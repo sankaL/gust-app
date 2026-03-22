@@ -352,6 +352,7 @@ Cancellation behavior:
 
 - Completing a task before send cancels the reminder.
 - Deleting a task before send cancels the reminder.
+- Retryable delivery failures may be retried automatically, but terminal provider failures must not duplicate-send.
 
 ## Recurrence Contract
 
@@ -376,9 +377,11 @@ Behavior:
 - A recurring task generates the next occurrence when the current occurrence is completed.
 - The next occurrence is created in the same group.
 - Only one future open occurrence should exist for a series at a time.
+- Daily recurrence creates the next local calendar day after completion.
 - Weekly recurrence repeats on a single weekday.
 - Monthly recurrence repeats on the day-of-month of the completed occurrence; if that day does not exist in the next month, it falls to the last day of that month.
 - If a recurring task has a reminder, the next occurrence inherits the same relative offset from the due date.
+- If that inherited reminder would already be in the past at completion time, the generated occurrence does not schedule a reminder email.
 
 ## Timezone Contract
 

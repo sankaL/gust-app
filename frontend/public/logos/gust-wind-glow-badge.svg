@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Gust wind logo glow badge</title>
+  <defs>
+    <linearGradient id="gustBadgeGradient" x1="110" y1="84" x2="404" y2="428" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ba9eff" />
+      <stop offset="100%" stop-color="#8455ef" />
+    </linearGradient>
+    <filter id="gustGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18" result="blur" />
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="1 0 0 0 0.5176 0 1 0 0 0.3333 0 0 1 0 0.9373 0 0 0 0.45 0"
+      />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="#1a1a1a" />
+  <rect x="64" y="64" width="384" height="384" rx="64" fill="#20201f" />
+  <g fill="none" stroke="#ba9eff" stroke-width="40" stroke-linecap="butt" stroke-linejoin="round" filter="url(#gustGlow)" opacity="0.7" transform="translate(256 256) scale(0.82) translate(-282 -245)">
+    <path d="M108 154H268C304 154 332 126 332 92C332 58 304 30 270 30C240 30 214 48 196 78" />
+    <path d="M76 252H126" />
+    <path d="M156 252H424C460 252 488 224 488 190C488 156 460 128 426 128C396 128 370 146 352 176" />
+    <path d="M156 348H360A56 56 0 1 1 360 460" />
+  </g>
+  <g fill="none" stroke="url(#gustBadgeGradient)" stroke-width="40" stroke-linecap="butt" stroke-linejoin="round" transform="translate(256 256) scale(0.82) translate(-282 -245)">
+    <path d="M108 154H268C304 154 332 126 332 92C332 58 304 30 270 30C240 30 214 48 196 78" />
+    <path d="M76 252H126" />
+    <path d="M156 252H424C460 252 488 224 488 190C488 156 460 128 426 128C396 128 370 146 352 176" />
+    <path d="M156 348H360A56 56 0 1 1 360 460" />
+  </g>
+</svg>

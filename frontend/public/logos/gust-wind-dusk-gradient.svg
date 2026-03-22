@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Gust wind logo dusk gradient</title>
+  <defs>
+    <linearGradient id="gustDuskGradient" x1="72" y1="64" x2="438" y2="432" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#d6c6ff" />
+      <stop offset="45%" stop-color="#ba9eff" />
+      <stop offset="100%" stop-color="#8455ef" />
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#gustDuskGradient)" stroke-width="40" stroke-linecap="butt" stroke-linejoin="round" transform="translate(-26 11)">
+    <path d="M108 154H268C304 154 332 126 332 92C332 58 304 30 270 30C240 30 214 48 196 78" />
+    <path d="M76 252H126" />
+    <path d="M156 252H424C460 252 488 224 488 190C488 156 460 128 426 128C396 128 370 146 352 176" />
+    <path d="M156 348H360A56 56 0 1 1 360 460" />
+  </g>
+</svg>

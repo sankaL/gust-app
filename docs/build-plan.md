@@ -60,10 +60,10 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
-| P4-01 | Implement reminder data model and idempotent reminder worker with transactional claiming | TODO | TBD | Safe to retry and overlap | PRD, Tech, Schema |
-| P4-02 | Integrate Resend for reminder delivery with deterministic idempotency keys and send-result tracking | TODO | TBD | One reminder per occurrence | PRD, Tech |
-| P4-03 | Implement recurrence generation on completion for daily, weekly, and monthly rules | TODO | TBD | Only one future open occurrence per series | PRD, Tech |
-| P4-04 | Implement bounded capture/transcript retention and cleanup behavior | TODO | TBD | Initial target is 7-day retention | PRD, Schema |
+| P4-01 | Implement reminder data model and idempotent reminder worker with transactional claiming | DONE | 2026-03-22 | Protected internal worker route, transactional claiming, retry-safe requeue, and send-result tracking added | PRD, Tech, Schema |
+| P4-02 | Integrate Resend for reminder delivery with deterministic idempotency keys and send-result tracking | DONE | 2026-03-22 | Added Resend adapter, deterministic idempotency header use, and provider message-id persistence | PRD, Tech |
+| P4-03 | Implement recurrence generation on completion for daily, weekly, and monthly rules | DONE | 2026-03-22 | Completion now creates the next occurrence transactionally, guards duplicate series, and resets subtasks | PRD, Tech |
+| P4-04 | Implement bounded capture/transcript retention and cleanup behavior | DONE | 2026-03-22 | Expired capture cleanup added with `tasks.capture_id` retention-safe nulling | PRD, Schema |
 
 ## Phase 5: Hardening and Launch Readiness
 
@@ -79,8 +79,9 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
-| ADH-01 | Unplanned implementation or documentation work discovered during delivery | TODO | TBD | Add concrete scope when raised | - |
+| ADH-01 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Expanded env example coverage for runtime, frontend, and provider config | AGENTS, Tech |
 | ADH-02 | Tooling or workflow improvements needed to unblock delivery | DONE | 2026-03-22 | Added `make dev local` local-stack startup with conditional Alembic upgrades, dynamic port assignment, and ready-state checks | AGENTS, Runbook |
+| ADH-03 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Added Gust logo SVG colorway assets aligned to the sonic minimalist palette | Design |
 
 ## Bug Fixes
 

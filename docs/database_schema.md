@@ -111,7 +111,7 @@ Primary task record for open and completed tasks.
 | `id` | `uuid` | No | Primary key. |
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
 | `group_id` | `uuid` | No | Foreign key to `groups.id`. Never null. |
-| `capture_id` | `uuid` | Yes | Foreign key to `captures.id` when task originated from a capture. |
+| `capture_id` | `uuid` | Yes | Foreign key to `captures.id` when task originated from a capture. Uses `ON DELETE SET NULL` so bounded capture cleanup does not delete long-lived tasks. |
 | `series_id` | `uuid` | Yes | Stable recurrence-series identifier shared by occurrences. Null for non-recurring tasks and actively maintained when recurrence is added, edited, or removed. |
 | `title` | `text` | No | Non-empty task title. |
 | `status` | `task_status` | No | `open` or `completed`. |
@@ -142,6 +142,11 @@ Constraints and invariants:
   - `recurrence_frequency = 'weekly'` requires `recurrence_weekday`.
   - `recurrence_frequency = 'monthly'` requires `recurrence_day_of_month`.
   - `recurrence_interval` is fixed to `1` in v1.
+- Recurring completion generation is completion-based in the user's timezone:
+  - daily generates the next local calendar day
+  - weekly generates the next matching configured weekday after completion
+  - monthly generates the next month on the completion day-of-month, clamped to month end, and persists that new day on the generated occurrence
+- Generated recurring occurrences may clear `reminder_at` when the inherited relative reminder would already be in the past at completion time.
 - Only one future open task should exist per `series_id`.
 - Moving a flagged task to a different group clears `needs_review` at the application level.
 
@@ -228,6 +233,7 @@ Constraints and invariants:
 - Task edits must keep reminder rows in sync so there is never more than one reminder row per task occurrence.
 - Reopen or restore only reactivates a reminder when the task still has a future `reminder_at`.
 - Worker logic must claim rows transactionally before send.
+- Retryable delivery failures return claimed reminders to `pending`; terminal provider failures may move them to `failed`.
 
 ## Cross-Table Rules
 
@@ -235,7 +241,7 @@ Constraints and invariants:
 - `tasks.group_id` must reference a group owned by the same user.
 - `subtasks.task_id` must reference a task owned by the same user.
 - `reminders.task_id` must reference a task owned by the same user.
-- `captures.id` may be referenced by tasks created from that capture for traceability and result summaries.
+- `captures.id` may be referenced by tasks created from that capture for traceability and result summaries until retention cleanup removes the capture and nulls `tasks.capture_id`.
 
 ## Indexing Guidance
 
@@ -258,6 +264,7 @@ The initial migration set should include indexes for:
 ## Retention and Cleanup
 
 - Capture rows are retained only until `expires_at`, with an initial default target of 7 days after creation.
+- Retention cleanup hard-deletes expired capture rows in bounded batches.
 - Reminder rows may be retained for audit and idempotency protection after send or cancellation.
 - Task, subtask, group, and user retention policy is outside Phase 0 and should not conflict with reminder or capture cleanup.
 

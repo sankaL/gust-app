@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -108,6 +109,45 @@ def compute_reminder_offset_minutes(
     return int(delta.total_seconds() // 60)
 
 
+def compute_reminder_at_from_offset(
+    *,
+    due_date: date,
+    reminder_offset_minutes: int,
+    user_timezone: str,
+) -> datetime:
+    local_timezone = ZoneInfo(user_timezone)
+    due_midnight = datetime.combine(due_date, time.min, tzinfo=local_timezone)
+    return due_midnight + timedelta(minutes=reminder_offset_minutes)
+
+
+def next_due_date_for_completed_task(
+    *,
+    completed_at: datetime,
+    recurrence_frequency: str,
+    recurrence_weekday: int | None,
+    recurrence_day_of_month: int | None,
+    user_timezone: str,
+) -> tuple[date, int | None]:
+    local_completed_date = completed_at.astimezone(ZoneInfo(user_timezone)).date()
+
+    if recurrence_frequency == "daily":
+        return (local_completed_date + timedelta(days=1), recurrence_day_of_month)
+
+    if recurrence_frequency == "weekly":
+        if recurrence_weekday is None:
+            raise ValueError("Weekly recurrence requires a weekday.")
+        days_until = (recurrence_weekday - _weekday_for_v1(local_completed_date)) % 7
+        if days_until == 0:
+            days_until = 7
+        return (local_completed_date + timedelta(days=days_until), recurrence_day_of_month)
+
+    if recurrence_frequency == "monthly":
+        next_month = _add_one_month(local_completed_date)
+        return (next_month, next_month.day)
+
+    raise ValueError("Unsupported recurrence frequency.")
+
+
 def due_bucket_for_date(
     *,
     due_date: date | None,
@@ -124,3 +164,14 @@ def due_bucket_for_date(
     if due_date <= today + timedelta(days=3):
         return "due_soon"
     return "future"
+
+
+def _weekday_for_v1(value: date) -> int:
+    return (value.weekday() + 1) % 7
+
+
+def _add_one_month(value: date) -> date:
+    year = value.year + (1 if value.month == 12 else 0)
+    month = 1 if value.month == 12 else value.month + 1
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(value.day, last_day))
