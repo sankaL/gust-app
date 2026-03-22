@@ -6,6 +6,7 @@ Keep this file focused on **durable frontend engineering rules** for Gust. Do no
 - Product behavior: `docs/PRD-Gust.md`
 - Frontend architecture and PWA constraints: `docs/Tech-Stack-Gust.md`
 - Visual system and interaction direction: `docs/Design.md`
+- When working on any UI, reference: `docs/ui-reference/*`
 
 ## Frontend Commitments
 - Build for a **mobile-first, voice-first** task capture flow.

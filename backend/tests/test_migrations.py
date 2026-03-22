@@ -1,8 +1,11 @@
+import importlib.util
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
+import pytest
+from sqlalchemy import create_engine, inspect, text
 
 from app.db.migrations import check_required_revision, get_current_revision
+from app.db.schema import metadata
 
 
 def test_get_current_revision_returns_none_when_alembic_table_is_missing() -> None:
@@ -20,7 +23,43 @@ def test_check_required_revision_accepts_matching_revision(tmp_path: Path) -> No
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
         connection.execute(
-            text("INSERT INTO alembic_version (version_num) VALUES ('0001_phase0_baseline')")
+            text("INSERT INTO alembic_version (version_num) VALUES ('0002_phase1_core_backend')")
         )
 
-    check_required_revision(database_url, "0001_phase0_baseline")
+    check_required_revision(database_url, "0002_phase1_core_backend")
+
+
+def test_phase1_schema_metadata_contains_required_tables(tmp_path: Path) -> None:
+    database_path = tmp_path / "schema.db"
+    database_url = f"sqlite+pysqlite:///{database_path}"
+    engine = create_engine(database_url)
+
+    metadata.create_all(engine)
+
+    with engine.begin() as connection:
+        table_names = set(inspect(connection).get_table_names())
+
+    assert {"users", "groups", "tasks", "subtasks", "captures", "reminders"} <= table_names
+
+
+def test_phase1_migration_creates_captures_before_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0002_phase1_core_backend.py"
+    )
+    spec = importlib.util.spec_from_file_location("phase1_core_backend_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    create_order: list[str] = []
+    monkeypatch.setattr(module.op, "create_table", lambda name, *args, **kwargs: create_order.append(name))
+    monkeypatch.setattr(module.op, "create_index", lambda *args, **kwargs: None)
+
+    module.upgrade()
+
+    assert create_order.index("captures") < create_order.index("tasks")

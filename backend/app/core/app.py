@@ -1,10 +1,21 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 
 from app.api.routes import auth, captures, groups, health, reminders, tasks
+from app.core.errors import (
+    ApiError,
+    api_error_handler,
+    http_exception_handler,
+    migration_exception_handler,
+    unexpected_exception_handler,
+    validation_exception_handler,
+)
+from app.core.logging import configure_logging
+from app.core.middleware import RequestContextMiddleware
 from app.core.settings import get_settings
-from app.db.migrations import check_required_revision
+from app.db.migrations import MigrationVersionError, check_required_revision
 
 
 @asynccontextmanager
@@ -17,6 +28,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(settings.log_level)
 
     app = FastAPI(
         title="Gust API",
@@ -27,6 +39,12 @@ def create_app() -> FastAPI:
     )
 
     app.state.settings = settings
+    app.add_middleware(RequestContextMiddleware)
+    app.add_exception_handler(ApiError, api_error_handler)
+    app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(MigrationVersionError, migration_exception_handler)
+    app.add_exception_handler(Exception, unexpected_exception_handler)
 
     app.include_router(health.router)
     app.include_router(auth.router, prefix="/auth/session", tags=["auth-session"])

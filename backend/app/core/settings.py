@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Optional
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,7 +19,7 @@ class Settings(BaseSettings):
     )
     database_url: str = Field(validation_alias=AliasChoices("DATABASE_URL"))
     required_alembic_revision: str = Field(
-        default="0001_phase0_baseline",
+        default="0002_phase1_core_backend",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -26,6 +27,30 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("RUN_STARTUP_CHECKS"),
     )
     log_level: str = Field(default="INFO", validation_alias=AliasChoices("LOG_LEVEL"))
+    frontend_app_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("FRONTEND_APP_URL"),
+    )
+    backend_public_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("BACKEND_PUBLIC_URL"),
+    )
+    supabase_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("SUPABASE_URL"),
+    )
+    supabase_anon_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("SUPABASE_ANON_KEY"),
+    )
+    session_cookie_secure: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("SESSION_COOKIE_SECURE"),
+    )
+    session_cookie_domain: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("SESSION_COOKIE_DOMAIN"),
+    )
 
 
 @lru_cache(maxsize=1)

@@ -1,5 +1,12 @@
 # Decisions Made
 
+## 2026-03-22 16:42:00 EDT
+
+- Implemented Phase 1 auth around backend-owned Supabase PKCE callback handling, secure cookie session storage, request-time JWT validation, and explicit CSRF enforcement instead of relying on browser-managed Supabase sessions.
+- Standardized first-login timezone bootstrap on `UTC` until the frontend reports the browser timezone, while keeping the persisted timezone required and user-updatable through the backend session API.
+- Landed the first substantive Alembic revision as `0002_phase1_core_backend` and moved the backend startup revision check default to that revision.
+- Kept Phase 1 API surface intentionally narrow around `auth/session` behavior and core repositories, leaving task/group CRUD shape decisions for the later product phases that define those contracts.
+
 ## 2026-03-22 12:37:17 EDT
 
 - Executed Phase 0 as a true foundation pass and stopped at documented contracts, scaffolds, local-dev plumbing, and baseline checks rather than pulling Phase 1 product behavior forward.

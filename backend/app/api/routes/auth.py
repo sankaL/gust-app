@@ -1,10 +1,213 @@
-from fastapi import APIRouter
+from __future__ import annotations
 
-from app.core.errors import not_implemented
+# ruff: noqa: UP045
+from typing import Annotated, Optional
+
+from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+
+from app.core.dependencies import (
+    get_auth_service,
+    get_optional_session_context,
+    require_csrf,
+)
+from app.core.errors import AuthRequiredError, CsrfValidationError, InvalidTimezoneError
+from app.core.security import (
+    CSRF_COOKIE,
+    OAUTH_CODE_VERIFIER_COOKIE,
+    OAUTH_STATE_COOKIE,
+    REFRESH_TOKEN_COOKIE,
+    clear_csrf_cookie,
+    clear_oauth_state_cookies,
+    clear_session_cookies,
+    ensure_csrf_cookie,
+    generate_pkce_state,
+    set_oauth_state_cookies,
+    set_session_cookies,
+)
+from app.core.settings import Settings, get_settings
+from app.db.engine import connection_scope
+from app.db.repositories import (
+    SessionContext,
+    ensure_inbox_group,
+    get_session_context,
+    get_user,
+    update_user_timezone,
+    upsert_user,
+)
+from app.services.auth import AuthenticatedSession, SupabaseAuthService
 
 router = APIRouter()
 
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+OptionalSessionContextDep = Annotated[
+    Optional[SessionContext],
+    Depends(get_optional_session_context),
+]
+RequiredSessionContextDep = Annotated[SessionContext, Depends(require_csrf)]
+AuthServiceDep = Annotated[SupabaseAuthService, Depends(get_auth_service)]
 
-@router.get("")
-def get_session_status() -> None:
-    raise not_implemented("Auth session endpoint")
+
+class UserSummary(BaseModel):
+    id: str
+    email: str
+    display_name: Optional[str]
+
+
+class SessionStatusResponse(BaseModel):
+    signed_in: bool
+    user: Optional[UserSummary] = None
+    timezone: Optional[str] = None
+    inbox_group_id: Optional[str] = None
+    csrf_token: Optional[str] = None
+
+
+class TimezoneUpdateRequest(BaseModel):
+    timezone: str
+
+
+@router.get("", response_model=SessionStatusResponse)
+async def get_session_status(
+    request: Request,
+    response: Response,
+    session_context: OptionalSessionContextDep,
+    settings: SettingsDep,
+) -> SessionStatusResponse:
+    if session_context is None:
+        clear_session_cookies(response, settings)
+        clear_csrf_cookie(response, settings)
+        return SessionStatusResponse(signed_in=False)
+
+    csrf_token = ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
+    return SessionStatusResponse(
+        signed_in=True,
+        user=UserSummary(
+            id=session_context.user.id,
+            email=session_context.user.email,
+            display_name=session_context.user.display_name,
+        ),
+        timezone=session_context.user.timezone,
+        inbox_group_id=session_context.inbox_group_id,
+        csrf_token=csrf_token,
+    )
+
+
+@router.get("/google/start")
+async def start_google_sign_in(
+    settings: SettingsDep,
+    auth_service: AuthServiceDep,
+) -> RedirectResponse:
+    auth_service.ensure_configured()
+    pkce_state = generate_pkce_state()
+    response = RedirectResponse(
+        url=auth_service.build_google_authorize_url(
+            state=pkce_state.state,
+            code_challenge=pkce_state.challenge,
+        ),
+        status_code=302,
+    )
+    set_oauth_state_cookies(response, settings, pkce_state)
+    return response
+
+
+@router.get("/callback")
+async def auth_callback(
+    request: Request,
+    settings: SettingsDep,
+    auth_service: AuthServiceDep,
+    code: str = Query(...),
+    state: Optional[str] = Query(default=None),
+) -> RedirectResponse:
+    auth_service.ensure_configured()
+
+    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    code_verifier = request.cookies.get(OAUTH_CODE_VERIFIER_COOKIE)
+    if not expected_state or not code_verifier or not state or state != expected_state:
+        raise CsrfValidationError("OAuth state validation failed.")
+
+    session = await auth_service.exchange_code_for_session(code=code, code_verifier=code_verifier)
+    with connection_scope(settings.database_url) as connection:
+        _bootstrap_user_session(connection, session)
+        session_context = get_session_context(connection, session.identity.user_id)
+
+    if session_context is None:
+        raise AuthRequiredError("Authenticated user could not be resolved locally.")
+
+    response = RedirectResponse(url=settings.frontend_app_url or "/", status_code=302)
+    clear_oauth_state_cookies(response, settings)
+    set_session_cookies(response, settings, session.tokens)
+    ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
+    return response
+
+
+@router.post("/logout")
+async def logout(
+    response: Response,
+    request: Request,
+    session_context: RequiredSessionContextDep,
+    settings: SettingsDep,
+    auth_service: AuthServiceDep,
+) -> dict[str, bool]:
+    del session_context
+    refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
+    clear_session_cookies(response, settings)
+    clear_csrf_cookie(response, settings)
+
+    if refresh_token:
+        try:
+            await auth_service.revoke_refresh_token(refresh_token=refresh_token)
+        except Exception:
+            pass
+
+    return {"signed_out": True}
+
+
+@router.put("/timezone", response_model=SessionStatusResponse)
+async def update_timezone(
+    payload: TimezoneUpdateRequest,
+    request: Request,
+    response: Response,
+    session_context: RequiredSessionContextDep,
+    settings: SettingsDep,
+) -> SessionStatusResponse:
+    _validate_timezone(payload.timezone)
+    with connection_scope(settings.database_url) as connection:
+        user = update_user_timezone(
+            connection,
+            user_id=session_context.user.id,
+            timezone=payload.timezone,
+        )
+        if user is None:
+            raise AuthRequiredError("Authenticated user could not be updated locally.")
+        inbox = ensure_inbox_group(connection, user_id=session_context.user.id)
+
+    csrf_token = ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
+    return SessionStatusResponse(
+        signed_in=True,
+        user=UserSummary(id=user.id, email=user.email, display_name=user.display_name),
+        timezone=user.timezone,
+        inbox_group_id=inbox.id,
+        csrf_token=csrf_token,
+    )
+
+
+def _bootstrap_user_session(connection, session: AuthenticatedSession) -> None:
+    existing_user = get_user(connection, session.identity.user_id)
+    upsert_user(
+        connection,
+        user_id=session.identity.user_id,
+        email=session.identity.email,
+        display_name=session.identity.display_name,
+        timezone=existing_user.timezone if existing_user is not None else "UTC",
+    )
+    ensure_inbox_group(connection, user_id=session.identity.user_id)
+
+
+def _validate_timezone(timezone: str) -> None:
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        ZoneInfo(timezone)
+    except ZoneInfoNotFoundError as exc:
+        raise InvalidTimezoneError() from exc
