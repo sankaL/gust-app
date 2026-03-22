@@ -4,8 +4,13 @@ BACKEND_VENV := backend/.venv
 BACKEND_PYTHON := $(BACKEND_VENV)/bin/python
 BACKEND_PIP := $(BACKEND_VENV)/bin/pip
 SUPABASE := npx supabase@latest
+DEV_RUNTIME_DIR := .dev-runtime
+DEV_RUNTIME_ENV := $(DEV_RUNTIME_DIR)/runtime.env
+DEV_SUPABASE_DIR := $(DEV_RUNTIME_DIR)/supabase
+DEV_SUPABASE_WORKDIR := $(DEV_RUNTIME_DIR)
+DOCKER_COMPOSE := docker compose --env-file $(DEV_RUNTIME_ENV)
 
-.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke check supabase-start supabase-stop app-up app-down dev-up dev-down
+.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime supabase-start supabase-stop wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
 
 frontend-install:
 	npm --prefix frontend install
@@ -53,18 +58,59 @@ backend-smoke:
 
 check: frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke
 
-supabase-start:
-	$(SUPABASE) start
+prepare-dev-runtime:
+	python3 scripts/dev/prepare-runtime.py
 
 supabase-stop:
-	$(SUPABASE) stop
+	@if [ -d "$(DEV_SUPABASE_DIR)" ]; then \
+		$(SUPABASE) stop --workdir "$(DEV_SUPABASE_WORKDIR)"; \
+	fi
 
-app-up:
-	docker compose up --build -d frontend backend
+supabase-start: prepare-dev-runtime
+	$(SUPABASE) start --workdir "$(DEV_SUPABASE_WORKDIR)"
+
+app-up: prepare-dev-runtime
+	$(DOCKER_COMPOSE) up -d backend
+	$(MAKE) wait-backend
+	$(DOCKER_COMPOSE) up -d frontend
+
+wait-backend:
+	@. "$(DEV_RUNTIME_ENV)"; \
+	printf 'Waiting for backend health check on http://localhost:%s/health ...\n' "$$GUST_BACKEND_PORT"; \
+	attempts=0; \
+	until curl -fsS "http://localhost:$$GUST_BACKEND_PORT/health" 2>/dev/null | grep -q '"status":"ok"'; do \
+		attempts=$$((attempts + 1)); \
+		if [ $$attempts -ge 60 ]; then \
+			echo 'Backend did not become healthy within 60 seconds.'; \
+			$(DOCKER_COMPOSE) logs --tail=50 backend; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
 
 app-down:
-	docker compose down
+	@if [ -f "$(DEV_RUNTIME_ENV)" ]; then \
+		$(DOCKER_COMPOSE) down; \
+	else \
+		docker compose down; \
+	fi
 
-dev-up: install supabase-start app-up
+dev-local: supabase-start app-up
+	@. "$(DEV_RUNTIME_ENV)"; \
+	printf '%s\n' \
+		'Local dev stack is ready:' \
+		"  frontend: http://localhost:$$GUST_FRONTEND_PORT" \
+		"  backend: http://localhost:$$GUST_BACKEND_PORT" \
+		"  supabase api: http://localhost:$$GUST_SUPABASE_API_PORT" \
+		"  supabase studio: http://localhost:$$GUST_SUPABASE_STUDIO_PORT"
 
-dev-down: app-down supabase-stop
+dev: dev-local
+
+local: dev-local
+
+dev-up: dev-local
+
+local-down: app-down supabase-stop
+	rm -rf "$(DEV_RUNTIME_DIR)"
+
+dev-down: local-down

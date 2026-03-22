@@ -1,6 +1,6 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Last Updated:** 2026-03-22
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
@@ -20,10 +20,10 @@ Local development uses a Makefile-managed Docker stack plus local Supabase CLI s
 Bootstrap sequence:
 
 1. Ensure `GUST_DEV_MODE=true` in local env files.
-2. Start local Supabase services through the Makefile entrypoint.
-3. Start Dockerized backend and frontend services through the Makefile entrypoint.
-4. Install backend dependencies and configure Alembic against the local database.
-5. Run Alembic migrations to the latest revision before serving real application traffic.
+2. Start the local stack through the Makefile entrypoint (`make dev`, `make local`, or `make dev local`).
+3. If the default local ports are already occupied, assign alternate free host ports for the frontend, backend, and local Supabase services before startup.
+4. Reuse the existing local Supabase database state; do not reset or rebuild the database for routine restarts.
+5. Check the current Alembic revision against the repo head and run `alembic upgrade head` only when the local database is behind.
 6. Start the backend app only after migration verification succeeds.
 7. Start the frontend app against the backend base URL for the local stack.
 
@@ -31,6 +31,8 @@ Guardrails:
 
 - Local development must not connect to hosted production Supabase Auth or the production database.
 - Dev mode changes infrastructure targets only. It must not bypass auth or validation behavior in application code.
+- The local backend must target the current required application revision and local Supabase Auth endpoints before it serves traffic.
+- The startup entrypoint must print the chosen local URLs when it falls back to non-default ports.
 
 ## Environment Contract
 
@@ -89,6 +91,20 @@ Deployment implication:
 
 - environments must apply `0002_phase1_core_backend` before running the Phase 1 backend, because startup revision checks now require that revision by default
 
+## Phase 2 Revision
+
+Phase 2 introduces `0003_phase2_capture_extraction` as the required application revision.
+
+That revision establishes:
+
+- the canonical `tasks.reminder_at` field used by capture extraction and later task-edit/reminder flows
+- compatibility between capture-created task reminders and the dedicated `reminders` table
+- the migration floor required by the synchronous capture/transcription/extraction backend
+
+Deployment implication:
+
+- environments must apply `0003_phase2_capture_extraction` before running the Phase 2 backend, because startup revision checks now require that revision by default
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -112,17 +128,23 @@ Why this order:
 Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
-- The required revision configured for the backend matches `0002_phase1_core_backend` or the current deployed head.
+- The required revision configured for the backend matches `0003_phase2_capture_extraction` or the current deployed head.
 - Backend startup revision check passes.
 - `users.timezone` exists and accepts valid IANA timezone data.
 - Each sampled user has exactly one Inbox group with `system_key = 'inbox'`.
 - No task row has a null `group_id`.
+- `tasks.reminder_at` exists and remains nullable for legacy rows without reminders.
 - Group names are unique per user.
 - Reminder uniqueness and idempotency constraints exist:
   - one reminder row per task occurrence
   - unique `idempotency_key`
 - Reminder lifecycle fields exist for claiming and send tracking.
 - Capture retention fields exist and new rows receive an `expires_at` value.
+
+For capture/extraction releases, also verify:
+
+- `POST /captures/text`, `POST /captures/voice`, and `POST /captures/{capture_id}/submit` succeed against the deployed schema
+- failed transcription or extraction attempts leave capture rows in explicit failure states without creating partial task writes
 
 For reminder-related releases, also verify:
 

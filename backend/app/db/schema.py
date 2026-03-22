@@ -78,6 +78,7 @@ tasks = sa.Table(
     sa.Column("status", task_status, nullable=False, server_default="open"),
     sa.Column("needs_review", sa.Boolean(), nullable=False, server_default=sa.false()),
     sa.Column("due_date", sa.Date(), nullable=True),
+    sa.Column("reminder_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("reminder_offset_minutes", sa.Integer(), nullable=True),
     sa.Column("recurrence_frequency", recurrence_frequency, nullable=True),
     sa.Column("recurrence_interval", sa.Integer(), nullable=True),

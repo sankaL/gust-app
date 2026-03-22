@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { afterEach, beforeEach, vi } from 'vitest'
 
 import { AppProviders } from '../providers'
 import { AppShell } from '../components/AppShell'
@@ -34,11 +35,41 @@ function renderWithRoute(initialEntries: string[]) {
   )
 }
 
+function jsonResponse(body: unknown, init?: ResponseInit) {
+  return new Response(JSON.stringify(body), {
+    status: init?.status ?? 200,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers ?? {})
+    }
+  })
+}
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      jsonResponse({
+        signed_in: true,
+        user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
+        timezone: 'UTC',
+        inbox_group_id: 'inbox-1',
+        csrf_token: 'csrf-token'
+      })
+    )
+  )
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
 describe('app shell', () => {
-  it('renders the capture route by default', () => {
+  it('renders the capture route by default', async () => {
     renderWithRoute(['/'])
 
-    expect(screen.getByRole('heading', { name: 'Capture' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Capture' })).toBeInTheDocument()
     expect(screen.getByText('Voice-first foundation')).toBeInTheDocument()
   })
 

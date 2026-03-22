@@ -6,12 +6,12 @@ services:
     working_dir: /workspace/frontend
     environment:
       VITE_GUST_DEV_MODE: "true"
-      VITE_API_BASE_URL: "http://localhost:8000"
+      VITE_API_BASE_URL: "http://localhost:${GUST_BACKEND_PORT:-8000}"
     volumes:
       - .:/workspace
       - frontend-node-modules:/workspace/frontend/node_modules
     ports:
-      - "3000:3000"
+      - "${GUST_FRONTEND_PORT:-3000}:3000"
     depends_on:
       - backend
     command: sh -lc "npm install && npm run dev"
@@ -24,22 +24,22 @@ services:
     environment:
       APP_ENV: development
       GUST_DEV_MODE: "true"
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@host.docker.internal:54322/postgres
-      REQUIRED_ALEMBIC_REVISION: 0001_phase0_baseline
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@host.docker.internal:${GUST_SUPABASE_DB_PORT:-54322}/postgres
+      REQUIRED_ALEMBIC_REVISION: 0003_phase2_capture_extraction
       RUN_STARTUP_CHECKS: "true"
       LOG_LEVEL: INFO
+      FRONTEND_APP_URL: "http://localhost:${GUST_FRONTEND_PORT:-3000}"
+      BACKEND_PUBLIC_URL: "http://localhost:${GUST_BACKEND_PORT:-8000}"
+      SUPABASE_URL: "http://host.docker.internal:${GUST_SUPABASE_API_PORT:-54321}"
+      SUPABASE_ANON_KEY: "local-supabase-anon-key"
+      SESSION_COOKIE_SECURE: "false"
     volumes:
       - .:/workspace
-      - backend-venv:/workspace/backend/.venv
     ports:
-      - "8000:8000"
-    command: >
-      sh -lc "python -m venv .venv &&
-      .venv/bin/pip install --upgrade pip &&
-      .venv/bin/pip install -e '.[dev]' &&
-      .venv/bin/alembic upgrade head &&
-      .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      - "${GUST_BACKEND_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: sh -lc "sh /workspace/scripts/dev/backend-start.sh"
 
 volumes:
   frontend-node-modules:
-  backend-venv:
