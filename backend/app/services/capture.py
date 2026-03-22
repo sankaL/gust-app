@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: UP037, UP045
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Protocol
 from zoneinfo import ZoneInfo
 
@@ -37,6 +37,7 @@ from app.services.extraction import (
     ExtractionServiceError,
     ExtractorMalformedResponseError,
 )
+from app.services.task_rules import RecurrenceInput, normalize_task_fields
 from app.services.transcription import TranscriptionServiceError
 
 logger = logging.getLogger("gust.api")
@@ -136,6 +137,7 @@ class PreparedTask:
     due_date: Optional[date]
     reminder_at: Optional[datetime]
     reminder_offset_minutes: Optional[int]
+    series_id: Optional[str]
     recurrence_frequency: Optional[str]
     recurrence_interval: Optional[int]
     recurrence_weekday: Optional[int]
@@ -362,6 +364,7 @@ class CaptureService:
                     recurrence_interval=prepared.recurrence_interval,
                     recurrence_weekday=prepared.recurrence_weekday,
                     recurrence_day_of_month=prepared.recurrence_day_of_month,
+                    series_id=prepared.series_id,
                 )
                 if prepared.subtasks:
                     create_subtasks(
@@ -463,23 +466,6 @@ class CaptureService:
                 "Task title cannot be blank.",
                 candidate.title,
             )
-        if candidate.reminder_at is not None and candidate.reminder_at.tzinfo is None:
-            raise CandidateValidationError(
-                "invalid_reminder",
-                "Reminder timestamp must include a timezone.",
-                candidate.title,
-            )
-
-        if candidate.reminder_at is not None and candidate.due_date is None:
-            raise CandidateValidationError(
-                "reminder_requires_due_date",
-                "Reminder requires a due date.",
-                candidate.title,
-            )
-
-        if candidate.recurrence is not None:
-            self._validate_recurrence(candidate)
-
         for subtask in candidate.subtasks:
             if not subtask.title.strip():
                 raise CandidateValidationError(
@@ -509,36 +495,60 @@ class CaptureService:
             group_id = resolved_group.id
             needs_review = True
 
-        reminder_offset_minutes: Optional[int] = None
-        if candidate.reminder_at is not None and candidate.due_date is not None:
-            reminder_offset_minutes = self._compute_reminder_offset_minutes(
-                due_date=candidate.due_date,
-                reminder_at=candidate.reminder_at,
-                user_timezone=user_timezone,
+        recurrence_input = None
+        if candidate.recurrence is not None:
+            recurrence_input = RecurrenceInput(
+                frequency=candidate.recurrence.frequency,
+                weekday=candidate.recurrence.weekday,
+                day_of_month=candidate.recurrence.day_of_month,
             )
 
-        recurrence_frequency: Optional[str] = None
-        recurrence_interval: Optional[int] = None
-        recurrence_weekday: Optional[int] = None
-        recurrence_day_of_month: Optional[int] = None
-        if candidate.recurrence is not None:
-            recurrence_frequency = candidate.recurrence.frequency
-            recurrence_interval = 1
-            recurrence_weekday = candidate.recurrence.weekday
-            recurrence_day_of_month = candidate.recurrence.day_of_month
+        try:
+            normalized = normalize_task_fields(
+                title=candidate.title,
+                due_date=candidate.due_date,
+                reminder_at=candidate.reminder_at,
+                recurrence=recurrence_input,
+                user_timezone=user_timezone,
+            )
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Task title cannot be blank.":
+                raise CandidateValidationError("invalid_title", message, candidate.title) from exc
+            if message == "Reminder timestamp must include a timezone.":
+                raise CandidateValidationError(
+                    "invalid_reminder",
+                    message,
+                    candidate.title,
+                ) from exc
+            if message == "Reminder requires a due date.":
+                raise CandidateValidationError(
+                    "reminder_requires_due_date", message, candidate.title
+                ) from exc
+            if message in {
+                "Recurrence payload is invalid for v1.",
+                "Recurrence requires a due date.",
+            }:
+                raise CandidateValidationError(
+                    "invalid_recurrence",
+                    message,
+                    candidate.title,
+                ) from exc
+            raise
 
         subtasks = [subtask.title for subtask in candidate.subtasks]
         return PreparedTask(
-            title=candidate.title.strip(),
+            title=normalized.title,
             group_id=group_id,
             needs_review=needs_review,
-            due_date=candidate.due_date,
-            reminder_at=candidate.reminder_at,
-            reminder_offset_minutes=reminder_offset_minutes,
-            recurrence_frequency=recurrence_frequency,
-            recurrence_interval=recurrence_interval,
-            recurrence_weekday=recurrence_weekday,
-            recurrence_day_of_month=recurrence_day_of_month,
+            due_date=normalized.due_date,
+            reminder_at=normalized.reminder_at,
+            reminder_offset_minutes=normalized.reminder_offset_minutes,
+            series_id=normalized.series_id,
+            recurrence_frequency=normalized.recurrence_frequency,
+            recurrence_interval=normalized.recurrence_interval,
+            recurrence_weekday=normalized.recurrence_weekday,
+            recurrence_day_of_month=normalized.recurrence_day_of_month,
             subtasks=[subtask.strip() for subtask in subtasks],
         )
 
@@ -569,40 +579,6 @@ class CaptureService:
             if alternative.confidence >= 0.5 and confidence_gap <= 0.1:
                 return True
         return False
-
-    def _validate_recurrence(self, candidate: ExtractedTaskCandidate) -> None:
-        assert candidate.recurrence is not None
-        recurrence = candidate.recurrence
-        if recurrence.frequency == "daily":
-            if recurrence.weekday is None and recurrence.day_of_month is None:
-                return
-        elif recurrence.frequency == "weekly":
-            if recurrence.weekday is not None and 0 <= recurrence.weekday <= 6:
-                if recurrence.day_of_month is None:
-                    return
-        elif recurrence.frequency == "monthly":
-            if recurrence.day_of_month is not None and 1 <= recurrence.day_of_month <= 31:
-                if recurrence.weekday is None:
-                    return
-
-        raise CandidateValidationError(
-            "invalid_recurrence",
-            "Recurrence payload is invalid for v1.",
-            candidate.title,
-        )
-
-    def _compute_reminder_offset_minutes(
-        self,
-        *,
-        due_date: date,
-        reminder_at: datetime,
-        user_timezone: str,
-    ) -> int:
-        local_timezone = ZoneInfo(user_timezone)
-        due_midnight = datetime.combine(due_date, time.min, tzinfo=local_timezone)
-        reminder_local = reminder_at.astimezone(local_timezone)
-        delta = reminder_local - due_midnight
-        return int(delta.total_seconds() // 60)
 
     def _group_context_payload(self, group: GroupContextRecord) -> dict[str, object]:
         return {

@@ -51,10 +51,10 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
-| P3-01 | Implement tasks and groups API CRUD with explicit user scoping and product sorting semantics | TODO | TBD | Includes open/completed lifecycle rules | PRD, Tech |
-| P3-02 | Build grouped task list UI with overdue, due-soon, and no-date ordering plus review indicators | TODO | TBD | Mobile-first interaction model | PRD, Design |
-| P3-03 | Build task detail editing for title, group, due date, reminder, recurrence, and subtasks | TODO | TBD | No nested subtasks or rich notes | PRD |
-| P3-04 | Build group management with Inbox protections, reassignment on delete, swipe complete/delete, and review-clear on manual move | TODO | TBD | Preserve Inbox invariants | PRD, Design |
+| P3-01 | Implement tasks and groups API CRUD with explicit user scoping and product sorting semantics | DONE | 2026-03-22 | Added task/group services, authenticated CRUD/lifecycle routes, due-bucket sorting, reminder sync, recurrence `series_id` maintenance, and subtask mutations | PRD, Tech |
+| P3-02 | Build grouped task list UI with overdue, due-soon, and no-date ordering plus review indicators | DONE | 2026-03-22 | Replaced the placeholder Tasks screen with signed-in group selection, URL state, bucketed sections, review indicators, and undo-backed task actions | PRD, Design |
+| P3-03 | Build task detail editing for title, group, due date, reminder, recurrence, and subtasks | DONE | 2026-03-22 | Added full-screen task detail editing with explicit save, dependent-field clearing, and inline subtask management | PRD |
+| P3-04 | Build group management with Inbox protections, reassignment on delete, swipe complete/delete, and review-clear on manual move | DONE | 2026-03-22 | Added Tasks-adjacent group management, Inbox protections, reassignment-on-delete, and undo-backed complete/delete flows | PRD, Design |
 
 ## Phase 4: Reminders, Recurrence, and Retention
 
@@ -87,4 +87,4 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
 | BUG-01 | Capture, transcription, or extraction regression | TODO | TBD | Link failing flow or test when opened | PRD, Tech |
-| BUG-02 | Task, reminder, recurrence, or auth regression | TODO | TBD | Link failing flow or test when opened | PRD, Tech |
+| BUG-02 | Task, reminder, recurrence, or auth regression | DONE | 2026-03-22 | Fixed deleted-group reassignment for soft-deleted tasks plus task-list/task-detail frontend regressions, with backend and frontend regression tests | PRD, Tech |

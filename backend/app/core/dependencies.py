@@ -25,6 +25,8 @@ from app.services.auth import (
 )
 from app.services.capture import CaptureService
 from app.services.extraction import OpenRouterExtractionService
+from app.services.group_service import GroupService
+from app.services.task_service import TaskService
 from app.services.transcription import MistralTranscriptionService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -58,6 +60,17 @@ def get_capture_service(
         transcription_service=transcription_service,
         extraction_service=extraction_service,
     )
+
+
+def get_task_service(settings: SettingsDep) -> TaskService:
+    return TaskService(settings=settings)
+
+
+def get_group_service(
+    settings: SettingsDep,
+    task_service: Annotated[TaskService, Depends(get_task_service)],
+) -> GroupService:
+    return GroupService(settings=settings, task_service=task_service)
 
 
 async def get_optional_session_context(

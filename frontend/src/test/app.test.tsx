@@ -5,6 +5,8 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { AppProviders } from '../providers'
 import { AppShell } from '../components/AppShell'
 import { CaptureRoute } from '../routes/CaptureRoute'
+import { ManageGroupsRoute } from '../routes/ManageGroupsRoute'
+import { TaskDetailRoute } from '../routes/TaskDetailRoute'
 import { TasksRoute } from '../routes/TasksRoute'
 
 function renderWithRoute(initialEntries: string[]) {
@@ -21,6 +23,14 @@ function renderWithRoute(initialEntries: string[]) {
           {
             path: 'tasks',
             element: <TasksRoute />
+          },
+          {
+            path: 'tasks/groups',
+            element: <ManageGroupsRoute />
+          },
+          {
+            path: 'tasks/:taskId',
+            element: <TaskDetailRoute />
           }
         ]
       }
@@ -45,18 +55,68 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
   })
 }
 
+function requestUrl(input: RequestInfo | URL) {
+  if (typeof input === 'string') {
+    return input
+  }
+  if (input instanceof URL) {
+    return input.toString()
+  }
+  return input.url
+}
+
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(() =>
-      jsonResponse({
-        signed_in: true,
-        user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
-        timezone: 'UTC',
-        inbox_group_id: 'inbox-1',
-        csrf_token: 'csrf-token'
-      })
-    )
+    vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+
+      if (url.includes('/auth/session')) {
+        return jsonResponse({
+          signed_in: true,
+          user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
+          timezone: 'UTC',
+          inbox_group_id: 'inbox-1',
+          csrf_token: 'csrf-token'
+        })
+      }
+
+      if (url.includes('/groups')) {
+        return jsonResponse([
+          {
+            id: 'inbox-1',
+            name: 'Inbox',
+            description: null,
+            is_system: true,
+            system_key: 'inbox',
+            open_task_count: 1
+          }
+        ])
+      }
+
+      if (url.includes('/tasks?')) {
+        return jsonResponse([
+          {
+            id: 'task-1',
+            title: 'Review extraction contract',
+            status: 'open',
+            needs_review: true,
+            due_date: null,
+            reminder_at: null,
+            due_bucket: 'no_date',
+            group: {
+              id: 'inbox-1',
+              name: 'Inbox',
+              is_system: true
+            },
+            completed_at: null,
+            deleted_at: null
+          }
+        ])
+      }
+
+      return jsonResponse({})
+    })
   )
 })
 
@@ -77,6 +137,24 @@ describe('app shell', () => {
     renderWithRoute(['/tasks'])
 
     expect(screen.getByRole('heading', { name: 'Tasks' })).toBeInTheDocument()
-    expect(screen.getByText('Inbox')).toBeInTheDocument()
+  })
+
+  it('fails closed when the tasks route is signed out', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        jsonResponse({
+          signed_in: false,
+          user: null,
+          timezone: null,
+          inbox_group_id: null,
+          csrf_token: null
+        })
+      )
+    )
+
+    renderWithRoute(['/tasks'])
+
+    expect(await screen.findByText('Session Required')).toBeInTheDocument()
   })
 })

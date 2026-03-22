@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-22 16:52:45 EDT
+
+- Kept the primary shell limited to `Capture` and `Tasks`, and moved group management into a full-screen Tasks-adjacent route instead of adding a third primary tab.
+- Standardized `due_soon` on tasks due today through the next 3 calendar days in the user's timezone, with server-side bucket assignment and sorting treated as authoritative.
+- Chose snackbar undo for both task completion and task deletion in Phase 3, backed by explicit reopen and restore endpoints, instead of adding a completed-task browser in this phase.
+
 ## 2026-03-22 19:05:00 EDT
 
 - Added `tasks.reminder_at` in Phase 2 and treated it as the canonical task-level reminder timestamp, while keeping `reminder_offset_minutes` for recurrence inheritance rather than trying to overload the offset field for absolute capture-time reminder writes.
