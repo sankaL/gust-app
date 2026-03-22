@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
   <title>Gust wind logo on void background</title>
   <rect width="512" height="512" rx="96" fill="#0e0e0e" />
-  <g fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="butt" stroke-linejoin="round">
-    <path d="M108 154H276A56 56 0 1 0 276 42" />
+  <g fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="butt" stroke-linejoin="round" transform="translate(256 256) scale(0.82) translate(-282 -245)">
+    <path d="M108 154H268C304 154 332 126 332 92C332 58 304 30 270 30C240 30 214 48 196 78" />
     <path d="M76 252H126" />
-    <path d="M156 252H396A56 56 0 1 0 396 140" />
+    <path d="M156 252H424C460 252 488 224 488 190C488 156 460 128 426 128C396 128 370 146 352 176" />
     <path d="M156 348H360A56 56 0 1 1 360 460" />
   </g>
 </svg>
