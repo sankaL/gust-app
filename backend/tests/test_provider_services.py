@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 import httpx
@@ -13,6 +13,7 @@ from app.services.extraction import (
     ExtractorMalformedResponseError,
     OpenRouterExtractionService,
 )
+from app.services.reminders import ReminderDeliveryError, ResendReminderService
 from app.services.transcription import MistralTranscriptionService, TranscriptionServiceError
 
 
@@ -57,6 +58,8 @@ def build_settings() -> Settings:
             "SUPABASE_ANON_KEY": "test-anon-key",
             "MISTRAL_API_KEY": "mistral-key",
             "OPENROUTER_API_KEY": "openrouter-key",
+            "RESEND_API_KEY": "resend-key",
+            "RESEND_FROM_EMAIL": "gust@example.com",
             "RUN_STARTUP_CHECKS": False,
             "SESSION_COOKIE_SECURE": False,
         }
@@ -153,3 +156,89 @@ def test_extraction_service_wraps_invalid_json_responses(
                 schema={"type": "object"},
             )
         )
+
+
+def test_resend_service_wraps_transport_failures_as_retryable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = ResendReminderService(build_settings())
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda timeout: FakeAsyncClient(error=httpx.ReadTimeout("timeout")),
+    )
+
+    with pytest.raises(ReminderDeliveryError) as exc_info:
+        asyncio.run(
+            service.send(
+                to_email="user@example.com",
+                task_title="Pay rent",
+                due_date=date(2026, 3, 24),
+                scheduled_for=datetime(2026, 3, 24, 9, 0),
+                idempotency_key="task:1",
+            )
+        )
+
+    assert exc_info.value.retryable is True
+
+
+def test_resend_service_marks_provider_rejections_as_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = ResendReminderService(build_settings())
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda timeout: FakeAsyncClient(response=FakeJsonResponse(status_code=400, json_value={})),
+    )
+
+    with pytest.raises(ReminderDeliveryError) as exc_info:
+        asyncio.run(
+            service.send(
+                to_email="user@example.com",
+                task_title="Pay rent",
+                due_date=date(2026, 3, 24),
+                scheduled_for=datetime(2026, 3, 24, 9, 0),
+                idempotency_key="task:1",
+            )
+        )
+
+    assert exc_info.value.retryable is False
+
+
+def test_resend_service_returns_provider_message_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = ResendReminderService(build_settings())
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda timeout: FakeAsyncClient(
+            response=FakeJsonResponse(status_code=200, json_value={"id": "provider-msg-123"})
+        ),
+    )
+
+    result = asyncio.run(
+        service.send(
+            to_email="user@example.com",
+            task_title="Pay rent",
+            due_date=date(2026, 3, 24),
+            scheduled_for=datetime(2026, 3, 24, 9, 0),
+            idempotency_key="task:1",
+        )
+    )
+
+    assert result.provider_message_id == "provider-msg-123"
+
+
+def test_resend_service_escapes_task_title_in_html_body() -> None:
+    service = ResendReminderService(build_settings())
+
+    body = service._build_html_body(
+        task_title='</p><a href="https://evil.test">click me</a>',
+        due_date=date(2026, 3, 24),
+        scheduled_for=datetime(2026, 3, 24, 9, 0),
+    )
+
+    assert '</p><a href="https://evil.test">click me</a>' not in body
+    assert "&lt;/p&gt;&lt;a href=&quot;https://evil.test&quot;&gt;click me&lt;/a&gt;" in body

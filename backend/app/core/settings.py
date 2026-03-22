@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     )
     database_url: str = Field(validation_alias=AliasChoices("DATABASE_URL"))
     required_alembic_revision: str = Field(
-        default="0003_phase2_capture_extraction",
+        default="0004_phase4_reminders_retention",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -86,6 +86,34 @@ class Settings(BaseSettings):
     extraction_timeout_seconds: float = Field(
         default=20.0,
         validation_alias=AliasChoices("EXTRACTION_TIMEOUT_SECONDS"),
+    )
+    resend_api_url: str = Field(
+        default="https://api.resend.com/emails",
+        validation_alias=AliasChoices("RESEND_API_URL"),
+    )
+    resend_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("RESEND_API_KEY"),
+    )
+    resend_from_email: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("RESEND_FROM_EMAIL"),
+    )
+    internal_job_shared_secret: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("INTERNAL_JOB_SHARED_SECRET"),
+    )
+    reminder_batch_size: int = Field(
+        default=50,
+        validation_alias=AliasChoices("REMINDER_BATCH_SIZE"),
+    )
+    reminder_claim_timeout_seconds: int = Field(
+        default=600,
+        validation_alias=AliasChoices("REMINDER_CLAIM_TIMEOUT_SECONDS"),
+    )
+    reminder_request_timeout_seconds: float = Field(
+        default=10.0,
+        validation_alias=AliasChoices("REMINDER_REQUEST_TIMEOUT_SECONDS"),
     )
 
 

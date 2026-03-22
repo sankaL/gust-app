@@ -1,5 +1,12 @@
 # Decisions Made
 
+## 2026-03-22 17:48:11 EDT
+
+- Kept the Phase 4 scheduler on the existing `POST /internal/reminders/run` HTTP route and protected it with a shared-secret header instead of introducing a separate CLI entrypoint or unauthenticated private route.
+- Classified reminder delivery failures into retryable versus terminal outcomes, with transient transport/provider issues requeued to `pending` and terminal provider rejections recorded as `failed`.
+- Made recurrence generation completion-based in the user's timezone, with monthly rules persisting the generated occurrence day-of-month after month-end clamping and duplicate-series guards preventing extra open occurrences.
+- Changed `tasks.capture_id` to use `ON DELETE SET NULL` so bounded capture-retention cleanup can hard-delete expired captures without deleting long-lived task rows.
+
 ## 2026-03-22 16:52:45 EDT
 
 - Kept the primary shell limited to `Capture` and `Tasks`, and moved group management into a full-screen Tasks-adjacent route instead of adding a third primary tab.

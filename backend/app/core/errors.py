@@ -37,6 +37,15 @@ class CsrfValidationError(ApiError):
         )
 
 
+class InternalJobAuthError(ApiError):
+    def __init__(self, message: str = "Internal job authentication failed.") -> None:
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="internal_job_auth_invalid",
+            message=message,
+        )
+
+
 class ConfigurationError(ApiError):
     def __init__(self, message: str = "Required application configuration is missing.") -> None:
         super().__init__(

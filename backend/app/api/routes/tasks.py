@@ -129,7 +129,11 @@ def complete_task_route(
     session_context: RequiredSessionContextDep,
     task_service: TaskServiceDep,
 ) -> TaskDetailResponse:
-    detail = task_service.complete_task(user_id=session_context.user.id, task_id=task_id)
+    detail = task_service.complete_task(
+        user_id=session_context.user.id,
+        user_timezone=session_context.user.timezone,
+        task_id=task_id,
+    )
     return _build_task_detail(detail, session_context.user.timezone)
 
 
@@ -139,7 +143,11 @@ def reopen_task_route(
     session_context: RequiredSessionContextDep,
     task_service: TaskServiceDep,
 ) -> TaskDetailResponse:
-    detail = task_service.reopen_task(user_id=session_context.user.id, task_id=task_id)
+    detail = task_service.reopen_task(
+        user_id=session_context.user.id,
+        user_timezone=session_context.user.timezone,
+        task_id=task_id,
+    )
     return _build_task_detail(detail, session_context.user.timezone)
 
 

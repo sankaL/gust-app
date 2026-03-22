@@ -261,10 +261,12 @@ Reminder processing must be idempotent.
 Required behavior:
 
 - select only due, unsent, still-open reminders
+- requeue expired claims safely before the next claim pass
 - claim rows transactionally before send
 - send through Resend
 - use a deterministic idempotency key per reminder event
 - record send result and provider message ID
+- retry transient send failures without duplicate-send and mark terminal provider failures as failed
 
 This prevents duplicate emails during retries or overlapping job executions.
 
@@ -277,6 +279,18 @@ Required behavior:
 - completion and next-occurrence creation happen in one transaction
 - only one future open occurrence exists per series
 - recurrence calculation uses the user's timezone
+- daily recurrence advances to the next local calendar day after completion
+- monthly recurrence persists the generated occurrence day-of-month after month-end clamping
+- generated occurrences clear `reminder_at` when the inherited timestamp is already in the past
+
+### Retention Cleanup
+
+Bounded retention cleanup runs in the same scheduled worker execution.
+
+Required behavior:
+
+- delete expired capture rows in bounded batches
+- preserve tasks by nulling `tasks.capture_id` when the source capture is removed
 
 ## Data Model Expectations
 

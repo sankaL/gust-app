@@ -5,7 +5,12 @@ from typing import Annotated, Optional
 
 from fastapi import Depends, Request, Response
 
-from app.core.errors import AuthRequiredError, CsrfValidationError
+from app.core.errors import (
+    AuthRequiredError,
+    ConfigurationError,
+    CsrfValidationError,
+    InternalJobAuthError,
+)
 from app.core.security import (
     ACCESS_TOKEN_COOKIE,
     CSRF_COOKIE,
@@ -26,6 +31,7 @@ from app.services.auth import (
 from app.services.capture import CaptureService
 from app.services.extraction import OpenRouterExtractionService
 from app.services.group_service import GroupService
+from app.services.reminders import INTERNAL_JOB_SECRET_HEADER, ReminderWorkerService, ResendReminderService
 from app.services.task_service import TaskService
 from app.services.transcription import MistralTranscriptionService
 
@@ -64,6 +70,23 @@ def get_capture_service(
 
 def get_task_service(settings: SettingsDep) -> TaskService:
     return TaskService(settings=settings)
+
+
+def get_resend_reminder_service(settings: SettingsDep) -> ResendReminderService:
+    return ResendReminderService(settings)
+
+
+def get_reminder_worker_service(
+    settings: SettingsDep,
+    resend_reminder_service: Annotated[
+        ResendReminderService,
+        Depends(get_resend_reminder_service),
+    ],
+) -> ReminderWorkerService:
+    return ReminderWorkerService(
+        settings=settings,
+        reminder_delivery_service=resend_reminder_service,
+    )
 
 
 def get_group_service(
@@ -138,3 +161,15 @@ def require_csrf(
         raise CsrfValidationError()
 
     return session_context
+
+
+def require_internal_job_secret(
+    request: Request,
+    settings: SettingsDep,
+) -> None:
+    if not settings.internal_job_shared_secret:
+        raise ConfigurationError("Internal reminder job configuration is missing.")
+
+    header_value = request.headers.get(INTERNAL_JOB_SECRET_HEADER)
+    if header_value != settings.internal_job_shared_secret:
+        raise InternalJobAuthError()

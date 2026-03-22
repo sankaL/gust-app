@@ -107,6 +107,19 @@ Deployment implication:
 
 - environments must apply `0003_phase2_capture_extraction` before running the Phase 2 backend, because startup revision checks now require that revision by default
 
+## Phase 4 Revision
+
+Phase 4 introduces `0004_phase4_reminders_retention` as the required application revision.
+
+That revision establishes:
+
+- `tasks.capture_id` cleanup compatibility by changing the capture foreign key to `ON DELETE SET NULL`
+- the migration floor required by the internal reminder worker and bounded capture-retention cleanup
+
+Deployment implication:
+
+- environments must apply `0004_phase4_reminders_retention` before running the Phase 4 backend, because startup revision checks now require that revision by default
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -130,7 +143,7 @@ Why this order:
 Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
-- The required revision configured for the backend matches `0003_phase2_capture_extraction` or the current deployed head.
+- The required revision configured for the backend matches `0004_phase4_reminders_retention` or the current deployed head.
 - Backend startup revision check passes.
 - `users.timezone` exists and accepts valid IANA timezone data.
 - Each sampled user has exactly one Inbox group with `system_key = 'inbox'`.
@@ -142,6 +155,7 @@ Minimum verification after applying schema-affecting changes:
   - unique `idempotency_key`
 - Reminder lifecycle fields exist for claiming and send tracking.
 - Capture retention fields exist and new rows receive an `expires_at` value.
+- `tasks.capture_id` supports capture cleanup without orphaning tasks.
 
 For capture/extraction releases, also verify:
 
@@ -153,6 +167,8 @@ For reminder-related releases, also verify:
 - pending reminders can be claimed transactionally
 - claimed rows expire safely if a worker dies
 - sent reminders store provider message IDs
+- the internal reminder route rejects missing or invalid shared-secret auth
+- expired captures are deleted in bounded batches and task rows survive with `capture_id = null`
 
 ## Rollback Guidance
 

@@ -84,6 +84,7 @@ def _seed_task(
     needs_review: bool = False,
     due_date_value: Optional[date] = None,
     reminder_at_value: Optional[datetime] = None,
+    reminder_offset_minutes: Optional[int] = None,
     series_id: Optional[str] = None,
     recurrence_frequency: Optional[str] = None,
     recurrence_interval: Optional[int] = None,
@@ -106,7 +107,7 @@ def _seed_task(
                 needs_review=needs_review,
                 due_date=due_date_value,
                 reminder_at=reminder_at_value,
-                reminder_offset_minutes=None,
+                reminder_offset_minutes=reminder_offset_minutes,
                 recurrence_frequency=recurrence_frequency,
                 recurrence_interval=recurrence_interval,
                 recurrence_weekday=recurrence_weekday,
@@ -265,8 +266,8 @@ def test_group_delete_reassigns_soft_deleted_tasks_too(app: FastAPI, client: Tes
 def test_list_tasks_applies_sorting_and_user_scope(app: FastAPI, client: TestClient) -> None:
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Personal")
-    other_group_id = _seed_group(client, user_id=OTHER_USER_ID, name="Other")
     _seed_user(client, user_id=OTHER_USER_ID)
+    other_group_id = _seed_group(client, user_id=OTHER_USER_ID, name="Other")
 
     today = date.today()
     _seed_task(
@@ -424,12 +425,316 @@ def test_complete_reopen_delete_restore_manage_reminders(
     assert reminder_row.status == "pending"
 
 
+def test_complete_task_creates_next_daily_occurrence_with_reset_subtasks(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Recurring")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    reminder_at_value = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc) + timedelta(
+        hours=9
+    )
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Daily standup",
+        due_date_value=today,
+        reminder_at_value=reminder_at_value,
+        reminder_offset_minutes=540,
+        series_id=series_id,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+    )
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            subtasks.insert().values(
+                id=str(uuid.uuid4()),
+                task_id=task_id,
+                user_id=USER_ID,
+                title="Review blockers",
+                is_completed=True,
+                completed_at=datetime.now(timezone.utc),
+            )
+        )
+    _seed_reminder(client, user_id=USER_ID, task_id=task_id, scheduled_for=reminder_at_value)
+
+    response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks)
+            .where(tasks.c.series_id == series_id)
+            .order_by(tasks.c.created_at.asc(), tasks.c.id.asc())
+        ).fetchall()
+        original_row = next(row for row in task_rows if str(row.id) == task_id)
+        next_row = next(row for row in task_rows if str(row.id) != task_id)
+        next_task_id = str(next_row.id)
+        next_subtask_rows = connection.execute(
+            sa.select(subtasks).where(subtasks.c.task_id == next_task_id)
+        ).fetchall()
+        reminder_rows = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == next_task_id)
+        ).fetchall()
+
+    assert len(task_rows) == 2
+    assert original_row.status == "completed"
+    assert next_row.status == "open"
+    assert next_row.due_date == today + timedelta(days=1)
+    assert next_row.series_id == series_id
+    assert next_row.needs_review is False
+    assert next_row.reminder_at == (reminder_at_value + timedelta(days=1)).replace(
+        tzinfo=None
+    )
+    assert len(next_subtask_rows) == 1
+    assert next_subtask_rows[0].title == "Review blockers"
+    assert next_subtask_rows[0].is_completed is False
+    assert next_subtask_rows[0].completed_at is None
+    assert len(reminder_rows) == 1
+    assert reminder_rows[0].status == "pending"
+
+
+def test_complete_task_monthly_recurrence_uses_new_occurrence_day_of_month(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Billing")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Close monthly books",
+        due_date_value=today,
+        series_id=series_id,
+        recurrence_frequency="monthly",
+        recurrence_interval=1,
+        recurrence_day_of_month=today.day,
+    )
+
+    response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks)
+            .where(tasks.c.series_id == series_id)
+            .order_by(tasks.c.created_at.asc(), tasks.c.id.asc())
+        ).fetchall()
+
+    next_row = [row for row in task_rows if str(row.id) != task_id][0]
+    assert len(task_rows) == 2
+    assert next_row.status == "open"
+    assert next_row.recurrence_frequency == "monthly"
+    assert next_row.recurrence_day_of_month == next_row.due_date.day
+
+
+def test_complete_task_skips_new_occurrence_when_series_already_has_open_task(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Series Guard")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Weekly review",
+        due_date_value=today,
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=((today.weekday() + 2) % 7),
+    )
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Weekly review",
+        due_date_value=today + timedelta(days=1),
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=((today.weekday() + 2) % 7),
+    )
+
+    response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        open_series_rows = connection.execute(
+            sa.select(tasks).where(
+                tasks.c.series_id == series_id,
+                tasks.c.status == "open",
+                tasks.c.deleted_at.is_(None),
+            )
+        ).fetchall()
+
+    assert len(open_series_rows) == 1
+
+
+def test_complete_task_clears_past_derived_inherited_reminder(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Past Reminder")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    reminder_at_value = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=1)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Daily review",
+        due_date_value=today,
+        reminder_at_value=reminder_at_value,
+        reminder_offset_minutes=-1500,
+        series_id=series_id,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+    )
+    _seed_reminder(client, user_id=USER_ID, task_id=task_id, scheduled_for=reminder_at_value)
+
+    response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        next_row = connection.execute(
+            sa.select(tasks)
+            .where(
+                tasks.c.series_id == series_id,
+                tasks.c.status == "open",
+                tasks.c.deleted_at.is_(None),
+            )
+        ).one()
+        next_reminders = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == next_row.id)
+        ).fetchall()
+
+    assert next_row.reminder_at is None
+    assert next_reminders == []
+
+
+def test_reopen_recurring_task_reuses_generated_occurrence_as_undo_target(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Undo Series")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    reminder_at_value = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc) + timedelta(
+        hours=9
+    )
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Daily stretch",
+        due_date_value=today,
+        reminder_at_value=reminder_at_value,
+        reminder_offset_minutes=540,
+        series_id=series_id,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+    )
+    _seed_reminder(client, user_id=USER_ID, task_id=task_id, scheduled_for=reminder_at_value)
+
+    complete_response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+    reopen_response = client.post(f"/tasks/{task_id}/reopen", headers=headers)
+
+    assert complete_response.status_code == 200
+    assert reopen_response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks)
+            .where(tasks.c.series_id == series_id)
+            .order_by(tasks.c.created_at.asc(), tasks.c.id.asc())
+        ).fetchall()
+        generated_task = next(row for row in task_rows if str(row.id) != task_id)
+        generated_reminder = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == generated_task.id)
+        ).one()
+        open_rows = [
+            row
+            for row in task_rows
+            if row.status == "open" and row.deleted_at is None
+        ]
+
+    assert len(open_rows) == 1
+    assert str(open_rows[0].id) == task_id
+    assert generated_task.deleted_at is not None
+    assert generated_reminder.status == "cancelled"
+
+
+def test_reopen_recurring_task_rejects_when_series_has_other_open_occurrence(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Reopen Conflict")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Weekly sync",
+        due_date_value=today,
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=((today.weekday() + 2) % 7),
+    )
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            tasks.update()
+            .where(tasks.c.id == task_id)
+            .values(
+                status="completed",
+                completed_at=datetime.now(timezone.utc),
+                updated_at=sa.text("CURRENT_TIMESTAMP"),
+            )
+        )
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Manually adjusted weekly sync",
+        due_date_value=today + timedelta(days=14),
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=((today.weekday() + 2) % 7),
+    )
+
+    reopen_response = client.post(f"/tasks/{task_id}/reopen", headers=headers)
+
+    assert reopen_response.status_code == 409
+    assert reopen_response.json()["error"]["code"] == "task_reopen_conflict"
+
+
 def test_subtask_crud_and_user_scoping(app: FastAPI, client: TestClient) -> None:
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Errands")
     task_id = _seed_task(client, user_id=USER_ID, group_id=group_id, title="Plan weekend")
-    other_group_id = _seed_group(client, user_id=OTHER_USER_ID, name="Other Group")
     _seed_user(client, user_id=OTHER_USER_ID)
+    other_group_id = _seed_group(client, user_id=OTHER_USER_ID, name="Other Group")
     other_task_id = _seed_task(
         client,
         user_id=OTHER_USER_ID,

@@ -72,7 +72,12 @@ tasks = sa.Table(
     sa.Column("id", sa.Uuid(as_uuid=False), primary_key=True),
     sa.Column("user_id", sa.Uuid(as_uuid=False), sa.ForeignKey("users.id"), nullable=False),
     sa.Column("group_id", sa.Uuid(as_uuid=False), sa.ForeignKey("groups.id"), nullable=False),
-    sa.Column("capture_id", sa.Uuid(as_uuid=False), sa.ForeignKey("captures.id"), nullable=True),
+    sa.Column(
+        "capture_id",
+        sa.Uuid(as_uuid=False),
+        sa.ForeignKey("captures.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
     sa.Column("series_id", sa.Uuid(as_uuid=False), nullable=True),
     sa.Column("title", sa.Text(), nullable=False),
     sa.Column("status", task_status, nullable=False, server_default="open"),

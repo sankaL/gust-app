@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: UP045
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import sqlalchemy as sa
@@ -103,6 +103,14 @@ class ReminderRecord:
     scheduled_for: datetime
     status: str
     idempotency_key: str
+    claim_token: Optional[str]
+    claimed_at: Optional[datetime]
+    claim_expires_at: Optional[datetime]
+    send_attempt_count: int
+    last_error_code: Optional[str]
+    provider_message_id: Optional[str]
+    sent_at: Optional[datetime]
+    cancelled_at: Optional[datetime]
 
 
 @dataclass
@@ -207,6 +215,14 @@ def _row_to_reminder(row: sa.Row) -> ReminderRecord:
         scheduled_for=row.scheduled_for,
         status=row.status,
         idempotency_key=row.idempotency_key,
+        claim_token=str(row.claim_token) if row.claim_token is not None else None,
+        claimed_at=row.claimed_at,
+        claim_expires_at=row.claim_expires_at,
+        send_attempt_count=int(row.send_attempt_count),
+        last_error_code=row.last_error_code,
+        provider_message_id=row.provider_message_id,
+        sent_at=row.sent_at,
+        cancelled_at=row.cancelled_at,
     )
 
 
@@ -548,6 +564,29 @@ def list_tasks(
     return [_row_to_task(row) for row in rows]
 
 
+def get_open_task_in_series(
+    connection: Connection,
+    *,
+    user_id: str,
+    series_id: str,
+    exclude_task_id: Optional[str] = None,
+) -> Optional[TaskRecord]:
+    conditions = [
+        tasks.c.user_id == user_id,
+        tasks.c.series_id == series_id,
+        tasks.c.status == "open",
+        tasks.c.deleted_at.is_(None),
+    ]
+    if exclude_task_id is not None:
+        conditions.append(tasks.c.id != exclude_task_id)
+    row = connection.execute(
+        sa.select(tasks).where(*conditions).order_by(tasks.c.created_at.desc()).limit(1)
+    ).first()
+    if row is None:
+        return None
+    return _row_to_task(row)
+
+
 def create_task(
     connection: Connection,
     *,
@@ -736,6 +775,13 @@ def get_reminder_by_task_id(
     return _row_to_reminder(row)
 
 
+def get_reminder_by_id(connection: Connection, *, reminder_id: str) -> Optional[ReminderRecord]:
+    row = connection.execute(sa.select(reminders).where(reminders.c.id == reminder_id)).first()
+    if row is None:
+        return None
+    return _row_to_reminder(row)
+
+
 def create_reminder(
     connection: Connection,
     *,
@@ -757,6 +803,240 @@ def create_reminder(
     )
     row = connection.execute(sa.select(reminders).where(reminders.c.id == reminder_id)).one()
     return _row_to_reminder(row)
+
+
+def requeue_expired_claims(
+    connection: Connection,
+    *,
+    now: datetime,
+) -> int:
+    result = connection.execute(
+        reminders.update()
+        .where(
+            reminders.c.status == "claimed",
+            reminders.c.claim_expires_at.is_not(None),
+            reminders.c.claim_expires_at <= now,
+        )
+        .values(
+            status="pending",
+            claim_token=None,
+            claimed_at=None,
+            claim_expires_at=None,
+            updated_at=CURRENT_TIMESTAMP,
+        )
+    )
+    return int(result.rowcount or 0)
+
+
+def claim_due_reminders(
+    connection: Connection,
+    *,
+    now: datetime,
+    limit: int,
+    claim_timeout_seconds: int,
+) -> list[ReminderRecord]:
+    claim_token = str(uuid.uuid4())
+    claim_expires_at = now + timedelta(seconds=claim_timeout_seconds)
+
+    if connection.dialect.name == "postgresql":
+        connection.execute(
+            sa.text(
+                """
+                WITH eligible AS (
+                    SELECT r.id
+                    FROM reminders AS r
+                    JOIN tasks AS t
+                      ON t.id = r.task_id
+                     AND t.user_id = r.user_id
+                    WHERE r.status = 'pending'
+                      AND r.scheduled_for <= :now
+                      AND t.status = 'open'
+                      AND t.deleted_at IS NULL
+                    ORDER BY r.scheduled_for ASC, r.id ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT :limit
+                )
+                UPDATE reminders AS r
+                   SET status = 'claimed',
+                       claim_token = :claim_token,
+                       claimed_at = :now,
+                       claim_expires_at = :claim_expires_at,
+                       updated_at = CURRENT_TIMESTAMP
+                  FROM eligible
+                 WHERE r.id = eligible.id
+                """
+            ),
+            {
+                "now": now,
+                "limit": limit,
+                "claim_token": claim_token,
+                "claim_expires_at": claim_expires_at,
+            },
+        )
+    else:
+        candidate_rows = connection.execute(
+            sa.select(reminders.c.id)
+            .select_from(reminders.join(tasks, tasks.c.id == reminders.c.task_id))
+            .where(
+                reminders.c.status == "pending",
+                reminders.c.scheduled_for <= now,
+                tasks.c.status == "open",
+                tasks.c.deleted_at.is_(None),
+            )
+            .order_by(reminders.c.scheduled_for.asc(), reminders.c.id.asc())
+            .limit(limit)
+        ).fetchall()
+        candidate_ids = [str(row.id) for row in candidate_rows]
+        if not candidate_ids:
+            return []
+        connection.execute(
+            reminders.update()
+            .where(reminders.c.id.in_(candidate_ids), reminders.c.status == "pending")
+            .values(
+                status="claimed",
+                claim_token=claim_token,
+                claimed_at=now,
+                claim_expires_at=claim_expires_at,
+                updated_at=CURRENT_TIMESTAMP,
+            )
+        )
+
+    rows = connection.execute(
+        sa.select(reminders)
+        .where(reminders.c.claim_token == claim_token)
+        .order_by(reminders.c.scheduled_for.asc(), reminders.c.id.asc())
+    ).fetchall()
+    return [_row_to_reminder(row) for row in rows]
+
+
+def cancel_claimed_reminder(
+    connection: Connection,
+    *,
+    reminder_id: str,
+    claim_token: str,
+) -> Optional[ReminderRecord]:
+    connection.execute(
+        reminders.update()
+        .where(
+            reminders.c.id == reminder_id,
+            reminders.c.status == "claimed",
+            reminders.c.claim_token == claim_token,
+        )
+        .values(
+            status="cancelled",
+            claim_token=None,
+            claimed_at=None,
+            claim_expires_at=None,
+            last_error_code=None,
+            cancelled_at=CURRENT_TIMESTAMP,
+            updated_at=CURRENT_TIMESTAMP,
+        )
+    )
+    return get_reminder_by_id(connection, reminder_id=reminder_id)
+
+
+def mark_reminder_sent(
+    connection: Connection,
+    *,
+    reminder_id: str,
+    claim_token: str,
+    provider_message_id: str,
+    sent_at: datetime,
+) -> Optional[ReminderRecord]:
+    connection.execute(
+        reminders.update()
+        .where(
+            reminders.c.id == reminder_id,
+            reminders.c.status == "claimed",
+            reminders.c.claim_token == claim_token,
+        )
+        .values(
+            status="sent",
+            claim_token=None,
+            claimed_at=None,
+            claim_expires_at=None,
+            send_attempt_count=reminders.c.send_attempt_count + 1,
+            last_error_code=None,
+            provider_message_id=provider_message_id,
+            sent_at=sent_at,
+            updated_at=CURRENT_TIMESTAMP,
+        )
+    )
+    return get_reminder_by_id(connection, reminder_id=reminder_id)
+
+
+def requeue_claimed_reminder(
+    connection: Connection,
+    *,
+    reminder_id: str,
+    claim_token: str,
+    error_code: str,
+) -> Optional[ReminderRecord]:
+    connection.execute(
+        reminders.update()
+        .where(
+            reminders.c.id == reminder_id,
+            reminders.c.status == "claimed",
+            reminders.c.claim_token == claim_token,
+        )
+        .values(
+            status="pending",
+            claim_token=None,
+            claimed_at=None,
+            claim_expires_at=None,
+            send_attempt_count=reminders.c.send_attempt_count + 1,
+            last_error_code=error_code,
+            updated_at=CURRENT_TIMESTAMP,
+        )
+    )
+    return get_reminder_by_id(connection, reminder_id=reminder_id)
+
+
+def fail_claimed_reminder(
+    connection: Connection,
+    *,
+    reminder_id: str,
+    claim_token: str,
+    error_code: str,
+) -> Optional[ReminderRecord]:
+    connection.execute(
+        reminders.update()
+        .where(
+            reminders.c.id == reminder_id,
+            reminders.c.status == "claimed",
+            reminders.c.claim_token == claim_token,
+        )
+        .values(
+            status="failed",
+            claim_token=None,
+            claimed_at=None,
+            claim_expires_at=None,
+            send_attempt_count=reminders.c.send_attempt_count + 1,
+            last_error_code=error_code,
+            updated_at=CURRENT_TIMESTAMP,
+        )
+    )
+    return get_reminder_by_id(connection, reminder_id=reminder_id)
+
+
+def delete_expired_captures(
+    connection: Connection,
+    *,
+    now: datetime,
+    limit: int,
+) -> int:
+    rows = connection.execute(
+        sa.select(captures.c.id)
+        .where(captures.c.expires_at <= now)
+        .order_by(captures.c.expires_at.asc(), captures.c.id.asc())
+        .limit(limit)
+    ).fetchall()
+    capture_ids = [str(row.id) for row in rows]
+    if not capture_ids:
+        return 0
+
+    result = connection.execute(captures.delete().where(captures.c.id.in_(capture_ids)))
+    return int(result.rowcount or 0)
 
 
 def upsert_reminder(
