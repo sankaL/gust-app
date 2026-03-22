@@ -63,6 +63,9 @@ Voice is the primary mode. Text input is available but visually secondary.
 
 The Tasks screen shows open tasks grouped by user-defined groups.
 
+The Tasks surface keeps the primary shell at `Capture` and `Tasks`.
+Group management lives on a full-screen Tasks-adjacent route instead of a third primary tab.
+
 Each task supports:
 
 - Title
@@ -85,6 +88,7 @@ Users can:
 - Delete non-system groups
 
 Group descriptions exist to improve AI routing and are user-editable.
+Group management is reached from the Tasks area and is not a primary navigation tab.
 
 ### 4. Authentication
 
@@ -124,9 +128,13 @@ The app is installable on iPhone Safari and Android Chrome and behaves like a fu
 ### Flow C: Task Review
 
 1. User opens the Tasks screen.
-2. Flagged tasks are visually marked.
-3. User moves or edits incorrect tasks.
-4. Moving a flagged task to a different group clears `needs_review`.
+2. The app defaults to Inbox on first load and preserves the selected group in the URL afterward.
+3. Open tasks for the selected group are shown in `Overdue`, `Due Soon`, and `No Date` sections.
+4. `Due Soon` means today through the next 3 calendar days in the user's timezone.
+5. Flagged tasks are visually marked.
+6. User can complete or delete from the list with a visible undo path.
+7. User opens a task to edit it and saves the draft explicitly.
+8. Moving a flagged task to a different group clears `needs_review`.
 
 ### Flow D: Reminder Delivery
 
@@ -161,8 +169,10 @@ Open tasks are shown by group.
 Within each group, sorting is:
 
 1. Overdue
-2. Due today / due soon
+2. Due soon
 3. No due date
+
+`Due Soon` means tasks due today through the next 3 calendar days in the user's timezone.
 
 Within each due bucket, flagged tasks appear before unflagged tasks.
 
@@ -177,7 +187,8 @@ Task interactions:
 
 - Swipe right completes
 - Swipe left deletes with an undo affordance
-- Tap expands for detail editing
+- Explicit complete and delete actions exist as keyboard/desktop fallbacks
+- Tap opens full-screen detail editing
 
 ### Task Detail
 
@@ -190,11 +201,15 @@ Editable fields:
 - Recurrence
 - Subtasks
 
+Detail editing uses a local draft with an explicit save action.
+If the user clears the due date, the app must also clear the reminder and recurrence before save so the payload remains valid.
+V1 recurrence editing is limited to `daily`, `weekly`, and `monthly`.
+
 V1 does not include rich notes, attachments, or nested subtasks.
 
 ### Groups
 
-Users can manage groups from a lightweight screen.
+Users can manage groups from a full-screen Tasks-adjacent screen.
 
 Each custom group has:
 
@@ -287,7 +302,9 @@ Task states in v1:
 - Open
 - Completed
 
-Deleting a task removes it from active use immediately. Completed tasks are hidden from the default task list.
+Completing a task removes it from the default task list immediately and is recoverable through undo-backed reopen behavior.
+Deleting a task removes it from active use immediately through soft delete and is recoverable through undo-backed restore behavior.
+Completed tasks are hidden from the default task list in Phase 3.
 
 ### Required Task Fields
 

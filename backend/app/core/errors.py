@@ -112,6 +112,69 @@ class ExtractionFailedError(ApiError):
         )
 
 
+class TaskNotFoundError(ApiError):
+    def __init__(self, message: str = "Task could not be found.") -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="task_not_found",
+            message=message,
+        )
+
+
+class GroupNotFoundError(ApiError):
+    def __init__(self, message: str = "Group could not be found.") -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="group_not_found",
+            message=message,
+        )
+
+
+class SubtaskNotFoundError(ApiError):
+    def __init__(self, message: str = "Subtask could not be found.") -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="subtask_not_found",
+            message=message,
+        )
+
+
+class InvalidTaskError(ApiError):
+    def __init__(self, message: str = "Task input is invalid.") -> None:
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="invalid_task",
+            message=message,
+        )
+
+
+class InvalidGroupError(ApiError):
+    def __init__(self, message: str = "Group input is invalid.") -> None:
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="invalid_group",
+            message=message,
+        )
+
+
+class InvalidSubtaskError(ApiError):
+    def __init__(self, message: str = "Subtask input is invalid.") -> None:
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="invalid_subtask",
+            message=message,
+        )
+
+
+class ConflictError(ApiError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            code=code,
+            message=message,
+        )
+
+
 def not_implemented(resource: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,

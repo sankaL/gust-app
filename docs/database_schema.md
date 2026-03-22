@@ -112,7 +112,7 @@ Primary task record for open and completed tasks.
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
 | `group_id` | `uuid` | No | Foreign key to `groups.id`. Never null. |
 | `capture_id` | `uuid` | Yes | Foreign key to `captures.id` when task originated from a capture. |
-| `series_id` | `uuid` | Yes | Stable recurrence-series identifier shared by occurrences. Null for non-recurring tasks. |
+| `series_id` | `uuid` | Yes | Stable recurrence-series identifier shared by occurrences. Null for non-recurring tasks and actively maintained when recurrence is added, edited, or removed. |
 | `title` | `text` | No | Non-empty task title. |
 | `status` | `task_status` | No | `open` or `completed`. |
 | `needs_review` | `boolean` | No | Defaults to `false`. |
@@ -124,7 +124,7 @@ Primary task record for open and completed tasks.
 | `recurrence_weekday` | `smallint` | Yes | `0-6` for Sunday-Saturday. Required for weekly recurrence. |
 | `recurrence_day_of_month` | `smallint` | Yes | `1-31`. Required for monthly recurrence. |
 | `completed_at` | `timestamptz` | Yes | Set when completed. |
-| `deleted_at` | `timestamptz` | Yes | Soft-delete marker used for undo/operational safety if adopted. |
+| `deleted_at` | `timestamptz` | Yes | Soft-delete marker adopted in v1 for swipe-delete undo and operational safety. |
 | `created_at` | `timestamptz` | No | Default `now()`. |
 | `updated_at` | `timestamptz` | No | Default `now()`. |
 
@@ -134,6 +134,7 @@ Constraints and invariants:
 - `title` must not be blank after trimming.
 - `completed_at` is required when `status = 'completed'` and must be null when `status = 'open'`.
 - If `reminder_at` is populated, `due_date` must also be populated at the application layer in v1.
+- Clearing `due_date` in task editing must also clear `reminder_at`, `reminder_offset_minutes`, and recurrence columns at the application layer.
 - `reminder_at` is the canonical task-level reminder timestamp. `reminder_offset_minutes` is retained to support recurrence inheritance.
 - Recurrence columns are all null for non-recurring tasks.
 - Recurring task rules:
@@ -224,6 +225,8 @@ Constraints and invariants:
 - Unique constraint on `idempotency_key`.
 - Only due, unsent, still-open reminders are eligible for claiming.
 - Completion or deletion of the task cancels a pending reminder instead of sending it.
+- Task edits must keep reminder rows in sync so there is never more than one reminder row per task occurrence.
+- Reopen or restore only reactivates a reminder when the task still has a future `reminder_at`.
 - Worker logic must claim rows transactionally before send.
 
 ## Cross-Table Rules
