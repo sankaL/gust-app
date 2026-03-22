@@ -356,6 +356,7 @@ Required automated coverage:
 Required end-to-end coverage:
 
 - Google sign-in happy path in a test environment
+- local dev sign-in through the backend-mediated local Supabase test account flow
 - voice capture with mocked transcription response
 - text capture fallback
 - reminder job flow with mocked Resend provider

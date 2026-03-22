@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: UP045
 from dataclasses import dataclass
 from typing import Any, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse, urlunparse
 
 import httpx
 import jwt
@@ -49,6 +49,11 @@ class SupabaseAuthService:
         return f"{self.settings.supabase_url.rstrip('/')}/auth/v1/token"
 
     @property
+    def signup_url(self) -> str:
+        assert self.settings.supabase_url is not None
+        return f"{self.settings.supabase_url.rstrip('/')}/auth/v1/signup"
+
+    @property
     def logout_url(self) -> str:
         assert self.settings.supabase_url is not None
         return f"{self.settings.supabase_url.rstrip('/')}/auth/v1/logout"
@@ -62,6 +67,23 @@ class SupabaseAuthService:
     def issuer(self) -> str:
         assert self.settings.supabase_url is not None
         return f"{self.settings.supabase_url.rstrip('/')}/auth/v1"
+
+    def accepted_issuers(self) -> set[str]:
+        issuers = {self.issuer}
+
+        if not self.settings.gust_dev_mode:
+            return issuers
+
+        parsed_issuer = urlparse(self.issuer)
+        if parsed_issuer.hostname != "host.docker.internal":
+            return issuers
+
+        for hostname in ("127.0.0.1", "localhost"):
+            issuers.add(
+                urlunparse(parsed_issuer._replace(netloc=f"{hostname}:{parsed_issuer.port}"))
+            )
+
+        return issuers
 
     @property
     def callback_url(self) -> str:
@@ -101,6 +123,42 @@ class SupabaseAuthService:
         data = await self._post_token_request({"grant_type": "refresh_token"}, payload)
         return self._parse_session(data)
 
+    async def sign_up_with_password(
+        self,
+        *,
+        email: str,
+        password: str,
+        display_name: Optional[str] = None,
+    ) -> AuthenticatedSession:
+        payload: dict[str, Any] = {
+            "email": email,
+            "password": password,
+        }
+        if display_name:
+            payload["data"] = {
+                "full_name": display_name,
+                "name": display_name,
+            }
+        data = await self._post_auth_request(self.signup_url, payload)
+        return self._parse_session(data)
+
+    async def sign_in_with_password(
+        self,
+        *,
+        email: str,
+        password: str,
+    ) -> AuthenticatedSession:
+        payload = {
+            "email": email,
+            "password": password,
+        }
+        data = await self._post_auth_request(
+            self.token_url,
+            payload,
+            query_params={"grant_type": "password"},
+        )
+        return self._parse_session(data)
+
     async def revoke_refresh_token(self, *, refresh_token: str) -> None:
         self.ensure_configured()
         headers = {"apikey": self.settings.supabase_anon_key or ""}
@@ -124,9 +182,12 @@ class SupabaseAuthService:
             access_token,
             signing_key,
             algorithms=["ES256", "RS256"],
-            issuer=self.issuer,
-            options={"require": ["exp", "iat", "sub"], "verify_aud": False},
+            options={"require": ["exp", "iat", "sub"], "verify_aud": False, "verify_iss": False},
         )
+
+        issuer = claims.get("iss")
+        if issuer not in self.accepted_issuers():
+            raise InvalidTokenError("JWT issuer did not match the configured Supabase auth issuer.")
 
         email = claims.get("email")
         user_id = claims.get("sub")
@@ -150,11 +211,24 @@ class SupabaseAuthService:
         query_params: dict[str, str],
         payload: dict[str, Any],
     ) -> dict[str, Any]:
+        return await self._post_auth_request(
+            self.token_url,
+            payload,
+            query_params=query_params,
+        )
+
+    async def _post_auth_request(
+        self,
+        url: str,
+        payload: dict[str, Any],
+        *,
+        query_params: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
         self.ensure_configured()
         headers = {"apikey": self.settings.supabase_anon_key or ""}
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                self.token_url,
+                url,
                 params=query_params,
                 json=payload,
                 headers=headers,

@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react'
 
-import { getAuthStartUrl, type SessionStatus } from '../lib/api'
+import { type SessionStatus } from '../lib/api'
+import { SessionRequiredCard } from './SessionRequiredCard'
 
 type SessionGuardProps = {
   session: SessionStatus | undefined
@@ -50,20 +51,7 @@ export function SessionGuard({
           </p>
         </div>
 
-        <div className="rounded-soft border border-outline/40 bg-surface-container p-6 shadow-ambient">
-          <div className="space-y-4">
-            <p className="font-display text-2xl text-on-surface">Session Required</p>
-            <p className="font-body text-sm leading-6 text-on-surface-variant">
-              Gust fails closed when session state is missing. Sign in with Google to continue.
-            </p>
-            <a
-              href={getAuthStartUrl()}
-              className="inline-flex rounded-pill bg-primary px-5 py-3 font-body text-sm font-medium text-surface"
-            >
-              Sign in with Google
-            </a>
-          </div>
-        </div>
+        <SessionRequiredCard />
       </section>
     )
   }

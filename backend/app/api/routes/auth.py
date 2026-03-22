@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: UP045
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
@@ -12,7 +12,12 @@ from app.core.dependencies import (
     get_optional_session_context,
     require_csrf,
 )
-from app.core.errors import AuthRequiredError, CsrfValidationError, InvalidTimezoneError
+from app.core.errors import (
+    AuthRequiredError,
+    CsrfValidationError,
+    InvalidTimezoneError,
+    UpstreamAuthError,
+)
 from app.core.security import (
     CSRF_COOKIE,
     OAUTH_CODE_VERIFIER_COOKIE,
@@ -39,6 +44,10 @@ from app.db.repositories import (
 from app.services.auth import AuthenticatedSession, SupabaseAuthService
 
 router = APIRouter()
+
+LOCAL_DEV_AUTH_EMAIL = "local-dev@gust.local"
+LOCAL_DEV_AUTH_PASSWORD = "gust-local-dev-password"
+LOCAL_DEV_AUTH_DISPLAY_NAME = "Local Dev User"
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 OptionalSessionContextDep = Annotated[
@@ -80,17 +89,7 @@ async def get_session_status(
         return SessionStatusResponse(signed_in=False)
 
     csrf_token = ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
-    return SessionStatusResponse(
-        signed_in=True,
-        user=UserSummary(
-            id=session_context.user.id,
-            email=session_context.user.email,
-            display_name=session_context.user.display_name,
-        ),
-        timezone=session_context.user.timezone,
-        inbox_group_id=session_context.inbox_group_id,
-        csrf_token=csrf_token,
-    )
+    return _build_session_status_response(session_context, csrf_token)
 
 
 @router.get("/google/start")
@@ -141,6 +140,41 @@ async def auth_callback(
     return response
 
 
+@router.post("/dev-login", response_model=SessionStatusResponse)
+async def local_dev_login(
+    request: Request,
+    response: Response,
+    settings: SettingsDep,
+    auth_service: AuthServiceDep,
+) -> SessionStatusResponse:
+    if not settings.gust_dev_mode:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
+
+    auth_service.ensure_configured()
+    try:
+        session = await auth_service.sign_up_with_password(
+            email=LOCAL_DEV_AUTH_EMAIL,
+            password=LOCAL_DEV_AUTH_PASSWORD,
+            display_name=LOCAL_DEV_AUTH_DISPLAY_NAME,
+        )
+    except UpstreamAuthError:
+        session = await auth_service.sign_in_with_password(
+            email=LOCAL_DEV_AUTH_EMAIL,
+            password=LOCAL_DEV_AUTH_PASSWORD,
+        )
+
+    with connection_scope(settings.database_url) as connection:
+        _bootstrap_user_session(connection, session)
+        session_context = get_session_context(connection, session.identity.user_id)
+
+    if session_context is None:
+        raise AuthRequiredError("Authenticated user could not be resolved locally.")
+
+    set_session_cookies(response, settings, session.tokens)
+    csrf_token = ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
+    return _build_session_status_response(session_context, csrf_token)
+
+
 @router.post("/logout")
 async def logout(
     response: Response,
@@ -183,11 +217,28 @@ async def update_timezone(
         inbox = ensure_inbox_group(connection, user_id=session_context.user.id)
 
     csrf_token = ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
+    return _build_session_status_response(
+        SessionContext(
+            user=user,
+            inbox_group_id=inbox.id,
+        ),
+        csrf_token,
+    )
+
+
+def _build_session_status_response(
+    session_context: SessionContext,
+    csrf_token: str,
+) -> SessionStatusResponse:
     return SessionStatusResponse(
         signed_in=True,
-        user=UserSummary(id=user.id, email=user.email, display_name=user.display_name),
-        timezone=user.timezone,
-        inbox_group_id=inbox.id,
+        user=UserSummary(
+            id=session_context.user.id,
+            email=session_context.user.email,
+            display_name=session_context.user.display_name,
+        ),
+        timezone=session_context.user.timezone,
+        inbox_group_id=session_context.inbox_group_id,
         csrf_token=csrf_token,
     )
 
