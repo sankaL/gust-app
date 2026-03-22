@@ -23,11 +23,11 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
-| P0-01 | Populate the schema source of truth for users, Inbox, tasks, subtasks, captures, reminders, recurrence, timezone, and retention | TODO | TBD | Release blocker before coding | Schema, PRD, Tech |
-| P0-02 | Populate the backend/database migration runbook with bootstrap order, rollout checks, rollback notes, and post-deploy verification | TODO | TBD | Release blocker before coding | Runbook, Schema, Tech |
-| P0-03 | Scaffold the frontend app with React, TypeScript, Vite, Tailwind, Router, Query, and PWA foundations | TODO | TBD | Match committed stack | Tech, Design |
-| P0-04 | Scaffold the backend app with FastAPI, Pydantic v2, SQLAlchemy Core, psycopg, and Alembic | TODO | TBD | Match committed stack | Tech |
-| P0-05 | Add dev-mode local development support with Makefile-managed Docker services and baseline CI/checks | TODO | TBD | Must not use production services locally | AGENTS, Tech |
+| P0-01 | Populate the schema source of truth for users, Inbox, tasks, subtasks, captures, reminders, recurrence, timezone, and retention | DONE | 2026-03-22 | Normalized schema contract added for v1 foundation | Schema, PRD, Tech |
+| P0-02 | Populate the backend/database migration runbook with bootstrap order, rollout checks, rollback notes, and post-deploy verification | DONE | 2026-03-22 | Runbook aligned with local Supabase, Alembic, and rollout checks | Runbook, Schema, Tech |
+| P0-03 | Scaffold the frontend app with React, TypeScript, Vite, Tailwind, Router, Query, and PWA foundations | DONE | 2026-03-22 | App shell, providers, routes, tests, and PWA baseline added | Tech, Design |
+| P0-04 | Scaffold the backend app with FastAPI, Pydantic v2, SQLAlchemy Core, psycopg, and Alembic | DONE | 2026-03-22 | App factory, placeholder routers, tests, and Alembic baseline added | Tech |
+| P0-05 | Add dev-mode local development support with Makefile-managed Docker services and baseline CI/checks | DONE | 2026-03-22 | Makefile, Docker, Supabase config, env examples, and CI added | AGENTS, Tech |
 
 ## Phase 1: Auth and Core Backend
 

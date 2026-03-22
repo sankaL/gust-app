@@ -9,6 +9,13 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+backend/.venv/
+backend/.pytest_cache/
+backend/.ruff_cache/
 develop-eggs/
 dist/
 downloads/
@@ -136,6 +143,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.example.local
 .envrc
 .venv
 env/

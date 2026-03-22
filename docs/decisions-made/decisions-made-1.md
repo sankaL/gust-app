@@ -1,5 +1,13 @@
 # Decisions Made
 
+## 2026-03-22 12:37:17 EDT
+
+- Executed Phase 0 as a true foundation pass and stopped at documented contracts, scaffolds, local-dev plumbing, and baseline checks rather than pulling Phase 1 product behavior forward.
+- Chose a no-op Alembic baseline revision in Phase 0 so startup version checks and CI can validate migration wiring before the first substantive schema migration lands in Phase 1.
+- Standardized the v1 schema on a dedicated `reminders` table plus typed recurrence columns on `tasks`, instead of inline-only reminder state or JSON-heavy recurrence blobs.
+- Enforced group-name uniqueness per user at the schema-contract level to keep extractor `group_name` resolution deterministic.
+- Kept local dev aligned to the committed stack by using local Supabase CLI services plus Dockerized frontend/backend app containers, while leaving application auth behavior fail-closed and un-bypassed.
+
 ## 2026-03-22 11:45:55 EDT
 
 - Standardized local testing guidance around an explicit env-file dev-mode flag and a Makefile-managed Docker stack instead of ad-hoc use of hosted production services.

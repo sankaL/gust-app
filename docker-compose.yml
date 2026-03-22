@@ -1,0 +1,45 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    working_dir: /workspace/frontend
+    environment:
+      VITE_GUST_DEV_MODE: "true"
+      VITE_API_BASE_URL: "http://localhost:8000"
+    volumes:
+      - .:/workspace
+      - frontend-node-modules:/workspace/frontend/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    command: sh -lc "npm install && npm run dev"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    working_dir: /workspace/backend
+    environment:
+      APP_ENV: development
+      GUST_DEV_MODE: "true"
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@host.docker.internal:54322/postgres
+      REQUIRED_ALEMBIC_REVISION: 0001_phase0_baseline
+      RUN_STARTUP_CHECKS: "true"
+      LOG_LEVEL: INFO
+    volumes:
+      - .:/workspace
+      - backend-venv:/workspace/backend/.venv
+    ports:
+      - "8000:8000"
+    command: >
+      sh -lc "python -m venv .venv &&
+      .venv/bin/pip install --upgrade pip &&
+      .venv/bin/pip install -e '.[dev]' &&
+      .venv/bin/alembic upgrade head &&
+      .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  frontend-node-modules:
+  backend-venv:

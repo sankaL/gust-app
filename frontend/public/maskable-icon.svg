@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="maskableGradient" cx="35%" cy="25%" r="80%">
+      <stop offset="0%" stop-color="#ba9eff" />
+      <stop offset="100%" stop-color="#8455ef" />
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="160" fill="#131313" />
+  <circle cx="256" cy="256" r="176" fill="url(#maskableGradient)" />
+  <circle cx="256" cy="236" r="56" fill="#131313" />
+  <rect x="222" y="172" width="68" height="126" rx="34" fill="#131313" />
+  <path
+    d="M184 258c0 39.8 32.2 72 72 72s72-32.2 72-72"
+    fill="none"
+    stroke="#131313"
+    stroke-linecap="round"
+    stroke-width="24"
+  />
+  <path
+    d="M256 330v36M224 366h64"
+    fill="none"
+    stroke="#131313"
+    stroke-linecap="round"
+    stroke-width="24"
+  />
+</svg>

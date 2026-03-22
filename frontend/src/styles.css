@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  font-family: Inter, sans-serif;
+  --color-surface: #0e0e0e;
+  --color-surface-dim: #121212;
+  --color-surface-container: #1a1a1a;
+  --color-surface-container-high: #20201f;
+  --color-surface-container-highest: #262626;
+  --color-surface-variant: rgba(44, 44, 44, 0.6);
+  --color-primary: #ba9eff;
+  --color-primary-dim: #8455ef;
+  --color-tertiary: #fd81a8;
+  --color-on-surface: #ffffff;
+  --color-on-surface-variant: #adaaaa;
+  --color-outline: #484847;
+  background:
+    radial-gradient(circle at top, rgba(132, 85, 239, 0.22), transparent 35%),
+    linear-gradient(180deg, #161616 0%, #0b0b0b 100%);
+  background-color: var(--color-surface);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(circle at top left, rgba(186, 158, 255, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(253, 129, 168, 0.08), transparent 22%),
+    linear-gradient(180deg, #131313 0%, #0d0d0d 100%);
+  color: var(--color-on-surface);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
