@@ -23,12 +23,41 @@ from app.services.auth import (
     InvalidTokenError,
     SupabaseAuthService,
 )
+from app.services.capture import CaptureService
+from app.services.extraction import OpenRouterExtractionService
+from app.services.transcription import MistralTranscriptionService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 def get_auth_service(settings: SettingsDep) -> SupabaseAuthService:
     return SupabaseAuthService(settings)
+
+
+def get_transcription_service(settings: SettingsDep) -> MistralTranscriptionService:
+    return MistralTranscriptionService(settings)
+
+
+def get_extraction_service(settings: SettingsDep) -> OpenRouterExtractionService:
+    return OpenRouterExtractionService(settings)
+
+
+def get_capture_service(
+    settings: SettingsDep,
+    transcription_service: Annotated[
+        MistralTranscriptionService,
+        Depends(get_transcription_service),
+    ],
+    extraction_service: Annotated[
+        OpenRouterExtractionService,
+        Depends(get_extraction_service),
+    ],
+) -> CaptureService:
+    return CaptureService(
+        settings=settings,
+        transcription_service=transcription_service,
+        extraction_service=extraction_service,
+    )
 
 
 async def get_optional_session_context(

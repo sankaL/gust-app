@@ -1,6 +1,6 @@
 # Gust Database Schema
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Last Updated:** 2026-03-22
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
@@ -117,6 +117,7 @@ Primary task record for open and completed tasks.
 | `status` | `task_status` | No | `open` or `completed`. |
 | `needs_review` | `boolean` | No | Defaults to `false`. |
 | `due_date` | `date` | Yes | Optional due date in the user's calendar context. |
+| `reminder_at` | `timestamptz` | Yes | Canonical task-level reminder timestamp when the capture flow or task editing sets a reminder. |
 | `reminder_offset_minutes` | `integer` | Yes | Relative offset from the due date/time for inherited recurrence reminders. |
 | `recurrence_frequency` | `recurrence_frequency` | Yes | Null when not recurring. |
 | `recurrence_interval` | `integer` | Yes | Reserved for v1 default `1`; must be `1` in v1. |
@@ -132,6 +133,8 @@ Constraints and invariants:
 - Foreign key ownership must align by user in application logic and migration-time integrity checks.
 - `title` must not be blank after trimming.
 - `completed_at` is required when `status = 'completed'` and must be null when `status = 'open'`.
+- If `reminder_at` is populated, `due_date` must also be populated at the application layer in v1.
+- `reminder_at` is the canonical task-level reminder timestamp. `reminder_offset_minutes` is retained to support recurrence inheritance.
 - Recurrence columns are all null for non-recurring tasks.
 - Recurring task rules:
   - `recurrence_frequency = 'daily'` requires no weekday or day-of-month.

@@ -1,5 +1,12 @@
 # Decisions Made
 
+## 2026-03-22 19:05:00 EDT
+
+- Added `tasks.reminder_at` in Phase 2 and treated it as the canonical task-level reminder timestamp, while keeping `reminder_offset_minutes` for recurrence inheritance rather than trying to overload the offset field for absolute capture-time reminder writes.
+- Kept Phase 2 extraction synchronous behind the capture submit endpoint so voice/text capture, transcript review, and task creation stay in one bounded user flow without introducing polling or background orchestration early.
+- Split capture integrations into a backend orchestration service plus separate transcription and extraction clients so provider failures can be tested independently and routes stay narrow.
+- Chose separate review for both voice and text capture, with same-recording voice retry kept in memory on the client rather than persisting raw audio server-side.
+
 ## 2026-03-22 16:42:00 EDT
 
 - Implemented Phase 1 auth around backend-owned Supabase PKCE callback handling, secure cookie session storage, request-time JWT validation, and explicit CSRF enforcement instead of relying on browser-managed Supabase sessions.

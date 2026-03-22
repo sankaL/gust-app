@@ -1,0 +1,581 @@
+from __future__ import annotations
+
+# ruff: noqa: UP045
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+import sqlalchemy as sa
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+import app.services.capture as capture_service_module
+from app.core.dependencies import (
+    get_auth_service,
+    get_extraction_service,
+    get_transcription_service,
+)
+from app.core.security import ACCESS_TOKEN_COOKIE
+from app.db.engine import connection_scope
+from app.db.repositories import ensure_inbox_group, upsert_user
+from app.db.schema import captures, groups, reminders, subtasks, tasks
+from app.services.auth import AuthenticatedIdentity
+from app.services.extraction import ExtractorMalformedResponseError
+from app.services.transcription import TranscriptionResult, TranscriptionServiceError
+
+
+@dataclass
+class FakeAuthService:
+    def ensure_configured(self) -> None:
+        return None
+
+    def validate_access_token(self, access_token: str) -> AuthenticatedIdentity:
+        assert access_token == "access-token"
+        return AuthenticatedIdentity(
+            user_id="11111111-1111-1111-1111-111111111111",
+            email="user@example.com",
+            display_name="Gust User",
+        )
+
+
+@dataclass
+class FakeTranscriptionService:
+    result: Optional[TranscriptionResult] = None
+    error: Optional[Exception] = None
+    call_count: int = 0
+
+    async def transcribe(
+        self,
+        *,
+        audio_bytes: bytes,
+        filename: str,
+        content_type: str,
+    ) -> TranscriptionResult:
+        self.call_count += 1
+        assert audio_bytes
+        assert filename
+        assert content_type
+        if self.error is not None:
+            raise self.error
+        assert self.result is not None
+        return self.result
+
+
+@dataclass
+class FakeExtractionService:
+    responses: list[Any] = field(default_factory=list)
+    call_count: int = 0
+    requests: list[Any] = field(default_factory=list)
+
+    async def extract(self, *, request, schema: dict[str, object]) -> dict[str, object]:
+        self.call_count += 1
+        self.requests.append(request)
+        assert "properties" in schema
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+def _override_auth_service(app: FastAPI) -> None:
+    app.dependency_overrides[get_auth_service] = lambda: FakeAuthService()
+
+
+def _override_transcription_service(app: FastAPI, service: FakeTranscriptionService) -> None:
+    app.dependency_overrides[get_transcription_service] = lambda: service
+
+
+def _override_extraction_service(app: FastAPI, service: FakeExtractionService) -> None:
+    app.dependency_overrides[get_extraction_service] = lambda: service
+
+
+def _seed_user(
+    client: TestClient,
+    *,
+    user_id: str = "11111111-1111-1111-1111-111111111111",
+) -> None:
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        upsert_user(
+            connection,
+            user_id=user_id,
+            email="user@example.com",
+            display_name="Gust User",
+            timezone="UTC",
+        )
+        ensure_inbox_group(connection, user_id=user_id)
+
+
+def _seed_group(
+    client: TestClient,
+    *,
+    user_id: str,
+    name: str,
+    description: Optional[str] = None,
+) -> str:
+    group_id = str(uuid.uuid4())
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            groups.insert().values(
+                id=group_id,
+                user_id=user_id,
+                name=name,
+                description=description,
+                is_system=False,
+                system_key=None,
+            )
+        )
+    return group_id
+
+
+def _seed_open_task(
+    client: TestClient,
+    *,
+    user_id: str,
+    group_id: str,
+    title: str,
+) -> None:
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            tasks.insert().values(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                group_id=group_id,
+                capture_id=None,
+                series_id=None,
+                title=title,
+                status="open",
+                needs_review=False,
+            )
+        )
+
+
+def _authenticated_headers(app: FastAPI, client: TestClient) -> dict[str, str]:
+    _override_auth_service(app)
+    _seed_user(client)
+    client.cookies.set(ACCESS_TOKEN_COOKIE, "access-token")
+    session_response = client.get("/auth/session")
+    csrf_token = session_response.json()["csrf_token"]
+    assert csrf_token is not None
+    return {"X-CSRF-Token": csrf_token}
+
+
+def test_text_capture_requires_csrf(app: FastAPI, client: TestClient) -> None:
+    _override_auth_service(app)
+    _seed_user(client)
+    client.cookies.set(ACCESS_TOKEN_COOKIE, "access-token")
+
+    response = client.post("/captures/text", json={"text": "Plan roadmap"})
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "csrf_invalid"
+
+
+def test_text_capture_creates_review_ready_capture(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+
+    response = client.post("/captures/text", json={"text": "Plan roadmap"}, headers=headers)
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["status"] == "ready_for_review"
+    assert payload["transcript_text"] == "Plan roadmap"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(
+            sa.select(captures).where(captures.c.id == payload["capture_id"])
+        ).one()
+
+    assert capture_row.input_type == "text"
+    assert capture_row.source_text == "Plan roadmap"
+    assert capture_row.status == "ready_for_review"
+
+
+def test_voice_capture_transcribes_audio_and_returns_review_state(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    fake_transcription = FakeTranscriptionService(
+        result=TranscriptionResult(
+            transcript_text="Buy coffee beans at 5pm",
+            provider="mistral",
+            latency_ms=412,
+        )
+    )
+    _override_transcription_service(app, fake_transcription)
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["status"] == "ready_for_review"
+    assert payload["transcript_text"] == "Buy coffee beans at 5pm"
+    assert fake_transcription.call_count == 1
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(
+            sa.select(captures).where(captures.c.id == payload["capture_id"])
+        ).one()
+
+    assert capture_row.status == "ready_for_review"
+    assert capture_row.transcription_provider == "mistral"
+    assert capture_row.transcription_latency_ms == 412
+
+
+def test_voice_capture_marks_capture_failed_on_transcription_error(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(error=TranscriptionServiceError("provider down")),
+    )
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "transcription_failed"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "transcription_failed"
+    assert capture_row.error_code == "transcription_provider_error"
+
+
+def test_submit_capture_persists_tasks_subtasks_and_reminders(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    work_group_id = _seed_group(client, user_id=user_id, name="Work", description="Job")
+    _seed_open_task(client, user_id=user_id, group_id=work_group_id, title="Existing work task")
+
+    create_response = client.post(
+        "/captures/text",
+        json={"text": "Draft follow-up and buy groceries"},
+        headers=headers,
+    )
+    capture_id = create_response.json()["capture_id"]
+
+    fake_extraction = FakeExtractionService(
+        responses=[
+            {
+                "tasks": [
+                    {
+                        "title": "Send invoice",
+                        "due_date": "2026-03-23",
+                        "reminder_at": "2026-03-23T13:00:00Z",
+                        "group_name": "Work",
+                        "top_confidence": 0.91,
+                        "alternative_groups": [{"group_name": "Inbox", "confidence": 0.2}],
+                        "subtasks": [{"title": "Draft email"}],
+                    },
+                    {
+                        "title": "Buy groceries",
+                        "due_date": "2026-03-24",
+                        "group_name": "Unknown",
+                        "top_confidence": 0.65,
+                        "alternative_groups": [{"group_name": "Inbox", "confidence": 0.58}],
+                    },
+                    {
+                        "title": "  ",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                ]
+            }
+        ]
+    )
+    _override_extraction_service(app, fake_extraction)
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": "Draft follow-up and buy groceries tomorrow"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tasks_created_count"] == 2
+    assert payload["tasks_flagged_for_review_count"] == 1
+    assert payload["tasks_skipped_count"] == 1
+    assert payload["zero_actionable"] is False
+    assert fake_extraction.call_count == 1
+    assert fake_extraction.requests[0].groups[1]["recent_task_titles"] == ["Existing work task"]
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks).where(tasks.c.capture_id == capture_id).order_by(tasks.c.title)
+        ).fetchall()
+        reminder_rows = connection.execute(sa.select(reminders)).fetchall()
+        subtask_rows = connection.execute(sa.select(subtasks)).fetchall()
+        capture_row = connection.execute(
+            sa.select(captures).where(captures.c.id == capture_id)
+        ).one()
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+
+    assert [row.title for row in task_rows] == ["Buy groceries", "Send invoice"]
+    assert task_rows[0].group_id == inbox_group.id
+    assert task_rows[0].needs_review is True
+    assert task_rows[1].group_id == work_group_id
+    assert task_rows[1].needs_review is False
+    assert task_rows[1].reminder_at == datetime(2026, 3, 23, 13, 0)
+    assert task_rows[1].reminder_offset_minutes == 780
+    assert len(reminder_rows) == 1
+    assert reminder_rows[0].scheduled_for == datetime(2026, 3, 23, 13, 0)
+    assert [row.title for row in subtask_rows] == ["Draft email"]
+    assert capture_row.status == "completed"
+    assert capture_row.extraction_attempt_count == 1
+
+
+def test_submit_capture_can_retry_after_downstream_write_failure(
+    app: FastAPI,
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    create_response = client.post(
+        "/captures/text",
+        json={"text": "Plan trip"},
+        headers=headers,
+    )
+    capture_id = create_response.json()["capture_id"]
+
+    fake_extraction = FakeExtractionService(
+        responses=[
+            {"tasks": [{"title": "Plan trip", "group_name": "Inbox", "top_confidence": 0.9}]},
+            {"tasks": [{"title": "Plan trip", "group_name": "Inbox", "top_confidence": 0.9}]},
+        ]
+    )
+    _override_extraction_service(app, fake_extraction)
+
+    real_create_task = capture_service_module.create_task
+    create_task_calls = 0
+
+    def flaky_create_task(*args, **kwargs):
+        nonlocal create_task_calls
+        create_task_calls += 1
+        if create_task_calls == 1:
+            raise RuntimeError("database write failed")
+        return real_create_task(*args, **kwargs)
+
+    monkeypatch.setattr(capture_service_module, "create_task", flaky_create_task)
+
+    with TestClient(app, follow_redirects=False, raise_server_exceptions=False) as failing_client:
+        _override_auth_service(app)
+        failing_client.cookies.set(ACCESS_TOKEN_COOKIE, "access-token")
+        session_response = failing_client.get("/auth/session")
+        csrf_token = session_response.json()["csrf_token"]
+        assert csrf_token is not None
+
+        first_response = failing_client.post(
+            f"/captures/{capture_id}/submit",
+            json={"transcript_text": "Plan trip next week"},
+            headers={"X-CSRF-Token": csrf_token},
+        )
+
+    assert first_response.status_code == 500
+    assert first_response.json()["error"]["code"] == "internal_error"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(
+            sa.select(captures).where(captures.c.id == capture_id)
+        ).one()
+        task_rows = connection.execute(
+            sa.select(tasks).where(tasks.c.capture_id == capture_id)
+        ).fetchall()
+
+    assert capture_row.status == "ready_for_review"
+    assert task_rows == []
+
+    second_response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": "Plan trip next week"},
+        headers=headers,
+    )
+
+    assert second_response.status_code == 200
+    assert second_response.json()["tasks_created_count"] == 1
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        final_capture_row = connection.execute(
+            sa.select(captures).where(captures.c.id == capture_id)
+        ).one()
+
+    assert final_capture_row.status == "completed"
+
+
+def test_submit_capture_retries_once_on_malformed_full_payload(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    work_group_id = _seed_group(
+        client,
+        user_id="11111111-1111-1111-1111-111111111111",
+        name="Work",
+    )
+    del work_group_id
+
+    create_response = client.post(
+        "/captures/text",
+        json={"text": "Plan trip"},
+        headers=headers,
+    )
+    capture_id = create_response.json()["capture_id"]
+
+    fake_extraction = FakeExtractionService(
+        responses=[
+            {"unexpected": []},
+            {"tasks": [{"title": "Plan trip", "group_name": "Work", "top_confidence": 0.9}]},
+        ]
+    )
+    _override_extraction_service(app, fake_extraction)
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": "Plan trip next week"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert fake_extraction.call_count == 2
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(
+            sa.select(captures).where(captures.c.id == capture_id)
+        ).one()
+
+    assert capture_row.extraction_attempt_count == 2
+    assert capture_row.status == "completed"
+
+
+def test_submit_capture_fails_after_second_malformed_full_payload(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    create_response = client.post(
+        "/captures/text",
+        json={"text": "Plan trip"},
+        headers=headers,
+    )
+    capture_id = create_response.json()["capture_id"]
+    _override_extraction_service(
+        app,
+        FakeExtractionService(
+            responses=[
+                ExtractorMalformedResponseError("bad payload"),
+                {"unexpected": []},
+            ]
+        ),
+    )
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": "Plan trip next week"},
+        headers=headers,
+    )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "extraction_failed"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(
+            sa.select(captures).where(captures.c.id == capture_id)
+        ).one()
+        task_rows = connection.execute(sa.select(tasks)).fetchall()
+
+    assert capture_row.status == "extraction_failed"
+    assert capture_row.extraction_attempt_count == 2
+    assert task_rows == []
+
+
+def test_submit_capture_returns_zero_actionable_when_all_items_are_skipped(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    create_response = client.post(
+        "/captures/text",
+        json={"text": "Call Sam"},
+        headers=headers,
+    )
+    capture_id = create_response.json()["capture_id"]
+    _override_extraction_service(
+        app,
+        FakeExtractionService(
+            responses=[
+                {
+                    "tasks": [
+                        {
+                            "title": "Call Sam",
+                            "reminder_at": "2026-03-23T09:00:00Z",
+                            "group_name": "Inbox",
+                            "top_confidence": 0.4,
+                        }
+                    ]
+                }
+            ]
+        ),
+    )
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": "Call Sam"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tasks_created_count"] == 0
+    assert payload["tasks_skipped_count"] == 1
+    assert payload["zero_actionable"] is True
+
+
+def test_submit_capture_is_scoped_to_the_authenticated_user(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    other_user_id = "22222222-2222-2222-2222-222222222222"
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        upsert_user(
+            connection,
+            user_id=other_user_id,
+            email="other@example.com",
+            display_name="Other User",
+            timezone="UTC",
+        )
+        ensure_inbox_group(connection, user_id=other_user_id)
+        connection.execute(
+            captures.insert().values(
+                id="33333333-3333-3333-3333-333333333333",
+                user_id=other_user_id,
+                input_type="text",
+                status="ready_for_review",
+                transcript_text="Secret task",
+                expires_at=datetime(2026, 3, 29, tzinfo=timezone.utc),
+            )
+        )
+
+    response = client.post(
+        "/captures/33333333-3333-3333-3333-333333333333/submit",
+        json={"transcript_text": "Secret task"},
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "capture_not_found"

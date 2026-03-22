@@ -64,6 +64,54 @@ class UpstreamAuthError(ApiError):
         )
 
 
+class CaptureNotFoundError(ApiError):
+    def __init__(self, message: str = "Capture could not be found.") -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="capture_not_found",
+            message=message,
+        )
+
+
+class InvalidCaptureError(ApiError):
+    def __init__(self, message: str = "Capture input is invalid.") -> None:
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="invalid_capture",
+            message=message,
+        )
+
+
+class CaptureStateConflictError(ApiError):
+    def __init__(self, message: str = "Capture is not in a valid state for this action.") -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            code="capture_state_conflict",
+            message=message,
+        )
+
+
+class TranscriptionFailedError(ApiError):
+    def __init__(self, message: str = "Transcription failed. Please retry.") -> None:
+        super().__init__(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="transcription_failed",
+            message=message,
+        )
+
+
+class ExtractionFailedError(ApiError):
+    def __init__(
+        self,
+        message: str = "Extraction failed. Please edit the transcript or retry.",
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="extraction_failed",
+            message=message,
+        )
+
+
 def not_implemented(resource: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,

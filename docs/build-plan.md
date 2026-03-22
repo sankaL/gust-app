@@ -42,10 +42,10 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
-| P2-01 | Build the mobile-first Capture screen with mic controls, recording states, text fallback, cancel, and retry UX | TODO | TBD | Voice first, text secondary | PRD, Design |
-| P2-02 | Implement audio upload and server-side transcription with bounded timeouts and retry-safe failures | TODO | TBD | Do not retain raw audio | PRD, Tech |
-| P2-03 | Implement transcript review/edit flow that preserves local edits until submit succeeds or user discards | TODO | TBD | No silent data loss | PRD, AGENTS |
-| P2-04 | Implement extraction orchestration with structured-output validation, one bounded retry, confidence routing, and result summary | TODO | TBD | Partial-invalid items must be disclosed | PRD, Tech |
+| P2-01 | Build the mobile-first Capture screen with mic controls, recording states, text fallback, cancel, and retry UX | DONE | 2026-03-22 | Signed-in capture route now supports voice recording, permission fallback, transcript review, discard, retry, and inline summaries | PRD, Design |
+| P2-02 | Implement audio upload and server-side transcription with bounded timeouts and retry-safe failures | DONE | 2026-03-22 | Added authenticated voice upload endpoint, Mistral client seam, explicit capture failure states, and no raw-audio persistence | PRD, Tech |
+| P2-03 | Implement transcript review/edit flow that preserves local edits until submit succeeds or user discards | DONE | 2026-03-22 | Voice and text both route through review state, local edits persist across extraction failures, and discard is explicit | PRD, AGENTS |
+| P2-04 | Implement extraction orchestration with structured-output validation, one bounded retry, confidence routing, and result summary | DONE | 2026-03-22 | Added structured extraction service, candidate-level skip disclosure, reminder/subtask persistence, and result summaries | PRD, Tech |
 
 ## Phase 3: Tasks, Groups, and Editing UX
 
@@ -80,7 +80,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
 | ADH-01 | Unplanned implementation or documentation work discovered during delivery | TODO | TBD | Add concrete scope when raised | - |
-| ADH-02 | Tooling or workflow improvements needed to unblock delivery | TODO | TBD | Keep separate from feature scope | AGENTS |
+| ADH-02 | Tooling or workflow improvements needed to unblock delivery | DONE | 2026-03-22 | Added `make dev local` local-stack startup with conditional Alembic upgrades, dynamic port assignment, and ready-state checks | AGENTS, Runbook |
 
 ## Bug Fixes
 
