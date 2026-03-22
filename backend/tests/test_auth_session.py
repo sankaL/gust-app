@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+# ruff: noqa: UP045
 from dataclasses import dataclass
+from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.core.dependencies import get_auth_service
+from app.core.errors import UpstreamAuthError
 from app.core.security import (
     ACCESS_TOKEN_COOKIE,
     CSRF_COOKIE,
@@ -25,6 +28,8 @@ from app.services.auth import (
 
 @dataclass
 class FakeAuthService:
+    fail_signup: bool = False
+
     def ensure_configured(self) -> None:
         return None
 
@@ -70,6 +75,47 @@ class FakeAuthService:
             ),
         )
 
+    async def sign_up_with_password(
+        self,
+        *,
+        email: str,
+        password: str,
+        display_name: Optional[str] = None,
+    ) -> AuthenticatedSession:
+        assert email == "local-dev@gust.local"
+        assert password == "gust-local-dev-password"
+        assert display_name == "Local Dev User"
+        if self.fail_signup:
+            raise UpstreamAuthError("signup failed")
+        return AuthenticatedSession(
+            tokens=TokenBundle(
+                access_token="access-token",
+                refresh_token="refresh-token",
+                expires_in=3600,
+            ),
+            identity=AuthenticatedIdentity(
+                user_id="11111111-1111-1111-1111-111111111111",
+                email=email,
+                display_name=display_name,
+            ),
+        )
+
+    async def sign_in_with_password(self, *, email: str, password: str) -> AuthenticatedSession:
+        assert email == "local-dev@gust.local"
+        assert password == "gust-local-dev-password"
+        return AuthenticatedSession(
+            tokens=TokenBundle(
+                access_token="access-token",
+                refresh_token="refresh-token",
+                expires_in=3600,
+            ),
+            identity=AuthenticatedIdentity(
+                user_id="11111111-1111-1111-1111-111111111111",
+                email=email,
+                display_name="Local Dev User",
+            ),
+        )
+
     async def revoke_refresh_token(self, *, refresh_token: str) -> None:
         self.revoked_token = refresh_token
 
@@ -90,7 +136,7 @@ def _override_auth_service(app: FastAPI, service: FakeAuthService) -> None:
 
 
 def test_get_session_returns_signed_out_without_cookies(client: TestClient) -> None:
-    response = client.get("/auth/session")
+    response = client.get("/auth/session", headers={"Origin": "http://frontend.test"})
 
     assert response.status_code == 200
     assert response.json() == {
@@ -101,6 +147,24 @@ def test_get_session_returns_signed_out_without_cookies(client: TestClient) -> N
         "csrf_token": None,
     }
     assert response.headers["X-Request-ID"]
+    assert response.headers["access-control-allow-origin"] == "http://frontend.test"
+    assert response.headers["access-control-allow-credentials"] == "true"
+
+
+def test_session_preflight_allows_frontend_origin(client: TestClient) -> None:
+    response = client.options(
+        "/auth/session/dev-login",
+        headers={
+            "Origin": "http://frontend.test",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://frontend.test"
+    assert response.headers["access-control-allow-credentials"] == "true"
+    assert "POST" in response.headers["access-control-allow-methods"]
 
 
 def test_google_start_sets_pkce_cookies(app: FastAPI, client: TestClient) -> None:
@@ -141,6 +205,41 @@ def test_callback_bootstraps_user_session_and_inbox(app: FastAPI, client: TestCl
     assert context is not None
     assert context.user.email == "user@example.com"
     assert context.inbox_group_id == payload["inbox_group_id"]
+
+
+def test_local_dev_login_bootstraps_cookie_session(app: FastAPI, client: TestClient) -> None:
+    app.state.settings.gust_dev_mode = True
+    _override_auth_service(app, FakeAuthService())
+
+    response = client.post("/auth/session/dev-login")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["signed_in"] is True
+    assert payload["user"]["email"] == "local-dev@gust.local"
+    assert payload["csrf_token"] is not None
+    assert ACCESS_TOKEN_COOKIE in response.headers["set-cookie"]
+    assert REFRESH_TOKEN_COOKIE in response.headers["set-cookie"]
+
+
+def test_local_dev_login_reuses_existing_local_account(app: FastAPI, client: TestClient) -> None:
+    app.state.settings.gust_dev_mode = True
+    service = FakeAuthService()
+    service.fail_signup = True
+    _override_auth_service(app, service)
+
+    response = client.post("/auth/session/dev-login")
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "local-dev@gust.local"
+
+
+def test_local_dev_login_is_hidden_outside_dev_mode(app: FastAPI, client: TestClient) -> None:
+    _override_auth_service(app, FakeAuthService())
+
+    response = client.post("/auth/session/dev-login")
+
+    assert response.status_code == 404
 
 
 def test_callback_preserves_existing_timezone(app: FastAPI, client: TestClient) -> None:

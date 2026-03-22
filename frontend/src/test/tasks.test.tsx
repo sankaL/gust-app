@@ -448,7 +448,7 @@ describe('tasks flow', () => {
   })
 
   it('preserves unsaved task edits when a subtask mutation refetches detail', async () => {
-    let taskTitle = 'Refine design system'
+    const taskTitle = 'Refine design system'
     const subtasks = [
       { id: 'subtask-1', title: 'Audit tokens', is_completed: false, completed_at: null }
     ]

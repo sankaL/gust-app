@@ -88,3 +88,4 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 |---|---|---|---|---|---|
 | BUG-01 | Capture, transcription, or extraction regression | TODO | TBD | Link failing flow or test when opened | PRD, Tech |
 | BUG-02 | Task, reminder, recurrence, or auth regression | DONE | 2026-03-22 | Fixed deleted-group reassignment for soft-deleted tasks plus task-list/task-detail frontend regressions, with backend and frontend regression tests | PRD, Tech |
+| BUG-03 | Local dev auth regression blocking protected flow testing | DONE | 2026-03-22 | Added backend-mediated local Supabase test-account sign-in, corrected local runtime anon-key wiring, and restored credentialed CORS between the local frontend and backend | Tech, Runbook, AGENTS |

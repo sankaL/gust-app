@@ -31,7 +31,7 @@ services:
       FRONTEND_APP_URL: "http://localhost:${GUST_FRONTEND_PORT:-3000}"
       BACKEND_PUBLIC_URL: "http://localhost:${GUST_BACKEND_PORT:-8000}"
       SUPABASE_URL: "http://host.docker.internal:${GUST_SUPABASE_API_PORT:-54321}"
-      SUPABASE_ANON_KEY: "local-supabase-anon-key"
+      SUPABASE_ANON_KEY: "${GUST_SUPABASE_ANON_KEY}"
       SESSION_COOKIE_SECURE: "false"
     volumes:
       - .:/workspace

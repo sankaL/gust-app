@@ -23,6 +23,12 @@ PORT_DEFAULTS = {
     "GUST_SUPABASE_POOLER_PORT": 54329,
 }
 
+LOCAL_SUPABASE_ANON_KEY = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9."
+    "CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+)
+
 
 def port_is_available(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -75,8 +81,25 @@ def render_supabase_config(config_template: str, ports: dict[str, int]) -> str:
 
 
 def write_runtime_env(ports: dict[str, int]) -> None:
-    lines = [f"{key}={value}" for key, value in sorted(ports.items())]
+    runtime_values = {
+        **ports,
+        "GUST_SUPABASE_ANON_KEY": LOCAL_SUPABASE_ANON_KEY,
+    }
+    lines = [f"{key}={value}" for key, value in sorted(runtime_values.items())]
     RUNTIME_ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def ensure_runtime_env_defaults() -> bool:
+    if not RUNTIME_ENV_PATH.exists():
+        return False
+
+    current_lines = RUNTIME_ENV_PATH.read_text(encoding="utf-8").splitlines()
+    if any(line.startswith("GUST_SUPABASE_ANON_KEY=") for line in current_lines):
+        return True
+
+    current_lines.append(f"GUST_SUPABASE_ANON_KEY={LOCAL_SUPABASE_ANON_KEY}")
+    RUNTIME_ENV_PATH.write_text("\n".join(current_lines) + "\n", encoding="utf-8")
+    return True
 
 
 def main() -> None:
@@ -86,6 +109,7 @@ def main() -> None:
         SUPABASE_RUNTIME_DIR / "seed.sql",
     )
     if all(path.exists() for path in existing_files):
+        ensure_runtime_env_defaults()
         return
 
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)

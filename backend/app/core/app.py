@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import auth, captures, groups, health, reminders, tasks
 from app.core.errors import (
@@ -39,6 +40,14 @@ def create_app() -> FastAPI:
     )
 
     app.state.settings = settings
+    if settings.frontend_app_url:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[settings.frontend_app_url],
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Content-Type", "X-CSRF-Token"],
+        )
     app.add_middleware(RequestContextMiddleware)
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)

@@ -68,11 +68,72 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
 describe('capture route', () => {
+  it('offers local test-account sign-in in local dev mode', async () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'true')
+
+    const fetchMock: FetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          signed_in: false,
+          user: null,
+          timezone: null,
+          inbox_group_id: null,
+          csrf_token: null
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          signed_in: true,
+          user: {
+            id: 'user-1',
+            email: 'local-dev@gust.local',
+            display_name: 'Local Dev User'
+          },
+          timezone: 'UTC',
+          inbox_group_id: 'inbox-1',
+          csrf_token: 'csrf-token'
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          signed_in: true,
+          user: {
+            id: 'user-1',
+            email: 'local-dev@gust.local',
+            display_name: 'Local Dev User'
+          },
+          timezone: 'UTC',
+          inbox_group_id: 'inbox-1',
+          csrf_token: 'csrf-token'
+        })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderCaptureRoute()
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: 'Continue with Local Test Account' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/auth/session/dev-login'),
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include'
+        })
+      )
+    })
+
+    expect(await screen.findByText('Local Dev User')).toBeInTheDocument()
+  })
+
   it('keeps text fallback usable when microphone permission is denied', async () => {
     const fetchMock: FetchMock = vi.fn(() =>
       jsonResponse({

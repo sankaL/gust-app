@@ -31,7 +31,9 @@ Guardrails:
 
 - Local development must not connect to hosted production Supabase Auth or the production database.
 - Dev mode changes infrastructure targets only. It must not bypass auth or validation behavior in application code.
+- Local auth testing must use the backend-mediated local Supabase test-account flow, which still issues the normal backend cookie session instead of bypassing authentication.
 - The local backend must target the current required application revision and local Supabase Auth endpoints before it serves traffic.
+- The local runtime env must carry the active local Supabase anon key before the backend starts, or local sign-in flows will fail.
 - The startup entrypoint must print the chosen local URLs when it falls back to non-default ports.
 
 ## Environment Contract
