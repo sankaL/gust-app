@@ -1,8 +1,180 @@
-from fastapi import HTTPException, status
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+
+from fastapi import HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+from app.db.migrations import MigrationVersionError
+
+logger = logging.getLogger("gust.api")
+
+
+@dataclass
+class ApiError(Exception):
+    status_code: int
+    code: str
+    message: str
+
+
+class AuthRequiredError(ApiError):
+    def __init__(self, message: str = "Authentication is required.") -> None:
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="auth_required",
+            message=message,
+        )
+
+
+class CsrfValidationError(ApiError):
+    def __init__(self, message: str = "CSRF validation failed.") -> None:
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="csrf_invalid",
+            message=message,
+        )
+
+
+class ConfigurationError(ApiError):
+    def __init__(self, message: str = "Required application configuration is missing.") -> None:
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code="config_missing",
+            message=message,
+        )
+
+
+class InvalidTimezoneError(ApiError):
+    def __init__(self, message: str = "Invalid timezone provided.") -> None:
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="invalid_timezone",
+            message=message,
+        )
+
+
+class UpstreamAuthError(ApiError):
+    def __init__(self, message: str = "Authentication provider request failed.") -> None:
+        super().__init__(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="auth_provider_error",
+            message=message,
+        )
 
 
 def not_implemented(resource: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail=f"{resource} is scaffolded but not implemented yet.",
+    )
+
+
+def build_error_response(
+    request: Request,
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    payload = {
+        "error": {
+            "code": code,
+            "message": message,
+        }
+    }
+    if request_id is not None:
+        payload["request_id"] = request_id
+
+    response = JSONResponse(status_code=status_code, content=payload)
+    if request_id is not None:
+        response.headers["X-Request-ID"] = request_id
+    return response
+
+
+async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+    logger.warning(
+        "request_failed",
+        extra={
+            "event": "request_failed",
+            "request_id": getattr(request.state, "request_id", None),
+            "path": request.url.path,
+            "status_code": exc.status_code,
+            "error_code": exc.code,
+        },
+    )
+    return build_error_response(
+        request,
+        status_code=exc.status_code,
+        code=exc.code,
+        message=exc.message,
+    )
+
+
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    message = exc.detail if isinstance(exc.detail, str) else "Request failed."
+    return build_error_response(
+        request,
+        status_code=exc.status_code,
+        code="http_error",
+        message=message,
+    )
+
+
+async def validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    logger.warning(
+        "request_validation_failed",
+        extra={
+            "event": "request_validation_failed",
+            "request_id": getattr(request.state, "request_id", None),
+            "path": request.url.path,
+        },
+    )
+    return build_error_response(
+        request,
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        code="validation_error",
+        message="Request validation failed.",
+    )
+
+
+async def migration_exception_handler(
+    request: Request,
+    exc: MigrationVersionError,
+) -> JSONResponse:
+    logger.error(
+        "migration_version_mismatch",
+        extra={
+            "event": "migration_version_mismatch",
+            "request_id": getattr(request.state, "request_id", None),
+            "path": request.url.path,
+        },
+    )
+    return build_error_response(
+        request,
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        code="migration_version_mismatch",
+        message=str(exc),
+    )
+
+
+async def unexpected_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception(
+        "unexpected_server_error",
+        extra={
+            "event": "unexpected_server_error",
+            "request_id": getattr(request.state, "request_id", None),
+            "path": request.url.path,
+        },
+    )
+    return build_error_response(
+        request,
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        code="internal_error",
+        message="Unexpected server error.",
     )

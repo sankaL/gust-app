@@ -1,6 +1,6 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Last Updated:** 2026-03-22
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
@@ -74,6 +74,21 @@ Phase 0 establishes:
 
 Phase 0 does not yet require the full production application schema migration set. The first substantive schema revision lands in Phase 1 and must align with [database_schema.md](/Users/sankal/Documents/professional/gust-app/docs/database_schema.md).
 
+## Phase 1 Revision
+
+Phase 1 introduces `0002_phase1_core_backend` as the required application revision.
+
+That revision establishes:
+
+- the substantive v1 application tables for users, groups, tasks, subtasks, captures, and reminders
+- Inbox uniqueness and non-null task group ownership invariants
+- named task/capture/reminder/recurrence value constraints
+- the persisted `users.timezone` contract used by auth bootstrap and reminder/date resolution
+
+Deployment implication:
+
+- environments must apply `0002_phase1_core_backend` before running the Phase 1 backend, because startup revision checks now require that revision by default
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -97,6 +112,7 @@ Why this order:
 Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
+- The required revision configured for the backend matches `0002_phase1_core_backend` or the current deployed head.
 - Backend startup revision check passes.
 - `users.timezone` exists and accepts valid IANA timezone data.
 - Each sampled user has exactly one Inbox group with `system_key = 'inbox'`.

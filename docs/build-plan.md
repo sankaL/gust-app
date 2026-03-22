@@ -33,10 +33,10 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
-| P1-01 | Implement Google sign-in with backend-managed secure cookie sessions and CSRF protection | TODO | TBD | Fail closed on invalid auth | PRD, Tech |
-| P1-02 | Implement initial database migrations and data-access layer for users, groups, tasks, subtasks, captures, and reminders | TODO | TBD | Explicit `user_id` scoping everywhere | Schema, Runbook, Tech |
-| P1-03 | Implement Inbox bootstrap and user timezone persistence/update flows | TODO | TBD | Inbox must be non-null and system-managed | PRD, Schema |
-| P1-04 | Add session/status endpoints plus request IDs, structured logs, and sanitized error handling | TODO | TBD | No secrets or raw transcript data in logs | Tech, AGENTS |
+| P1-01 | Implement Google sign-in with backend-managed secure cookie sessions and CSRF protection | DONE | 2026-03-22 | Supabase PKCE callback, JWT validation, cookie sessions, refresh, logout, and CSRF enforcement added | PRD, Tech |
+| P1-02 | Implement initial database migrations and data-access layer for users, groups, tasks, subtasks, captures, and reminders | DONE | 2026-03-22 | Added Phase 1 revision plus SQLAlchemy Core schema metadata and scoped repositories | Schema, Runbook, Tech |
+| P1-03 | Implement Inbox bootstrap and user timezone persistence/update flows | DONE | 2026-03-22 | Auth callback bootstraps Inbox and `PUT /auth/session/timezone` persists validated IANA timezones | PRD, Schema |
+| P1-04 | Add session/status endpoints plus request IDs, structured logs, and sanitized error handling | DONE | 2026-03-22 | Session bootstrap endpoint, request-id middleware, structured logs, and sanitized handlers added | Tech, AGENTS |
 
 ## Phase 2: Capture and Extraction
 
