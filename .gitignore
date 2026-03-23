@@ -143,6 +143,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.prod
 .dev-runtime/
 .env.example.local
 .envrc
@@ -217,3 +218,5 @@ __marimo__/
 
 # Deployment keys
 .deployment-keys
+
+.env.prod

@@ -55,6 +55,15 @@ class ConfigurationError(ApiError):
         )
 
 
+class InvalidConfigurationError(ApiError):
+    def __init__(self, message: str = "Required application configuration is invalid.") -> None:
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code="config_invalid",
+            message=message,
+        )
+
+
 class InvalidTimezoneError(ApiError):
     def __init__(self, message: str = "Invalid timezone provided.") -> None:
         super().__init__(

@@ -82,11 +82,13 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-01 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Expanded env example coverage for runtime, frontend, and provider config | AGENTS, Tech |
 | ADH-02 | Tooling or workflow improvements needed to unblock delivery | DONE | 2026-03-22 | Added `make dev local` local-stack startup with conditional Alembic upgrades, dynamic port assignment, and ready-state checks | AGENTS, Runbook |
 | ADH-03 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Added Gust logo SVG colorway assets aligned to the sonic minimalist palette | Design |
+| ADH-04 | Tooling or workflow improvements needed to unblock delivery | DONE | 2026-03-22 | Unified root env templates, added `.env.prod`, and routed local Docker config through generated runtime env derived from `.env` | AGENTS, Tech |
+| ADH-05 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Switched default transcription and extraction models to Voxtral Mini Transcribe 2 and MiniMax M2.7, with provider request regression coverage | Tech, AGENTS |
 
 ## Bug Fixes
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
-| BUG-01 | Capture, transcription, or extraction regression | TODO | TBD | Link failing flow or test when opened | PRD, Tech |
+| BUG-01 | Capture, transcription, or extraction regression | DONE | 2026-03-22 | Restored the Mistral transcription default to `voxtral-mini-latest`, normalized strict extraction schemas, and switched extraction to `openai/gpt-5.4-mini` after validating it on the current OpenRouter route | PRD, Tech |
 | BUG-02 | Task, reminder, recurrence, or auth regression | DONE | 2026-03-22 | Fixed deleted-group reassignment for soft-deleted tasks plus task-list/task-detail frontend regressions, with backend and frontend regression tests | PRD, Tech |
 | BUG-03 | Local dev auth regression blocking protected flow testing | DONE | 2026-03-22 | Added backend-mediated local Supabase test-account sign-in, corrected local runtime anon-key wiring, and restored credentialed CORS between the local frontend and backend | Tech, Runbook, AGENTS |

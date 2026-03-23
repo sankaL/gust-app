@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import copy
 import json
+import logging
+import re
 from dataclasses import dataclass
 from datetime import date
 
@@ -8,6 +11,8 @@ import httpx
 
 from app.core.errors import ConfigurationError
 from app.core.settings import Settings
+
+logger = logging.getLogger("gust.api")
 
 
 @dataclass
@@ -68,7 +73,7 @@ class OpenRouterExtractionService:
                 "json_schema": {
                     "name": "gust_capture_extraction",
                     "strict": True,
-                    "schema": schema,
+                    "schema": self._normalize_schema_for_strict_outputs(schema),
                 },
             },
         }
@@ -84,6 +89,14 @@ class OpenRouterExtractionService:
             raise ExtractionServiceError("Extraction provider request failed.") from exc
 
         if response.status_code >= 400:
+            logger.warning(
+                "extraction_provider_rejected",
+                extra={
+                    "event": "extraction_provider_rejected",
+                    "provider_status_code": response.status_code,
+                    "model": self.settings.openrouter_extraction_model,
+                },
+            )
             raise ExtractionServiceError("Extraction provider request failed.")
 
         try:
@@ -95,14 +108,31 @@ class OpenRouterExtractionService:
         try:
             content = body["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
+            logger.warning(
+                "extraction_provider_payload_invalid",
+                extra={
+                    "event": "extraction_provider_payload_invalid",
+                    "model": self.settings.openrouter_extraction_model,
+                    "response_body_keys": sorted(body.keys()) if isinstance(body, dict) else [],
+                },
+            )
             raise ExtractorMalformedResponseError(
                 "Extraction provider returned an invalid response."
             ) from exc
 
         if isinstance(content, str):
             try:
-                parsed = json.loads(content)
+                parsed = json.loads(self._strip_json_fence(content))
             except json.JSONDecodeError as exc:
+                logger.warning(
+                    "extraction_provider_content_invalid",
+                    extra={
+                        "event": "extraction_provider_content_invalid",
+                        "model": self.settings.openrouter_extraction_model,
+                        "content_length": len(content),
+                        "content_is_fenced_json": bool(re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", content.strip(), flags=re.DOTALL)),
+                    },
+                )
                 raise ExtractorMalformedResponseError(
                     "Extraction provider returned invalid JSON."
                 ) from exc
@@ -141,3 +171,33 @@ class OpenRouterExtractionService:
                 request.transcript_text,
             ]
         )
+
+    def _strip_json_fence(self, content: str) -> str:
+        stripped = content.strip()
+        match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, flags=re.DOTALL)
+        if match is not None:
+            return match.group(1).strip()
+        return stripped
+
+    def _normalize_schema_for_strict_outputs(self, schema: dict[str, object]) -> dict[str, object]:
+        normalized = copy.deepcopy(schema)
+        self._normalize_schema_node(normalized)
+        return normalized
+
+    def _normalize_schema_node(self, node: object) -> None:
+        if isinstance(node, list):
+            for item in node:
+                self._normalize_schema_node(item)
+            return
+
+        if not isinstance(node, dict):
+            return
+
+        node.pop("default", None)
+
+        for value in node.values():
+            self._normalize_schema_node(value)
+
+        properties = node.get("properties")
+        if node.get("type") == "object" and isinstance(properties, dict):
+            node["required"] = list(properties.keys())

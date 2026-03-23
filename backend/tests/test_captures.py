@@ -16,6 +16,7 @@ from app.core.dependencies import (
     get_extraction_service,
     get_transcription_service,
 )
+from app.core.errors import InvalidConfigurationError
 from app.core.security import ACCESS_TOKEN_COOKIE
 from app.db.engine import connection_scope
 from app.db.repositories import ensure_inbox_group, upsert_user
@@ -251,6 +252,34 @@ def test_voice_capture_marks_capture_failed_on_transcription_error(
 
     assert capture_row.status == "transcription_failed"
     assert capture_row.error_code == "transcription_provider_error"
+
+
+def test_voice_capture_returns_config_invalid_for_invalid_transcription_model(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            error=InvalidConfigurationError("Configured Mistral transcription model is invalid."),
+        ),
+    )
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "config_invalid"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "transcription_failed"
+    assert capture_row.error_code == "config_invalid"
 
 
 def test_submit_capture_persists_tasks_subtasks_and_reminders(

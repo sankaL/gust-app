@@ -80,7 +80,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("OPENROUTER_API_KEY"),
     )
     openrouter_extraction_model: str = Field(
-        default="openai/gpt-4.1-mini",
+        default="openai/gpt-5.4-mini",
         validation_alias=AliasChoices("OPENROUTER_EXTRACTION_MODEL"),
     )
     extraction_timeout_seconds: float = Field(

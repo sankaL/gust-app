@@ -12,7 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.core.errors import (
     CaptureNotFoundError,
     CaptureStateConflictError,
+    ConfigurationError,
     ExtractionFailedError,
+    InvalidConfigurationError,
     InvalidCaptureError,
     TranscriptionFailedError,
 )
@@ -604,6 +606,10 @@ class CaptureService:
     def _error_code_for_exception(self, exc: Exception) -> str:
         if isinstance(exc, ValidationError):
             return "payload_invalid"
+        if isinstance(exc, InvalidConfigurationError):
+            return "config_invalid"
+        if isinstance(exc, ConfigurationError):
+            return "config_missing"
         if isinstance(exc, TranscriptionServiceError):
             return "transcription_provider_error"
         if isinstance(exc, ExtractorMalformedResponseError):

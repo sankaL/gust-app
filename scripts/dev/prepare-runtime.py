@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+ROOT_ENV_PATH = ROOT / ".env"
 RUNTIME_DIR = ROOT / ".dev-runtime"
 SUPABASE_TEMPLATE_DIR = ROOT / "supabase"
 SUPABASE_RUNTIME_DIR = RUNTIME_DIR / "supabase"
@@ -28,6 +29,80 @@ LOCAL_SUPABASE_ANON_KEY = (
     "eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9."
     "CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
 )
+
+LOCAL_ENV_DEFAULTS = {
+    "APP_ENV": "development",
+    "GUST_DEV_MODE": "true",
+    "REQUIRED_ALEMBIC_REVISION": "0004_phase4_reminders_retention",
+    "RUN_STARTUP_CHECKS": "true",
+    "LOG_LEVEL": "INFO",
+    "SESSION_COOKIE_SECURE": "false",
+    "SESSION_COOKIE_DOMAIN": "",
+    "CAPTURE_RETENTION_DAYS": "7",
+    "MISTRAL_API_URL": "https://api.mistral.ai/v1/audio/transcriptions",
+    "MISTRAL_API_KEY": "",
+    "MISTRAL_TRANSCRIPTION_MODEL": "voxtral-mini-latest",
+    "TRANSCRIPTION_TIMEOUT_SECONDS": "20",
+    "OPENROUTER_API_URL": "https://openrouter.ai/api/v1/chat/completions",
+    "OPENROUTER_API_KEY": "",
+    "OPENROUTER_EXTRACTION_MODEL": "openai/gpt-5.4-mini",
+    "EXTRACTION_TIMEOUT_SECONDS": "20",
+    "RESEND_API_URL": "https://api.resend.com/emails",
+    "RESEND_API_KEY": "",
+    "RESEND_FROM_EMAIL": "",
+    "INTERNAL_JOB_SHARED_SECRET": "",
+    "REMINDER_BATCH_SIZE": "50",
+    "REMINDER_CLAIM_TIMEOUT_SECONDS": "600",
+    "REMINDER_REQUEST_TIMEOUT_SECONDS": "10",
+    "VITE_GUST_DEV_MODE": "true",
+}
+
+RUNTIME_KEYS = (
+    "APP_ENV",
+    "GUST_DEV_MODE",
+    "DATABASE_URL",
+    "REQUIRED_ALEMBIC_REVISION",
+    "RUN_STARTUP_CHECKS",
+    "LOG_LEVEL",
+    "FRONTEND_APP_URL",
+    "BACKEND_PUBLIC_URL",
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "SESSION_COOKIE_SECURE",
+    "SESSION_COOKIE_DOMAIN",
+    "CAPTURE_RETENTION_DAYS",
+    "MISTRAL_API_URL",
+    "MISTRAL_API_KEY",
+    "MISTRAL_TRANSCRIPTION_MODEL",
+    "TRANSCRIPTION_TIMEOUT_SECONDS",
+    "OPENROUTER_API_URL",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_EXTRACTION_MODEL",
+    "EXTRACTION_TIMEOUT_SECONDS",
+    "RESEND_API_URL",
+    "RESEND_API_KEY",
+    "RESEND_FROM_EMAIL",
+    "INTERNAL_JOB_SHARED_SECRET",
+    "REMINDER_BATCH_SIZE",
+    "REMINDER_CLAIM_TIMEOUT_SECONDS",
+    "REMINDER_REQUEST_TIMEOUT_SECONDS",
+    "VITE_GUST_DEV_MODE",
+    "VITE_API_BASE_URL",
+)
+
+
+def parse_env_file(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip("'").strip('"')
+    return values
 
 
 def port_is_available(port: int) -> bool:
@@ -80,49 +155,68 @@ def render_supabase_config(config_template: str, ports: dict[str, int]) -> str:
     return rendered
 
 
-def write_runtime_env(ports: dict[str, int]) -> None:
-    runtime_values = {
-        **ports,
-        "GUST_SUPABASE_ANON_KEY": LOCAL_SUPABASE_ANON_KEY,
-    }
-    lines = [f"{key}={value}" for key, value in sorted(runtime_values.items())]
-    RUNTIME_ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def ensure_runtime_env_defaults() -> bool:
-    if not RUNTIME_ENV_PATH.exists():
-        return False
-
-    current_lines = RUNTIME_ENV_PATH.read_text(encoding="utf-8").splitlines()
-    if any(line.startswith("GUST_SUPABASE_ANON_KEY=") for line in current_lines):
-        return True
-
-    current_lines.append(f"GUST_SUPABASE_ANON_KEY={LOCAL_SUPABASE_ANON_KEY}")
-    RUNTIME_ENV_PATH.write_text("\n".join(current_lines) + "\n", encoding="utf-8")
-    return True
-
-
-def main() -> None:
-    existing_files = (
-        RUNTIME_ENV_PATH,
-        SUPABASE_RUNTIME_DIR / "config.toml",
-        SUPABASE_RUNTIME_DIR / "seed.sql",
-    )
-    if all(path.exists() for path in existing_files):
-        ensure_runtime_env_defaults()
-        return
-
-    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    SUPABASE_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
+    if all(key in existing_values for key in PORT_DEFAULTS):
+        return {key: int(existing_values[key]) for key in PORT_DEFAULTS}
 
     reserved: set[int] = set()
-    ports = {
+    return {
         key: choose_port(default_port, reserved)
         for key, default_port in PORT_DEFAULTS.items()
     }
 
-    write_runtime_env(ports)
 
+def build_runtime_values(
+    env_values: dict[str, str],
+    ports: dict[str, int],
+    *,
+    supabase_anon_key: str,
+) -> dict[str, str | int]:
+    frontend_url = f"http://localhost:{ports['GUST_FRONTEND_PORT']}"
+    backend_url = f"http://localhost:{ports['GUST_BACKEND_PORT']}"
+
+    runtime_values: dict[str, str | int] = {
+        **ports,
+        "DATABASE_URL": (
+            "postgresql+psycopg://postgres:postgres@host.docker.internal:"
+            f"{ports['GUST_SUPABASE_DB_PORT']}/postgres"
+        ),
+        "FRONTEND_APP_URL": frontend_url,
+        "BACKEND_PUBLIC_URL": backend_url,
+        "SUPABASE_URL": f"http://host.docker.internal:{ports['GUST_SUPABASE_API_PORT']}",
+        "SUPABASE_ANON_KEY": supabase_anon_key,
+        "VITE_API_BASE_URL": backend_url,
+    }
+    for key in RUNTIME_KEYS:
+        if key in runtime_values:
+            continue
+        runtime_values[key] = env_values.get(key, LOCAL_ENV_DEFAULTS.get(key, ""))
+    return runtime_values
+
+
+def write_runtime_env(runtime_values: dict[str, str | int]) -> None:
+    lines = [f"{key}={value}" for key, value in sorted(runtime_values.items())]
+    RUNTIME_ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main() -> None:
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    SUPABASE_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+
+    root_env_values = parse_env_file(ROOT_ENV_PATH)
+    existing_runtime_values = parse_env_file(RUNTIME_ENV_PATH)
+    ports = resolve_ports(existing_runtime_values)
+    supabase_anon_key = (
+        existing_runtime_values.get("SUPABASE_ANON_KEY")
+        or existing_runtime_values.get("GUST_SUPABASE_ANON_KEY")
+        or LOCAL_SUPABASE_ANON_KEY
+    )
+    runtime_values = build_runtime_values(
+        root_env_values,
+        ports,
+        supabase_anon_key=supabase_anon_key,
+    )
+    write_runtime_env(runtime_values)
     shutil.copy2(SUPABASE_TEMPLATE_DIR / "seed.sql", SUPABASE_RUNTIME_DIR / "seed.sql")
 
     config_template = (SUPABASE_TEMPLATE_DIR / "config.toml").read_text(encoding="utf-8")

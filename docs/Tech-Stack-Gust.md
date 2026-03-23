@@ -213,6 +213,8 @@ Reason:
 
 Use Mistral's audio transcription endpoint as the initial speech-to-text provider.
 
+Current default model alias: `voxtral-mini-latest`.
+
 Operational contract:
 
 - audio is uploaded from backend to provider
@@ -230,6 +232,8 @@ Model selection is an operational setting, not a product contract. The required 
 - reliable date normalization
 - JSON-schema structured outputs
 - acceptable latency for synchronous task creation
+
+Current default model: `openai/gpt-5.4-mini`.
 
 Backend behavior:
 
