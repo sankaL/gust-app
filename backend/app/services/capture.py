@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Protocol
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 
 from app.core.errors import (
     CaptureNotFoundError,
@@ -39,6 +39,11 @@ from app.services.extraction import (
     ExtractionServiceError,
     ExtractorMalformedResponseError,
 )
+from app.services.extraction_models import (
+    ExtractionRecurrence,
+    ExtractedTaskCandidate,
+    ExtractorPayload,
+)
 from app.services.task_rules import RecurrenceInput, normalize_task_fields
 from app.services.transcription import TranscriptionServiceError
 
@@ -60,50 +65,7 @@ class ExtractionClient(Protocol):
         self,
         *,
         request: ExtractionRequest,
-        schema: dict[str, object],
     ) -> dict[str, object]: ...
-
-
-class ExtractionAlternativeGroup(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    group_id: Optional[str] = None
-    group_name: Optional[str] = None
-    confidence: float = Field(ge=0.0, le=1.0)
-
-
-class ExtractionRecurrence(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    frequency: str
-    weekday: Optional[int] = None
-    day_of_month: Optional[int] = None
-
-
-class ExtractionSubtask(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    title: str
-
-
-class ExtractedTaskCandidate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    title: str
-    due_date: Optional[date] = None
-    reminder_at: Optional[datetime] = None
-    group_id: Optional[str] = None
-    group_name: Optional[str] = None
-    top_confidence: float = Field(ge=0.0, le=1.0)
-    alternative_groups: list[ExtractionAlternativeGroup] = Field(default_factory=list)
-    recurrence: Optional[ExtractionRecurrence] = None
-    subtasks: list[ExtractionSubtask] = Field(default_factory=list)
-
-
-class ExtractorPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    tasks: list[ExtractedTaskCandidate]
 
 
 @dataclass
@@ -275,41 +237,47 @@ class CaptureService:
             current_local_date=datetime.now(ZoneInfo(user.timezone)).date(),
             groups=[self._group_context_payload(group) for group in groups],
         )
+        extraction_attempt_count = 1
 
-        attempts = 0
-        extractor_payload: Optional[ExtractorPayload] = None
-        while attempts < 2:
-            attempts += 1
-            try:
-                raw_payload = await self.extraction_service.extract(
-                    request=extraction_request,
-                    schema=ExtractorPayload.model_json_schema(),
-                )
-                extractor_payload = ExtractorPayload.model_validate(raw_payload)
-                break
-            except (ExtractorMalformedResponseError, ValidationError) as exc:
-                if attempts >= 2:
-                    self._mark_capture_failure(
-                        capture_id=capture_id,
-                        user_id=user_id,
-                        status="extraction_failed",
-                        error_code="extractor_payload_invalid",
-                        extraction_attempt_count=attempts,
-                        transcript_edited_text=normalized_transcript,
-                    )
-                    raise ExtractionFailedError() from exc
-            except Exception as exc:
-                self._mark_capture_failure(
-                    capture_id=capture_id,
-                    user_id=user_id,
-                    status="extraction_failed",
-                    error_code=self._error_code_for_exception(exc),
-                    extraction_attempt_count=attempts,
-                    transcript_edited_text=normalized_transcript,
-                )
-                raise self._map_extraction_error(exc) from exc
-
-        assert extractor_payload is not None
+        try:
+            raw_payload = await self.extraction_service.extract(
+                request=extraction_request,
+            )
+            extraction_attempt_count = self._resolve_extraction_attempt_count()
+            extractor_payload = ExtractorPayload.model_validate(raw_payload)
+        except (ExtractorMalformedResponseError, ValidationError) as exc:
+            extraction_attempt_count = self._resolve_extraction_attempt_count()
+            self._mark_capture_failure(
+                capture_id=capture_id,
+                user_id=user_id,
+                status="extraction_failed",
+                error_code="extractor_payload_invalid",
+                extraction_attempt_count=extraction_attempt_count,
+                transcript_edited_text=normalized_transcript,
+            )
+            raise ExtractionFailedError() from exc
+        except ExtractionServiceError as exc:
+            extraction_attempt_count = self._resolve_extraction_attempt_count()
+            self._mark_capture_failure(
+                capture_id=capture_id,
+                user_id=user_id,
+                status="extraction_failed",
+                error_code="extraction_provider_error",
+                extraction_attempt_count=extraction_attempt_count,
+                transcript_edited_text=normalized_transcript,
+            )
+            raise ExtractionFailedError() from exc
+        except Exception as exc:
+            extraction_attempt_count = self._resolve_extraction_attempt_count()
+            self._mark_capture_failure(
+                capture_id=capture_id,
+                user_id=user_id,
+                status="extraction_failed",
+                error_code=self._error_code_for_exception(exc),
+                extraction_attempt_count=extraction_attempt_count,
+                transcript_edited_text=normalized_transcript,
+            )
+            raise self._map_extraction_error(exc) from exc
 
         skipped_items: list[SkippedTaskItem] = []
         prepared_tasks: list[PreparedTask] = []
@@ -392,7 +360,7 @@ class CaptureService:
                 capture_id=capture_id,
                 status="completed",
                 transcript_edited_text=normalized_transcript,
-                extraction_attempt_count=attempts,
+                extraction_attempt_count=extraction_attempt_count,
                 tasks_created_count=created_count,
                 tasks_skipped_count=len(skipped_items),
                 error_code=None,
@@ -592,6 +560,12 @@ class CaptureService:
 
     def _normalize_transcript_text(self, value: str) -> str:
         return value.strip()
+
+    def _resolve_extraction_attempt_count(self) -> int:
+        attempts = getattr(self.extraction_service, "last_attempt_count", None)
+        if isinstance(attempts, int) and attempts > 0:
+            return attempts
+        return 1
 
     def _map_transcription_error(self, exc: Exception) -> Exception:
         if isinstance(exc, TranscriptionServiceError):

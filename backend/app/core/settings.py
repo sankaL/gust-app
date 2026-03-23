@@ -87,6 +87,26 @@ class Settings(BaseSettings):
         default=20.0,
         validation_alias=AliasChoices("EXTRACTION_TIMEOUT_SECONDS"),
     )
+    extraction_max_retries: int = Field(
+        default=3,
+        validation_alias=AliasChoices("EXTRACTION_MAX_RETRIES"),
+    )
+    extraction_retry_base_delay: float = Field(
+        default=1.0,
+        validation_alias=AliasChoices("EXTRACTION_RETRY_BASE_DELAY"),
+    )
+    extraction_retry_max_delay: float = Field(
+        default=10.0,
+        validation_alias=AliasChoices("EXTRACTION_RETRY_MAX_DELAY"),
+    )
+    extraction_model_config_path: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("EXTRACTION_MODEL_CONFIG_PATH"),
+    )
+    extraction_ab_test_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("EXTRACTION_AB_TEST_ENABLED"),
+    )
     resend_api_url: str = Field(
         default="https://api.resend.com/emails",
         validation_alias=AliasChoices("RESEND_API_URL"),

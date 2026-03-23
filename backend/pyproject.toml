@@ -12,6 +12,9 @@ dependencies = [
   "alembic>=1.15.2",
   "fastapi>=0.115.12",
   "httpx>=0.28.1",
+  "langchain>=0.3.0",
+  "langchain-openai>=0.3.0",
+  "langchain-core>=0.3.0",
   "PyJWT[crypto]>=2.10.1",
   "pydantic-settings>=2.8.1",
   "pydantic>=2.11.3",
@@ -23,6 +26,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ab-testing = [
+  "pyyaml>=6.0.0"
+]
 dev = [
   "pytest>=8.3.5",
   "pytest-asyncio>=0.26.0",

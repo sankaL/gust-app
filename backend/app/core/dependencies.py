@@ -29,7 +29,7 @@ from app.services.auth import (
     SupabaseAuthService,
 )
 from app.services.capture import CaptureService
-from app.services.extraction import OpenRouterExtractionService
+from app.services.extraction import LangChainExtractionService
 from app.services.group_service import GroupService
 from app.services.reminders import INTERNAL_JOB_SECRET_HEADER, ReminderWorkerService, ResendReminderService
 from app.services.task_service import TaskService
@@ -46,8 +46,8 @@ def get_transcription_service(settings: SettingsDep) -> MistralTranscriptionServ
     return MistralTranscriptionService(settings)
 
 
-def get_extraction_service(settings: SettingsDep) -> OpenRouterExtractionService:
-    return OpenRouterExtractionService(settings)
+def get_extraction_service(settings: SettingsDep) -> LangChainExtractionService:
+    return LangChainExtractionService(settings)
 
 
 def get_capture_service(
@@ -57,7 +57,7 @@ def get_capture_service(
         Depends(get_transcription_service),
     ],
     extraction_service: Annotated[
-        OpenRouterExtractionService,
+        LangChainExtractionService,
         Depends(get_extraction_service),
     ],
 ) -> CaptureService:

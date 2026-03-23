@@ -1,22 +1,35 @@
+"""Extraction service using LangChain with OpenRouter for task extraction."""
+
 from __future__ import annotations
 
-import copy
 import json
 import logging
 import re
 from dataclasses import dataclass
 from datetime import date
+from typing import Any, Optional
 
-import httpx
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
 from app.core.errors import ConfigurationError
 from app.core.settings import Settings
+from app.prompts.extraction_prompts import ExtractionPromptManager
+from app.services.extraction_models import (
+    ExtractionModelConfig,
+    ExtractionModelRegistry,
+    ExtractorPayload,
+)
+from app.services.extraction_retry import ExtractionRetryError, ExtractionRetryManager, RetryConfig
 
 logger = logging.getLogger("gust.api")
 
 
 @dataclass
 class ExtractionRequest:
+    """Request for task extraction."""
+
     transcript_text: str
     user_timezone: str
     current_local_date: date
@@ -24,18 +37,57 @@ class ExtractionRequest:
 
 
 class ExtractionServiceError(Exception):
+    """Base exception for extraction service errors."""
+
     pass
 
 
 class ExtractorMalformedResponseError(ExtractionServiceError):
+    """Raised when extraction provider returns malformed response."""
+
     pass
 
 
-class OpenRouterExtractionService:
-    def __init__(self, settings: Settings) -> None:
+class LangChainExtractionService:
+    """Extraction service using LangChain with OpenRouter."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        prompt_manager: Optional[ExtractionPromptManager] = None,
+        retry_manager: Optional[ExtractionRetryManager] = None,
+        model_registry: Optional[ExtractionModelRegistry] = None,
+    ) -> None:
         self.settings = settings
+        self.prompt_manager = prompt_manager or ExtractionPromptManager()
+        self.retry_manager = retry_manager or self._create_retry_manager()
+        self.model_registry = model_registry or self._create_model_registry()
+        self.output_parser = JsonOutputParser()
+        self.last_attempt_count = 0
+
+    def _create_retry_manager(self) -> ExtractionRetryManager:
+        """Create retry manager from settings."""
+        config = RetryConfig(
+            max_retries=self.settings.extraction_max_retries,
+            base_delay=self.settings.extraction_retry_base_delay,
+            max_delay=self.settings.extraction_retry_max_delay,
+        )
+        return ExtractionRetryManager(config=config)
+
+    def _create_model_registry(self) -> ExtractionModelRegistry:
+        """Create model registry from settings."""
+        if self.settings.extraction_model_config_path:
+            return ExtractionModelRegistry.from_yaml(
+                self.settings.extraction_model_config_path,
+                ab_test_enabled=self.settings.extraction_ab_test_enabled,
+            )
+        return ExtractionModelRegistry.default(
+            self.settings.openrouter_extraction_model,
+            ab_test_enabled=self.settings.extraction_ab_test_enabled,
+        )
 
     def ensure_configured(self) -> None:
+        """Ensure extraction service is properly configured."""
         if not self.settings.openrouter_api_key:
             raise ConfigurationError("OpenRouter extraction configuration is missing.")
 
@@ -43,161 +95,226 @@ class OpenRouterExtractionService:
         self,
         *,
         request: ExtractionRequest,
-        schema: dict[str, object],
     ) -> dict[str, object]:
+        """Extract tasks from transcript using LangChain with retry logic.
+
+        Args:
+            request: Extraction request with transcript and context.
+
+        Returns:
+            Validated extraction payload as dictionary.
+
+        Raises:
+            ExtractionServiceError: When extraction fails.
+            ExtractorMalformedResponseError: When response is malformed.
+        """
+        self.last_attempt_count = 0
         self.ensure_configured()
 
-        timeout = httpx.Timeout(self.settings.extraction_timeout_seconds)
-        headers = {
-            "Authorization": f"Bearer {self.settings.openrouter_api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": self.settings.openrouter_extraction_model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You extract actionable tasks from Gust capture transcripts. "
-                        "Return only JSON matching the provided schema. "
-                        "Never invent new groups. Use Inbox when confidence is low."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": self._build_prompt(request),
-                },
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "gust_capture_extraction",
-                    "strict": True,
-                    "schema": self._normalize_schema_for_strict_outputs(schema),
-                },
+        # Select model for this extraction
+        model_config = self.model_registry.select_model()
+
+        # Create LLM once for all retry attempts
+        llm = self._create_llm(model_config)
+
+        logger.info(
+            "extraction_started",
+            extra={
+                "event": "extraction_started",
+                "model": model_config.model_id,
+                "model_name": model_config.name,
+                "transcript_length": len(request.transcript_text),
             },
-        }
+        )
 
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    self.settings.openrouter_api_url,
-                    headers=headers,
-                    json=payload,
-                )
-        except httpx.HTTPError as exc:
-            raise ExtractionServiceError("Extraction provider request failed.") from exc
+            # Execute extraction with retry logic
+            result = await self.retry_manager.execute_with_retry(
+                self._execute_extraction,
+                self._validate_result,
+                request=request,
+                model_config=model_config,
+                llm=llm,
+            )
+            self.last_attempt_count = self.retry_manager.last_attempt_count
 
-        if response.status_code >= 400:
-            logger.warning(
-                "extraction_provider_rejected",
+            logger.info(
+                "extraction_completed",
                 extra={
-                    "event": "extraction_provider_rejected",
-                    "provider_status_code": response.status_code,
-                    "model": self.settings.openrouter_extraction_model,
+                    "event": "extraction_completed",
+                    "model": model_config.model_id,
+                    "model_name": model_config.name,
+                    "attempt_count": self.last_attempt_count,
+                    "tasks_extracted": len(result.get("tasks", [])),
                 },
             )
-            raise ExtractionServiceError("Extraction provider request failed.")
 
-        try:
-            body = response.json()
-        except ValueError as exc:
-            raise ExtractorMalformedResponseError(
-                "Extraction provider returned invalid JSON."
-            ) from exc
-        try:
-            content = body["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            logger.warning(
-                "extraction_provider_payload_invalid",
+            return result
+
+        except ExtractionRetryError as exc:
+            self.last_attempt_count = self.retry_manager.last_attempt_count
+            logger.error(
+                "extraction_failed",
                 extra={
-                    "event": "extraction_provider_payload_invalid",
-                    "model": self.settings.openrouter_extraction_model,
-                    "response_body_keys": sorted(body.keys()) if isinstance(body, dict) else [],
+                    "event": "extraction_failed",
+                    "model": model_config.model_id,
+                    "model_name": model_config.name,
+                    "attempt_count": self.last_attempt_count,
+                    "error": str(exc),
+                    "last_error": str(exc.last_exception) if exc.last_exception else None,
+                },
+            )
+            raise ExtractionServiceError("Extraction failed after retries.") from exc
+
+    async def _execute_extraction(
+        self,
+        request: ExtractionRequest,
+        model_config: ExtractionModelConfig,
+        llm: ChatOpenAI,
+    ) -> dict[str, object]:
+        """Execute a single extraction attempt.
+
+        Args:
+            request: Extraction request.
+            model_config: Model configuration to use.
+            llm: Pre-configured LangChain LLM instance.
+
+        Returns:
+            Raw extraction result.
+
+        Raises:
+            ExtractorMalformedResponseError: When response is malformed.
+        """
+        # Build prompts
+        system_prompt = self.prompt_manager.get_system_prompt()
+        user_prompt = self.prompt_manager.get_user_prompt(
+            user_timezone=request.user_timezone,
+            current_local_date=request.current_local_date,
+            groups=request.groups,
+            transcript_text=request.transcript_text,
+        )
+
+        # Create prompt template
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                ("user", "{user_input}"),
+            ]
+        )
+
+        # Create chain
+        chain = prompt | llm | self.output_parser
+
+        # Execute chain
+        try:
+            result = await chain.ainvoke({"user_input": user_prompt})
+        except Exception as exc:
+            logger.warning(
+                "extraction_chain_error",
+                extra={
+                    "event": "extraction_chain_error",
+                    "model": model_config.model_id,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
                 },
             )
             raise ExtractorMalformedResponseError(
-                "Extraction provider returned an invalid response."
+                "Extraction provider request failed."
             ) from exc
 
-        if isinstance(content, str):
+        # Parse and normalize result
+        return self._parse_result(result)
+
+    def _create_llm(self, model_config: ExtractionModelConfig) -> ChatOpenAI:
+        """Create LangChain LLM instance.
+
+        Args:
+            model_config: Model configuration.
+
+        Returns:
+            Configured ChatOpenAI instance.
+        """
+        # Extract base URL from OpenRouter API URL
+        base_url = self.settings.openrouter_api_url.replace("/chat/completions", "")
+
+        return ChatOpenAI(
+            model=model_config.model_id,
+            openai_api_key=self.settings.openrouter_api_key,
+            openai_api_base=base_url,
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_tokens,
+            timeout=self.settings.extraction_timeout_seconds,
+            max_retries=0,  # We handle retries ourselves
+        )
+
+    def _parse_result(self, result: Any) -> dict[str, object]:
+        """Parse and normalize extraction result.
+
+        Args:
+            result: Raw result from LLM.
+
+        Returns:
+            Normalized dictionary result.
+
+        Raises:
+            ExtractorMalformedResponseError: When result cannot be parsed.
+        """
+        if isinstance(result, dict):
+            return result
+
+        if isinstance(result, str):
             try:
-                parsed = json.loads(self._strip_json_fence(content))
+                parsed = json.loads(self._strip_json_fence(result))
+                if isinstance(parsed, dict):
+                    return parsed
             except json.JSONDecodeError as exc:
                 logger.warning(
-                    "extraction_provider_content_invalid",
+                    "extraction_parse_error",
                     extra={
-                        "event": "extraction_provider_content_invalid",
-                        "model": self.settings.openrouter_extraction_model,
-                        "content_length": len(content),
-                        "content_is_fenced_json": bool(re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", content.strip(), flags=re.DOTALL)),
+                        "event": "extraction_parse_error",
+                        "content_length": len(result),
+                        "error": str(exc),
                     },
                 )
                 raise ExtractorMalformedResponseError(
                     "Extraction provider returned invalid JSON."
                 ) from exc
-        elif isinstance(content, dict):
-            parsed = content
-        else:
-            raise ExtractorMalformedResponseError(
-                "Extraction provider returned an unsupported payload."
-            )
 
-        if not isinstance(parsed, dict):
-            raise ExtractorMalformedResponseError(
-                "Extraction provider returned a non-object payload."
-            )
-
-        return parsed
-
-    def _build_prompt(self, request: ExtractionRequest) -> str:
-        group_lines: list[str] = []
-        for group in request.groups:
-            recent = group.get("recent_task_titles") or []
-            recent_titles = ", ".join(str(item) for item in recent) if recent else "None"
-            description = group.get("description") or "None"
-            group_lines.append(
-                f"- {group['name']} (id={group['id']}, description={description}, "
-                f"recent={recent_titles})"
-            )
-
-        return "\n".join(
-            [
-                f"User timezone: {request.user_timezone}",
-                f"Current local date: {request.current_local_date.isoformat()}",
-                "Available groups:",
-                "\n".join(group_lines) or "- Inbox",
-                "Transcript:",
-                request.transcript_text,
-            ]
+        raise ExtractorMalformedResponseError(
+            "Extraction provider returned an unsupported payload."
         )
 
+    def _validate_result(self, result: dict[str, object]) -> dict[str, object]:
+        """Validate extraction result against Pydantic schema.
+
+        Args:
+            result: Raw extraction result.
+
+        Returns:
+            Validated result as dictionary.
+
+        Raises:
+            ValidationError: When validation fails.
+        """
+        # Validate using Pydantic model
+        validated = ExtractorPayload.model_validate(result)
+        return validated.model_dump()
+
     def _strip_json_fence(self, content: str) -> str:
+        """Strip JSON fence markers from content.
+
+        Args:
+            content: Content that may contain JSON fence.
+
+        Returns:
+            Content without fence markers.
+        """
         stripped = content.strip()
         match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, flags=re.DOTALL)
         if match is not None:
             return match.group(1).strip()
         return stripped
 
-    def _normalize_schema_for_strict_outputs(self, schema: dict[str, object]) -> dict[str, object]:
-        normalized = copy.deepcopy(schema)
-        self._normalize_schema_node(normalized)
-        return normalized
 
-    def _normalize_schema_node(self, node: object) -> None:
-        if isinstance(node, list):
-            for item in node:
-                self._normalize_schema_node(item)
-            return
-
-        if not isinstance(node, dict):
-            return
-
-        node.pop("default", None)
-
-        for value in node.values():
-            self._normalize_schema_node(value)
-
-        properties = node.get("properties")
-        if node.get("type") == "object" and isinstance(properties, dict):
-            node["required"] = list(properties.keys())
+# Keep backward compatibility
+OpenRouterExtractionService = LangChainExtractionService
