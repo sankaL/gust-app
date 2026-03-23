@@ -70,7 +70,7 @@ supabase-start: prepare-dev-runtime
 	$(SUPABASE) start --workdir "$(DEV_SUPABASE_WORKDIR)"
 
 app-up: prepare-dev-runtime
-	$(DOCKER_COMPOSE) up -d backend
+	$(DOCKER_COMPOSE) up -d --build backend
 	$(MAKE) wait-backend
 	$(DOCKER_COMPOSE) up -d frontend
 
