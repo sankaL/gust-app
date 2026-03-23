@@ -96,6 +96,7 @@ export function TaskDetailRoute() {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({})
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [isEditMode, setIsEditMode] = useState(false)
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -126,6 +127,8 @@ export function TaskDetailRoute() {
 
     setDraft((current) => current ?? buildDraftState(taskQuery.data))
     setSubtaskDrafts((current) => mergeSubtaskDrafts(current, taskQuery.data.subtasks))
+    // Set edit mode based on needs_review flag
+    setIsEditMode(taskQuery.data.needs_review)
   }, [taskQuery.data])
 
   function requireCsrf() {
@@ -242,11 +245,11 @@ export function TaskDetailRoute() {
       eyebrow="Focused editing"
       description="Refine the title, group, dates, reminders, and subtasks for a single task."
     >
-      <section className="space-y-6">
+      <section className="space-y-4">
         <div className="flex items-center justify-between">
           <Link
             to={`/tasks${backSearch}`}
-            className="rounded-pill bg-surface-container px-4 py-3 text-sm text-on-surface"
+            className="rounded-pill bg-surface-container px-3 py-2 text-sm text-on-surface"
           >
             Back to Tasks
           </Link>
@@ -255,7 +258,7 @@ export function TaskDetailRoute() {
             onClick={() => {
               void navigate(`/tasks${backSearch}`)
             }}
-            className="rounded-pill border border-outline/30 px-4 py-3 text-sm text-on-surface-variant"
+            className="rounded-pill border border-outline/30 px-3 py-2 text-sm text-on-surface-variant"
           >
             Close
           </button>
@@ -272,158 +275,211 @@ export function TaskDetailRoute() {
             Loading task detail.
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <p className="font-body text-xs uppercase tracking-[0.2em] text-on-surface-variant">
-                    Current task
-                  </p>
-                  <input
-                    value={draft.title}
-                    onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                    className="w-full rounded-card border border-outline/20 bg-surface-dim px-4 py-4 font-display text-3xl text-on-surface outline-none focus:border-primary"
-                    aria-label="Task title"
-                  />
+          <div className="space-y-4">
+            <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1 flex-1">
+                    <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
+                      Current task
+                    </p>
+                    {isEditMode ? (
+                      <input
+                        value={draft.title}
+                        onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                        className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 font-display text-2xl text-on-surface outline-none focus:border-primary"
+                        aria-label="Task title"
+                      />
+                    ) : (
+                      <p className="font-display text-2xl text-on-surface">{draft.title}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditMode((current) => !current)}
+                    className="rounded-full bg-primary/20 p-2 text-primary transition-colors hover:bg-primary/30"
+                    aria-label={isEditMode ? 'Switch to view mode' : 'Switch to edit mode'}
+                  >
+                    {isEditMode ? (
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    )}
+                  </button>
                 </div>
 
-                <div className="grid gap-4">
-                  <label className="space-y-2">
-                    <span className="font-body text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+                <div className="grid gap-3">
+                  <label className="space-y-1">
+                    <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
                       Group
                     </span>
-                    <select
-                      value={draft.groupId}
-                      onChange={(event) => setDraft({ ...draft, groupId: event.target.value })}
-                      className="w-full rounded-card border border-outline/20 bg-surface-dim px-4 py-4 text-on-surface outline-none focus:border-primary"
-                    >
-                      {groupsQuery.data?.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </select>
+                    {isEditMode ? (
+                      <select
+                        value={draft.groupId}
+                        onChange={(event) => setDraft({ ...draft, groupId: event.target.value })}
+                        className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 text-on-surface outline-none focus:border-primary"
+                      >
+                        {groupsQuery.data?.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="rounded-card bg-surface-dim px-3 py-3 text-on-surface">
+                        {groupsQuery.data?.find((g) => g.id === draft.groupId)?.name ?? 'Unknown'}
+                      </p>
+                    )}
                   </label>
 
-                  <label className="space-y-2">
-                    <span className="font-body text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+                  <label className="space-y-1">
+                    <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
                       Due date
                     </span>
-                    <input
-                      type="date"
-                      value={draft.dueDate}
-                      onChange={(event) => {
-                        const nextDueDate = event.target.value
-                        if (!nextDueDate) {
+                    {isEditMode ? (
+                      <input
+                        type="date"
+                        value={draft.dueDate}
+                        onChange={(event) => {
+                          const nextDueDate = event.target.value
+                          if (!nextDueDate) {
+                            setDraft({
+                              ...draft,
+                              dueDate: '',
+                              reminderAt: '',
+                              recurrence: null
+                            })
+                            return
+                          }
+
+                          let nextRecurrence = draft.recurrence
+                          if (draft.recurrence?.frequency === 'weekly') {
+                            nextRecurrence = recurrenceForDueDate('weekly', nextDueDate, draft.recurrence)
+                          }
+                          if (draft.recurrence?.frequency === 'monthly') {
+                            nextRecurrence = recurrenceForDueDate('monthly', nextDueDate, draft.recurrence)
+                          }
                           setDraft({
                             ...draft,
-                            dueDate: '',
-                            reminderAt: '',
-                            recurrence: null
+                            dueDate: nextDueDate,
+                            recurrence: nextRecurrence
                           })
-                          return
-                        }
-
-                        let nextRecurrence = draft.recurrence
-                        if (draft.recurrence?.frequency === 'weekly') {
-                          nextRecurrence = recurrenceForDueDate('weekly', nextDueDate, draft.recurrence)
-                        }
-                        if (draft.recurrence?.frequency === 'monthly') {
-                          nextRecurrence = recurrenceForDueDate('monthly', nextDueDate, draft.recurrence)
-                        }
-                        setDraft({
-                          ...draft,
-                          dueDate: nextDueDate,
-                          recurrence: nextRecurrence
-                        })
-                      }}
-                      className="w-full rounded-card border border-outline/20 bg-surface-dim px-4 py-4 text-on-surface outline-none focus:border-primary"
-                    />
+                        }}
+                        className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 text-on-surface outline-none focus:border-primary"
+                      />
+                    ) : (
+                      <p className="rounded-card bg-surface-dim px-3 py-3 text-on-surface">
+                        {draft.dueDate || 'No due date'}
+                      </p>
+                    )}
                   </label>
 
-                  <label className="space-y-2">
-                    <span className="font-body text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+                  <label className="space-y-1">
+                    <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
                       Reminder
                     </span>
-                    <input
-                      type="datetime-local"
-                      value={draft.reminderAt}
-                      onChange={(event) => setDraft({ ...draft, reminderAt: event.target.value })}
-                      disabled={!draft.dueDate}
-                      className="w-full rounded-card border border-outline/20 bg-surface-dim px-4 py-4 text-on-surface outline-none focus:border-primary disabled:opacity-50"
-                    />
+                    {isEditMode ? (
+                      <input
+                        type="datetime-local"
+                        value={draft.reminderAt}
+                        onChange={(event) => setDraft({ ...draft, reminderAt: event.target.value })}
+                        disabled={!draft.dueDate}
+                        className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 text-on-surface outline-none focus:border-primary disabled:opacity-50"
+                      />
+                    ) : (
+                      <p className="rounded-card bg-surface-dim px-3 py-3 text-on-surface">
+                        {draft.reminderAt ? new Date(draft.reminderAt).toLocaleString() : 'No reminder'}
+                      </p>
+                    )}
                   </label>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
-              <div className="space-y-4">
+            <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
+              <div className="space-y-3">
                 <div>
-                  <p className="font-body text-xs uppercase tracking-[0.2em] text-on-surface-variant">
+                  <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
                     Recurrence
                   </p>
-                  <p className="mt-2 font-body text-sm text-on-surface-variant">
-                    Daily, weekly, and monthly only. Clearing the due date disables recurrence.
-                  </p>
+                  {isEditMode ? (
+                    <p className="mt-1 font-body text-xs text-on-surface-variant">
+                      Daily, weekly, and monthly only. Clearing the due date disables recurrence.
+                    </p>
+                  ) : null}
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Daily', value: 'daily' },
-                    { label: 'Weekly', value: 'weekly' },
-                    { label: 'Monthly', value: 'monthly' }
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      disabled={!draft.dueDate}
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          recurrence:
-                            draft.recurrence?.frequency === option.value
-                              ? null
-                              : recurrenceForDueDate(
-                                  option.value as 'daily' | 'weekly' | 'monthly',
-                                  draft.dueDate,
-                                  draft.recurrence
-                                )
-                        })
-                      }
-                      className={[
-                        'rounded-card px-4 py-4 text-sm transition',
-                        draft.recurrence?.frequency === option.value
-                          ? 'bg-primary text-surface'
-                          : 'bg-surface-dim text-on-surface-variant',
-                        !draft.dueDate ? 'opacity-50' : ''
-                      ].join(' ')}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+                {isEditMode ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: 'Daily', value: 'daily' },
+                      { label: 'Weekly', value: 'weekly' },
+                      { label: 'Monthly', value: 'monthly' }
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        disabled={!draft.dueDate}
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            recurrence:
+                              draft.recurrence?.frequency === option.value
+                                ? null
+                                : recurrenceForDueDate(
+                                    option.value as 'daily' | 'weekly' | 'monthly',
+                                    draft.dueDate,
+                                    draft.recurrence
+                                  )
+                          })
+                        }
+                        className={[
+                          'rounded-card px-3 py-3 text-sm transition',
+                          draft.recurrence?.frequency === option.value
+                            ? 'bg-primary text-surface'
+                            : 'bg-surface-dim text-on-surface-variant',
+                          !draft.dueDate ? 'opacity-50' : ''
+                        ].join(' ')}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-card bg-surface-dim px-3 py-3 text-on-surface">
+                    {draft.recurrence?.frequency
+                      ? draft.recurrence.frequency.charAt(0).toUpperCase() + draft.recurrence.frequency.slice(1)
+                      : 'No recurrence'}
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
-              <div className="space-y-4">
+            <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-display text-2xl text-on-surface">Subtasks</p>
-                    <p className="mt-2 font-body text-sm text-on-surface-variant">
-                      Add, rename, complete, or remove checklist items.
-                    </p>
+                    <p className="font-display text-xl text-on-surface">Subtasks</p>
+                    {isEditMode ? (
+                      <p className="mt-1 font-body text-xs text-on-surface-variant">
+                        Add, rename, complete, or remove checklist items.
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="rounded-pill bg-surface-container-high px-3 py-2 text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+                  <span className="rounded-pill bg-surface-container-high px-2 py-1 text-xs uppercase tracking-[0.1em] text-on-surface-variant">
                     {taskQuery.data.subtasks.length} items
                   </span>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {taskQuery.data.subtasks.map((subtask) => (
-                    <div key={subtask.id} className="rounded-card bg-surface-dim p-4">
-                      <div className="flex items-start gap-3">
+                    <div key={subtask.id} className="rounded-card bg-surface-dim p-3">
+                      <div className="flex items-start gap-2">
                         <button
                           type="button"
                           onClick={() =>
@@ -433,68 +489,76 @@ export function TaskDetailRoute() {
                             })
                           }
                           className={[
-                            'mt-1 h-6 w-6 rounded-pill border',
+                            'mt-0.5 h-5 w-5 rounded-pill border',
                             subtask.is_completed
                               ? 'border-primary bg-primary'
                               : 'border-outline/25 bg-surface-container-high'
                           ].join(' ')}
                           aria-label={`Toggle ${subtask.title}`}
                         />
-                        <div className="flex-1 space-y-3">
-                          <input
-                            value={subtaskDrafts[subtask.id] ?? subtask.title}
-                            onChange={(event) =>
-                              setSubtaskDrafts({
-                                ...subtaskDrafts,
-                                [subtask.id]: event.target.value
-                              })
-                            }
-                            className="w-full rounded-card border border-outline/15 bg-surface-container px-4 py-3 text-on-surface outline-none focus:border-primary"
-                            aria-label={`Subtask ${subtask.title}`}
-                          />
-                          <div className="flex gap-3">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateSubtaskMutation.mutate({
-                                  subtaskId: subtask.id,
-                                  title: subtaskDrafts[subtask.id]
+                        <div className="flex-1 space-y-2">
+                          {isEditMode ? (
+                            <input
+                              value={subtaskDrafts[subtask.id] ?? subtask.title}
+                              onChange={(event) =>
+                                setSubtaskDrafts({
+                                  ...subtaskDrafts,
+                                  [subtask.id]: event.target.value
                                 })
                               }
-                              className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface"
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteSubtaskMutation.mutate(subtask.id)}
-                              className="rounded-pill border border-outline/30 px-4 py-2 text-sm text-on-surface-variant"
-                            >
-                              Delete
-                            </button>
-                          </div>
+                              className="w-full rounded-card border border-outline/15 bg-surface-container px-3 py-2 text-on-surface outline-none focus:border-primary"
+                              aria-label={`Subtask ${subtask.title}`}
+                            />
+                          ) : (
+                            <p className="text-on-surface">{subtask.title}</p>
+                          )}
+                          {isEditMode ? (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateSubtaskMutation.mutate({
+                                    subtaskId: subtask.id,
+                                    title: subtaskDrafts[subtask.id]
+                                  })
+                                }
+                                className="rounded-pill bg-primary px-3 py-1.5 text-sm font-medium text-surface"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteSubtaskMutation.mutate(subtask.id)}
+                                className="rounded-pill border border-outline/30 px-3 py-1.5 text-sm text-on-surface-variant"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex gap-3">
-                  <input
-                    value={newSubtaskTitle}
-                    onChange={(event) => setNewSubtaskTitle(event.target.value)}
-                    placeholder="Add a subtask..."
-                    className="flex-1 rounded-card border border-dashed border-outline/30 bg-surface-dim px-4 py-4 text-on-surface outline-none focus:border-primary"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => createSubtaskMutation.mutate()}
-                    disabled={!newSubtaskTitle.trim()}
-                    className="rounded-pill bg-primary px-5 py-3 text-sm font-medium text-surface disabled:opacity-50"
-                  >
-                    Add
-                  </button>
-                </div>
+                {isEditMode ? (
+                  <div className="flex gap-2">
+                    <input
+                      value={newSubtaskTitle}
+                      onChange={(event) => setNewSubtaskTitle(event.target.value)}
+                      placeholder="Add a subtask..."
+                      className="flex-1 rounded-card border border-dashed border-outline/30 bg-surface-dim px-3 py-3 text-on-surface outline-none focus:border-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => createSubtaskMutation.mutate()}
+                      disabled={!newSubtaskTitle.trim()}
+                      className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
 

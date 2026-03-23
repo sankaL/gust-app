@@ -65,6 +65,15 @@ function buildDueBadge(task: TaskSummary) {
   if (diffDays === 1) {
     return { label: 'Tomorrow', tone: 'bg-primary/20 text-on-surface' }
   }
+  if (diffDays <= 7) {
+    return {
+      label: new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric'
+      }).format(due),
+      tone: 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+    }
+  }
   return {
     label: new Intl.DateTimeFormat(undefined, {
       month: 'short',
@@ -116,8 +125,8 @@ function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTask
   }
 
   return (
-    <article className="relative overflow-hidden rounded-card bg-surface-container shadow-ambient">
-      <div className="absolute inset-0 flex items-center justify-between px-4 text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+    <article className={`relative overflow-hidden rounded-card shadow-ambient ${!task.due_date ? 'bg-surface-container/50 opacity-70' : 'bg-surface-container'}`}>
+      <div className="absolute inset-0 flex items-center justify-between px-3 text-xs uppercase tracking-[0.1em] text-on-surface-variant">
         <span>Swipe right to complete</span>
         <span>Swipe left to delete</span>
       </div>
@@ -128,54 +137,72 @@ function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTask
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={resetSwipe}
-        className="relative z-10 w-full touch-pan-y rounded-card bg-surface-container p-5 text-left transition"
+        className="relative z-10 w-full touch-pan-y rounded-card bg-surface-container p-3 text-left transition"
         style={{ transform: `translateX(${offsetX}px)` }}
       >
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-1.5">
               {task.needs_review ? (
-                <span className="inline-flex rounded-pill bg-primary/20 px-3 py-1 text-xs uppercase tracking-[0.18em] text-primary">
+                <span className="inline-flex rounded-pill bg-primary/20 px-2 py-0.5 text-xs uppercase tracking-[0.1em] text-primary">
                   Needs review
                 </span>
               ) : null}
               {badge ? (
-                <span className={`inline-flex rounded-pill px-3 py-1 text-xs uppercase tracking-[0.18em] ${badge.tone}`}>
+                <span className={`inline-flex rounded-pill px-2 py-0.5 text-xs uppercase tracking-[0.1em] ${badge.tone}`}>
                   {badge.label}
                 </span>
               ) : null}
             </div>
-            <div className="space-y-2">
-              <p className="font-display text-xl text-on-surface">{task.title}</p>
-              <p className="font-body text-sm text-on-surface-variant">{task.group.name}</p>
-            </div>
+            <p className="truncate font-display text-base text-on-surface">{task.title}</p>
+            <p className="truncate font-body text-xs text-on-surface-variant">{task.group.name}</p>
           </div>
-          <div className="mt-1 rounded-pill bg-surface-container-high px-3 py-2 text-xs uppercase tracking-[0.18em] text-on-surface-variant">
-            {task.due_bucket.replace('_', ' ')}
+          <div className="flex flex-col items-end gap-2">
+            {!task.due_date ? (
+              <div className="flex items-center gap-1 rounded-pill bg-surface-container-high px-2 py-1 text-xs text-on-surface-variant">
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>Add date</span>
+              </div>
+            ) : (
+              <div className="rounded-pill bg-surface-container-high px-2 py-1 text-xs uppercase tracking-[0.1em] text-on-surface-variant">
+                {task.due_bucket.replace('_', ' ')}
+              </div>
+            )}
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onComplete(task.id)
+                }}
+                disabled={isBusy}
+                className="rounded-full bg-primary/20 p-1.5 text-primary disabled:opacity-50"
+                aria-label={`Complete ${task.title}`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(task.id)
+                }}
+                disabled={isBusy}
+                className="rounded-full bg-surface-container-high p-1.5 text-on-surface-variant disabled:opacity-50"
+                aria-label={`Delete ${task.title}`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </button>
-
-      <div className="relative z-10 flex gap-3 border-t border-outline/15 bg-surface-container-high px-4 py-3">
-        <button
-          type="button"
-          onClick={() => onComplete(task.id)}
-          disabled={isBusy}
-          className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
-          aria-label={`Complete ${task.title}`}
-        >
-          Complete
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(task.id)}
-          disabled={isBusy}
-          className="rounded-pill border border-outline/30 px-4 py-2 text-sm text-on-surface-variant disabled:opacity-50"
-          aria-label={`Delete ${task.title}`}
-        >
-          Delete
-        </button>
-      </div>
     </article>
   )
 }
@@ -305,18 +332,12 @@ export function TasksRoute() {
       eyebrow="Focused task surface"
       description="Review, sort, and correct extracted tasks without leaving the protected backend session."
     >
-      <section className="space-y-6">
-        <div className="space-y-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-3">
-              <p className="font-body text-sm uppercase tracking-[0.25em] text-on-surface-variant">
-                Grouped open work
-              </p>
-              <h2 className="font-display text-3xl text-on-surface">Tasks</h2>
-              <p className="max-w-sm font-body text-base leading-7 text-on-surface-variant">
-                {selectedGroup
-                  ? `Focused on ${selectedGroup.name}. Swipe for fast changes or open a task for full editing.`
-                  : 'Loading your groups and open tasks.'}
+      <section className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-2">
+              <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
+                {selectedGroup?.name ?? 'Loading'}
               </p>
             </div>
             <Link
@@ -324,25 +345,28 @@ export function TasksRoute() {
                 pathname: '/tasks/groups',
                 search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
               }}
-              className="inline-flex rounded-pill bg-surface-container-high px-4 py-3 text-sm text-on-surface"
+              className="inline-flex items-center gap-2 rounded-pill bg-primary/20 px-4 py-2 text-sm font-medium text-primary transition-all duration-200 hover:bg-primary/30 hover:shadow-ambient active:scale-95"
             >
-              Manage Groups
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              Groups
             </Link>
           </div>
         </div>
 
         {groupsQuery.data?.length ? (
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
             {groupsQuery.data.map((group) => (
               <button
                 key={group.id}
                 type="button"
                 onClick={() => setSearchParams({ group: group.id })}
                 className={[
-                  'rounded-pill px-4 py-3 font-body text-sm transition',
+                  'rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200',
                   group.id === resolvedGroupId
-                    ? 'bg-primary text-surface shadow-ambient'
-                    : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                    ? 'bg-primary text-surface shadow-ambient ring-2 ring-primary/50'
+                    : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest hover:shadow-ambient border border-outline/20'
                 ].join(' ')}
               >
                 {group.name} · {group.open_task_count}
@@ -372,7 +396,7 @@ export function TasksRoute() {
           </div>
         ) : null}
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {bucketSections.map((section) => {
             const items = (tasksQuery.data ?? []).filter((task) => task.due_bucket === section.key)
             if (items.length === 0) {
@@ -380,15 +404,15 @@ export function TasksRoute() {
             }
 
             return (
-              <section key={section.key} className="space-y-4">
+              <section key={section.key} className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-display text-2xl text-on-surface">{section.label}</h3>
-                  <span className="font-body text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+                  <h3 className="font-display text-xl text-on-surface">{section.label}</h3>
+                  <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
                     {items.length} tasks
                   </span>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {items.map((task) => (
                     <SwipeTaskCard
                       key={task.id}
@@ -421,13 +445,17 @@ export function TasksRoute() {
         </div>
 
         {undoState ? (
-          <div className="sticky bottom-4 rounded-soft bg-surface-container-highest p-4 shadow-ambient">
-            <div className="flex items-center justify-between gap-4">
+          <div className={`fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-soft p-4 shadow-ambient ${
+            undoState.kind === 'complete'
+              ? 'bg-green-900/90 border-t-2 border-green-500'
+              : 'bg-red-900/90 border-t-2 border-red-500'
+          }`}>
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-body text-sm text-on-surface">
                   {undoState.kind === 'complete' ? 'Completed' : 'Deleted'} {undoState.title}
                 </p>
-                <p className="font-body text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+                <p className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
                   Undo is available while this message is visible
                 </p>
               </div>
@@ -435,7 +463,11 @@ export function TasksRoute() {
                 type="button"
                 onClick={() => undoMutation.mutate(undoState)}
                 disabled={undoMutation.isPending}
-                className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
+                className={`rounded-pill px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-50 ${
+                  undoState.kind === 'complete'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
                 Undo
               </button>

@@ -12,23 +12,20 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-surface text-on-surface">
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-4 pb-8 pt-6">
-        <header className="mb-8 space-y-4 pt-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-body text-sm uppercase tracking-[0.3em] text-on-surface-variant">
-                Voice-first foundation
-              </p>
-              <h1 className="font-display text-5xl leading-none text-on-surface">Gust</h1>
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3">
+        <header className="sticky top-0 z-50 mb-4 space-y-3 bg-surface/95 pt-2 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-6 w-6" />
+              <h1 className="font-display text-2xl leading-none text-on-surface">Gust</h1>
             </div>
-            <div className="rounded-pill bg-surface-container-high px-3 py-2 text-right shadow-ambient">
-              <p className="font-body text-xs text-on-surface-variant">Environment</p>
-              <p className="font-body text-sm font-medium">{config.environmentLabel}</p>
+            <div className="rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient">
+              <p className="font-body text-xs font-medium">{config.environmentLabel}</p>
             </div>
           </div>
           <nav
             aria-label="Primary"
-            className="grid grid-cols-2 gap-3 rounded-soft bg-surface-container p-2"
+            className="grid grid-cols-2 gap-2 rounded-soft bg-surface-container p-1.5"
           >
             {navigation.map((item) => (
               <NavLink
@@ -37,7 +34,7 @@ export function AppShell() {
                 end={item.end}
                 className={({ isActive }) =>
                   [
-                    'rounded-soft px-4 py-3 text-center font-body text-sm transition',
+                    'rounded-soft px-3 py-2 text-center font-body text-sm transition',
                     isActive
                       ? 'bg-surface-container-highest text-on-surface shadow-ambient'
                       : 'text-on-surface-variant hover:bg-surface-container-high'

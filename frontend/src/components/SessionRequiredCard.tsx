@@ -29,9 +29,9 @@ export function SessionRequiredCard() {
   })
 
   return (
-    <div className="rounded-soft border border-outline/40 bg-surface-container p-6 shadow-ambient">
-      <div className="space-y-4">
-        <p className="font-display text-2xl text-on-surface">Session Required</p>
+    <div className="rounded-soft border border-outline/40 bg-surface-container p-4 shadow-ambient">
+      <div className="space-y-3">
+        <p className="font-display text-xl text-on-surface">Session Required</p>
         {devMode ? (
           <>
             <p className="font-body text-sm leading-6 text-on-surface-variant">
@@ -42,7 +42,7 @@ export function SessionRequiredCard() {
               type="button"
               onClick={() => localDevSignInMutation.mutate()}
               disabled={localDevSignInMutation.isPending}
-              className="inline-flex rounded-pill bg-primary px-5 py-3 font-body text-sm font-medium text-surface disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex rounded-pill bg-primary px-4 py-2 font-body text-sm font-medium text-surface disabled:cursor-not-allowed disabled:opacity-70"
             >
               {localDevSignInMutation.isPending
                 ? 'Signing in to local test account...'
@@ -64,7 +64,7 @@ export function SessionRequiredCard() {
             </p>
             <a
               href={getAuthStartUrl()}
-              className="inline-flex rounded-pill bg-primary px-5 py-3 font-body text-sm font-medium text-surface"
+              className="inline-flex rounded-pill bg-primary px-4 py-2 font-body text-sm font-medium text-surface"
             >
               Sign in with Google
             </a>
