@@ -84,22 +84,36 @@ class ExtractionRetryManager:
                         "attempt": attempt,
                         "max_retries": self.config.max_retries,
                         "error": str(exc),
+                        "error_type": type(exc).__name__,
+                        "validation_errors": exc.errors() if hasattr(exc, "errors") else None,
                     },
                 )
 
             except Exception as exc:
                 last_exception = exc
                 self.last_attempt_count = attempt
-                logger.warning(
-                    "extraction_attempt_failed",
-                    extra={
-                        "event": "extraction_attempt_failed",
-                        "attempt": attempt,
-                        "max_retries": self.config.max_retries,
-                        "error": str(exc),
-                        "error_type": type(exc).__name__,
-                    },
-                )
+                # Capture detailed error information
+                import traceback
+                error_details = {
+                    "event": "extraction_attempt_failed",
+                    "attempt": attempt,
+                    "max_retries": self.config.max_retries,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "error_module": type(exc).__module__,
+                    "traceback": traceback.format_exc(),
+                }
+                
+                # Add specific details for common error types
+                if hasattr(exc, "response"):
+                    error_details["response_status"] = getattr(exc.response, "status_code", None)
+                    error_details["response_text"] = getattr(exc.response, "text", None)
+                if hasattr(exc, "status_code"):
+                    error_details["status_code"] = exc.status_code
+                if hasattr(exc, "body"):
+                    error_details["body"] = str(exc.body)
+                
+                logger.warning("extraction_attempt_failed", extra=error_details)
 
             # Calculate delay with exponential backoff
             if attempt < self.config.max_retries:
@@ -115,15 +129,29 @@ class ExtractionRetryManager:
                 await asyncio.sleep(delay)
 
         # All retries exhausted
-        logger.error(
-            "extraction_retry_exhausted",
-            extra={
-                "event": "extraction_retry_exhausted",
-                "max_retries": self.config.max_retries,
-                "last_error": str(last_exception),
-                "last_error_type": type(last_exception).__name__ if last_exception else None,
-            },
-        )
+        import traceback
+        error_details = {
+            "event": "extraction_retry_exhausted",
+            "max_retries": self.config.max_retries,
+            "last_error": str(last_exception),
+            "last_error_type": type(last_exception).__name__ if last_exception else None,
+            "last_error_module": type(last_exception).__module__ if last_exception else None,
+        }
+        
+        # Add traceback if available
+        if last_exception:
+            error_details["traceback"] = traceback.format_exc()
+            
+            # Add specific details for common error types
+            if hasattr(last_exception, "response"):
+                error_details["response_status"] = getattr(last_exception.response, "status_code", None)
+                error_details["response_text"] = getattr(last_exception.response, "text", None)
+            if hasattr(last_exception, "status_code"):
+                error_details["status_code"] = last_exception.status_code
+            if hasattr(last_exception, "body"):
+                error_details["body"] = str(last_exception.body)
+        
+        logger.error("extraction_retry_exhausted", extra=error_details)
 
         raise ExtractionRetryError(
             f"Extraction failed after {self.config.max_retries} attempts",

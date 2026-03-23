@@ -197,7 +197,7 @@ class LangChainExtractionService:
         # Create prompt template
         prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", system_prompt),
+                ("system", "{system_prompt}"),
                 ("user", "{user_input}"),
             ]
         )
@@ -207,19 +207,37 @@ class LangChainExtractionService:
 
         # Execute chain
         try:
-            result = await chain.ainvoke({"user_input": user_prompt})
-        except Exception as exc:
-            logger.warning(
-                "extraction_chain_error",
-                extra={
-                    "event": "extraction_chain_error",
-                    "model": model_config.model_id,
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                },
+            result = await chain.ainvoke(
+                {
+                    "system_prompt": system_prompt,
+                    "user_input": user_prompt,
+                }
             )
+        except Exception as exc:
+            # Capture detailed error information for debugging
+            import traceback
+            error_details = {
+                "event": "extraction_chain_error",
+                "model": model_config.model_id,
+                "model_name": model_config.name,
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+                "error_module": type(exc).__module__,
+                "traceback": traceback.format_exc(),
+            }
+            
+            # Add specific details for common error types
+            if hasattr(exc, "response"):
+                error_details["response_status"] = getattr(exc.response, "status_code", None)
+                error_details["response_text"] = getattr(exc.response, "text", None)
+            if hasattr(exc, "status_code"):
+                error_details["status_code"] = exc.status_code
+            if hasattr(exc, "body"):
+                error_details["body"] = str(exc.body)
+            
+            logger.warning("extraction_chain_error", extra=error_details)
             raise ExtractorMalformedResponseError(
-                "Extraction provider request failed."
+                f"Extraction provider request failed: {type(exc).__name__}: {str(exc)}"
             ) from exc
 
         # Parse and normalize result
@@ -236,6 +254,21 @@ class LangChainExtractionService:
         """
         # Extract base URL from OpenRouter API URL
         base_url = self.settings.openrouter_api_url.replace("/chat/completions", "")
+
+        # Log API configuration for debugging
+        logger.debug(
+            "extraction_llm_config",
+            extra={
+                "event": "extraction_llm_config",
+                "model_id": model_config.model_id,
+                "model_name": model_config.name,
+                "base_url": base_url,
+                "api_key_configured": bool(self.settings.openrouter_api_key),
+                "temperature": model_config.temperature,
+                "max_tokens": model_config.max_tokens,
+                "timeout_seconds": self.settings.extraction_timeout_seconds,
+            },
+        )
 
         return ChatOpenAI(
             model=model_config.model_id,
@@ -259,6 +292,16 @@ class LangChainExtractionService:
         Raises:
             ExtractorMalformedResponseError: When result cannot be parsed.
         """
+        # Log the raw response for debugging
+        logger.debug(
+            "extraction_raw_response",
+            extra={
+                "event": "extraction_raw_response",
+                "result_type": type(result).__name__,
+                "result_preview": str(result)[:500] if result else None,
+            },
+        )
+        
         if isinstance(result, dict):
             return result
 

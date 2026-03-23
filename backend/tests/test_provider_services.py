@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime
+import logging
 from typing import Optional
 from unittest.mock import patch
 
@@ -12,6 +13,7 @@ from app.core.settings import Settings
 from app.prompts.extraction_prompts import ExtractionPromptManager
 from app.services.extraction import (
     ExtractionRequest,
+    ExtractorMalformedResponseError,
     ExtractionServiceError,
     LangChainExtractionService,
 )
@@ -320,50 +322,18 @@ def test_extraction_service_tracks_attempt_count_across_retries() -> None:
 
 def test_extraction_service_parses_valid_dict_result() -> None:
     """Extraction returns dict results directly without parsing."""
-    settings = build_settings()
-    service = LangChainExtractionService(settings=settings)
-
     expected_payload = {"tasks": [{"title": "Buy milk", "due_date": None}]}
-
-    async def mock_execute(*args, **kwargs):
-        return expected_payload
-
-    with patch.object(service, "_execute_extraction", side_effect=mock_execute):
-        result = asyncio.run(
-            service.extract(
-                request=ExtractionRequest(
-                    transcript_text="Buy milk",
-                    user_timezone="UTC",
-                    current_local_date=date(2026, 3, 22),
-                    groups=[],
-                ),
-            )
-        )
+    service = LangChainExtractionService(settings=build_settings())
+    result = service._parse_result(expected_payload)
 
     assert result == expected_payload
 
 
 def test_extraction_service_strips_fenced_json() -> None:
     """Extraction strips JSON fence markers from string results."""
-    settings = build_settings()
-    service = LangChainExtractionService(settings=settings)
-
+    service = LangChainExtractionService(settings=build_settings())
     fenced_json = '```json\n{"tasks": []}\n```'
-
-    async def mock_execute(*args, **kwargs):
-        return fenced_json
-
-    with patch.object(service, "_execute_extraction", side_effect=mock_execute):
-        result = asyncio.run(
-            service.extract(
-                request=ExtractionRequest(
-                    transcript_text="Plan trip",
-                    user_timezone="UTC",
-                    current_local_date=date(2026, 3, 22),
-                    groups=[],
-                ),
-            )
-        )
+    result = service._parse_result(fenced_json)
 
     assert result == {"tasks": []}
 
@@ -389,6 +359,15 @@ def test_extraction_prompt_manager_does_not_request_needs_review_field() -> None
     prompt = manager.get_system_prompt()
 
     assert "needs_review" not in prompt
+
+
+def test_extraction_prompt_manager_keeps_json_example_valid() -> None:
+    """System prompt should show valid JSON syntax to the model."""
+    manager = ExtractionPromptManager()
+    prompt = manager.get_system_prompt()
+
+    assert "{{" not in prompt
+    assert "}}" not in prompt
 
 
 def test_extraction_prompt_manager_formats_groups() -> None:
@@ -425,6 +404,97 @@ def test_extraction_prompt_manager_falls_back_to_inbox() -> None:
     )
 
     assert "- Inbox" in prompt
+
+
+def test_extraction_service_debug_log_omits_api_key_prefix(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Debug logging should not emit credential material."""
+    settings = build_settings()
+    service = LangChainExtractionService(settings=settings)
+    model_config = service.model_registry.select_model()
+
+    with caplog.at_level(logging.DEBUG, logger="gust.api"):
+        service._create_llm(model_config)
+
+    config_logs = [record for record in caplog.records if record.msg == "extraction_llm_config"]
+
+    assert len(config_logs) == 1
+    assert not hasattr(config_logs[0], "api_key_prefix")
+
+
+def test_extraction_parse_error_log_omits_raw_provider_content(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Malformed JSON logging should not include raw model output."""
+    service = LangChainExtractionService(settings=build_settings())
+    malformed = 'not valid json {"secret":"user-task"}'
+
+    with caplog.at_level(logging.WARNING, logger="gust.api"):
+        with pytest.raises(ExtractorMalformedResponseError):
+            service._parse_result(malformed)
+
+    parse_logs = [record for record in caplog.records if record.msg == "extraction_parse_error"]
+    assert len(parse_logs) == 1
+    assert not hasattr(parse_logs[0], "content_preview")
+    assert "user-task" not in caplog.text
+
+
+def test_extraction_service_passes_system_prompt_as_runtime_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """System prompt JSON examples should not be parsed as template variables."""
+    settings = build_settings()
+    service = LangChainExtractionService(settings=settings)
+    captured: dict[str, object] = {}
+
+    class FakeChain:
+        def __or__(self, other):
+            return self
+
+        async def ainvoke(self, payload):
+            captured["payload"] = payload
+            return {"tasks": []}
+
+    fake_chain = FakeChain()
+    captured_messages: dict[str, object] = {}
+
+    def fake_from_messages(messages):
+        captured_messages["messages"] = messages
+        return fake_chain
+
+    monkeypatch.setattr(
+        "app.services.extraction.ChatPromptTemplate.from_messages",
+        fake_from_messages,
+    )
+
+    result = asyncio.run(
+        service._execute_extraction(
+            request=ExtractionRequest(
+                transcript_text="Buy groceries",
+                user_timezone="UTC",
+                current_local_date=date(2026, 3, 22),
+                groups=[],
+            ),
+            model_config=service.model_registry.select_model(),
+            llm=object(),
+        )
+    )
+
+    assert result == {"tasks": []}
+    assert captured_messages["messages"] == [
+        ("system", "{system_prompt}"),
+        ("user", "{user_input}"),
+    ]
+    assert captured["payload"] == {
+        "system_prompt": service.prompt_manager.get_system_prompt(),
+        "user_input": service.prompt_manager.get_user_prompt(
+            user_timezone="UTC",
+            current_local_date=date(2026, 3, 22),
+            groups=[],
+            transcript_text="Buy groceries",
+        ),
+    }
 
 
 def test_extractor_payload_allows_invalid_recurrence_for_candidate_filtering() -> None:
@@ -493,7 +563,8 @@ async def test_retry_manager_retries_on_validation_error() -> None:
         return ExtractorPayload.model_validate(result)
 
     result = await manager.execute_with_retry(eventually_succeed, validate_as_extractor_payload)
-    assert result == {"tasks": []}
+    assert isinstance(result, ExtractorPayload)
+    assert result.model_dump() == {"tasks": []}
     assert call_count == 2
     assert manager.last_attempt_count == 2
 
