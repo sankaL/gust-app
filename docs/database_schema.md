@@ -1,7 +1,7 @@
 # Gust Database Schema
 
-**Version:** 1.1  
-**Last Updated:** 2026-03-22
+**Version:** 1.2
+**Last Updated:** 2026-03-23
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
 
@@ -171,6 +171,37 @@ Constraints and invariants:
 - Subtasks do not carry due dates, reminders, or recurrence.
 - Completing all subtasks does not auto-complete the parent task.
 
+### `extracted_tasks`
+
+Staging table for extracted tasks before user approval. Tasks remain here until approved or discarded.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `uuid` | No | Primary key. |
+| `user_id` | `uuid` | No | Foreign key to `users.id`. |
+| `capture_id` | `uuid` | No | Foreign key to `captures.id`. |
+| `title` | `text` | No | Non-empty task title. |
+| `group_id` | `uuid` | No | Foreign key to `groups.id`. |
+| `group_name` | `text` | Yes | Denormalized group name for display. |
+| `due_date` | `date` | Yes | Optional due date. |
+| `reminder_at` | `timestamptz` | Yes | Optional reminder timestamp. |
+| `recurrence_frequency` | `text` | Yes | Null when not recurring. |
+| `recurrence_weekday` | `smallint` | Yes | `0-6` for Sunday-Saturday. Required for weekly recurrence. |
+| `recurrence_day_of_month` | `smallint` | Yes | `1-31`. Required for monthly recurrence. |
+| `top_confidence` | `float` | No | Extraction confidence score (0.0-1.0). |
+| `needs_review` | `boolean` | No | `true` when confidence < 0.7. |
+| `status` | `text` | No | `pending`, `approved`, or `discarded`. |
+| `created_at` | `timestamptz` | No | Default `now()`. |
+| `updated_at` | `timestamptz` | No | Default `now()`. |
+
+Constraints and invariants:
+
+- `status` must be one of: `pending`, `approved`, `discarded`.
+- `top_confidence` must be between 0.0 and 1.0.
+- `needs_review` is `true` when `top_confidence < 0.7`.
+- Tasks are linked to captures for traceability.
+- User-scoped for security.
+
 ### `captures`
 
 Bounded-retention record of capture attempts and transcript review state.
@@ -260,11 +291,15 @@ The initial migration set should include indexes for:
 - `reminders (task_id)` unique
 - `reminders (idempotency_key)` unique
 - `reminders (claim_expires_at)` for reclaiming stuck claims
+- `extracted_tasks (user_id)` for user queries
+- `extracted_tasks (capture_id)` for capture queries
+- `extracted_tasks (user_id, status)` for pending task queries
 
 ## Retention and Cleanup
 
 - Capture rows are retained only until `expires_at`, with an initial default target of 7 days after creation.
 - Retention cleanup hard-deletes expired capture rows in bounded batches.
+- Extracted task rows are retained for 7 days after creation, matching capture retention.
 - Reminder rows may be retained for audit and idempotency protection after send or cancellation.
 - Task, subtask, group, and user retention policy is outside Phase 0 and should not conflict with reminder or capture cleanup.
 

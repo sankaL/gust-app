@@ -6,14 +6,22 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from pydantic import BaseModel
 
-from app.core.dependencies import get_capture_service, require_csrf
+from app.core.dependencies import (
+    get_capture_service,
+    get_current_session_context,
+    get_staging_service,
+    require_csrf,
+)
 from app.db.repositories import SessionContext
 from app.services.capture import CaptureService, ReviewCaptureResult, SubmitCaptureResult
+from app.services.staging import StagingService
 
 router = APIRouter()
 
 CaptureServiceDep = Annotated[CaptureService, Depends(get_capture_service)]
+StagingServiceDep = Annotated[StagingService, Depends(get_staging_service)]
 RequiredSessionContextDep = Annotated[SessionContext, Depends(require_csrf)]
+AuthenticatedSessionContextDep = Annotated[SessionContext, Depends(get_current_session_context)]
 
 
 class TextCaptureRequest(BaseModel):
@@ -44,6 +52,28 @@ class SubmitCaptureResponse(BaseModel):
     tasks_skipped_count: int
     zero_actionable: bool
     skipped_items: list[SkippedCaptureItemResponse]
+
+
+class ExtractedTaskResponse(BaseModel):
+    id: str
+    capture_id: str
+    title: str
+    group_id: str
+    group_name: Optional[str]
+    due_date: Optional[str]
+    reminder_at: Optional[str]
+    recurrence_frequency: Optional[str]
+    recurrence_weekday: Optional[int]
+    recurrence_day_of_month: Optional[int]
+    top_confidence: float
+    needs_review: bool
+    status: str
+    created_at: str
+    updated_at: str
+
+
+class ReExtractRequest(BaseModel):
+    transcript_text: str
 
 
 @router.post("/voice", response_model=CaptureReviewResponse, status_code=status.HTTP_201_CREATED)
@@ -111,3 +141,148 @@ def _build_submit_response(result: SubmitCaptureResult) -> SubmitCaptureResponse
             for item in result.skipped_items
         ],
     )
+
+
+def _build_extracted_task_response(task) -> ExtractedTaskResponse:
+    return ExtractedTaskResponse(
+        id=task.id,
+        capture_id=task.capture_id,
+        title=task.title,
+        group_id=task.group_id,
+        group_name=task.group_name,
+        due_date=task.due_date.isoformat() if task.due_date else None,
+        reminder_at=task.reminder_at.isoformat() if task.reminder_at else None,
+        recurrence_frequency=task.recurrence_frequency,
+        recurrence_weekday=task.recurrence_weekday,
+        recurrence_day_of_month=task.recurrence_day_of_month,
+        top_confidence=task.top_confidence,
+        needs_review=task.needs_review,
+        status=task.status,
+        created_at=task.created_at.isoformat(),
+        updated_at=task.updated_at.isoformat(),
+    )
+
+
+@router.get("/{capture_id}/extracted-tasks", response_model=list[ExtractedTaskResponse])
+async def list_extracted_tasks(
+    capture_id: str,
+    session_context: AuthenticatedSessionContextDep,
+    staging_service: StagingServiceDep,
+) -> list[ExtractedTaskResponse]:
+    extracted_tasks = await staging_service.list_extracted_tasks(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+        status="pending",
+    )
+    return [_build_extracted_task_response(task) for task in extracted_tasks]
+
+
+@router.post("/{capture_id}/extracted-tasks/{task_id}/approve", response_model=ExtractedTaskResponse)
+async def approve_extracted_task(
+    capture_id: str,
+    task_id: str,
+    session_context: RequiredSessionContextDep,
+    staging_service: StagingServiceDep,
+) -> ExtractedTaskResponse:
+    await staging_service.approve_task(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+        extracted_task_id=task_id,
+    )
+    # Fetch the approved extracted task to return the full response
+    approved_task = await staging_service.get_extracted_task(
+        user_id=session_context.user.id,
+        extracted_task_id=task_id,
+    )
+    return _build_extracted_task_response(approved_task)
+
+
+@router.post("/{capture_id}/extracted-tasks/{task_id}/discard", status_code=status.HTTP_200_OK)
+async def discard_extracted_task(
+    capture_id: str,
+    task_id: str,
+    session_context: RequiredSessionContextDep,
+    staging_service: StagingServiceDep,
+) -> dict[str, bool]:
+    await staging_service.discard_task(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+        extracted_task_id=task_id,
+    )
+    return {"discarded": True}
+
+
+@router.post("/{capture_id}/extracted-tasks/approve-all", response_model=list[ExtractedTaskResponse])
+async def approve_all_extracted_tasks(
+    capture_id: str,
+    session_context: RequiredSessionContextDep,
+    staging_service: StagingServiceDep,
+) -> list[ExtractedTaskResponse]:
+    await staging_service.approve_all(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+    )
+    # Fetch all approved extracted tasks to return the full responses
+    approved_tasks = await staging_service.list_extracted_tasks(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+        status="approved",
+    )
+    return [_build_extracted_task_response(task) for task in approved_tasks]
+
+
+@router.post("/{capture_id}/extracted-tasks/discard-all", status_code=status.HTTP_200_OK)
+async def discard_all_extracted_tasks(
+    capture_id: str,
+    session_context: RequiredSessionContextDep,
+    staging_service: StagingServiceDep,
+) -> dict[str, int]:
+    count = await staging_service.discard_all(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+    )
+    return {"discarded_count": count}
+
+
+@router.post("/{capture_id}/re-extract", response_model=list[ExtractedTaskResponse])
+async def re_extract_capture(
+    capture_id: str,
+    payload: ReExtractRequest,
+    session_context: RequiredSessionContextDep,
+    capture_service: CaptureServiceDep,
+    staging_service: StagingServiceDep,
+) -> list[ExtractedTaskResponse]:
+    await capture_service.re_extract_capture(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+        transcript_text=payload.transcript_text,
+    )
+    # Fetch the newly extracted (pending) tasks from staging
+    extracted_tasks = await staging_service.list_extracted_tasks(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+        status="pending",
+    )
+    return [_build_extracted_task_response(task) for task in extracted_tasks]
+
+
+class CompleteCaptureRequest(BaseModel):
+    pass
+
+
+@router.post("/{capture_id}/complete", status_code=status.HTTP_200_OK)
+async def complete_capture(
+    capture_id: str,
+    session_context: RequiredSessionContextDep,
+    capture_service: CaptureServiceDep,
+) -> dict[str, str]:
+    """Mark a capture as completed after all staging tasks are resolved.
+
+    This endpoint transitions the capture status to 'completed', indicating
+    that the user has finished reviewing and resolving all extracted tasks.
+    """
+    await capture_service.complete_capture(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+    )
+    return {"status": "completed"}

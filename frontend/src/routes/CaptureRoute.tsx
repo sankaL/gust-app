@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 
 import {
@@ -8,11 +8,17 @@ import {
   createVoiceCapture,
   getSessionStatus,
   submitCapture,
-  type SubmitCaptureResponse
+  listExtractedTasks,
+  approveExtractedTask,
+  discardExtractedTask,
+  approveAllExtractedTasks,
+  discardAllExtractedTasks,
+  completeCapture,
+  type SubmitCaptureResponse,
+  type ExtractedTask
 } from '../lib/api'
 import { SessionRequiredCard } from '../components/SessionRequiredCard'
-
-type ReviewSource = 'voice' | 'text' | null
+import { StagingTable } from '../components/StagingTable'
 
 type RecordedAudio = {
   blob: Blob
@@ -32,23 +38,89 @@ export function CaptureRoute() {
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const recordedChunksRef = useRef<BlobPart[]>([])
   const retryAudioRef = useRef<RecordedAudio | null>(null)
+  const queryClient = useQueryClient()
 
   const [isRecording, setIsRecording] = useState(false)
   const [isRecorderLoading, setIsRecorderLoading] = useState(false)
   const [textExpanded, setTextExpanded] = useState(false)
   const [textDraft, setTextDraft] = useState('')
   const [reviewCaptureId, setReviewCaptureId] = useState<string | null>(null)
-  const [reviewText, setReviewText] = useState('')
-  const [reviewSource, setReviewSource] = useState<ReviewSource>(null)
   const [permissionError, setPermissionError] = useState<string | null>(null)
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [summary, setSummary] = useState<SubmitCaptureResponse | null>(null)
+  const [extractedTasks, setExtractedTasks] = useState<ExtractedTask[]>([])
+  const [showStaging, setShowStaging] = useState(false)
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
     queryFn: getSessionStatus
   })
+
+  const extractedTasksQuery = useQuery({
+    queryKey: ['extracted-tasks', reviewCaptureId],
+    queryFn: () => listExtractedTasks(reviewCaptureId!),
+    enabled: !!reviewCaptureId && showStaging,
+    refetchInterval: 2000
+  })
+
+  // Sync extracted tasks from query to local state
+  useEffect(() => {
+    if (extractedTasksQuery.data) {
+      setExtractedTasks(extractedTasksQuery.data)
+    }
+  }, [extractedTasksQuery.data])
+
+  // Handler functions for StagingTable
+  const handleApproveTask = async (taskId: string) => {
+    if (!reviewCaptureId || !sessionQuery.data?.csrf_token) return
+    try {
+      setSubmitError(null)
+      await approveExtractedTask(reviewCaptureId, taskId, sessionQuery.data.csrf_token)
+      // Refresh the extracted tasks list
+      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
+    } catch (error) {
+      setSubmitError(buildFriendlyMessage(error, 'Failed to approve task.'))
+    }
+  }
+
+  const handleDiscardTask = async (taskId: string) => {
+    if (!reviewCaptureId || !sessionQuery.data?.csrf_token) return
+    try {
+      setSubmitError(null)
+      await discardExtractedTask(reviewCaptureId, taskId, sessionQuery.data.csrf_token)
+      // Refresh the extracted tasks list
+      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
+    } catch (error) {
+      setSubmitError(buildFriendlyMessage(error, 'Failed to discard task.'))
+    }
+  }
+
+  const handleApproveAll = async () => {
+    if (!reviewCaptureId || !sessionQuery.data?.csrf_token) return
+    try {
+      setSubmitError(null)
+      await approveAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
+      // Refresh the extracted tasks list
+      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
+    } catch (error) {
+      setSubmitError(buildFriendlyMessage(error, 'Failed to approve all tasks.'))
+    }
+  }
+
+  const handleDiscardAll = async () => {
+    if (!reviewCaptureId || !sessionQuery.data?.csrf_token) return
+    try {
+      setSubmitError(null)
+      await discardAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
+      // Refresh the extracted tasks list
+      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
+    } catch (error) {
+      setSubmitError(buildFriendlyMessage(error, 'Failed to discard all tasks.'))
+    }
+  }
+
+  const isLoadingTasks = extractedTasksQuery.isLoading || extractedTasksQuery.isFetching
 
   const textCaptureMutation = useMutation({
     mutationFn: async (text: string) => {
@@ -64,8 +136,7 @@ export function CaptureRoute() {
       setSubmitError(null)
       setTranscriptionError(null)
       setReviewCaptureId(payload.capture_id)
-      setReviewText(payload.transcript_text)
-      setReviewSource('text')
+      setShowStaging(true)
     },
     onError: (error) => {
       setSubmitError(buildFriendlyMessage(error, 'Text capture could not be prepared.'))
@@ -86,8 +157,7 @@ export function CaptureRoute() {
       setTranscriptionError(null)
       setSubmitError(null)
       setReviewCaptureId(payload.capture_id)
-      setReviewText(payload.transcript_text)
-      setReviewSource('voice')
+      setShowStaging(true)
     },
     onError: (error) => {
       setTranscriptionError(
@@ -110,8 +180,6 @@ export function CaptureRoute() {
       setTextDraft('')
       setTextExpanded(false)
       setReviewCaptureId(null)
-      setReviewText('')
-      setReviewSource(null)
       setSubmitError(null)
       setTranscriptionError(null)
       retryAudioRef.current = null
@@ -200,15 +268,8 @@ export function CaptureRoute() {
     }
   }
 
-  function discardReview() {
-    retryAudioRef.current = null
-    clearReviewState()
-  }
-
   function clearReviewState() {
     setReviewCaptureId(null)
-    setReviewText('')
-    setReviewSource(null)
     setSubmitError(null)
   }
 
@@ -265,8 +326,6 @@ export function CaptureRoute() {
       </section>
     )
   }
-
-  const userName = sessionQuery.data.user?.display_name ?? sessionQuery.data.user?.email ?? 'Gust user'
 
   return (
     <section className="space-y-4">
@@ -387,30 +446,28 @@ export function CaptureRoute() {
         </div>
       ) : null}
 
-      {reviewCaptureId ? (
+      {showStaging && reviewCaptureId ? (
         <div className="space-y-3 rounded-card bg-surface-container p-4">
           <div className="space-y-1">
             <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
-              Transcript Review
+              Extracted Tasks
             </p>
             <h3 className="font-display text-xl text-on-surface">
-              {reviewSource === 'voice' ? 'Voice transcript' : 'Text draft review'}
+              Review and approve tasks
             </h3>
             <p className="font-body text-sm text-on-surface-variant">
-              Edit anything you need before Gust creates tasks.
+              Approve tasks to add them to your task list, or discard them.
             </p>
           </div>
 
-          <label className="space-y-1">
-            <span className="font-body text-xs text-on-surface-variant">Transcript</span>
-            <textarea
-              aria-label="Transcript"
-              value={reviewText}
-              onChange={(event) => setReviewText(event.target.value)}
-              rows={8}
-              className="min-h-40 w-full rounded-card bg-surface-dim px-3 py-3 font-body text-sm text-on-surface outline-none transition focus:ring-2 focus:ring-primary/50"
-            />
-          </label>
+          <StagingTable
+            tasks={extractedTasks}
+            onApprove={handleApproveTask}
+            onDiscard={handleDiscardTask}
+            onApproveAll={handleApproveAll}
+            onDiscardAll={handleDiscardAll}
+            isLoading={isLoadingTasks}
+          />
 
           {submitError ? (
             <p className="rounded-card bg-tertiary/10 px-3 py-2 font-body text-sm text-on-surface">
@@ -421,25 +478,23 @@ export function CaptureRoute() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => {
-                if (reviewCaptureId) {
-                  submitMutation.mutate({
-                    captureId: reviewCaptureId,
-                    transcriptText: reviewText
-                  })
+              onClick={async () => {
+                if (!reviewCaptureId || !sessionQuery.data?.csrf_token) {
+                  return
+                }
+                try {
+                  setSubmitError(null)
+                  await completeCapture(reviewCaptureId, sessionQuery.data.csrf_token)
+                  setShowStaging(false)
+                  setReviewCaptureId(null)
+                  setExtractedTasks([])
+                } catch (error) {
+                  setSubmitError(buildFriendlyMessage(error, 'Failed to complete capture.'))
                 }
               }}
-              disabled={submitMutation.isPending}
-              className="rounded-pill bg-primary px-3 py-1.5 text-sm font-medium text-surface"
-            >
-              {submitMutation.isPending ? 'Submitting' : 'Submit Transcript'}
-            </button>
-            <button
-              type="button"
-              onClick={discardReview}
               className="rounded-pill border border-outline px-3 py-1.5 text-sm text-on-surface-variant"
             >
-              Discard
+              Done
             </button>
           </div>
         </div>

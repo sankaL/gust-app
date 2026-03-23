@@ -20,7 +20,7 @@ from app.core.errors import InvalidConfigurationError
 from app.core.security import ACCESS_TOKEN_COOKIE
 from app.db.engine import connection_scope
 from app.db.repositories import ensure_inbox_group, upsert_user
-from app.db.schema import captures, groups, reminders, subtasks, tasks
+from app.db.schema import captures, extracted_tasks, groups, reminders, subtasks, tasks
 from app.services.auth import AuthenticatedIdentity
 from app.services.extraction import ExtractorMalformedResponseError
 from app.services.transcription import TranscriptionResult, TranscriptionServiceError
@@ -69,10 +69,16 @@ class FakeExtractionService:
     call_count: int = 0
     requests: list[Any] = field(default_factory=list)
 
-    async def extract(self, *, request, schema: dict[str, object]) -> dict[str, object]:
+    async def extract(
+        self,
+        *,
+        request,
+        schema: Optional[dict[str, object]] = None,
+    ) -> dict[str, object]:
         self.call_count += 1
         self.requests.append(request)
-        assert "properties" in schema
+        if schema is not None:
+            assert "properties" in schema
         response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -149,6 +155,58 @@ def _seed_open_task(
                 needs_review=False,
             )
         )
+
+
+def _seed_capture(
+    client: TestClient,
+    *,
+    user_id: str,
+    status: str = "ready_for_review",
+) -> str:
+    capture_id = str(uuid.uuid4())
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            captures.insert().values(
+                id=capture_id,
+                user_id=user_id,
+                input_type="text",
+                status=status,
+                transcript_text="Plan roadmap",
+                expires_at=datetime(2026, 3, 29, tzinfo=timezone.utc),
+            )
+        )
+    return capture_id
+
+
+def _seed_extracted_task(
+    client: TestClient,
+    *,
+    user_id: str,
+    capture_id: str,
+    group_id: str,
+    status: str = "pending",
+) -> str:
+    extracted_task_id = str(uuid.uuid4())
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            extracted_tasks.insert().values(
+                id=extracted_task_id,
+                user_id=user_id,
+                capture_id=capture_id,
+                title="Review draft",
+                group_id=group_id,
+                group_name="Inbox",
+                due_date=None,
+                reminder_at=None,
+                recurrence_frequency=None,
+                recurrence_weekday=None,
+                recurrence_day_of_month=None,
+                top_confidence=0.9,
+                needs_review=False,
+                status=status,
+            )
+        )
+    return extracted_task_id
 
 
 def _authenticated_headers(app: FastAPI, client: TestClient) -> dict[str, str]:
@@ -608,3 +666,116 @@ def test_submit_capture_is_scoped_to_the_authenticated_user(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "capture_not_found"
+
+
+def test_list_extracted_tasks_allows_authenticated_get_without_csrf(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    _override_auth_service(app)
+    _seed_user(client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    client.cookies.set(ACCESS_TOKEN_COOKIE, "access-token")
+
+    capture_id = _seed_capture(client, user_id=user_id)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+    _seed_extracted_task(
+        client,
+        user_id=user_id,
+        capture_id=capture_id,
+        group_id=inbox_group.id,
+        status="pending",
+    )
+
+    response = client.get(f"/captures/{capture_id}/extracted-tasks")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["status"] == "pending"
+
+
+def test_approve_extracted_task_returns_not_found_for_unknown_row(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    capture_id = _seed_capture(client, user_id=user_id)
+
+    response = client.post(
+        f"/captures/{capture_id}/extracted-tasks/{uuid.uuid4()}/approve",
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "extracted_task_not_found"
+
+
+def test_complete_capture_conflicts_when_pending_extracted_tasks_exist(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    capture_id = _seed_capture(client, user_id=user_id)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+    _seed_extracted_task(
+        client,
+        user_id=user_id,
+        capture_id=capture_id,
+        group_id=inbox_group.id,
+        status="pending",
+    )
+
+    response = client.post(f"/captures/{capture_id}/complete", headers=headers)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "capture_state_conflict"
+
+
+def test_re_extract_replaces_existing_staged_tasks_for_capture(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    capture_id = _seed_capture(client, user_id=user_id)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+    _seed_extracted_task(
+        client,
+        user_id=user_id,
+        capture_id=capture_id,
+        group_id=inbox_group.id,
+        status="pending",
+    )
+    _override_extraction_service(
+        app,
+        FakeExtractionService(
+            responses=[
+                {"tasks": [{"title": "New extracted task", "group_name": "Inbox", "top_confidence": 0.92}]}
+            ]
+        ),
+    )
+
+    response = client.post(
+        f"/captures/{capture_id}/re-extract",
+        json={"transcript_text": "New transcript text"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["title"] == "New extracted task"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        rows = connection.execute(
+            sa.select(extracted_tasks).where(extracted_tasks.c.capture_id == capture_id)
+        ).fetchall()
+
+    assert len(rows) == 1
+    assert rows[0].title == "New extracted task"

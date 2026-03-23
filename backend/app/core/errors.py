@@ -109,6 +109,26 @@ class CaptureStateConflictError(ApiError):
         )
 
 
+class ExtractedTaskNotFoundError(ApiError):
+    def __init__(self, message: str = "Extracted task could not be found.") -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="extracted_task_not_found",
+            message=message,
+        )
+
+
+class ExtractedTaskStateConflictError(ApiError):
+    def __init__(
+        self, message: str = "Extracted task is not in a valid state for this action."
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            code="extracted_task_state_conflict",
+            message=message,
+        )
+
+
 class TranscriptionFailedError(ApiError):
     def __init__(self, message: str = "Transcription failed. Please retry.") -> None:
         super().__init__(

@@ -9,7 +9,7 @@ from typing import Optional
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
-from app.db.schema import captures, groups, reminders, subtasks, tasks, users
+from app.db.schema import captures, extracted_tasks, groups, reminders, subtasks, tasks, users
 
 CURRENT_TIMESTAMP = sa.text("CURRENT_TIMESTAMP")
 
@@ -111,6 +111,26 @@ class ReminderRecord:
     provider_message_id: Optional[str]
     sent_at: Optional[datetime]
     cancelled_at: Optional[datetime]
+
+
+@dataclass
+class ExtractedTaskRecord:
+    id: str
+    user_id: str
+    capture_id: str
+    title: str
+    group_id: str
+    group_name: Optional[str]
+    due_date: Optional[date]
+    reminder_at: Optional[datetime]
+    recurrence_frequency: Optional[str]
+    recurrence_weekday: Optional[int]
+    recurrence_day_of_month: Optional[int]
+    top_confidence: float
+    needs_review: bool
+    status: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass
@@ -223,6 +243,27 @@ def _row_to_reminder(row: sa.Row) -> ReminderRecord:
         provider_message_id=row.provider_message_id,
         sent_at=row.sent_at,
         cancelled_at=row.cancelled_at,
+    )
+
+
+def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
+    return ExtractedTaskRecord(
+        id=str(row.id),
+        user_id=str(row.user_id),
+        capture_id=str(row.capture_id),
+        title=row.title,
+        group_id=str(row.group_id),
+        group_name=row.group_name,
+        due_date=row.due_date,
+        reminder_at=row.reminder_at,
+        recurrence_frequency=row.recurrence_frequency,
+        recurrence_weekday=row.recurrence_weekday,
+        recurrence_day_of_month=row.recurrence_day_of_month,
+        top_confidence=float(row.top_confidence),
+        needs_review=bool(row.needs_review),
+        status=row.status,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
 
 
@@ -1076,6 +1117,144 @@ def upsert_reminder(
     )
     row = connection.execute(sa.select(reminders).where(reminders.c.id == existing.id)).one()
     return _row_to_reminder(row)
+
+
+def create_extracted_task(
+    connection: Connection,
+    *,
+    user_id: str,
+    capture_id: str,
+    title: str,
+    group_id: str,
+    group_name: Optional[str],
+    due_date: Optional[date],
+    reminder_at: Optional[datetime],
+    recurrence_frequency: Optional[str],
+    recurrence_weekday: Optional[int],
+    recurrence_day_of_month: Optional[int],
+    top_confidence: float,
+    needs_review: bool,
+) -> ExtractedTaskRecord:
+    extracted_task_id = str(uuid.uuid4())
+    connection.execute(
+        extracted_tasks.insert().values(
+            id=extracted_task_id,
+            user_id=user_id,
+            capture_id=capture_id,
+            title=title,
+            group_id=group_id,
+            group_name=group_name,
+            due_date=due_date,
+            reminder_at=reminder_at,
+            recurrence_frequency=recurrence_frequency,
+            recurrence_weekday=recurrence_weekday,
+            recurrence_day_of_month=recurrence_day_of_month,
+            top_confidence=top_confidence,
+            needs_review=needs_review,
+            status="pending",
+        )
+    )
+    row = connection.execute(
+        sa.select(extracted_tasks).where(extracted_tasks.c.id == extracted_task_id)
+    ).one()
+    return _row_to_extracted_task(row)
+
+
+def get_extracted_task(
+    connection: Connection,
+    *,
+    user_id: str,
+    extracted_task_id: str,
+) -> Optional[ExtractedTaskRecord]:
+    row = connection.execute(
+        sa.select(extracted_tasks).where(
+            extracted_tasks.c.id == extracted_task_id,
+            extracted_tasks.c.user_id == user_id,
+        )
+    ).first()
+    if row is None:
+        return None
+    return _row_to_extracted_task(row)
+
+
+def list_extracted_tasks(
+    connection: Connection,
+    *,
+    user_id: str,
+    capture_id: Optional[str] = None,
+    status: Optional[str] = None,
+) -> list[ExtractedTaskRecord]:
+    conditions = [extracted_tasks.c.user_id == user_id]
+    if capture_id is not None:
+        conditions.append(extracted_tasks.c.capture_id == capture_id)
+    if status is not None:
+        conditions.append(extracted_tasks.c.status == status)
+
+    rows = connection.execute(
+        sa.select(extracted_tasks)
+        .where(*conditions)
+        .order_by(extracted_tasks.c.created_at.asc(), extracted_tasks.c.id.asc())
+    ).fetchall()
+    return [_row_to_extracted_task(row) for row in rows]
+
+
+def update_extracted_task_status(
+    connection: Connection,
+    *,
+    user_id: str,
+    extracted_task_id: str,
+    status: str,
+) -> Optional[ExtractedTaskRecord]:
+    connection.execute(
+        extracted_tasks.update()
+        .where(
+            extracted_tasks.c.id == extracted_task_id,
+            extracted_tasks.c.user_id == user_id,
+        )
+        .values(status=status, updated_at=CURRENT_TIMESTAMP)
+    )
+    return get_extracted_task(
+        connection, user_id=user_id, extracted_task_id=extracted_task_id
+    )
+
+
+def delete_extracted_tasks_by_capture(
+    connection: Connection,
+    *,
+    user_id: str,
+    capture_id: str,
+) -> int:
+    result = connection.execute(
+        extracted_tasks.delete().where(
+            extracted_tasks.c.user_id == user_id,
+            extracted_tasks.c.capture_id == capture_id,
+        )
+    )
+    return int(result.rowcount or 0)
+
+
+def delete_expired_extracted_tasks(
+    connection: Connection,
+    *,
+    now: datetime,
+    limit: int,
+) -> int:
+    # Delete extracted tasks older than 7 days
+    cutoff = now - timedelta(days=7)
+    rows = connection.execute(
+        sa.select(extracted_tasks.c.id)
+        .where(extracted_tasks.c.created_at <= cutoff)
+        .order_by(extracted_tasks.c.created_at.asc(), extracted_tasks.c.id.asc())
+        .limit(limit)
+    ).fetchall()
+    extracted_task_ids = [str(row.id) for row in rows]
+    if not extracted_task_ids:
+        return 0
+
+    result = connection.execute(
+        extracted_tasks.delete().where(extracted_tasks.c.id.in_(extracted_task_ids))
+    )
+    return int(result.rowcount or 0)
 
 
 def cancel_reminder(

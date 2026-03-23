@@ -32,6 +32,7 @@ from app.services.capture import CaptureService
 from app.services.extraction import LangChainExtractionService
 from app.services.group_service import GroupService
 from app.services.reminders import INTERNAL_JOB_SECRET_HEADER, ReminderWorkerService, ResendReminderService
+from app.services.staging import StagingService
 from app.services.task_service import TaskService
 from app.services.transcription import MistralTranscriptionService
 
@@ -60,12 +61,21 @@ def get_capture_service(
         LangChainExtractionService,
         Depends(get_extraction_service),
     ],
+    staging_service: Annotated[
+        StagingService,
+        Depends(get_staging_service),
+    ],
 ) -> CaptureService:
     return CaptureService(
         settings=settings,
         transcription_service=transcription_service,
         extraction_service=extraction_service,
+        staging_service=staging_service,
     )
+
+
+def get_staging_service(settings: SettingsDep) -> StagingService:
+    return StagingService(settings=settings)
 
 
 def get_task_service(settings: SettingsDep) -> TaskService:

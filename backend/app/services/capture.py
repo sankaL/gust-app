@@ -25,12 +25,14 @@ from app.db.repositories import (
     GroupContextRecord,
     GroupRecord,
     create_capture,
+    delete_extracted_tasks_by_capture,
     create_reminder,
     create_subtasks,
     create_task,
     ensure_inbox_group,
     get_capture,
     get_user,
+    list_extracted_tasks,
     list_groups_with_recent_tasks,
     update_capture,
 )
@@ -44,6 +46,7 @@ from app.services.extraction_models import (
     ExtractedTaskCandidate,
     ExtractorPayload,
 )
+from app.services.staging import StagingService
 from app.services.task_rules import RecurrenceInput, normalize_task_fields
 from app.services.transcription import TranscriptionServiceError
 
@@ -124,10 +127,12 @@ class CaptureService:
         settings: Settings,
         transcription_service: TranscriptionClient,
         extraction_service: ExtractionClient,
+        staging_service: StagingService,
     ) -> None:
         self.settings = settings
         self.transcription_service = transcription_service
         self.extraction_service = extraction_service
+        self.staging_service = staging_service
 
     async def create_voice_capture(
         self,
@@ -184,6 +189,26 @@ class CaptureService:
                 "user_id": user_id,
             },
         )
+
+        # Automatically extract and store in staging
+        try:
+            await self._extract_and_store_in_staging(
+                user_id=user_id,
+                capture_id=updated.id,
+                transcript_text=updated.transcript_text or "",
+            )
+        except Exception as exc:
+            logger.warning(
+                "auto_extraction_failed",
+                extra={
+                    "event": "auto_extraction_failed",
+                    "capture_id": updated.id,
+                    "user_id": user_id,
+                    "error": str(exc),
+                },
+            )
+            # Don't fail the capture creation, just log the error
+
         return ReviewCaptureResult(
             capture_id=updated.id,
             status=updated.status,
@@ -202,6 +227,26 @@ class CaptureService:
             source_text=normalized,
             transcript_text=normalized,
         )
+
+        # Automatically extract and store in staging
+        try:
+            await self._extract_and_store_in_staging(
+                user_id=user_id,
+                capture_id=capture.id,
+                transcript_text=normalized,
+            )
+        except Exception as exc:
+            logger.warning(
+                "auto_extraction_failed",
+                extra={
+                    "event": "auto_extraction_failed",
+                    "capture_id": capture.id,
+                    "user_id": user_id,
+                    "error": str(exc),
+                },
+            )
+            # Don't fail the capture creation, just log the error
+
         return ReviewCaptureResult(
             capture_id=capture.id,
             status=capture.status,
@@ -591,3 +636,208 @@ class CaptureService:
         if isinstance(exc, ExtractionServiceError):
             return "extraction_provider_error"
         return "unknown_error"
+
+    async def _extract_and_store_in_staging(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript_text: str,
+    ) -> None:
+        """Extract tasks from transcript and store in staging table.
+
+        Args:
+            user_id: User ID.
+            capture_id: Capture ID.
+            transcript_text: Transcript text to extract from.
+        """
+        normalized_transcript = self._normalize_transcript_text(transcript_text)
+        if not normalized_transcript:
+            return
+
+        with connection_scope(self.settings.database_url) as connection:
+            user = get_user(connection, user_id)
+            if user is None:
+                raise CaptureNotFoundError("Authenticated user could not be resolved.")
+            inbox_group = ensure_inbox_group(connection, user_id=user_id)
+            groups = list_groups_with_recent_tasks(connection, user_id=user_id)
+
+        extraction_request = ExtractionRequest(
+            transcript_text=normalized_transcript,
+            user_timezone=user.timezone,
+            current_local_date=datetime.now(ZoneInfo(user.timezone)).date(),
+            groups=[self._group_context_payload(group) for group in groups],
+        )
+
+        try:
+            raw_payload = await self.extraction_service.extract(
+                request=extraction_request,
+            )
+            extractor_payload = ExtractorPayload.model_validate(raw_payload)
+        except (ExtractorMalformedResponseError, ValidationError) as exc:
+            logger.warning(
+                "extraction_failed_for_staging",
+                extra={
+                    "event": "extraction_failed_for_staging",
+                    "capture_id": capture_id,
+                    "user_id": user_id,
+                    "error": str(exc),
+                },
+            )
+            return
+        except ExtractionServiceError as exc:
+            logger.warning(
+                "extraction_failed_for_staging",
+                extra={
+                    "event": "extraction_failed_for_staging",
+                    "capture_id": capture_id,
+                    "user_id": user_id,
+                    "error": str(exc),
+                },
+            )
+            return
+
+        # Store extracted tasks in staging
+        await self.staging_service.store_extracted_tasks(
+            user_id=user_id,
+            capture_id=capture_id,
+            extracted_payload=extractor_payload,
+            groups=groups,
+            inbox_group=inbox_group,
+            user_timezone=user.timezone,
+        )
+
+        logger.info(
+            "auto_extraction_completed",
+            extra={
+                "event": "auto_extraction_completed",
+                "capture_id": capture_id,
+                "user_id": user_id,
+                "tasks_extracted": len(extractor_payload.tasks),
+            },
+        )
+
+    async def re_extract_capture(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript_text: str,
+    ) -> ReviewCaptureResult:
+        """Re-extract tasks from an edited transcript.
+
+        Args:
+            user_id: User ID.
+            capture_id: Capture ID.
+            transcript_text: Edited transcript text.
+
+        Returns:
+            ReviewCaptureResult with updated capture.
+
+        Raises:
+            CaptureNotFoundError: If capture not found.
+            CaptureStateConflictError: If capture is not in a valid state.
+            InvalidCaptureError: If transcript is empty.
+        """
+        normalized_transcript = self._normalize_transcript_text(transcript_text)
+        if not normalized_transcript:
+            raise InvalidCaptureError("Transcript cannot be empty.")
+
+        with connection_scope(self.settings.database_url) as connection:
+            capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
+            if capture is None:
+                raise CaptureNotFoundError()
+            if capture.status not in {"ready_for_review", "extraction_failed"}:
+                raise CaptureStateConflictError()
+
+            # Re-extraction should replace prior staged output for this capture.
+            delete_extracted_tasks_by_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+            )
+
+            # Update the capture with the edited transcript
+            updated = update_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                transcript_text=normalized_transcript,
+                transcript_edited_text=normalized_transcript,
+                status="ready_for_review",
+                error_code=None,
+            )
+
+        assert updated is not None
+
+        # Re-extract and store in staging
+        await self._extract_and_store_in_staging(
+            user_id=user_id,
+            capture_id=capture_id,
+            transcript_text=normalized_transcript,
+        )
+
+        logger.info(
+            "capture_re_extracted",
+            extra={
+                "event": "capture_re_extracted",
+                "capture_id": capture_id,
+                "user_id": user_id,
+            },
+        )
+
+        return ReviewCaptureResult(
+            capture_id=updated.id,
+            status=updated.status,
+            transcript_text=updated.transcript_text or "",
+        )
+
+    async def complete_capture(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+    ) -> None:
+        """Mark a capture as completed after staging tasks are resolved.
+
+        Args:
+            user_id: User ID.
+            capture_id: Capture ID.
+
+        Raises:
+            CaptureNotFoundError: If capture not found.
+            CaptureStateConflictError: If capture is not in a valid state for completion.
+        """
+        with connection_scope(self.settings.database_url) as connection:
+            capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
+            if capture is None:
+                raise CaptureNotFoundError()
+            if capture.status not in {"ready_for_review", "extraction_failed"}:
+                raise CaptureStateConflictError()
+            pending_tasks = list_extracted_tasks(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                status="pending",
+            )
+            if pending_tasks:
+                raise CaptureStateConflictError(
+                    "Capture still has pending extracted tasks to review."
+                )
+
+            # Transition capture to completed status
+            update_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                status="completed",
+            )
+
+        logger.info(
+            "capture_completed",
+            extra={
+                "event": "capture_completed",
+                "capture_id": capture_id,
+                "user_id": user_id,
+            },
+        )
