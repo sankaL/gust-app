@@ -267,7 +267,7 @@ JSON SCHEMA:
 2. The CROSS-DOMAIN CHECK is NOT optional — always complete it before PASS 2
 3. Do NOT summarize or combine related actions into single tasks
 4. "and" / "also" / "and also" / "I gotta" / "I should" typically mean SEPARATE parallel tasks
-5. Health, appointment, and personal errand tasks are ALWAYS separate top-level tasks regardless of dominant transcript theme
+5. Health, appointment, and personal errand tasks should be separate top-level tasks regardless of dominant transcript theme
 6. Parse dates relative to user's timezone and current date provided
 7. Set reminder_at ONLY when a specific time is mentioned
 8. Always include top_confidence (use 0.9 when not otherwise specified)
@@ -280,10 +280,24 @@ JSON SCHEMA:
         current_local_date: date,
         groups: list[dict[str, object]],
         transcript_text: str,
+        missing_guarded_clauses: list[str] | None = None,
     ) -> str:
         """Build the user prompt with context and transcript."""
         group_lines = self._format_groups(groups)
         group_list = "\n".join(group_lines) if group_lines else "- Inbox"
+        repair_section = ""
+        if missing_guarded_clauses:
+            missing_items = "\n".join(f"- {clause}" for clause in missing_guarded_clauses)
+            repair_section = f"""
+
+REPAIR REQUIREMENT:
+The previous extraction omitted these standalone tasks detected by backend guardrails:
+{missing_items}
+
+Return a FULL corrected payload for the entire transcript.
+Each missing clause above must appear as its own top-level task unless the transcript clearly says otherwise.
+Do not hide any missing clause as a subtask.
+"""
 
         return f"""User timezone: {user_timezone}
 Current local date: {current_local_date.isoformat()}
@@ -295,7 +309,7 @@ Available groups:
 ---END TRANSCRIPT---
 
 Extract ALL tasks using the two-pass process. Before writing JSON, you MUST complete the CROSS-DOMAIN CHECK.
-⚠ IMPORTANT: After listing work/project tasks, explicitly check for health/medical tasks (doctor, dentist, pharmacy), personal errands, and social calls — even if the transcript is mostly about work. These are always separate top-level tasks."""
+⚠ IMPORTANT: After listing work/project tasks, explicitly check for health/medical tasks (doctor, dentist, pharmacy), personal errands, and social calls — even if the transcript is mostly about work. These should be separate top-level tasks whenever possible.{repair_section}"""
 
     def _format_groups(self, groups: list[dict[str, object]]) -> list[str]:
         """Format groups for the prompt."""

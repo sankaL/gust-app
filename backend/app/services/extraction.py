@@ -35,6 +35,7 @@ class ExtractionRequest:
     user_timezone: str
     current_local_date: date
     groups: list[dict[str, object]]
+    missing_guarded_clauses: list[str] | None = None
 
 
 class ExtractionServiceError(Exception):
@@ -193,6 +194,7 @@ class LangChainExtractionService:
             current_local_date=request.current_local_date,
             groups=request.groups,
             transcript_text=request.transcript_text,
+            missing_guarded_clauses=request.missing_guarded_clauses,
         )
 
         # Create prompt template
@@ -240,12 +242,24 @@ class LangChainExtractionService:
 
             # ── 3. Try to isolate the PASS 2 OUTPUT section first ─────────────────
             # The prompt instructs the model to label its final JSON with "PASS 2 OUTPUT:"
-            pass2_match = re.search(
-                r'PASS\s*2\s*OUTPUT\s*:(.*)',
-                text,
-                re.DOTALL | re.IGNORECASE,
-            )
-            fragment = pass2_match.group(1).strip() if pass2_match else text
+            # Be flexible with variations: "PASS TWO", "Pass 2 Output:", etc.
+            pass2_patterns = [
+                r'PASS\s*2\s*OUTPUT\s*:(.*)',  # PASS 2 OUTPUT:
+                r'PASS\s*TWO\s*OUTPUT\s*:(.*)',  # PASS TWO OUTPUT:
+                r'PASS\s*2\s*OUTPUT\s*\n+(.*)',  # PASS 2 OUTPUT with newlines
+                r'```json\s*\n(.*?)\n```',  # JSON in code block without PASS marker
+                r'```\s*\n(.*?)\n```',  # Any code block
+            ]
+            
+            fragment = text  # Default to full text
+            for pattern in pass2_patterns:
+                pass2_match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+                if pass2_match:
+                    candidate = pass2_match.group(1).strip()
+                    # Verify this candidate actually looks like JSON (starts with {)
+                    if candidate.strip().startswith('{'):
+                        fragment = candidate
+                        break
 
             # Strip a code fence that may wrap the whole fragment
             fragment = _strip_fence(fragment)

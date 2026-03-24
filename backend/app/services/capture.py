@@ -41,6 +41,12 @@ from app.services.extraction import (
     ExtractionServiceError,
     ExtractorMalformedResponseError,
 )
+from app.services.extraction_guardrails import (
+    GuardedIntent,
+    build_fallback_title,
+    detect_guarded_intents,
+    find_missing_guarded_intents,
+)
 from app.services.extraction_models import (
     ExtractionRecurrence,
     ExtractedTaskCandidate,
@@ -133,6 +139,7 @@ class CaptureService:
         self.transcription_service = transcription_service
         self.extraction_service = extraction_service
         self.staging_service = staging_service
+        self.last_extraction_attempt_count = 0
 
     async def create_voice_capture(
         self,
@@ -282,14 +289,13 @@ class CaptureService:
             current_local_date=datetime.now(ZoneInfo(user.timezone)).date(),
             groups=[self._group_context_payload(group) for group in groups],
         )
-        extraction_attempt_count = 1
 
         try:
-            raw_payload = await self.extraction_service.extract(
-                request=extraction_request,
+            extractor_payload, extraction_attempt_count = await self._extract_payload_with_guardrails(
+                transcript_text=normalized_transcript,
+                extraction_request=extraction_request,
+                inbox_group=inbox_group,
             )
-            extraction_attempt_count = self._resolve_extraction_attempt_count()
-            extractor_payload = ExtractorPayload.model_validate(raw_payload)
         except (ExtractorMalformedResponseError, ValidationError) as exc:
             extraction_attempt_count = self._resolve_extraction_attempt_count()
             self._mark_capture_failure(
@@ -607,10 +613,22 @@ class CaptureService:
         return value.strip()
 
     def _resolve_extraction_attempt_count(self) -> int:
+        if self.last_extraction_attempt_count > 0:
+            return self.last_extraction_attempt_count
+        return self._resolve_service_attempt_count()
+
+    def _resolve_service_attempt_count(self) -> int:
         attempts = getattr(self.extraction_service, "last_attempt_count", None)
         if isinstance(attempts, int) and attempts > 0:
             return attempts
         return 1
+
+    def _reset_extraction_attempt_count(self) -> None:
+        self.last_extraction_attempt_count = 0
+
+    def _record_extraction_attempt_count(self, attempts: int) -> int:
+        self.last_extraction_attempt_count = attempts
+        return attempts
 
     def _map_transcription_error(self, exc: Exception) -> Exception:
         if isinstance(exc, TranscriptionServiceError):
@@ -636,6 +654,120 @@ class CaptureService:
         if isinstance(exc, ExtractionServiceError):
             return "extraction_provider_error"
         return "unknown_error"
+
+    async def _extract_payload_with_guardrails(
+        self,
+        *,
+        transcript_text: str,
+        extraction_request: ExtractionRequest,
+        inbox_group: GroupRecord,
+    ) -> tuple[ExtractorPayload, int]:
+        self._reset_extraction_attempt_count()
+        guarded_intents = detect_guarded_intents(transcript_text)
+        total_attempt_count = 0
+
+        payload, attempt_count = await self._extract_validated_payload(extraction_request)
+        total_attempt_count += attempt_count
+
+        missing_guarded_intents = find_missing_guarded_intents(
+            guarded_intents=guarded_intents,
+            extracted_tasks=payload.tasks,
+        )
+        if not missing_guarded_intents:
+            return payload, self._record_extraction_attempt_count(total_attempt_count)
+
+        repair_request = ExtractionRequest(
+            transcript_text=extraction_request.transcript_text,
+            user_timezone=extraction_request.user_timezone,
+            current_local_date=extraction_request.current_local_date,
+            groups=extraction_request.groups,
+            missing_guarded_clauses=[intent.raw_text for intent in missing_guarded_intents],
+        )
+        repaired_payload, repair_attempt_count = await self._extract_validated_payload(repair_request)
+        total_attempt_count += repair_attempt_count
+
+        missing_after_repair = find_missing_guarded_intents(
+            guarded_intents=guarded_intents,
+            extracted_tasks=repaired_payload.tasks,
+        )
+        if not missing_after_repair:
+            logger.info(
+                "extraction_guardrail_repair_succeeded",
+                extra={
+                    "event": "extraction_guardrail_repair_succeeded",
+                    "missing_count": len(missing_guarded_intents),
+                },
+            )
+            return repaired_payload, self._record_extraction_attempt_count(total_attempt_count)
+
+        fallback_payload = self._append_guarded_fallbacks(
+            payload=repaired_payload,
+            missing_guarded_intents=missing_after_repair,
+            inbox_group=inbox_group,
+        )
+        logger.warning(
+            "extraction_guardrail_fallback_created",
+            extra={
+                "event": "extraction_guardrail_fallback_created",
+                "missing_count": len(missing_after_repair),
+            },
+        )
+        return fallback_payload, self._record_extraction_attempt_count(total_attempt_count)
+
+    async def _extract_validated_payload(
+        self,
+        request: ExtractionRequest,
+    ) -> tuple[ExtractorPayload, int]:
+        total_attempt_count = 0
+        last_exception: Exception | None = None
+
+        for outer_attempt in range(2):
+            current_attempt_count = 0
+            try:
+                raw_payload = await self.extraction_service.extract(request=request)
+                current_attempt_count = self._resolve_service_attempt_count()
+                validated_payload = ExtractorPayload.model_validate(raw_payload)
+                total_attempt_count += current_attempt_count
+                return validated_payload, total_attempt_count
+            except (ExtractorMalformedResponseError, ValidationError) as exc:
+                total_attempt_count += current_attempt_count or self._resolve_service_attempt_count()
+                last_exception = exc
+                self._record_extraction_attempt_count(total_attempt_count)
+                if outer_attempt == 0:
+                    continue
+                raise
+            except Exception:
+                total_attempt_count += current_attempt_count or self._resolve_service_attempt_count()
+                self._record_extraction_attempt_count(total_attempt_count)
+                raise
+
+        assert last_exception is not None
+        raise last_exception
+
+    def _append_guarded_fallbacks(
+        self,
+        *,
+        payload: ExtractorPayload,
+        missing_guarded_intents: list[GuardedIntent],
+        inbox_group: GroupRecord,
+    ) -> ExtractorPayload:
+        existing_titles = {task.title.strip().lower() for task in payload.tasks}
+        fallback_tasks = list(payload.tasks)
+
+        for intent in missing_guarded_intents:
+            fallback_title = build_fallback_title(intent)
+            if fallback_title.strip().lower() in existing_titles:
+                continue
+            fallback_tasks.append(
+                ExtractedTaskCandidate(
+                    title=fallback_title,
+                    group_id=inbox_group.id,
+                    top_confidence=0.0,
+                )
+            )
+            existing_titles.add(fallback_title.strip().lower())
+
+        return ExtractorPayload(tasks=fallback_tasks)
 
     async def _extract_and_store_in_staging(
         self,
@@ -670,10 +802,11 @@ class CaptureService:
         )
 
         try:
-            raw_payload = await self.extraction_service.extract(
-                request=extraction_request,
+            extractor_payload, _attempt_count = await self._extract_payload_with_guardrails(
+                transcript_text=normalized_transcript,
+                extraction_request=extraction_request,
+                inbox_group=inbox_group,
             )
-            extractor_payload = ExtractorPayload.model_validate(raw_payload)
         except (ExtractorMalformedResponseError, ValidationError) as exc:
             logger.warning(
                 "extraction_failed_for_staging",

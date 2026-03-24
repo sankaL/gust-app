@@ -272,6 +272,9 @@ The backend validates extractor output before any write.
 - Valid items from the same capture may still be created.
 - The response to the user must disclose if any items were skipped.
 - If the full extractor payload is malformed, the backend may perform one bounded retry.
+- The backend also performs a semantic completeness check for guarded cross-domain intents such as medical calls, appointments, and similar standalone errands.
+- If a guarded intent is missing from extracted tasks (including subtasks), the backend performs one bounded corrective re-extraction with the missing clause(s) called out explicitly.
+- If the guarded intent is still missing after the corrective retry, the backend creates a low-confidence Inbox review task instead of silently dropping it.
 - If validation still fails after retry, no tasks are created from that submission.
 
 ### Confidence Routing

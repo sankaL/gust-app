@@ -1,7 +1,7 @@
 # Tech Stack: Gust
 
 **Version:** 2.0  
-**Last Updated:** 2026-03-22  
+**Last Updated:** 2026-03-23  
 **Domain:** gustapp.ca
 
 ## Purpose
@@ -241,6 +241,9 @@ Backend behavior:
 - request strict JSON-schema output
 - validate every returned task candidate with Pydantic
 - perform one bounded retry on malformed full-payload output
+- run a deterministic guarded-intent completeness check for medical calls, appointments, communication tasks, and similar standalone errands
+- perform one bounded corrective re-extraction when a guarded intent is missing from the extracted tasks (including subtasks)
+- synthesize a low-confidence Inbox review task when the guarded intent still cannot be recovered after the corrective retry
 
 Do not rely on regex cleanup or permissive JSON repair as the main parsing strategy.
 

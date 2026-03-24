@@ -43,7 +43,9 @@ def normalize_task_fields(
         raise ValueError("Reminder timestamp must include a timezone.")
     if due_date is None and reminder_at is not None:
         raise ValueError("Reminder requires a due date.")
-    if due_date is None and recurrence is not None:
+    # Daily recurrence does not require a due date since next occurrence is computed
+    # from when the task is completed, not from a specific due date.
+    if due_date is None and recurrence is not None and recurrence.frequency != "daily":
         raise ValueError("Recurrence requires a due date.")
 
     recurrence_frequency = None

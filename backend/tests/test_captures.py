@@ -632,6 +632,162 @@ def test_submit_capture_returns_zero_actionable_when_all_items_are_skipped(
     assert payload["zero_actionable"] is True
 
 
+def test_submit_capture_repairs_missing_guarded_intent_with_second_extraction(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    work_group_id = _seed_group(client, user_id=user_id, name="Work", description="Job")
+    transcript = (
+        "So I need to create a resume for AI product manager and start applying to some jobs "
+        "using it to do that. I need to fix up my resume, do some research on what skills they "
+        "should have and maybe upskill my skills too. And also I should uh I gotta call my "
+        "dentist to probably tomorrow. Um around 9 a.m. to fix my metal thing in my mouth. Yeah."
+    )
+
+    create_response = client.post("/captures/text", json={"text": transcript}, headers=headers)
+    capture_id = create_response.json()["capture_id"]
+    fake_extraction = FakeExtractionService(
+        responses=[
+            {
+                "tasks": [
+                    {
+                        "title": "Create resume for AI product manager",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Apply to AI product manager jobs",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                ]
+            },
+            {
+                "tasks": [
+                    {
+                        "title": "Create resume for AI product manager",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Apply to AI product manager jobs",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Call dentist tomorrow at 9am about metal thing in mouth",
+                        "group_name": "Inbox",
+                        "top_confidence": 0.92,
+                    },
+                ]
+            },
+        ]
+    )
+    _override_extraction_service(app, fake_extraction)
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": transcript},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tasks_created_count"] == 3
+    assert fake_extraction.call_count == 2
+    assert fake_extraction.requests[1].missing_guarded_clauses is not None
+    assert "call my dentist" in fake_extraction.requests[1].missing_guarded_clauses[0].lower()
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks).where(tasks.c.capture_id == capture_id).order_by(tasks.c.title)
+        ).fetchall()
+
+    assert [row.title for row in task_rows] == [
+        "Apply to AI product manager jobs",
+        "Call dentist tomorrow at 9am about metal thing in mouth",
+        "Create resume for AI product manager",
+    ]
+    assert task_rows[0].group_id == work_group_id
+
+
+def test_submit_capture_creates_fallback_review_task_when_guarded_intent_still_missing(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    _seed_group(client, user_id=user_id, name="Work", description="Job")
+    transcript = (
+        "So I need to create a resume for AI product manager and start applying to some jobs "
+        "using it to do that. I need to fix up my resume, do some research on what skills they "
+        "should have and maybe upskill my skills too. And also I should uh I gotta call my "
+        "dentist to probably tomorrow. Um around 9 a.m. to fix my metal thing in my mouth. Yeah."
+    )
+
+    create_response = client.post("/captures/text", json={"text": transcript}, headers=headers)
+    capture_id = create_response.json()["capture_id"]
+    fake_extraction = FakeExtractionService(
+        responses=[
+            {
+                "tasks": [
+                    {
+                        "title": "Create resume for AI product manager",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Apply to AI product manager jobs",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                ]
+            },
+            {
+                "tasks": [
+                    {
+                        "title": "Create resume for AI product manager",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Apply to AI product manager jobs",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                ]
+            },
+        ]
+    )
+    _override_extraction_service(app, fake_extraction)
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": transcript},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tasks_created_count"] == 3
+    assert response.json()["tasks_flagged_for_review_count"] == 1
+    assert fake_extraction.call_count == 2
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks).where(tasks.c.capture_id == capture_id).order_by(tasks.c.created_at.asc())
+        ).fetchall()
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+
+    fallback_task = next(row for row in task_rows if "call my dentist" in row.title.lower())
+    assert fallback_task.group_id == inbox_group.id
+    assert fallback_task.needs_review is True
+    assert fallback_task.title == (
+        "Call my dentist to probably tomorrow around 9 a.m "
+        "to fix my metal thing in my mouth"
+    )
+
+
 def test_submit_capture_is_scoped_to_the_authenticated_user(
     app: FastAPI,
     client: TestClient,
