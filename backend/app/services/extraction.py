@@ -205,14 +205,21 @@ class LangChainExtractionService:
 
         # Create chain - use a custom parser to extract JSON from mixed text output
         def extract_json_from_text(input_: Any) -> dict:
-            """Extract JSON from text that may contain enumeration and other content."""
+            """Extract JSON from the model's mixed-text response.
+
+            Strategy (in priority order):
+            1. Find the 'PASS 2 OUTPUT:' label and extract the JSON that follows it.
+               This is the most reliable anchor since the prompt explicitly uses this label.
+            2. If no label is found, fall back to the last top-level JSON object in the text
+               (greedy match, rightmost wins).
+            3. Strip any code fence (```json ... ```) before parsing in all cases.
+            """
             import re
-            # Handle AIMessage or string input
+
+            # ── 1. Normalise input to a plain string ──────────────────────────────
             if hasattr(input_, 'content'):
-                # It's an AIMessage - extract content
                 content = input_.content
                 if isinstance(content, list):
-                    # List of content blocks - extract text from first text block
                     text = ""
                     for block in content:
                         if isinstance(block, dict) and block.get("type") == "text":
@@ -225,13 +232,33 @@ class LangChainExtractionService:
                     text = str(content)
             else:
                 text = str(input_)
-            
-            # Try to find JSON block in the text
-            json_match = re.search(r'\{[\s\S]*\}', text)
+
+            # ── 2. Helper: strip a single code fence wrapper ──────────────────────
+            def _strip_fence(s: str) -> str:
+                m = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", s.strip(), flags=re.DOTALL)
+                return m.group(1).strip() if m else s.strip()
+
+            # ── 3. Try to isolate the PASS 2 OUTPUT section first ─────────────────
+            # The prompt instructs the model to label its final JSON with "PASS 2 OUTPUT:"
+            pass2_match = re.search(
+                r'PASS\s*2\s*OUTPUT\s*:(.*)',
+                text,
+                re.DOTALL | re.IGNORECASE,
+            )
+            fragment = pass2_match.group(1).strip() if pass2_match else text
+
+            # Strip a code fence that may wrap the whole fragment
+            fragment = _strip_fence(fragment)
+
+            # ── 4. Greedy match: outermost { … } in the fragment ──────────────────
+            # re.findall with a greedy pattern returns one match spanning
+            # the first '{' to the last '}', which is exactly the tasks object.
+            json_match = re.search(r'\{[\s\S]*\}', fragment)
             if json_match:
                 return json.loads(json_match.group(0))
-            # If no JSON found, try parsing the whole thing
-            return json.loads(text)
+
+            # ── 5. Last resort: parse fragment directly ───────────────────────────
+            return json.loads(fragment)
         
         chain = prompt | llm | RunnableLambda(extract_json_from_text)
 

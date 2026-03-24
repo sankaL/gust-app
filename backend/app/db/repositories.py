@@ -129,6 +129,7 @@ class ExtractedTaskRecord:
     top_confidence: float
     needs_review: bool
     status: str
+    subtask_titles: list[str]
     created_at: datetime
     updated_at: datetime
 
@@ -247,6 +248,11 @@ def _row_to_reminder(row: sa.Row) -> ReminderRecord:
 
 
 def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
+    raw_subtasks = row.subtask_titles
+    if isinstance(raw_subtasks, list):
+        subtask_titles = [str(t) for t in raw_subtasks]
+    else:
+        subtask_titles = []
     return ExtractedTaskRecord(
         id=str(row.id),
         user_id=str(row.user_id),
@@ -262,6 +268,7 @@ def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
         top_confidence=float(row.top_confidence),
         needs_review=bool(row.needs_review),
         status=row.status,
+        subtask_titles=subtask_titles,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -1134,6 +1141,7 @@ def create_extracted_task(
     recurrence_day_of_month: Optional[int],
     top_confidence: float,
     needs_review: bool,
+    subtask_titles: Optional[list[str]] = None,
 ) -> ExtractedTaskRecord:
     extracted_task_id = str(uuid.uuid4())
     connection.execute(
@@ -1151,6 +1159,7 @@ def create_extracted_task(
             recurrence_day_of_month=recurrence_day_of_month,
             top_confidence=top_confidence,
             needs_review=needs_review,
+            subtask_titles=subtask_titles or [],
             status="pending",
         )
     )

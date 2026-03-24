@@ -17,6 +17,7 @@ from app.db.repositories import (
     TaskRecord,
     create_extracted_task,
     create_reminder,
+    create_subtasks,
     create_task,
     delete_extracted_tasks_by_capture,
     get_extracted_task,
@@ -117,6 +118,9 @@ class StagingService:
                         )
                         continue
 
+                    # Collect subtask titles from the candidate
+                    subtask_titles = [s.title for s in candidate.subtasks if s.title.strip()]
+
                     # Create extracted task
                     extracted_task = create_extracted_task(
                         connection,
@@ -132,6 +136,7 @@ class StagingService:
                         recurrence_day_of_month=normalized.recurrence_day_of_month,
                         top_confidence=candidate.top_confidence,
                         needs_review=needs_review,
+                        subtask_titles=subtask_titles or None,
                     )
                     extracted_tasks.append(extracted_task)
 
@@ -206,6 +211,15 @@ class StagingService:
                 recurrence_weekday=extracted_task.recurrence_weekday,
                 recurrence_day_of_month=extracted_task.recurrence_day_of_month,
             )
+
+            # Create subtasks if any were staged
+            if extracted_task.subtask_titles:
+                create_subtasks(
+                    connection,
+                    user_id=user_id,
+                    task_id=task.id,
+                    titles=extracted_task.subtask_titles,
+                )
 
             # Create reminder if needed
             if extracted_task.reminder_at is not None:

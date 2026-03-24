@@ -191,6 +191,7 @@ Staging table for extracted tasks before user approval. Tasks remain here until 
 | `top_confidence` | `float` | No | Extraction confidence score (0.0-1.0). |
 | `needs_review` | `boolean` | No | `true` when confidence < 0.7. |
 | `status` | `text` | No | `pending`, `approved`, or `discarded`. |
+| `subtask_titles` | `jsonb` | Yes | Ordered list of subtask title strings extracted from the transcript. Null when no subtasks identified. Subtask rows are created in the `subtasks` table when the extracted task is approved. |
 | `created_at` | `timestamptz` | No | Default `now()`. |
 | `updated_at` | `timestamptz` | No | Default `now()`. |
 
@@ -199,6 +200,8 @@ Constraints and invariants:
 - `status` must be one of: `pending`, `approved`, `discarded`.
 - `top_confidence` must be between 0.0 and 1.0.
 - `needs_review` is `true` when `top_confidence < 0.7`.
+- `subtask_titles` is a JSON array of non-empty strings; null means no subtasks were extracted.
+- When an extracted task is approved, its `subtask_titles` are written as rows to the `subtasks` table linked to the new `task_id`.
 - Tasks are linked to captures for traceability.
 - User-scoped for security.
 

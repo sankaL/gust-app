@@ -177,6 +177,9 @@ extracted_tasks = sa.Table(
     sa.Column("top_confidence", sa.Float(), nullable=False),
     sa.Column("needs_review", sa.Boolean(), nullable=False, server_default=sa.false()),
     sa.Column("status", sa.Text(), nullable=False, server_default="'pending'"),
+    # Ordered list of subtask titles extracted from the transcript.
+    # Stored as a JSON array of strings; null when no subtasks were identified.
+    sa.Column("subtask_titles", sa.JSON(), nullable=True),
     sa.Column(
         "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
     ),

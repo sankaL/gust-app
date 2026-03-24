@@ -48,7 +48,7 @@ class ExtractedTaskCandidate(BaseModel):
     reminder_at: Optional[datetime] = None
     group_id: Optional[str] = None
     group_name: Optional[str] = None
-    top_confidence: float = Field(ge=0.0, le=1.0)
+    top_confidence: float = Field(default=0.9, ge=0.0, le=1.0)
     alternative_groups: list[ExtractionAlternativeGroup] = Field(default_factory=list)
     recurrence: Optional[ExtractionRecurrence] = None
     subtasks: list[ExtractionSubtask] = Field(default_factory=list)

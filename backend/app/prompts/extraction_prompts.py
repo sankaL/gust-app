@@ -15,7 +15,7 @@ class ExtractionPromptManager:
 ## CRITICAL EXTRACTION RULES
 
 1. **EXTRACT EVERY SINGLE ACTIONABLE ITEM** - Every verb phrase in the transcript that represents something to do must become a task
-2. **DO NOT SUMMARIZE OR COMBINE** - "create resume for AI job and fix up resume and research skills and upskill" = 4 separate items, not 1
+2. **DO NOT SUMMARIZE OR COMBINE** - "create resume for AI job and fix up resume and research skills and upskill" = 4 separate items, NOT 1
 3. **EXPLICIT TASK COUNT** - You MUST identify and list every single task before organizing them
 4. **NO TASK LEFT BEHIND** - If someone could reasonably want to track it as a separate item, it should be a task
 
@@ -29,6 +29,14 @@ Before writing any JSON, explicitly list every actionable item in the transcript
 - Identify every verb phrase (buy, call, fix, research, create, apply, etc.)
 - List them all out, one per line
 - Count them
+
+**⚠ MANDATORY CROSS-DOMAIN CHECK (after PASS 1, before PASS 2)**
+After your initial enumeration, STOP and ask yourself:
+- Did I capture any **health/medical** tasks? (calls to doctors, dentists, pharmacies, appointments)
+- Did I capture any **social/communication** tasks? (calls, texts, emails to family, friends, colleagues)
+- Did I capture any **personal errand** tasks? (groceries, bills, household tasks)
+These are ALWAYS separate top-level tasks — even if the rest of the transcript is about work or a project.
+If you missed any, add them to your list NOW before moving to PASS 2.
 
 **PASS 2: ORGANIZE INTO HIERARCHY**
 Then, for each enumerated task:
@@ -49,6 +57,11 @@ ENUMERATED TASKS:
 3. Research skills for AI product manager job
 4. Call my mom tomorrow
 TOTAL: 4 tasks identified
+
+CROSS-DOMAIN CHECK:
+- Health/medical tasks? None.
+- Social/communication tasks? YES — Call my mom tomorrow (already captured as #4). ✓
+- Personal errands? None.
 ```
 
 ## TASK vs SUBTASK RULES
@@ -62,16 +75,19 @@ TOTAL: 4 tasks identified
 - It could stand alone in someone's to-do list
 - "Call my mom" could exist without "Create resume"
 - "Schedule dentist appointment" is independent
+- ANY task involving health, appointments, personal errands, or communications about a different topic
 
 ## SIGNAL WORDS → SEPARATE TASKS
 
 When you see these words, they usually introduce NEW SEPARATE TASKS:
 - "and" → NEW TASK (parallel action)
 - "also" → NEW TASK
+- "and also" → NEW TASK
 - "too" → NEW TASK
 - "I gotta" → NEW TASK
 - "I should" → NEW TASK
 - "I need to" → NEW TASK
+- "oh and" / "oh I also" → NEW TASK
 
 When you see "to do Y" after an action X:
 - "fix up my resume to apply" → X is SUBTASK of Y
@@ -93,14 +109,20 @@ ENUMERATED TASKS:
 5. Upskill my skills for AI product manager job
 6. Call dentist tomorrow at 9am about metal thing in mouth
 TOTAL: 6 tasks identified
+
+CROSS-DOMAIN CHECK:
+- Health/medical tasks? YES — calling the dentist (#6). ✓ Already captured.
+- Social/communication tasks? None beyond dentist call.
+- Personal errands? None.
 ```
 
-PASS 2 ORGANIZATION:
+PASS 2 OUTPUT:
 ```json
 {
   "tasks": [
     {
       "title": "Create resume for AI product manager",
+      "top_confidence": 0.9,
       "subtasks": [
         {"title": "Fix up my resume"},
         {"title": "Do some research on what skills AI product managers should have"},
@@ -108,12 +130,14 @@ PASS 2 ORGANIZATION:
       ]
     },
     {
-      "title": "Apply to AI product manager jobs"
+      "title": "Apply to AI product manager jobs",
+      "top_confidence": 0.9
     },
     {
       "title": "Call dentist tomorrow at 9am about metal thing in mouth",
       "due_date": "2026-03-25",
-      "reminder_at": "2026-03-25T09:00:00"
+      "reminder_at": "2026-03-25T09:00:00",
+      "top_confidence": 0.9
     }
   ]
 }
@@ -133,12 +157,13 @@ ENUMERATED TASKS:
 TOTAL: 3 tasks identified
 ```
 
+PASS 2 OUTPUT:
 ```json
 {
   "tasks": [
-    {"title": "Buy groceries"},
-    {"title": "Call my mom"},
-    {"title": "Schedule dentist appointment"}
+    {"title": "Buy groceries", "top_confidence": 0.9},
+    {"title": "Call my mom", "top_confidence": 0.9},
+    {"title": "Schedule dentist appointment", "top_confidence": 0.9}
   ]
 }
 ```
@@ -157,11 +182,13 @@ ENUMERATED TASKS:
 TOTAL: 3 tasks identified
 ```
 
+PASS 2 OUTPUT:
 ```json
 {
   "tasks": [
     {
       "title": "Learn guitar",
+      "top_confidence": 0.9,
       "subtasks": [
         {"title": "Buy a guitar"},
         {"title": "Find a guitar teacher"}
@@ -183,13 +210,15 @@ ENUMERATED TASKS:
 TOTAL: 1 task identified
 ```
 
+PASS 2 OUTPUT:
 ```json
 {
   "tasks": [
     {
       "title": "Call John about the project proposal",
       "due_date": "2026-03-25",
-      "reminder_at": "2026-03-25T14:00:00"
+      "reminder_at": "2026-03-25T14:00:00",
+      "top_confidence": 0.9
     }
   ]
 }
@@ -203,6 +232,11 @@ Return EXACTLY this format:
 PASS 1 ENUMERATION:
 <list all tasks, one per line, numbered>
 TOTAL: <count> tasks identified
+
+CROSS-DOMAIN CHECK:
+- Health/medical tasks? <answer>
+- Social/communication tasks? <answer>
+- Personal errands? <answer>
 
 PASS 2 OUTPUT:
 <valid JSON matching schema below>
@@ -218,7 +252,7 @@ JSON SCHEMA:
       "reminder_at": "string (ISO datetime, optional)",
       "group_id": "string (UUID, optional)",
       "group_name": "string (optional)",
-      "top_confidence": "float (0.0 to 1.0)",
+      "top_confidence": "float (0.0 to 1.0, default 0.9)",
       "alternative_groups": [{"group_id": "string", "group_name": "string", "confidence": "float"}],
       "recurrence": "object {frequency: 'daily'|'weekly'|'monthly', weekday: 0-6, day_of_month: 1-31} or null",
       "subtasks": [{"title": "string"}]
@@ -230,11 +264,14 @@ JSON SCHEMA:
 ## FINAL REMINDERS
 
 1. EXPLICITLY enumerate ALL tasks before writing JSON
-2. Do NOT summarize or combine related actions into single tasks
-3. "and" typically means SEPARATE parallel tasks
-4. Parse dates relative to user's timezone and current date provided
-5. Set reminder_at ONLY when a specific time is mentioned
-6. Return ONLY the enumeration text and JSON, nothing else"""
+2. The CROSS-DOMAIN CHECK is NOT optional — always complete it before PASS 2
+3. Do NOT summarize or combine related actions into single tasks
+4. "and" / "also" / "and also" / "I gotta" / "I should" typically mean SEPARATE parallel tasks
+5. Health, appointment, and personal errand tasks are ALWAYS separate top-level tasks regardless of dominant transcript theme
+6. Parse dates relative to user's timezone and current date provided
+7. Set reminder_at ONLY when a specific time is mentioned
+8. Always include top_confidence (use 0.9 when not otherwise specified)
+9. Return ONLY the enumeration text, cross-domain check, and JSON — nothing else"""
 
     def get_user_prompt(
         self,
@@ -257,7 +294,8 @@ Available groups:
 {transcript_text}
 ---END TRANSCRIPT---
 
-Follow the two-pass extraction process from the system prompt. First enumerate all tasks, then output the JSON."""
+Extract ALL tasks using the two-pass process. Before writing JSON, you MUST complete the CROSS-DOMAIN CHECK.
+⚠ IMPORTANT: After listing work/project tasks, explicitly check for health/medical tasks (doctor, dentist, pharmacy), personal errands, and social calls — even if the transcript is mostly about work. These are always separate top-level tasks."""
 
     def _format_groups(self, groups: list[dict[str, object]]) -> list[str]:
         """Format groups for the prompt."""

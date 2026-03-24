@@ -45,6 +45,21 @@ class TestExtractionPromptManager:
         assert "Call dentist" in prompt
         assert "09:00" in prompt or "9 a.m." in prompt
 
+    def test_system_prompt_examples_include_top_confidence(self) -> None:
+        """All example JSON objects must include top_confidence to teach the model."""
+        prompt = self.manager.get_system_prompt()
+        assert '"top_confidence": 0.9' in prompt
+
+    def test_system_prompt_includes_domain_separation_rule(self) -> None:
+        """Prompt should state that different-domain tasks are always separate."""
+        prompt = self.manager.get_system_prompt()
+        assert "health" in prompt.lower() or "appointment" in prompt.lower()
+
+    def test_signal_words_include_and_also(self) -> None:
+        """'and also' should be listed as a signal word for a new task."""
+        prompt = self.manager.get_system_prompt()
+        assert "and also" in prompt.lower()
+
     def test_test_case_includes_all_subtasks(self) -> None:
         """Test case should enumerate fix up resume, research skills, upskill."""
         prompt = self.manager.get_system_prompt()
@@ -71,7 +86,7 @@ class TestExtractionPromptManager:
             groups=[],
             transcript_text="Test transcript",
         )
-        assert "two-pass extraction" in prompt.lower() or "PASS" in prompt
+        assert "two-pass" in prompt.lower() or "cross-domain" in prompt.lower()
 
     def test_user_prompt_includes_context(self) -> None:
         """User prompt should include timezone, date, groups, transcript."""
@@ -124,7 +139,8 @@ class TestExtractionExamples:
 
     def test_test_case_shows_3_final_tasks(self) -> None:
         """PASS 2 should show 3 organized tasks with subtasks."""
-        # Should have 3 main tasks
+        # Should have 3 main tasks and a PASS 2 OUTPUT marker
+        assert "PASS 2 OUTPUT:" in self.prompt
         assert '"title": "Create resume for AI product manager"' in self.prompt
         assert '"title": "Apply to AI product manager jobs"' in self.prompt
         assert '"title": "Call dentist tomorrow at 9am about metal thing in mouth"' in self.prompt

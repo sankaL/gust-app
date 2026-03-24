@@ -69,6 +69,7 @@ class ExtractedTaskResponse(BaseModel):
     top_confidence: float
     needs_review: bool
     status: str
+    subtask_titles: list[str]
     created_at: str
     updated_at: str
 
@@ -163,6 +164,7 @@ def _build_extracted_task_response(task) -> ExtractedTaskResponse:
         top_confidence=task.top_confidence,
         needs_review=task.needs_review,
         status=task.status,
+        subtask_titles=task.subtask_titles,
         created_at=task.created_at.isoformat(),
         updated_at=task.updated_at.isoformat(),
     )
