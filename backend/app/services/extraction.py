@@ -12,6 +12,7 @@ from typing import Any, Optional
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+from langchain_core.runnables import RunnableLambda
 
 from app.core.errors import ConfigurationError
 from app.core.settings import Settings
@@ -202,8 +203,37 @@ class LangChainExtractionService:
             ]
         )
 
-        # Create chain
-        chain = prompt | llm | self.output_parser
+        # Create chain - use a custom parser to extract JSON from mixed text output
+        def extract_json_from_text(input_: Any) -> dict:
+            """Extract JSON from text that may contain enumeration and other content."""
+            import re
+            # Handle AIMessage or string input
+            if hasattr(input_, 'content'):
+                # It's an AIMessage - extract content
+                content = input_.content
+                if isinstance(content, list):
+                    # List of content blocks - extract text from first text block
+                    text = ""
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text = block.get("text", "")
+                            break
+                        elif isinstance(block, str):
+                            text = block
+                            break
+                else:
+                    text = str(content)
+            else:
+                text = str(input_)
+            
+            # Try to find JSON block in the text
+            json_match = re.search(r'\{[\s\S]*\}', text)
+            if json_match:
+                return json.loads(json_match.group(0))
+            # If no JSON found, try parsing the whole thing
+            return json.loads(text)
+        
+        chain = prompt | llm | RunnableLambda(extract_json_from_text)
 
         # Execute chain
         try:
