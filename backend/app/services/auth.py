@@ -178,6 +178,11 @@ class SupabaseAuthService:
     def validate_access_token(self, access_token: str) -> AuthenticatedIdentity:
         self.ensure_configured()
         signing_key = self._get_jwks_client().get_signing_key_from_jwt(access_token).key
+        # NOTE: Supabase JWTs do not include an audience claim ("aud"), so we cannot
+        # verify it. Supabase uses the JWT for session management within their ecosystem
+        # and the audience is implicitly the Supabase project. We rely on issuer
+        # validation and the fact that the token was obtained through our OAuth/code
+        # exchange flow. See: https://github.com/orgs/supabase/discussions/17932
         claims = jwt.decode(
             access_token,
             signing_key,

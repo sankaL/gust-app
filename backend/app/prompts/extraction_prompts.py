@@ -2,7 +2,56 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
+
+
+# Prompt injection patterns to neutralize
+# These patterns attempt to override or ignore the system prompt
+INJECTION_PATTERNS = [
+    re.compile(r"ignore(?:\s+all(?:\s+previous)?)?(?:\s+instructions)?", re.IGNORECASE),
+    re.compile(r"disregard(?:\s+all)?(?:\s+previous)?(?:\s+instructions)?", re.IGNORECASE),
+    re.compile(r"forget(?:\s+everything)?\s+you\s+(?:were\s+)?taught", re.IGNORECASE),
+    re.compile(r"new\s+instruction:", re.IGNORECASE),
+    re.compile(r"override\s+(?:your\s+)?(?:system|original)", re.IGNORECASE),
+    re.compile(r"you\s+are\s+(?:now\s+)?(?:a|an)\s+(?:new|different)", re.IGNORECASE),
+    re.compile(r"for\s+the\s+rest\s+of\s+this\s+(?:conversation|chat|turn)", re.IGNORECASE),
+    # Prevent the transcript delimiters from being escaped or nested
+    re.compile(r"---BEGIN\s+TRANSCRIPT---", re.IGNORECASE),
+    re.compile(r"---END\s+TRANSCRIPT---", re.IGNORECASE),
+]
+
+
+def sanitize_transcript_for_extraction(transcript: str) -> str:
+    """Sanitize user transcript to mitigate prompt injection attempts.
+
+    This function neutralizes common prompt injection patterns while preserving
+    legitimate transcript content. It does NOT guarantee complete protection
+    against all possible attacks - the extraction guardrails and structured
+    output validation provide additional layers of defense.
+
+    Args:
+        transcript: Raw user transcript text.
+
+    Returns:
+        Sanitized transcript safe for insertion into the extraction prompt.
+    """
+    sanitized = transcript
+
+    # Remove or replace known injection patterns
+    for pattern in INJECTION_PATTERNS:
+        sanitized = pattern.sub("[content removed]", sanitized)
+
+    # Prevent delimiter escaping by replacing bare delimiter markers
+    # The transcript delimiters in the prompt are ---BEGIN TRANSCRIPT--- and ---END TRANSCRIPT---
+    # If user text contains these exactly, normalize them
+    sanitized = re.sub(r"---BEGIN\s*TRANSCRIPT---", "[transcript start]", sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r"---END\s*TRANSCRIPT---", "[transcript end]", sanitized, re.IGNORECASE)
+
+    # Trim whitespace but preserve internal structure
+    sanitized = sanitized.strip()
+
+    return sanitized
 
 
 class ExtractionPromptManager:
@@ -136,7 +185,7 @@ PASS 2 OUTPUT:
     {
       "title": "Call dentist tomorrow at 9am about metal thing in mouth",
       "due_date": "2026-03-25",
-      "reminder_at": "2026-03-25T09:00:00",
+      "reminder_at": "2026-03-25T09:00:00+00:00",
       "top_confidence": 0.9
     }
   ]
@@ -217,7 +266,7 @@ PASS 2 OUTPUT:
     {
       "title": "Call John about the project proposal",
       "due_date": "2026-03-25",
-      "reminder_at": "2026-03-25T14:00:00",
+      "reminder_at": "2026-03-25T14:00:00+00:00",
       "top_confidence": 0.9
     }
   ]
@@ -248,13 +297,13 @@ JSON SCHEMA:
   "tasks": [
     {
       "title": "string (required, non-empty)",
-      "due_date": "string (ISO date YYYY-MM-DD, optional)",
-      "reminder_at": "string (ISO datetime, optional)",
+      "due_date": "string (ISO date YYYY-MM-DD, optional but REQUIRED if reminder_at is set or if recurrence is weekly/monthly)",
+      "reminder_at": "string (ISO datetime WITH timezone, e.g. 2026-03-25T09:00:00+00:00, optional)",
       "group_id": "string (UUID, optional)",
       "group_name": "string (optional)",
       "top_confidence": "float (0.0 to 1.0, default 0.9)",
       "alternative_groups": [{"group_id": "string", "group_name": "string", "confidence": "float"}],
-      "recurrence": "object {frequency: 'daily'|'weekly'|'monthly', weekday: 0-6, day_of_month: 1-31} or null",
+      "recurrence": "object {frequency: 'daily'|'weekly'|'monthly', weekday: 0-6, day_of_month: 1-31} or null - NOTE: weekly/monthly recurrence REQUIRES due_date to be set",
       "subtasks": [{"title": "string"}]
     }
   ]
@@ -269,9 +318,10 @@ JSON SCHEMA:
 4. "and" / "also" / "and also" / "I gotta" / "I should" typically mean SEPARATE parallel tasks
 5. Health, appointment, and personal errand tasks should be separate top-level tasks regardless of dominant transcript theme
 6. Parse dates relative to user's timezone and current date provided
-7. Set reminder_at ONLY when a specific time is mentioned
-8. Always include top_confidence (use 0.9 when not otherwise specified)
-9. Return ONLY the enumeration text, cross-domain check, and JSON — nothing else"""
+7. Set reminder_at ONLY when a specific time is mentioned — ALWAYS include timezone (e.g., +00:00 for UTC)
+8. For weekly or monthly recurrence, you MUST set due_date to the first occurrence date
+9. Always include top_confidence (use 0.9 when not otherwise specified)
+10. Return ONLY the enumeration text, cross-domain check, and JSON — nothing else"""
 
     def get_user_prompt(
         self,
@@ -287,7 +337,9 @@ JSON SCHEMA:
         group_list = "\n".join(group_lines) if group_lines else "- Inbox"
         repair_section = ""
         if missing_guarded_clauses:
-            missing_items = "\n".join(f"- {clause}" for clause in missing_guarded_clauses)
+            # Sanitize guarded clauses as they are also user-derived data
+            sanitized_clauses = [sanitize_transcript_for_extraction(clause) for clause in missing_guarded_clauses]
+            missing_items = "\n".join(f"- {clause}" for clause in sanitized_clauses)
             repair_section = f"""
 
 REPAIR REQUIREMENT:
@@ -305,7 +357,7 @@ Available groups:
 {group_list}
 
 ---BEGIN TRANSCRIPT---
-{transcript_text}
+{sanitize_transcript_for_extraction(transcript_text)}
 ---END TRANSCRIPT---
 
 Extract ALL tasks using the two-pass process. Before writing JSON, you MUST complete the CROSS-DOMAIN CHECK.
