@@ -23,7 +23,7 @@ export function ExpandableTranscript({
         {shouldTruncate && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            className="text-xs text-primary hover:text-primary-dim transition-colors"
           >
             {isExpanded ? 'Show less' : 'Show more'}
           </button>

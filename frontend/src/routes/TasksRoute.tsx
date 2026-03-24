@@ -447,8 +447,8 @@ export function TasksRoute() {
         {undoState ? (
           <div className={`fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-soft p-4 shadow-ambient ${
             undoState.kind === 'complete'
-              ? 'bg-green-900/90 border-t-2 border-green-500'
-              : 'bg-red-900/90 border-t-2 border-red-500'
+              ? 'bg-primary/10 border-t-2 border-primary'
+              : 'bg-tertiary/10 border-t-2 border-tertiary'
           }`}>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -465,8 +465,8 @@ export function TasksRoute() {
                 disabled={undoMutation.isPending}
                 className={`rounded-pill px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-50 ${
                   undoState.kind === 'complete'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-red-600 hover:bg-red-700'
+                    ? 'bg-primary hover:bg-primary-dim'
+                    : 'bg-tertiary hover:bg-tertiary/80'
                 }`}
               >
                 Undo

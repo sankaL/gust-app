@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from app.core.errors import ExtractedTaskNotFoundError, ExtractedTaskStateConflictError
@@ -21,6 +21,7 @@ from app.db.repositories import (
     delete_extracted_tasks_by_capture,
     get_extracted_task,
     list_extracted_tasks,
+    update_extracted_task_due_date,
     update_extracted_task_status,
 )
 from app.services.extraction_models import ExtractedTaskCandidate, ExtractorPayload
@@ -281,6 +282,59 @@ class StagingService:
                 "extracted_task_id": extracted_task_id,
             },
         )
+
+    async def update_task_due_date(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        extracted_task_id: str,
+        due_date: Optional[date],
+    ) -> ExtractedTaskRecord:
+        """Update the due date of an extracted task.
+
+        Args:
+            user_id: User ID.
+            capture_id: Capture ID.
+            extracted_task_id: Extracted task ID.
+            due_date: Due date or None to clear.
+
+        Returns:
+            Updated extracted task record.
+
+        Raises:
+            ExtractedTaskNotFoundError: If extracted task cannot be found.
+        """
+        with connection_scope(self.settings.database_url) as connection:
+            extracted_task = get_extracted_task(
+                connection, user_id=user_id, extracted_task_id=extracted_task_id
+            )
+            if extracted_task is None:
+                raise ExtractedTaskNotFoundError()
+            if extracted_task.capture_id != capture_id:
+                raise ExtractedTaskNotFoundError()
+            if extracted_task.status != "pending":
+                raise ExtractedTaskStateConflictError()
+
+            updated_task = update_extracted_task_due_date(
+                connection,
+                user_id=user_id,
+                extracted_task_id=extracted_task_id,
+                due_date=due_date,
+            )
+
+        logger.info(
+            "staging_task_due_date_updated",
+            extra={
+                "event": "staging_task_due_date_updated",
+                "user_id": user_id,
+                "capture_id": capture_id,
+                "extracted_task_id": extracted_task_id,
+                "due_date": due_date,
+            },
+        )
+
+        return updated_task
 
     async def approve_all(
         self,

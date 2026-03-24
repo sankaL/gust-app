@@ -180,7 +180,7 @@ def test_transcription_service_maps_invalid_model_to_invalid_configuration(
 def test_extraction_service_chain_error_raises_service_error() -> None:
     """Extraction propagates chain errors as ExtractionServiceError after retries."""
     settings = build_settings()
-    registry = ExtractionModelRegistry.default("openai/gpt-5.4-mini")
+    registry = ExtractionModelRegistry.default("google/gemini-3-flash-preview")
 
     service = LangChainExtractionService(
         settings=settings,
@@ -208,7 +208,7 @@ def test_extraction_service_chain_error_raises_service_error() -> None:
 def test_extraction_service_invalid_json_raises_malformed_error() -> None:
     """Extraction wraps malformed JSON responses as ExtractionServiceError."""
     settings = build_settings()
-    registry = ExtractionModelRegistry.default("openai/gpt-5.4-mini")
+    registry = ExtractionModelRegistry.default("google/gemini-3-flash-preview")
 
     service = LangChainExtractionService(
         settings=settings,

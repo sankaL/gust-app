@@ -9,13 +9,14 @@ import {
   getSessionStatus,
   submitCapture,
   listExtractedTasks,
+  listPendingTasks,
   approveExtractedTask,
   discardExtractedTask,
   approveAllExtractedTasks,
   discardAllExtractedTasks,
+  updateExtractedTaskDueDate,
   completeCapture,
-  type SubmitCaptureResponse,
-  type ExtractedTask
+  type SubmitCaptureResponse
 } from '../lib/api'
 import { SessionRequiredCard } from '../components/SessionRequiredCard'
 import { StagingTable } from '../components/StagingTable'
@@ -49,7 +50,6 @@ export function CaptureRoute() {
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [summary, setSummary] = useState<SubmitCaptureResponse | null>(null)
-  const [extractedTasks, setExtractedTasks] = useState<ExtractedTask[]>([])
   const [showStaging, setShowStaging] = useState(false)
 
   const sessionQuery = useQuery({
@@ -57,40 +57,65 @@ export function CaptureRoute() {
     queryFn: getSessionStatus
   })
 
+  // Query for all pending tasks (user-scoped, not capture-scoped)
+  const allPendingTasksQuery = useQuery({
+    queryKey: ['pending-tasks'],
+    queryFn: listPendingTasks,
+    enabled: !!sessionQuery.data?.signed_in
+  })
+
+  // Query for capture-specific tasks during review (used in staging table)
   const extractedTasksQuery = useQuery({
     queryKey: ['extracted-tasks', reviewCaptureId],
     queryFn: () => listExtractedTasks(reviewCaptureId!),
-    enabled: !!reviewCaptureId && showStaging,
-    refetchInterval: 2000
+    enabled: !!reviewCaptureId && showStaging
   })
 
-  // Sync extracted tasks from query to local state
-  useEffect(() => {
-    if (extractedTasksQuery.data) {
-      setExtractedTasks(extractedTasksQuery.data)
-    }
-  }, [extractedTasksQuery.data])
+
+
+  // Resolve task capture context without requiring pending cache availability.
+  const resolveTaskCaptureId = (taskId: string): string | null => {
+    const pendingTask = allPendingTasksQuery.data?.find((task) => task.id === taskId)
+    if (pendingTask?.capture_id) return pendingTask.capture_id
+
+    const reviewTask = extractedTasksQuery.data?.find((task) => task.id === taskId)
+    if (reviewTask?.capture_id) return reviewTask.capture_id
+
+    return reviewCaptureId
+  }
 
   // Handler functions for StagingTable
   const handleApproveTask = async (taskId: string) => {
-    if (!reviewCaptureId || !sessionQuery.data?.csrf_token) return
+    const captureId = resolveTaskCaptureId(taskId)
+    if (!captureId) {
+      setSubmitError('Task context is unavailable. Refresh and try again.')
+      return
+    }
+    if (!sessionQuery.data?.csrf_token) return
     try {
       setSubmitError(null)
-      await approveExtractedTask(reviewCaptureId, taskId, sessionQuery.data.csrf_token)
-      // Refresh the extracted tasks list
-      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
+      await approveExtractedTask(captureId, taskId, sessionQuery.data.csrf_token)
+      // Refresh both queries
+      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', captureId] })
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to approve task.'))
     }
   }
 
   const handleDiscardTask = async (taskId: string) => {
-    if (!reviewCaptureId || !sessionQuery.data?.csrf_token) return
+    const captureId = resolveTaskCaptureId(taskId)
+    if (!captureId) {
+      setSubmitError('Task context is unavailable. Refresh and try again.')
+      return
+    }
+    if (!sessionQuery.data?.csrf_token) return
     try {
       setSubmitError(null)
-      await discardExtractedTask(reviewCaptureId, taskId, sessionQuery.data.csrf_token)
-      // Refresh the extracted tasks list
-      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
+      await discardExtractedTask(captureId, taskId, sessionQuery.data.csrf_token)
+      // Refresh both queries
+      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', captureId] })
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to discard task.'))
     }
@@ -101,8 +126,9 @@ export function CaptureRoute() {
     try {
       setSubmitError(null)
       await approveAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
-      // Refresh the extracted tasks list
+      // Refresh both queries
       queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to approve all tasks.'))
     }
@@ -113,14 +139,88 @@ export function CaptureRoute() {
     try {
       setSubmitError(null)
       await discardAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
-      // Refresh the extracted tasks list
+      // Refresh both queries
       queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+    } catch (error) {
+      setSubmitError(buildFriendlyMessage(error, 'Failed to discard all tasks.'))
+    }
+  }
+
+  const handleDueDateChange = async (taskId: string, dueDate: string | null) => {
+    const captureId = resolveTaskCaptureId(taskId)
+    if (!captureId) {
+      setSubmitError('Task context is unavailable. Refresh and try again.')
+      return
+    }
+    if (!sessionQuery.data?.csrf_token) return
+    try {
+      setSubmitError(null)
+      await updateExtractedTaskDueDate(captureId, taskId, dueDate, sessionQuery.data.csrf_token)
+      // Refresh both queries
+      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', captureId] })
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+    } catch (error) {
+      setSubmitError(buildFriendlyMessage(error, 'Failed to update due date.'))
+    }
+  }
+
+  // Batch approve all pending tasks across all captures
+  const handleApproveAllPending = async () => {
+    const tasks = allPendingTasksQuery.data ?? []
+    const csrfToken = sessionQuery.data?.csrf_token
+    if (tasks.length === 0 || !csrfToken) return
+    try {
+      setSubmitError(null)
+      // Group tasks by capture_id and batch per-capture
+      const tasksByCapture = tasks.reduce((acc, task) => {
+        if (!acc[task.capture_id]) acc[task.capture_id] = []
+        acc[task.capture_id].push(task)
+        return acc
+      }, {} as Record<string, typeof tasks>)
+      // Process each capture's tasks in parallel batches
+      await Promise.all(
+        Object.entries(tasksByCapture).map(async ([captureId]) => {
+          // Use batch approve endpoint for each capture
+          await approveAllExtractedTasks(captureId, csrfToken)
+        })
+      )
+      // Refresh the pending list
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+    } catch (error) {
+      setSubmitError(buildFriendlyMessage(error, 'Failed to approve all tasks.'))
+    }
+  }
+
+  // Batch discard all pending tasks across all captures
+  const handleDiscardAllPending = async () => {
+    const tasks = allPendingTasksQuery.data ?? []
+    const csrfToken = sessionQuery.data?.csrf_token
+    if (tasks.length === 0 || !csrfToken) return
+    try {
+      setSubmitError(null)
+      // Group tasks by capture_id and batch per-capture
+      const tasksByCapture = tasks.reduce((acc, task) => {
+        if (!acc[task.capture_id]) acc[task.capture_id] = []
+        acc[task.capture_id].push(task)
+        return acc
+      }, {} as Record<string, typeof tasks>)
+      // Process each capture's tasks in parallel batches
+      await Promise.all(
+        Object.entries(tasksByCapture).map(async ([captureId]) => {
+          // Use batch discard endpoint for each capture
+          await discardAllExtractedTasks(captureId, csrfToken)
+        })
+      )
+      // Refresh the pending list
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to discard all tasks.'))
     }
   }
 
   const isLoadingTasks = extractedTasksQuery.isLoading || extractedTasksQuery.isFetching
+  const isLoadingAllPending = allPendingTasksQuery.isLoading || allPendingTasksQuery.isFetching
 
   const textCaptureMutation = useMutation({
     mutationFn: async (text: string) => {
@@ -180,9 +280,12 @@ export function CaptureRoute() {
       setTextDraft('')
       setTextExpanded(false)
       setReviewCaptureId(null)
+      setShowStaging(false)
       setSubmitError(null)
       setTranscriptionError(null)
       retryAudioRef.current = null
+      // Refresh the persistent pending list
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
     },
     onError: (error) => {
       setSubmitError(
@@ -338,9 +441,7 @@ export function CaptureRoute() {
                 ? 'Recording...'
                 : voiceCaptureMutation.isPending
                   ? 'Transcribing...'
-                  : reviewCaptureId
-                    ? 'Review transcript'
-                    : 'Ready to capture'}
+                  : 'Ready to capture'}
             </p>
           </div>
 
@@ -446,26 +547,40 @@ export function CaptureRoute() {
         </div>
       ) : null}
 
+      {/* Persistent Pending Tasks List - always visible when signed in */}
+      {sessionQuery.data?.signed_in && (allPendingTasksQuery.data?.length ?? 0) > 0 ? (
+        <div className="space-y-3 rounded-card bg-surface-container p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-lg text-on-surface">
+                Pending Tasks ({allPendingTasksQuery.data?.length ?? 0})
+              </h2>
+              <p className="font-body text-xs text-on-surface-variant">
+                Tasks from all captures awaiting your review
+              </p>
+            </div>
+          </div>
+          <StagingTable
+            tasks={allPendingTasksQuery.data ?? []}
+            onApprove={handleApproveTask}
+            onDiscard={handleDiscardTask}
+            onApproveAll={handleApproveAllPending}
+            onDiscardAll={handleDiscardAllPending}
+            onDueDateChange={handleDueDateChange}
+            isLoading={isLoadingAllPending}
+          />
+        </div>
+      ) : null}
+
       {showStaging && reviewCaptureId ? (
         <div className="space-y-3 rounded-card bg-surface-container p-4">
-          <div className="space-y-1">
-            <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
-              Extracted Tasks
-            </p>
-            <h3 className="font-display text-xl text-on-surface">
-              Review and approve tasks
-            </h3>
-            <p className="font-body text-sm text-on-surface-variant">
-              Approve tasks to add them to your task list, or discard them.
-            </p>
-          </div>
-
           <StagingTable
-            tasks={extractedTasks}
+            tasks={extractedTasksQuery.data ?? []}
             onApprove={handleApproveTask}
             onDiscard={handleDiscardTask}
             onApproveAll={handleApproveAll}
             onDiscardAll={handleDiscardAll}
+            onDueDateChange={handleDueDateChange}
             isLoading={isLoadingTasks}
           />
 
@@ -487,7 +602,6 @@ export function CaptureRoute() {
                   await completeCapture(reviewCaptureId, sessionQuery.data.csrf_token)
                   setShowStaging(false)
                   setReviewCaptureId(null)
-                  setExtractedTasks([])
                 } catch (error) {
                   setSubmitError(buildFriendlyMessage(error, 'Failed to complete capture.'))
                 }

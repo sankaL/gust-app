@@ -45,7 +45,7 @@ LOCAL_ENV_DEFAULTS = {
     "TRANSCRIPTION_TIMEOUT_SECONDS": "20",
     "OPENROUTER_API_URL": "https://openrouter.ai/api/v1/chat/completions",
     "OPENROUTER_API_KEY": "",
-    "OPENROUTER_EXTRACTION_MODEL": "openai/gpt-5.4-mini",
+    "OPENROUTER_EXTRACTION_MODEL": "google/gemini-3-flash-preview",
     "EXTRACTION_TIMEOUT_SECONDS": "20",
     "RESEND_API_URL": "https://api.resend.com/emails",
     "RESEND_API_KEY": "",

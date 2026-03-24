@@ -74,6 +74,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | P5-03 | Add frontend automated coverage for capture states, transcript retry, flagged tasks, swipe actions, and auth-gated routing | TODO | TBD | Regression safety requirement | Tech, AGENTS |
 | P5-04 | Add end-to-end coverage for sign-in, voice capture, text capture, reminder flow, and install path | TODO | TBD | Use test/local services only | Tech, AGENTS |
 | P5-05 | Complete launch hardening for observability, privacy checks, performance targets, and deployment readiness | TODO | TBD | Must meet v1 success metrics | PRD, Tech |
+| P5-06 | Implement persistent pending extracted tasks list with user-scoped queries and Railway cron cleanup job | TODO | TBD | Pending tasks accumulate across captures and persist until user approves/discards; cleanup job deletes approved/discarded records after 7 days but never deletes pending | pending-list-redesign-plan.md |
 
 ## Ad Hoc Tasks
 
@@ -84,6 +85,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-03 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Added Gust logo SVG colorway assets aligned to the sonic minimalist palette | Design |
 | ADH-04 | Tooling or workflow improvements needed to unblock delivery | DONE | 2026-03-22 | Unified root env templates, added `.env.prod`, and routed local Docker config through generated runtime env derived from `.env` | AGENTS, Tech |
 | ADH-05 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Switched default transcription and extraction models to Voxtral Mini Transcribe 2 and MiniMax M2.7, with provider request regression coverage | Tech, AGENTS |
+| ADH-06 | Implement persistent pending extracted tasks list with user-scoped queries and Railway cron cleanup job | IN PROGRESS | 2026-03-24 | Backend: modified cleanup job to only delete approved/discarded, added /pending-tasks endpoint. Frontend: added listPendingTasks, persistent pending list UI. Database schema docs updated. | pending-list-redesign-plan.md |
 
 ## Bug Fixes
 

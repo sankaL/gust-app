@@ -156,8 +156,8 @@ export function ManageGroupsRoute() {
         {feedback ? (
           <p className={`rounded-card border px-4 py-3 font-body text-sm ${
             feedback.type === 'success'
-              ? 'border-green-500/30 bg-green-500/10 text-green-400'
-              : 'border-red-500/30 bg-red-500/10 text-red-400'
+              ? 'border-primary/30 bg-primary/10 text-primary'
+              : 'border-tertiary/30 bg-tertiary/10 text-tertiary'
           }`}>
             {feedback.message}
           </p>

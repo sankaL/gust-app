@@ -299,7 +299,7 @@ The initial migration set should include indexes for:
 
 - Capture rows are retained only until `expires_at`, with an initial default target of 7 days after creation.
 - Retention cleanup hard-deletes expired capture rows in bounded batches.
-- Extracted task rows are retained for 7 days after creation, matching capture retention.
+- Extracted task rows: **pending** tasks persist until user action (approve/discard); **approved/discarded** tasks are retained for 7 days and then cleaned up by the retention job.
 - Reminder rows may be retained for audit and idempotency protection after send or cancellation.
 - Task, subtask, group, and user retention policy is outside Phase 0 and should not conflict with reminder or capture cleanup.
 

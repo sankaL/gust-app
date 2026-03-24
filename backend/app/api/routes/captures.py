@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 # ruff: noqa: UP045
 from typing import Annotated, Optional
 
@@ -74,6 +75,10 @@ class ExtractedTaskResponse(BaseModel):
 
 class ReExtractRequest(BaseModel):
     transcript_text: str
+
+
+class UpdateExtractedTaskRequest(BaseModel):
+    due_date: Optional[date] = None
 
 
 @router.post("/voice", response_model=CaptureReviewResponse, status_code=status.HTTP_201_CREATED)
@@ -212,6 +217,24 @@ async def discard_extracted_task(
     return {"discarded": True}
 
 
+@router.patch("/{capture_id}/extracted-tasks/{task_id}", response_model=ExtractedTaskResponse)
+async def update_extracted_task(
+    capture_id: str,
+    task_id: str,
+    payload: UpdateExtractedTaskRequest,
+    session_context: RequiredSessionContextDep,
+    staging_service: StagingServiceDep,
+) -> ExtractedTaskResponse:
+    """Update an extracted task (e.g., due_date)."""
+    updated_task = await staging_service.update_task_due_date(
+        user_id=session_context.user.id,
+        capture_id=capture_id,
+        extracted_task_id=task_id,
+        due_date=payload.due_date,
+    )
+    return _build_extracted_task_response(updated_task)
+
+
 @router.post("/{capture_id}/extracted-tasks/approve-all", response_model=list[ExtractedTaskResponse])
 async def approve_all_extracted_tasks(
     capture_id: str,
@@ -286,3 +309,20 @@ async def complete_capture(
         capture_id=capture_id,
     )
     return {"status": "completed"}
+
+
+@router.get("/pending-tasks", response_model=list[ExtractedTaskResponse])
+async def list_pending_tasks(
+    session_context: AuthenticatedSessionContextDep,
+    staging_service: StagingServiceDep,
+) -> list[ExtractedTaskResponse]:
+    """List all pending extracted tasks for the current user.
+
+    This endpoint returns pending tasks across ALL captures, enabling a persistent
+    pending list that accumulates over time until the user approves or discards each task.
+    """
+    extracted_tasks = await staging_service.list_extracted_tasks(
+        user_id=session_context.user.id,
+        status="pending",
+    )
+    return [_build_extracted_task_response(task) for task in extracted_tasks]

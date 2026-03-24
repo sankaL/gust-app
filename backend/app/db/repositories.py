@@ -1218,17 +1218,68 @@ def update_extracted_task_status(
     )
 
 
+def update_extracted_task_due_date(
+    connection: Connection,
+    *,
+    user_id: str,
+    extracted_task_id: str,
+    due_date: Optional[date],
+) -> Optional[ExtractedTaskRecord]:
+    """Update the due_date of an extracted task.
+
+    Args:
+        connection: Database connection.
+        user_id: User ID for ownership verification.
+        extracted_task_id: Extracted task ID.
+        due_date: New due_date value (None to clear).
+
+    Returns:
+        Updated extracted task record or None if not found.
+    """
+    connection.execute(
+        extracted_tasks.update()
+        .where(
+            extracted_tasks.c.id == extracted_task_id,
+            extracted_tasks.c.user_id == user_id,
+        )
+        .values(due_date=due_date, updated_at=CURRENT_TIMESTAMP)
+    )
+    return get_extracted_task(
+        connection, user_id=user_id, extracted_task_id=extracted_task_id
+    )
+
+
 def delete_extracted_tasks_by_capture(
     connection: Connection,
     *,
     user_id: str,
     capture_id: str,
+    status: Optional[str] = None,
 ) -> int:
+    """Delete extracted tasks for a capture.
+
+    Args:
+        connection: Database connection.
+        user_id: User ID.
+        capture_id: Capture ID.
+        status: Optional status filter. If provided, only tasks with this status are deleted.
+                If None, only pending tasks are deleted (for re-extraction safety).
+
+    Returns:
+        Number of deleted rows.
+    """
+    conditions = [
+        extracted_tasks.c.user_id == user_id,
+        extracted_tasks.c.capture_id == capture_id,
+    ]
+    if status is not None:
+        conditions.append(extracted_tasks.c.status == status)
+    else:
+        # Default: only delete pending tasks (safety measure for re-extraction)
+        conditions.append(extracted_tasks.c.status == 'pending')
+
     result = connection.execute(
-        extracted_tasks.delete().where(
-            extracted_tasks.c.user_id == user_id,
-            extracted_tasks.c.capture_id == capture_id,
-        )
+        extracted_tasks.delete().where(*conditions)
     )
     return int(result.rowcount or 0)
 
@@ -1239,11 +1290,25 @@ def delete_expired_extracted_tasks(
     now: datetime,
     limit: int,
 ) -> int:
-    # Delete extracted tasks older than 7 days
+    """Delete expired extracted tasks that have been approved or discarded.
+
+    Pending tasks are never automatically deleted - they persist until user action.
+
+    Args:
+        connection: Database connection.
+        now: Current datetime.
+        limit: Maximum number of rows to delete.
+
+    Returns:
+        Number of deleted rows.
+    """
     cutoff = now - timedelta(days=7)
     rows = connection.execute(
         sa.select(extracted_tasks.c.id)
-        .where(extracted_tasks.c.created_at <= cutoff)
+        .where(
+            extracted_tasks.c.created_at <= cutoff,
+            extracted_tasks.c.status.in_(['approved', 'discarded'])
+        )
         .order_by(extracted_tasks.c.created_at.asc(), extracted_tasks.c.id.asc())
         .limit(limit)
     ).fetchall()
