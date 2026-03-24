@@ -531,6 +531,9 @@ class CaptureService:
                 reminder_at=candidate.reminder_at,
                 recurrence=recurrence_input,
                 user_timezone=user_timezone,
+                # Lenient: accept AI-extracted tasks with imperfect datetime/recurrence
+                assume_utc_for_naive=True,
+                default_due_date_for_recurrence=True,
             )
         except ValueError as exc:
             message = str(exc)

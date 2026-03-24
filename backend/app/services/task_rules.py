@@ -36,41 +36,48 @@ def normalize_task_fields(
     recurrence: RecurrenceInput | None,
     user_timezone: str,
     current_series_id: str | None = None,
+    # Explicit opt-in behavior flags (default False = strict validation)
+    assume_utc_for_naive: bool = False,
+    default_due_date_for_recurrence: bool = False,
 ) -> NormalizedTaskFields:
     normalized_title = title.strip()
     if not normalized_title:
         raise ValueError("Task title cannot be blank.")
-    
-    # Handle naive datetime by assuming UTC
+
+    # Handle naive datetime: either assume UTC (opt-in) or raise error (strict)
     if reminder_at is not None and reminder_at.tzinfo is None:
-        logger = logging.getLogger("gust.api")
-        logger.warning(
-            "normalization_assuming_utc_for_naive_datetime",
-            extra={
-                "event": "normalization_assuming_utc_for_naive_datetime",
-                "original_reminder_at": str(reminder_at),
-                "title": normalized_title,
-            },
-        )
-        reminder_at = reminder_at.replace(tzinfo=ZoneInfo("UTC"))
-    
+        if assume_utc_for_naive:
+            logger = logging.getLogger("gust.api")
+            logger.warning(
+                "normalization_assuming_utc_for_naive_datetime",
+                extra={
+                    "event": "normalization_assuming_utc_for_naive_datetime",
+                    "original_reminder_at": str(reminder_at),
+                    "title": normalized_title,
+                },
+            )
+            reminder_at = reminder_at.replace(tzinfo=ZoneInfo("UTC"))
+        else:
+            raise ValueError("Reminder timestamp must include a timezone.")
+
     if due_date is None and reminder_at is not None:
         raise ValueError("Reminder requires a due date.")
-    
-    # For weekly/monthly recurrence, if no due_date provided, use current date
-    # This is a sensible default since the user clearly intends for this to recur
-    # but didn't specify a specific start date
+
+    # For weekly/monthly recurrence: either default to today (opt-in) or raise error (strict)
     if due_date is None and recurrence is not None and recurrence.frequency != "daily":
-        logger = logging.getLogger("gust.api")
-        logger.warning(
-            "normalization_defaulting_due_date_for_recurrence",
-            extra={
-                "event": "normalization_defaulting_due_date_for_recurrence",
-                "recurrence_frequency": recurrence.frequency,
-                "title": normalized_title,
-            },
-        )
-        due_date = date.today()
+        if default_due_date_for_recurrence:
+            logger = logging.getLogger("gust.api")
+            logger.warning(
+                "normalization_defaulting_due_date_for_recurrence",
+                extra={
+                    "event": "normalization_defaulting_due_date_for_recurrence",
+                    "recurrence_frequency": recurrence.frequency,
+                    "title": normalized_title,
+                },
+            )
+            due_date = date.today()
+        else:
+            raise ValueError("Recurrence requires a due date.")
 
     recurrence_frequency = None
     recurrence_interval = None
