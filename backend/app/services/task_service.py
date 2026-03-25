@@ -257,17 +257,16 @@ class TaskService:
                         "task_completion_conflict",
                         "Recurring tasks can only be completed on or after their due date.",
                     )
-            task = self._ensure_series_id_for_recurring_task(
-                connection,
-                user_id=user_id,
-                task=task,
-            )
+            series_id_to_assign: Optional[str] = None
+            if task.recurrence_frequency is not None and task.series_id is None:
+                series_id_to_assign = str(uuid.uuid4())
             completed_at = datetime.now(timezone.utc)
             updated = complete_task_if_open(
                 connection,
                 user_id=user_id,
                 task_id=task_id,
                 completed_at=completed_at,
+                series_id=series_id_to_assign,
             )
             if updated is None:
                 raise ConflictError(
@@ -347,14 +346,14 @@ class TaskService:
                     "task_delete_conflict",
                     "Only active tasks can be deleted.",
                 )
-            task = self._ensure_series_id_for_recurring_task(
-                connection,
-                user_id=user_id,
-                task=task,
-            )
             deleted_at = datetime.now(timezone.utc)
 
             if scope == "series":
+                task = self._ensure_series_id_for_recurring_task(
+                    connection,
+                    user_id=user_id,
+                    task=task,
+                )
                 if task.series_id is None or task.recurrence_frequency is None:
                     raise InvalidTaskError("Series delete is only supported for recurring tasks.")
                 if task.status != "open":

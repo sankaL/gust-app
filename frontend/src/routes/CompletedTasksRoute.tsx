@@ -40,22 +40,22 @@ function dedupeCompletedTasks(tasks: TaskSummary[]) {
   const result: TaskSummary[] = []
 
   for (const task of tasks) {
-    const completedMinute = task.completed_at ? task.completed_at.slice(0, 16) : 'none'
+    const completedSecond = task.completed_at ? task.completed_at.slice(0, 19) : 'none'
     const normalizedTitle = task.title.trim().toLowerCase()
     const dueValue = task.due_date ?? 'none'
     const candidateKeys = [`task:${task.id}`]
 
     if (task.series_id) {
-      candidateKeys.push(`series:${task.series_id}|minute:${completedMinute}`)
+      candidateKeys.push(`series:${task.series_id}|second:${completedSecond}`)
     } else if (task.recurrence_frequency) {
       candidateKeys.push(
-        `recurrence:${normalizedTitle}|group:${task.group.id}|due:${dueValue}|minute:${completedMinute}`
+        `recurrence:${normalizedTitle}|group:${task.group.id}|due:${dueValue}|second:${completedSecond}`
       )
     }
 
     if (task.completed_at && !task.series_id && !task.recurrence_frequency) {
       candidateKeys.push(
-        `legacy:${normalizedTitle}|group:${task.group.id}|due:${dueValue}|minute:${completedMinute}`
+        `legacy:${normalizedTitle}|group:${task.group.id}|due:${dueValue}|second:${completedSecond}`
       )
     }
 

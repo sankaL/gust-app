@@ -722,7 +722,15 @@ def complete_task_if_open(
     user_id: str,
     task_id: str,
     completed_at: datetime,
+    series_id: Optional[str] = None,
 ) -> Optional[TaskRecord]:
+    update_values: dict[str, object] = {
+        "status": "completed",
+        "completed_at": completed_at,
+        "updated_at": CURRENT_TIMESTAMP,
+    }
+    if series_id is not None:
+        update_values["series_id"] = series_id
     result = connection.execute(
         tasks.update()
         .where(
@@ -731,11 +739,7 @@ def complete_task_if_open(
             tasks.c.status == "open",
             tasks.c.deleted_at.is_(None),
         )
-        .values(
-            status="completed",
-            completed_at=completed_at,
-            updated_at=CURRENT_TIMESTAMP,
-        )
+        .values(**update_values)
     )
     if int(result.rowcount or 0) == 0:
         return None
