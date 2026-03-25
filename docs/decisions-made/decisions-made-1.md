@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-25 00:58:00 EDT
+
+- Updated recurring reopen/restore lifecycle semantics to be conditional: keep recurrence when the expected generated undo-target open occurrence is present, otherwise detach to a single non-recurring instance.
+- Kept conflict behavior fail-closed when another open occurrence exists but does not match the expected undo-target occurrence.
+- Chose UI-only suppression for historical duplicate completed rows caused by prior recurring lifecycle regressions, avoiding backend data mutation.
+
 ## 2026-03-25 00:10:00 EDT
 
 - Added explicit recurring delete scope at the task API and UI layers: `Delete this occurrence` and `Delete this and future`.

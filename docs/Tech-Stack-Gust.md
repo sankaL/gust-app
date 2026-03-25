@@ -60,6 +60,7 @@ Responsibilities:
 - Transcript review and submission
 - Task list rendering and editing
 - Per-group completed-task browsing and reopen actions
+- Completed-task rendering with legacy duplicate suppression for known historical recurrence regressions
 - Group management
 - PWA install experience
 
@@ -292,6 +293,7 @@ Required behavior:
 - generated occurrences clear `reminder_at` when the inherited timestamp is already in the past
 - deleting one recurring occurrence can generate the next occurrence from the deleted due date when no other open occurrence exists
 - deleting recurring `this and future` soft-deletes all open occurrences in the series and keeps completed history untouched
+- reopening/restoring recurring tasks keeps recurrence only when the expected generated undo-target open occurrence is present; otherwise the reopened/restored task detaches into a single non-recurring instance
 
 ### Retention Cleanup
 

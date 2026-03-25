@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 # ruff: noqa: UP045
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
+from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
 
@@ -23,6 +25,7 @@ from app.db.repositories import (
     TaskRecord,
     bulk_reassign_tasks,
     cancel_reminder,
+    complete_task_if_open,
     create_subtasks,
     create_task,
     create_subtask,
@@ -242,17 +245,35 @@ class TaskService:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None or task.deleted_at is not None:
                 raise TaskNotFoundError()
+            if task.status != "open":
+                raise ConflictError(
+                    "task_completion_conflict",
+                    "Only open tasks can be completed.",
+                )
+            if task.recurrence_frequency is not None and task.due_date is not None:
+                local_today = datetime.now(ZoneInfo(user_timezone)).date()
+                if task.due_date > local_today:
+                    raise ConflictError(
+                        "task_completion_conflict",
+                        "Recurring tasks can only be completed on or after their due date.",
+                    )
+            task = self._ensure_series_id_for_recurring_task(
+                connection,
+                user_id=user_id,
+                task=task,
+            )
             completed_at = datetime.now(timezone.utc)
-            updated = update_task(
+            updated = complete_task_if_open(
                 connection,
                 user_id=user_id,
                 task_id=task_id,
-                values={
-                    "status": "completed",
-                    "completed_at": completed_at,
-                },
+                completed_at=completed_at,
             )
-            assert updated is not None
+            if updated is None:
+                raise ConflictError(
+                    "task_completion_conflict",
+                    "Only open tasks can be completed.",
+                )
             cancel_reminder(connection, user_id=user_id, task_id=task_id)
             self._create_next_occurrence_on_completion(
                 connection,
@@ -271,11 +292,21 @@ class TaskService:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None or task.deleted_at is not None:
                 raise TaskNotFoundError()
-            self._reconcile_series_on_reopen(
+            if task.status != "completed":
+                raise ConflictError(
+                    "task_reopen_conflict",
+                    "Only completed tasks can be moved back to To-do.",
+                )
+            reopen_disposition = self._reconcile_series_on_reopen(
                 connection,
                 user_id=user_id,
                 user_timezone=user_timezone,
                 task=task,
+            )
+            recurrence_reset_values: dict[str, object] = (
+                self._recurrence_reset_values(task=task)
+                if reopen_disposition == "detach_instance"
+                else {}
             )
             updated = update_task(
                 connection,
@@ -284,6 +315,7 @@ class TaskService:
                 values={
                     "status": "open",
                     "completed_at": None,
+                    **recurrence_reset_values,
                 },
             )
             assert updated is not None
@@ -310,6 +342,16 @@ class TaskService:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()
+            if task.deleted_at is not None:
+                raise ConflictError(
+                    "task_delete_conflict",
+                    "Only active tasks can be deleted.",
+                )
+            task = self._ensure_series_id_for_recurring_task(
+                connection,
+                user_id=user_id,
+                task=task,
+            )
             deleted_at = datetime.now(timezone.utc)
 
             if scope == "series":
@@ -365,16 +407,30 @@ class TaskService:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()
-            self._reconcile_series_on_restore(
+            if task.deleted_at is None:
+                raise ConflictError(
+                    "task_restore_conflict",
+                    "Only deleted tasks can be restored.",
+                )
+            restore_disposition = self._reconcile_series_on_restore(
                 connection,
                 user_id=user_id,
+                user_timezone=user_timezone,
                 task=task,
+            )
+            recurrence_reset_values: dict[str, object] = (
+                self._recurrence_reset_values(task=task)
+                if restore_disposition == "detach_instance"
+                else {}
             )
             updated = update_task(
                 connection,
                 user_id=user_id,
                 task_id=task_id,
-                values={"deleted_at": None},
+                values={
+                    "deleted_at": None,
+                    **recurrence_reset_values,
+                },
             )
             assert updated is not None
             self._sync_reminder(
@@ -547,7 +603,6 @@ class TaskService:
         if (
             task.series_id is None
             or task.recurrence_frequency is None
-            or task.due_date is None
         ):
             return
 
@@ -623,9 +678,12 @@ class TaskService:
             task.status != "open"
             or task.series_id is None
             or task.recurrence_frequency is None
-            or task.due_date is None
         ):
             return
+
+        occurrence_due_date = task.due_date
+        if occurrence_due_date is None:
+            occurrence_due_date = deleted_at.astimezone(ZoneInfo(user_timezone)).date()
 
         existing_open = get_open_task_in_series(
             connection,
@@ -637,7 +695,7 @@ class TaskService:
             return
 
         next_due_date, next_day_of_month = next_due_date_for_deleted_occurrence(
-            occurrence_due_date=task.due_date,
+            occurrence_due_date=occurrence_due_date,
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
@@ -692,14 +750,13 @@ class TaskService:
         user_id: str,
         user_timezone: str,
         task: TaskRecord,
-    ) -> None:
+    ) -> Literal["keep_recurrence", "detach_instance"]:
         if (
             task.series_id is None
             or task.recurrence_frequency is None
             or task.completed_at is None
-            or task.due_date is None
         ):
-            return
+            return "keep_recurrence"
 
         existing_open = get_open_task_in_series(
             connection,
@@ -708,7 +765,7 @@ class TaskService:
             exclude_task_id=task.id,
         )
         if existing_open is None:
-            return
+            return "detach_instance"
 
         completed_at = task.completed_at
         if completed_at.tzinfo is None:
@@ -745,7 +802,7 @@ class TaskService:
                 values={"deleted_at": datetime.now(timezone.utc)},
             )
             cancel_reminder(connection, user_id=user_id, task_id=existing_open.id)
-            return
+            return "keep_recurrence"
 
         raise ConflictError(
             "task_reopen_conflict",
@@ -757,16 +814,24 @@ class TaskService:
         connection: sa.Connection,
         *,
         user_id: str,
+        user_timezone: str,
         task: TaskRecord,
-    ) -> None:
+    ) -> Literal["keep_recurrence", "detach_instance"]:
         if (
             task.status != "open"
             or task.deleted_at is None
             or task.series_id is None
             or task.recurrence_frequency is None
-            or task.due_date is None
         ):
-            return
+            return "keep_recurrence"
+
+        occurrence_due_date = task.due_date
+        if occurrence_due_date is None:
+            deleted_at = task.deleted_at
+            assert deleted_at is not None
+            if deleted_at.tzinfo is None:
+                deleted_at = deleted_at.replace(tzinfo=timezone.utc)
+            occurrence_due_date = deleted_at.astimezone(ZoneInfo(user_timezone)).date()
 
         existing_open = get_open_task_in_series(
             connection,
@@ -775,10 +840,10 @@ class TaskService:
             exclude_task_id=task.id,
         )
         if existing_open is None:
-            return
+            return "detach_instance"
 
         next_due_date, next_day_of_month = next_due_date_for_deleted_occurrence(
-            occurrence_due_date=task.due_date,
+            occurrence_due_date=occurrence_due_date,
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
@@ -807,12 +872,43 @@ class TaskService:
                 values={"deleted_at": datetime.now(timezone.utc)},
             )
             cancel_reminder(connection, user_id=user_id, task_id=existing_open.id)
-            return
+            return "keep_recurrence"
 
         raise ConflictError(
             "task_restore_conflict",
             "Task cannot be restored while another open occurrence in this series exists.",
         )
+
+    def _recurrence_reset_values(self, *, task: TaskRecord) -> dict[str, object]:
+        if task.recurrence_frequency is None and task.series_id is None:
+            return {}
+        return {
+            "series_id": None,
+            "recurrence_frequency": None,
+            "recurrence_interval": None,
+            "recurrence_weekday": None,
+            "recurrence_day_of_month": None,
+            "reminder_offset_minutes": None,
+        }
+
+    def _ensure_series_id_for_recurring_task(
+        self,
+        connection: sa.Connection,
+        *,
+        user_id: str,
+        task: TaskRecord,
+    ) -> TaskRecord:
+        if task.recurrence_frequency is None or task.series_id is not None:
+            return task
+
+        updated = update_task(
+            connection,
+            user_id=user_id,
+            task_id=task.id,
+            values={"series_id": str(uuid.uuid4())},
+        )
+        assert updated is not None
+        return updated
 
     def _due_bucket(self, *, task: TaskRecord, user_timezone: str) -> str:
         bucket = due_bucket_for_date(due_date=task.due_date, user_timezone=user_timezone)

@@ -230,11 +230,6 @@ export function TasksRoute() {
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
   const [pendingRecurringDelete, setPendingRecurringDelete] = useState<TaskSummary | null>(null)
 
-  // Clear pending recurring delete modal state on navigation away
-  useEffect(() => {
-    return () => setPendingRecurringDelete(null)
-  }, [])
-
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
     queryFn: getSessionStatus
@@ -342,7 +337,7 @@ export function TasksRoute() {
     completeMutation.isPending || deleteMutation.isPending || undoMutation.isPending
 
   function handleDeleteTask(task: TaskSummary) {
-    if (task.series_id) {
+    if (task.series_id || task.recurrence_frequency) {
       setPendingRecurringDelete(task)
       return
     }

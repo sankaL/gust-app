@@ -716,6 +716,32 @@ def update_task(
     return get_task(connection, user_id=user_id, task_id=task_id)
 
 
+def complete_task_if_open(
+    connection: Connection,
+    *,
+    user_id: str,
+    task_id: str,
+    completed_at: datetime,
+) -> Optional[TaskRecord]:
+    result = connection.execute(
+        tasks.update()
+        .where(
+            tasks.c.id == task_id,
+            tasks.c.user_id == user_id,
+            tasks.c.status == "open",
+            tasks.c.deleted_at.is_(None),
+        )
+        .values(
+            status="completed",
+            completed_at=completed_at,
+            updated_at=CURRENT_TIMESTAMP,
+        )
+    )
+    if int(result.rowcount or 0) == 0:
+        return None
+    return get_task(connection, user_id=user_id, task_id=task_id)
+
+
 def bulk_reassign_tasks(
     connection: Connection,
     *,

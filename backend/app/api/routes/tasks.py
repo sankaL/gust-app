@@ -43,6 +43,7 @@ class TaskSummaryResponse(BaseModel):
     id: str
     title: str
     series_id: Optional[str] = None
+    recurrence_frequency: Optional[str] = None
     status: str
     needs_review: bool
     due_date: Optional[date]
@@ -280,6 +281,7 @@ def _build_task_summary(item: TaskListItem) -> TaskSummaryResponse:
         id=item.task.id,
         title=item.task.title,
         series_id=item.task.series_id,
+        recurrence_frequency=item.task.recurrence_frequency,
         status=item.task.status,
         needs_review=item.task.needs_review,
         due_date=item.task.due_date,
@@ -303,6 +305,7 @@ def _build_task_detail(detail: TaskDetail, user_timezone: str) -> TaskDetailResp
         id=detail.task.id,
         title=detail.task.title,
         series_id=detail.task.series_id,
+        recurrence_frequency=detail.task.recurrence_frequency,
         status=detail.task.status,
         needs_review=detail.task.needs_review,
         due_date=detail.task.due_date,

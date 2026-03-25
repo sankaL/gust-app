@@ -202,6 +202,7 @@ Required behavior:
 - Completed list is filtered per selected group.
 - Soft-deleted tasks do not appear in the completed list.
 - Completed items are sorted newest-first by `completed_at`.
+- The completed list suppresses obvious duplicate historical rows for the same logical occurrence.
 - Each row can be moved back to To-do through reopen behavior.
 - Reopen conflicts must show a user-safe error.
 
@@ -403,6 +404,7 @@ Behavior:
 - If that inherited reminder would already be in the past at completion time, the generated occurrence does not schedule a reminder email.
 - Deleting a recurring occurrence generates the next occurrence based on the deleted occurrence due date when no other open occurrence exists in the series.
 - Deleting recurring `this and future` soft-deletes all open occurrences in the series and does not delete completed history.
+- Reopening or restoring a recurring occurrence keeps recurrence only when the generated undo-target occurrence is found; otherwise it reopens/restores as a single detached non-recurring instance.
 
 ## Timezone Contract
 

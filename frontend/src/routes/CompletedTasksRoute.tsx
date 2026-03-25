@@ -35,6 +35,40 @@ function buildCompletedLabel(task: TaskSummary) {
   }).format(value)}`
 }
 
+function dedupeCompletedTasks(tasks: TaskSummary[]) {
+  const seen = new Set<string>()
+  const result: TaskSummary[] = []
+
+  for (const task of tasks) {
+    const completedMinute = task.completed_at ? task.completed_at.slice(0, 16) : 'none'
+    const normalizedTitle = task.title.trim().toLowerCase()
+    const dueValue = task.due_date ?? 'none'
+    const candidateKeys = [`task:${task.id}`]
+
+    if (task.series_id) {
+      candidateKeys.push(`series:${task.series_id}|minute:${completedMinute}`)
+    } else if (task.recurrence_frequency) {
+      candidateKeys.push(
+        `recurrence:${normalizedTitle}|group:${task.group.id}|due:${dueValue}|minute:${completedMinute}`
+      )
+    }
+
+    if (task.completed_at && !task.series_id && !task.recurrence_frequency) {
+      candidateKeys.push(
+        `legacy:${normalizedTitle}|group:${task.group.id}|due:${dueValue}|minute:${completedMinute}`
+      )
+    }
+
+    if (candidateKeys.some((key) => seen.has(key))) {
+      continue
+    }
+    candidateKeys.forEach((key) => seen.add(key))
+    result.push(task)
+  }
+
+  return result
+}
+
 export function CompletedTasksRoute() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -105,6 +139,7 @@ export function CompletedTasksRoute() {
 
   const selectedGroup =
     groupsQuery.data?.find((group) => group.id === resolvedGroupId) ?? groupsQuery.data?.[0] ?? null
+  const visibleCompletedTasks = dedupeCompletedTasks(completedTasksQuery.data ?? [])
 
   return (
     <SessionGuard
@@ -178,7 +213,7 @@ export function CompletedTasksRoute() {
           </div>
         ) : null}
 
-        {completedTasksQuery.data && completedTasksQuery.data.length === 0 ? (
+        {completedTasksQuery.data && visibleCompletedTasks.length === 0 ? (
           <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
             <p className="font-display text-2xl text-on-surface">No completed tasks here</p>
             <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
@@ -188,7 +223,7 @@ export function CompletedTasksRoute() {
         ) : null}
 
         <div className="space-y-3">
-          {(completedTasksQuery.data ?? []).map((task) => (
+          {visibleCompletedTasks.map((task) => (
             <article key={task.id} className="rounded-card bg-surface-container p-4 shadow-ambient">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
