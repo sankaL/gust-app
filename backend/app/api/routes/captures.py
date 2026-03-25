@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 # ruff: noqa: UP045
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from pydantic import BaseModel
@@ -79,7 +79,13 @@ class ReExtractRequest(BaseModel):
 
 
 class UpdateExtractedTaskRequest(BaseModel):
+    title: Optional[str] = None
+    group_id: Optional[str] = None
     due_date: Optional[date] = None
+    reminder_at: Optional[datetime] = None  # ISO datetime string (with timezone) or null
+    recurrence_frequency: Optional[Literal["daily", "weekly", "monthly"]] = None
+    recurrence_weekday: Optional[int] = None  # 0-6 for weekly
+    recurrence_day_of_month: Optional[int] = None  # 1-31 for monthly
 
 
 @router.post("/voice", response_model=CaptureReviewResponse, status_code=status.HTTP_201_CREATED)
@@ -227,12 +233,13 @@ async def update_extracted_task(
     session_context: RequiredSessionContextDep,
     staging_service: StagingServiceDep,
 ) -> ExtractedTaskResponse:
-    """Update an extracted task (e.g., due_date)."""
-    updated_task = await staging_service.update_task_due_date(
+    """Update an extracted task with multiple field updates."""
+    updated_task = await staging_service.update_extracted_task(
         user_id=session_context.user.id,
+        user_timezone=session_context.user.timezone,
         capture_id=capture_id,
         extracted_task_id=task_id,
-        due_date=payload.due_date,
+        updates=payload.model_dump(exclude_unset=True),
     )
     return _build_extracted_task_response(updated_task)
 

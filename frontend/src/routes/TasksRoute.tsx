@@ -14,6 +14,7 @@ import {
   type SessionStatus,
   type TaskSummary
 } from '../lib/api'
+import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { SessionGuard } from '../components/SessionGuard'
 
 type UndoState =
@@ -213,6 +214,7 @@ export function TasksRoute() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [undoState, setUndoState] = useState<UndoState>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -340,18 +342,30 @@ export function TasksRoute() {
                 {selectedGroup?.name ?? 'Loading'}
               </p>
             </div>
-            <Link
-              to={{
-                pathname: '/tasks/groups',
-                search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
-              }}
-              className="inline-flex items-center gap-2 rounded-pill bg-primary/20 px-4 py-2 text-sm font-medium text-primary transition-all duration-200 hover:bg-primary/30 hover:shadow-ambient active:scale-95"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              Groups
-            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAddTaskModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface transition-all duration-200 hover:bg-primary-dim hover:shadow-ambient active:scale-95"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Task
+              </button>
+              <Link
+                to={{
+                  pathname: '/tasks/groups',
+                  search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
+                }}
+                className="inline-flex items-center gap-2 rounded-pill bg-primary/20 px-4 py-2 text-sm font-medium text-primary transition-all duration-200 hover:bg-primary/30 hover:shadow-ambient active:scale-95"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                Groups
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -475,6 +489,19 @@ export function TasksRoute() {
           </div>
         ) : null}
       </section>
+
+      <EditExtractedTaskModal
+        task={null}
+        groups={groupsQuery.data ?? []}
+        isOpen={isAddTaskModalOpen}
+        onClose={() => setIsAddTaskModalOpen(false)}
+        onSave={async (_taskId, _updates) => {
+          // Refresh task data after creation
+          await refreshTaskData()
+        }}
+        csrfToken={sessionQuery.data?.csrf_token ?? ''}
+        defaultGroupId={resolvedGroupId ?? undefined}
+      />
     </SessionGuard>
   )
 }

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { SessionGuard } from '../components/SessionGuard'
+import { SelectDropdown } from '../components/SelectDropdown'
 import {
   ApiError,
   createSubtask,
@@ -319,17 +320,13 @@ export function TaskDetailRoute() {
                       Group
                     </span>
                     {isEditMode ? (
-                      <select
+                      <SelectDropdown
+                        label=""
+                        options={groupsQuery.data?.map((group) => ({ value: group.id, label: group.name })) ?? []}
                         value={draft.groupId}
-                        onChange={(event) => setDraft({ ...draft, groupId: event.target.value })}
-                        className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 text-on-surface outline-none focus:border-primary"
-                      >
-                        {groupsQuery.data?.map((group) => (
-                          <option key={group.id} value={group.id}>
-                            {group.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(value) => setDraft({ ...draft, groupId: value as string })}
+                        placeholder="No Group"
+                      />
                     ) : (
                       <p className="rounded-card bg-surface-dim px-3 py-3 text-on-surface">
                         {groupsQuery.data?.find((g) => g.id === draft.groupId)?.name ?? 'Unknown'}

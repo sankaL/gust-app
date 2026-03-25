@@ -68,6 +68,15 @@ class TaskUpdateInput:
     recurrence: Optional[RecurrenceInput]
 
 
+@dataclass
+class TaskCreateInput:
+    title: str
+    group_id: str
+    due_date: Optional[date]
+    reminder_at: Optional[datetime]
+    recurrence: Optional[RecurrenceInput]
+
+
 class TaskService:
     def __init__(self, *, settings: Settings) -> None:
         self.settings = settings
@@ -117,6 +126,55 @@ class TaskService:
                 raise GroupNotFoundError("Task group could not be found.")
             task_subtasks = list_subtasks(connection, user_id=user_id, task_id=task_id)
         return TaskDetail(task=task, group=group, subtasks=task_subtasks)
+
+    def create_task(
+        self,
+        *,
+        user_id: str,
+        user_timezone: str,
+        payload: TaskCreateInput,
+    ) -> TaskDetail:
+        with connection_scope(self.settings.database_url) as connection:
+            destination_group = get_group(connection, user_id=user_id, group_id=payload.group_id)
+            if destination_group is None:
+                raise GroupNotFoundError("Destination group could not be found.")
+
+            normalized = self._normalize_fields(
+                title=payload.title,
+                due_date=payload.due_date,
+                reminder_at=payload.reminder_at,
+                recurrence=payload.recurrence,
+                user_timezone=user_timezone,
+                current_series_id=None,
+            )
+
+            created = create_task(
+                connection,
+                user_id=user_id,
+                group_id=payload.group_id,
+                capture_id=None,
+                title=normalized.title,
+                needs_review=False,
+                due_date=normalized.due_date,
+                reminder_at=normalized.reminder_at,
+                reminder_offset_minutes=normalized.reminder_offset_minutes,
+                recurrence_frequency=normalized.recurrence_frequency,
+                recurrence_interval=normalized.recurrence_interval,
+                recurrence_weekday=normalized.recurrence_weekday,
+                recurrence_day_of_month=normalized.recurrence_day_of_month,
+                series_id=normalized.series_id,
+            )
+            self._sync_reminder(
+                connection,
+                user_id=user_id,
+                task=created,
+                now=datetime.now(timezone.utc),
+            )
+            group = get_group(connection, user_id=user_id, group_id=created.group_id)
+            assert group is not None
+            task_subtasks = list_subtasks(connection, user_id=user_id, task_id=created.id)
+
+        return TaskDetail(task=created, group=group, subtasks=task_subtasks)
 
     def update_task(
         self,

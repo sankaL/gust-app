@@ -11,7 +11,7 @@ from app.core.dependencies import get_current_session_context, get_task_service,
 from app.core.errors import InvalidTaskError
 from app.db.repositories import SessionContext, SubtaskRecord, TaskRecord
 from app.services.task_rules import RecurrenceInput, due_bucket_for_date
-from app.services.task_service import TaskDetail, TaskListItem, TaskService, TaskUpdateInput
+from app.services.task_service import TaskCreateInput, TaskDetail, TaskListItem, TaskService, TaskUpdateInput
 
 router = APIRouter()
 
@@ -65,6 +65,14 @@ class UpdateTaskRequest(BaseModel):
     recurrence: Optional[RecurrenceResponse] = None
 
 
+class CreateTaskRequest(BaseModel):
+    title: str
+    group_id: str
+    due_date: Optional[date] = None
+    reminder_at: Optional[datetime] = None
+    recurrence: Optional[RecurrenceResponse] = None
+
+
 class CreateSubtaskRequest(BaseModel):
     title: str
 
@@ -89,6 +97,26 @@ def list_tasks_route(
         status=validated_status,
     )
     return [_build_task_summary(item) for item in items]
+
+
+@router.post("", response_model=TaskDetailResponse, status_code=status.HTTP_201_CREATED)
+def create_task_route(
+    payload: CreateTaskRequest,
+    session_context: RequiredSessionContextDep,
+    task_service: TaskServiceDep,
+) -> TaskDetailResponse:
+    detail = task_service.create_task(
+        user_id=session_context.user.id,
+        user_timezone=session_context.user.timezone,
+        payload=TaskCreateInput(
+            title=payload.title,
+            group_id=payload.group_id,
+            due_date=payload.due_date,
+            reminder_at=payload.reminder_at,
+            recurrence=_build_recurrence_input(payload.recurrence),
+        ),
+    )
+    return _build_task_detail(detail, session_context.user.timezone)
 
 
 @router.get("/{task_id}", response_model=TaskDetailResponse)

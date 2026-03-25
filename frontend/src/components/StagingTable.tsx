@@ -10,8 +10,10 @@ interface StagingTableProps {
   onDiscard: (taskId: string) => Promise<void>
   onApproveAll: () => Promise<void>
   onDiscardAll: () => Promise<void>
-  onDueDateChange?: (taskId: string, dueDate: string | null) => Promise<void>
+  onTaskClick: (task: ExtractedTask) => void
   isLoading?: boolean
+  title?: string
+  emptyMessage?: string
 }
 
 export function StagingTable({
@@ -20,8 +22,10 @@ export function StagingTable({
   onDiscard,
   onApproveAll,
   onDiscardAll,
-  onDueDateChange,
-  isLoading = false
+  onTaskClick,
+  isLoading = false,
+  title = 'Extracted Tasks',
+  emptyMessage = 'No extracted tasks to review'
 }: StagingTableProps) {
   const [isApprovingAll, setIsApprovingAll] = useState(false)
   const [isDiscardingAll, setIsDiscardingAll] = useState(false)
@@ -89,7 +93,7 @@ export function StagingTable({
   if (tasks.length === 0) {
     return (
       <div className="bg-surface-dim rounded-lg p-6 text-center">
-        <p className="text-on-surface-variant text-sm">No extracted tasks to review</p>
+        <p className="text-on-surface-variant text-sm">{emptyMessage}</p>
       </div>
     )
   }
@@ -102,7 +106,7 @@ export function StagingTable({
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-semibold text-on-surface">
-              Extracted Tasks ({pendingTasks.length})
+              {title} ({pendingTasks.length})
             </h2>
             {needsReviewCount > 0 && (
               <p className="text-sm text-warning mt-0.5">
@@ -220,7 +224,7 @@ export function StagingTable({
                     task={task}
                     onApprove={onApprove}
                     onDiscard={onDiscard}
-                    onDueDateChange={onDueDateChange}
+                    onClick={onTaskClick}
                   />
                 ))}
               </div>

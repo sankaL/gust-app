@@ -14,12 +14,14 @@ import {
   discardExtractedTask,
   approveAllExtractedTasks,
   discardAllExtractedTasks,
-  updateExtractedTaskDueDate,
+  listGroups,
   completeCapture,
+  type ExtractedTask,
   type SubmitCaptureResponse
 } from '../lib/api'
 import { SessionRequiredCard } from '../components/SessionRequiredCard'
 import { StagingTable } from '../components/StagingTable'
+import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 
 type RecordedAudio = {
   blob: Blob
@@ -71,7 +73,10 @@ export function CaptureRoute() {
     enabled: !!reviewCaptureId && showStaging
   })
 
-
+  const visiblePendingTasks =
+    showStaging && reviewCaptureId
+      ? (allPendingTasksQuery.data ?? []).filter((task) => task.capture_id !== reviewCaptureId)
+      : (allPendingTasksQuery.data ?? [])
 
   // Resolve task capture context without requiring pending cache availability.
   const resolveTaskCaptureId = (taskId: string): string | null => {
@@ -147,27 +152,42 @@ export function CaptureRoute() {
     }
   }
 
-  const handleDueDateChange = async (taskId: string, dueDate: string | null) => {
-    const captureId = resolveTaskCaptureId(taskId)
-    if (!captureId) {
-      setSubmitError('Task context is unavailable. Refresh and try again.')
-      return
-    }
-    if (!sessionQuery.data?.csrf_token) return
-    try {
-      setSubmitError(null)
-      await updateExtractedTaskDueDate(captureId, taskId, dueDate, sessionQuery.data.csrf_token)
-      // Refresh both queries
-      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', captureId] })
-      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
-    } catch (error) {
-      setSubmitError(buildFriendlyMessage(error, 'Failed to update due date.'))
-    }
+  // Modal state for editing extracted tasks
+  const [editModalTask, setEditModalTask] = useState<ExtractedTask | null>(null)
+
+  const handleTaskClick = (task: ExtractedTask) => {
+    setEditModalTask(task)
   }
+
+  const handleEditModalClose = () => {
+    setEditModalTask(null)
+  }
+
+  const handleEditModalSave = async () => {
+    // Refresh the task lists after save
+    // Note: _taskId and _updates are unused because we invalidate by reviewCaptureId for consistency
+    // with handleApproveAll/handleDiscardAll. Using editModalTask.capture_id would cause issues
+    // when editing a task from a different capture than the one currently being reviewed.
+    if (reviewCaptureId) {
+      await queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
+    }
+    // Always invalidate pending tasks as edited tasks may appear there
+    await queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+
+    // Also invalidate tasks query to ensure TasksRoute stays in sync
+    await queryClient.invalidateQueries({ queryKey: ['tasks'] })
+  }
+
+  // Groups query for the edit modal
+  const groupsQuery = useQuery({
+    queryKey: ['groups'],
+    queryFn: listGroups,
+    enabled: !!sessionQuery.data?.signed_in
+  })
 
   // Batch approve all pending tasks across all captures
   const handleApproveAllPending = async () => {
-    const tasks = allPendingTasksQuery.data ?? []
+    const tasks = visiblePendingTasks
     const csrfToken = sessionQuery.data?.csrf_token
     if (tasks.length === 0 || !csrfToken) return
     try {
@@ -194,7 +214,7 @@ export function CaptureRoute() {
 
   // Batch discard all pending tasks across all captures
   const handleDiscardAllPending = async () => {
-    const tasks = allPendingTasksQuery.data ?? []
+    const tasks = visiblePendingTasks
     const csrfToken = sessionQuery.data?.csrf_token
     if (tasks.length === 0 || !csrfToken) return
     try {
@@ -547,31 +567,6 @@ export function CaptureRoute() {
         </div>
       ) : null}
 
-      {/* Persistent Pending Tasks List - always visible when signed in */}
-      {sessionQuery.data?.signed_in && (allPendingTasksQuery.data?.length ?? 0) > 0 ? (
-        <div className="space-y-3 rounded-card bg-surface-container p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="font-display text-lg text-on-surface">
-                Pending Tasks ({allPendingTasksQuery.data?.length ?? 0})
-              </h2>
-              <p className="font-body text-xs text-on-surface-variant">
-                Tasks from all captures awaiting your review
-              </p>
-            </div>
-          </div>
-          <StagingTable
-            tasks={allPendingTasksQuery.data ?? []}
-            onApprove={handleApproveTask}
-            onDiscard={handleDiscardTask}
-            onApproveAll={handleApproveAllPending}
-            onDiscardAll={handleDiscardAllPending}
-            onDueDateChange={handleDueDateChange}
-            isLoading={isLoadingAllPending}
-          />
-        </div>
-      ) : null}
-
       {showStaging && reviewCaptureId ? (
         <div className="space-y-3 rounded-card bg-surface-container p-4">
           <StagingTable
@@ -580,8 +575,10 @@ export function CaptureRoute() {
             onDiscard={handleDiscardTask}
             onApproveAll={handleApproveAll}
             onDiscardAll={handleDiscardAll}
-            onDueDateChange={handleDueDateChange}
+            onTaskClick={handleTaskClick}
             isLoading={isLoadingTasks}
+            title="Newly Captured Tasks"
+            emptyMessage="No newly captured tasks to review"
           />
 
           {submitError ? (
@@ -611,6 +608,26 @@ export function CaptureRoute() {
               Done
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {/* Older pending tasks across previous captures */}
+      {sessionQuery.data?.signed_in && visiblePendingTasks.length > 0 ? (
+        <div className="space-y-3 rounded-card bg-surface-container p-4">
+          <p className="font-body text-xs text-on-surface-variant">
+            Pending tasks from previous captures awaiting review
+          </p>
+          <StagingTable
+            tasks={visiblePendingTasks}
+            onApprove={handleApproveTask}
+            onDiscard={handleDiscardTask}
+            onApproveAll={handleApproveAllPending}
+            onDiscardAll={handleDiscardAllPending}
+            onTaskClick={handleTaskClick}
+            isLoading={isLoadingAllPending}
+            title="Older Pending Tasks"
+            emptyMessage="No older pending tasks to review"
+          />
         </div>
       ) : null}
 
@@ -654,6 +671,18 @@ export function CaptureRoute() {
           </div>
         ) : null}
       </div>
+
+      {/* Edit Task Modal */}
+      {editModalTask && sessionQuery.data?.csrf_token && (
+        <EditExtractedTaskModal
+          task={editModalTask}
+          groups={groupsQuery.data ?? []}
+          isOpen={!!editModalTask}
+          onClose={handleEditModalClose}
+          onSave={handleEditModalSave}
+          csrfToken={sessionQuery.data.csrf_token}
+        />
+      )}
     </section>
   )
 }

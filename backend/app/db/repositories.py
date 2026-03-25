@@ -1258,6 +1258,45 @@ def update_extracted_task_due_date(
     )
 
 
+def update_extracted_task(
+    connection: Connection,
+    *,
+    user_id: str,
+    extracted_task_id: str,
+    values: dict[str, object],
+) -> Optional[ExtractedTaskRecord]:
+    """Update an extracted task with a partial set of fields.
+
+    The caller is responsible for validating that `values` only contains supported fields and
+    that those values are valid for the extracted-task -> task approval pipeline.
+
+    Args:
+        connection: Database connection.
+        user_id: User ID for ownership verification.
+        extracted_task_id: Extracted task ID.
+        values: A dict of fields to update. Keys not present are left unchanged. Values may be
+            explicitly set to None to clear nullable fields.
+
+    Returns:
+        Updated extracted task record or None if not found.
+    """
+    if not values:
+        return get_extracted_task(connection, user_id=user_id, extracted_task_id=extracted_task_id)
+
+    update_values = dict(values)
+    update_values["updated_at"] = CURRENT_TIMESTAMP
+
+    connection.execute(
+        extracted_tasks.update()
+        .where(
+            extracted_tasks.c.id == extracted_task_id,
+            extracted_tasks.c.user_id == user_id,
+        )
+        .values(**update_values)
+    )
+    return get_extracted_task(connection, user_id=user_id, extracted_task_id=extracted_task_id)
+
+
 def delete_extracted_tasks_by_capture(
     connection: Connection,
     *,

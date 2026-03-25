@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Optional
 
-from app.core.errors import ExtractedTaskNotFoundError, ExtractedTaskStateConflictError
+from app.core.errors import (
+    ExtractedTaskNotFoundError,
+    ExtractedTaskStateConflictError,
+    GroupNotFoundError,
+    InvalidTaskError,
+)
 from app.core.settings import Settings
 from app.db.engine import connection_scope
 from app.db.repositories import (
@@ -20,8 +25,10 @@ from app.db.repositories import (
     create_subtasks,
     create_task,
     delete_extracted_tasks_by_capture,
+    get_group,
     get_extracted_task,
     list_extracted_tasks,
+    update_extracted_task,
     update_extracted_task_due_date,
     update_extracted_task_status,
 )
@@ -348,6 +355,166 @@ class StagingService:
                 "capture_id": capture_id,
                 "extracted_task_id": extracted_task_id,
                 "due_date": due_date,
+            },
+        )
+
+        return updated_task
+
+    async def update_extracted_task(
+        self,
+        *,
+        user_id: str,
+        user_timezone: str,
+        capture_id: str,
+        extracted_task_id: str,
+        updates: dict[str, object],
+    ) -> ExtractedTaskRecord:
+        """Update an extracted task with a partial set of fields.
+
+        Args:
+            user_id: User ID.
+            user_timezone: User timezone (used for validation rules).
+            capture_id: Capture ID.
+            extracted_task_id: Extracted task ID.
+            updates: A dict of fields to update. Keys not present are left unchanged. Values may be
+                explicitly set to None to clear nullable fields.
+
+        Returns:
+            Updated extracted task record.
+
+        Raises:
+            ExtractedTaskNotFoundError: If extracted task cannot be found.
+        """
+        allowed_update_fields: set[str] = {
+            "title",
+            "group_id",
+            "due_date",
+            "reminder_at",
+            "recurrence_frequency",
+            "recurrence_weekday",
+            "recurrence_day_of_month",
+        }
+        unknown_fields = set(updates.keys()) - allowed_update_fields
+        if unknown_fields:
+            raise InvalidTaskError("Extracted task update contains unsupported fields.")
+
+        with connection_scope(self.settings.database_url) as connection:
+            extracted_task = get_extracted_task(
+                connection, user_id=user_id, extracted_task_id=extracted_task_id
+            )
+            if extracted_task is None:
+                raise ExtractedTaskNotFoundError()
+            if extracted_task.capture_id != capture_id:
+                raise ExtractedTaskNotFoundError()
+            if extracted_task.status != "pending":
+                raise ExtractedTaskStateConflictError()
+
+            values: dict[str, object] = dict(updates)
+
+            if "title" in values:
+                title = values["title"]
+                if not isinstance(title, str) or not title.strip():
+                    raise InvalidTaskError("Title cannot be blank.")
+                values["title"] = title.strip()
+
+            if "group_id" in values:
+                group_id = values["group_id"]
+                if not isinstance(group_id, str) or not group_id.strip():
+                    raise InvalidTaskError("group_id is required.")
+                group = get_group(connection, user_id=user_id, group_id=group_id)
+                if group is None:
+                    raise GroupNotFoundError("Destination group could not be found.")
+
+            # If due_date is explicitly cleared, also clear reminders unless the caller
+            # explicitly provided reminder_at.
+            if values.get("due_date", object()) is None and "reminder_at" not in values:
+                values["reminder_at"] = None
+
+            resulting_due_date: Optional[date] = (
+                values["due_date"] if "due_date" in values else extracted_task.due_date
+            )
+            resulting_reminder_at: Optional[datetime] = (
+                values["reminder_at"] if "reminder_at" in values else extracted_task.reminder_at
+            )
+            if resulting_due_date is None and resulting_reminder_at is not None:
+                # Fail closed: reminders must not exist without a due date.
+                raise InvalidTaskError("A reminder requires a due date.")
+            if "reminder_at" in values and values["reminder_at"] is not None:
+                reminder_at = values["reminder_at"]
+                if not isinstance(reminder_at, datetime) or reminder_at.tzinfo is None:
+                    raise InvalidTaskError("reminder_at must be an ISO datetime with timezone.")
+
+            recurrence_fields = {
+                "recurrence_frequency",
+                "recurrence_weekday",
+                "recurrence_day_of_month",
+            }
+            if recurrence_fields & values.keys():
+                allowed_frequencies = {"daily", "weekly", "monthly"}
+                existing_frequency = (
+                    extracted_task.recurrence_frequency
+                    if extracted_task.recurrence_frequency in allowed_frequencies
+                    else None
+                )
+                next_frequency = (
+                    values["recurrence_frequency"]
+                    if "recurrence_frequency" in values
+                    else existing_frequency
+                )
+                next_weekday = (
+                    values["recurrence_weekday"]
+                    if "recurrence_weekday" in values
+                    else extracted_task.recurrence_weekday
+                )
+                next_day_of_month = (
+                    values["recurrence_day_of_month"]
+                    if "recurrence_day_of_month" in values
+                    else extracted_task.recurrence_day_of_month
+                )
+
+                if next_frequency is None:
+                    next_weekday = None
+                    next_day_of_month = None
+                elif next_frequency == "daily":
+                    next_weekday = None
+                    next_day_of_month = None
+                elif next_frequency == "weekly":
+                    if next_weekday is None or not isinstance(next_weekday, int):
+                        raise InvalidTaskError("Weekly recurrence requires a weekday (0-6).")
+                    if next_weekday < 0 or next_weekday > 6:
+                        raise InvalidTaskError("Weekly recurrence weekday must be between 0 and 6.")
+                    next_day_of_month = None
+                elif next_frequency == "monthly":
+                    if next_day_of_month is None or not isinstance(next_day_of_month, int):
+                        raise InvalidTaskError("Monthly recurrence requires a day of month (1-31).")
+                    if next_day_of_month < 1 or next_day_of_month > 31:
+                        raise InvalidTaskError("Monthly recurrence day must be between 1 and 31.")
+                    next_weekday = None
+                else:
+                    raise InvalidTaskError(
+                        "recurrence_frequency must be one of daily, weekly, monthly, or null."
+                    )
+
+                values["recurrence_frequency"] = next_frequency
+                values["recurrence_weekday"] = next_weekday
+                values["recurrence_day_of_month"] = next_day_of_month
+
+            updated_task = update_extracted_task(
+                connection,
+                user_id=user_id,
+                extracted_task_id=extracted_task_id,
+                values=values,
+            )
+            assert updated_task is not None
+
+        logger.info(
+            "staging_task_updated",
+            extra={
+                "event": "staging_task_updated",
+                "user_id": user_id,
+                "capture_id": capture_id,
+                "extracted_task_id": extracted_task_id,
+                "updated_fields": sorted(values.keys()),
             },
         )
 

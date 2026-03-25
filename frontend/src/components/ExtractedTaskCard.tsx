@@ -5,22 +5,20 @@ interface ExtractedTaskCardProps {
   task: ExtractedTask
   onApprove: (taskId: string) => void
   onDiscard: (taskId: string) => void
-  onDueDateChange?: (taskId: string, dueDate: string | null) => Promise<void>
+  onClick: (task: ExtractedTask) => void
 }
 
 export function ExtractedTaskCard({
   task,
   onApprove,
   onDiscard,
-  onDueDateChange
+  onClick
 }: ExtractedTaskCardProps) {
   const [isApproving, setIsApproving] = useState(false)
   const [isDiscarding, setIsDiscarding] = useState(false)
-  const [isEditingDueDate, setIsEditingDueDate] = useState(false)
-  const [localDueDate, setLocalDueDate] = useState(task.due_date ? task.due_date.split('T')[0] : '')
-  const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false)
 
-  const handleApprove = async () => {
+  const handleApprove = async (e: React.MouseEvent) => {
+    e.stopPropagation()
     setIsApproving(true)
     try {
       await onApprove(task.id)
@@ -29,7 +27,8 @@ export function ExtractedTaskCard({
     }
   }
 
-  const handleDiscard = async () => {
+  const handleDiscard = async (e: React.MouseEvent) => {
+    e.stopPropagation()
     setIsDiscarding(true)
     try {
       await onDiscard(task.id)
@@ -38,27 +37,8 @@ export function ExtractedTaskCard({
     }
   }
 
-  const handleDueDateClick = () => {
-    if (onDueDateChange) {
-      setIsEditingDueDate(true)
-    }
-  }
-
-  const handleDueDateSave = async () => {
-    if (!onDueDateChange) return
-    setIsUpdatingDueDate(true)
-    try {
-      const newDueDate = localDueDate || null
-      await onDueDateChange(task.id, newDueDate)
-      setIsEditingDueDate(false)
-    } finally {
-      setIsUpdatingDueDate(false)
-    }
-  }
-
-  const handleDueDateCancel = () => {
-    setLocalDueDate(task.due_date ? task.due_date.split('T')[0] : '')
-    setIsEditingDueDate(false)
+  const handleCardClick = () => {
+    onClick(task)
   }
 
   const getConfidenceColor = (confidence: number) => {
@@ -75,12 +55,19 @@ export function ExtractedTaskCard({
 
   return (
     <div 
-      className="bg-surface-dim rounded-lg p-4 border border-surface-variant transition-transform"
+      className="bg-surface-dim rounded-lg p-4 border border-surface-variant transition-transform cursor-pointer hover:border-primary/50"
       style={{ willChange: 'transform' }}
+      onClick={handleCardClick}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
+          {/* Title row with recurring icon */}
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {task.recurrence_frequency && task.recurrence_frequency !== 'none' && (
+              <span className="text-primary text-sm" title={`Recurring: ${task.recurrence_frequency}`}>
+                🔁
+              </span>
+            )}
             <h3 className="text-sm font-medium text-on-surface truncate">
               {task.title}
             </h3>
@@ -91,76 +78,30 @@ export function ExtractedTaskCard({
             )}
           </div>
 
-          <div className="space-y-1 text-xs text-on-surface-variant">
+          {/* Condensed info row */}
+          <div className="flex items-center gap-2 text-xs text-on-surface-variant flex-wrap">
             {task.group_name && (
-              <div className="flex items-center gap-1">
-                <span className="text-on-surface-variant/60">Group:</span>
-                <span>{task.group_name}</span>
-              </div>
+              <span className="text-on-surface-variant/80">{task.group_name}</span>
             )}
-
-            <div className="flex items-center gap-1 min-h-[20px]">
-              <span className="text-on-surface-variant/60">Due:</span>
-              {isEditingDueDate ? (
-                <div className="flex items-center gap-1">
-                  <input
-                    type="date"
-                    value={localDueDate}
-                    onChange={(e) => setLocalDueDate(e.target.value)}
-                    className="bg-surface-container-high text-on-surface text-xs px-2 py-1 rounded border border-outline focus:border-primary outline-none h-6"
-                    disabled={isUpdatingDueDate}
-                  />
-                  <button
-                    onClick={handleDueDateSave}
-                    disabled={isUpdatingDueDate}
-                    className="text-primary hover:text-primary-dim text-xs h-6 px-1"
-                  >
-                    {isUpdatingDueDate ? '...' : '✓'}
-                  </button>
-                  <button
-                    onClick={handleDueDateCancel}
-                    disabled={isUpdatingDueDate}
-                    className="text-on-surface-variant hover:text-on-surface text-xs h-6 px-1"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : task.due_date ? (
-                <button
-                  onClick={handleDueDateClick}
-                  className="text-on-surface hover:text-primary transition-colors"
-                  disabled={!onDueDateChange}
-                >
-                  {new Date(task.due_date).toLocaleDateString()}
-                </button>
-              ) : (
-                <button
-                  onClick={handleDueDateClick}
-                  className="text-on-surface-variant/50 hover:text-primary transition-colors italic"
-                  disabled={!onDueDateChange}
-                >
-                  {onDueDateChange ? '+ Set due date' : 'No due date'}
-                </button>
-              )}
-            </div>
-
-            {task.recurrence_frequency && (
-              <div className="flex items-center gap-1">
-                <span className="text-on-surface-variant/60">Recurrence:</span>
-                <span className="capitalize">{task.recurrence_frequency}</span>
-              </div>
+            {task.group_name && task.due_date && (
+              <span className="text-on-surface-variant/40">•</span>
             )}
-
-            <div className="flex items-center gap-1">
-              <span className="text-on-surface-variant/60">Confidence:</span>
-              <span className={getConfidenceColor(task.top_confidence)}>
-                {getConfidenceLabel(task.top_confidence)} ({Math.round(task.top_confidence * 100)}%)
+            {task.due_date && (
+              <span className="text-on-surface-variant/80">
+                Due: {new Date(task.due_date + 'T00:00:00').toLocaleDateString()}
               </span>
-            </div>
+            )}
+            <span className="text-on-surface-variant/40">•</span>
+            <span className={getConfidenceColor(task.top_confidence)}>
+              {getConfidenceLabel(task.top_confidence)}
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div 
+          className="flex items-center gap-2 shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
             onClick={handleApprove}
             disabled={isApproving || isDiscarding}
