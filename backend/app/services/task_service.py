@@ -30,6 +30,7 @@ from app.db.repositories import (
     get_open_task_in_series,
     get_subtask,
     get_task,
+    list_open_tasks_in_series,
     list_subtasks,
     list_tasks,
     update_subtask,
@@ -40,6 +41,7 @@ from app.services.task_rules import (
     RecurrenceInput,
     compute_reminder_at_from_offset,
     due_bucket_for_date,
+    next_due_date_for_deleted_occurrence,
     next_due_date_for_completed_task,
     normalize_task_fields,
 )
@@ -113,7 +115,10 @@ class TaskService:
             )
             for task in task_rows
         ]
-        items.sort(key=lambda item: self._task_sort_key(item=item, user_timezone=user_timezone))
+        if status == "completed":
+            items.sort(key=self._completed_task_sort_key)
+        else:
+            items.sort(key=lambda item: self._task_sort_key(item=item, user_timezone=user_timezone))
         return items
 
     def get_task_detail(self, *, user_id: str, task_id: str) -> TaskDetail:
@@ -293,29 +298,78 @@ class TaskService:
             task_subtasks = list_subtasks(connection, user_id=user_id, task_id=task_id)
         return TaskDetail(task=updated, group=group, subtasks=task_subtasks)
 
-    def delete_task(self, *, user_id: str, task_id: str) -> TaskDetail:
+    def delete_task(
+        self,
+        *,
+        user_id: str,
+        user_timezone: str,
+        task_id: str,
+        scope: str = "occurrence",
+    ) -> TaskDetail:
         with connection_scope(self.settings.database_url) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()
-            updated = update_task(
-                connection,
-                user_id=user_id,
-                task_id=task_id,
-                values={"deleted_at": datetime.now(timezone.utc)},
-            )
-            assert updated is not None
-            cancel_reminder(connection, user_id=user_id, task_id=task_id)
+            deleted_at = datetime.now(timezone.utc)
+
+            if scope == "series":
+                if task.series_id is None or task.recurrence_frequency is None:
+                    raise InvalidTaskError("Series delete is only supported for recurring tasks.")
+                if task.status != "open":
+                    raise InvalidTaskError("Series delete is only supported for open recurring tasks.")
+                open_tasks = list_open_tasks_in_series(
+                    connection,
+                    user_id=user_id,
+                    series_id=task.series_id,
+                )
+                for series_task in open_tasks:
+                    update_task(
+                        connection,
+                        user_id=user_id,
+                        task_id=series_task.id,
+                        values={"deleted_at": deleted_at},
+                    )
+                    cancel_reminder(connection, user_id=user_id, task_id=series_task.id)
+                updated = get_task(connection, user_id=user_id, task_id=task_id)
+                assert updated is not None
+            else:
+                updated = update_task(
+                    connection,
+                    user_id=user_id,
+                    task_id=task_id,
+                    values={"deleted_at": deleted_at},
+                )
+                assert updated is not None
+                cancel_reminder(connection, user_id=user_id, task_id=task_id)
+                self._create_next_occurrence_on_delete(
+                    connection,
+                    user_id=user_id,
+                    user_timezone=user_timezone,
+                    task=updated,
+                    deleted_at=deleted_at,
+                )
+
             group = get_group(connection, user_id=user_id, group_id=updated.group_id)
             assert group is not None
             task_subtasks = list_subtasks(connection, user_id=user_id, task_id=task_id)
         return TaskDetail(task=updated, group=group, subtasks=task_subtasks)
 
-    def restore_task(self, *, user_id: str, task_id: str) -> TaskDetail:
+    def restore_task(
+        self,
+        *,
+        user_id: str,
+        user_timezone: str,
+        task_id: str,
+    ) -> TaskDetail:
         with connection_scope(self.settings.database_url) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()
+            self._reconcile_series_on_restore(
+                connection,
+                user_id=user_id,
+                task=task,
+            )
             updated = update_task(
                 connection,
                 user_id=user_id,
@@ -556,6 +610,81 @@ class TaskService:
 
         self._sync_reminder(connection, user_id=user_id, task=next_task, now=completed_at)
 
+    def _create_next_occurrence_on_delete(
+        self,
+        connection: sa.Connection,
+        *,
+        user_id: str,
+        user_timezone: str,
+        task: TaskRecord,
+        deleted_at: datetime,
+    ) -> None:
+        if (
+            task.status != "open"
+            or task.series_id is None
+            or task.recurrence_frequency is None
+            or task.due_date is None
+        ):
+            return
+
+        existing_open = get_open_task_in_series(
+            connection,
+            user_id=user_id,
+            series_id=task.series_id,
+            exclude_task_id=task.id,
+        )
+        if existing_open is not None:
+            return
+
+        next_due_date, next_day_of_month = next_due_date_for_deleted_occurrence(
+            occurrence_due_date=task.due_date,
+            recurrence_frequency=task.recurrence_frequency,
+            recurrence_weekday=task.recurrence_weekday,
+            recurrence_day_of_month=task.recurrence_day_of_month,
+        )
+
+        next_reminder_at = None
+        if task.reminder_offset_minutes is not None:
+            derived_reminder_at = compute_reminder_at_from_offset(
+                due_date=next_due_date,
+                reminder_offset_minutes=task.reminder_offset_minutes,
+                user_timezone=user_timezone,
+            ).astimezone(timezone.utc)
+            if derived_reminder_at > deleted_at:
+                next_reminder_at = derived_reminder_at
+
+        next_task = create_task(
+            connection,
+            user_id=user_id,
+            group_id=task.group_id,
+            capture_id=None,
+            title=task.title,
+            needs_review=False,
+            due_date=next_due_date,
+            reminder_at=next_reminder_at,
+            reminder_offset_minutes=task.reminder_offset_minutes,
+            recurrence_frequency=task.recurrence_frequency,
+            recurrence_interval=task.recurrence_interval,
+            recurrence_weekday=task.recurrence_weekday,
+            recurrence_day_of_month=(
+                next_day_of_month
+                if task.recurrence_frequency == "monthly"
+                else task.recurrence_day_of_month
+            ),
+            series_id=task.series_id,
+        )
+
+        source_subtasks = list_subtasks(connection, user_id=user_id, task_id=task.id)
+        if source_subtasks:
+            create_subtasks(
+                connection,
+                user_id=user_id,
+                task_id=next_task.id,
+                titles=[subtask.title for subtask in source_subtasks],
+            )
+
+        self._sync_reminder(connection, user_id=user_id, task=next_task, now=deleted_at)
+
     def _reconcile_series_on_reopen(
         self,
         connection: sa.Connection,
@@ -623,6 +752,68 @@ class TaskService:
             "Task cannot be reopened while another open occurrence in this series exists.",
         )
 
+    def _reconcile_series_on_restore(
+        self,
+        connection: sa.Connection,
+        *,
+        user_id: str,
+        task: TaskRecord,
+    ) -> None:
+        if (
+            task.status != "open"
+            or task.deleted_at is None
+            or task.series_id is None
+            or task.recurrence_frequency is None
+            or task.due_date is None
+        ):
+            return
+
+        existing_open = get_open_task_in_series(
+            connection,
+            user_id=user_id,
+            series_id=task.series_id,
+            exclude_task_id=task.id,
+        )
+        if existing_open is None:
+            return
+
+        next_due_date, next_day_of_month = next_due_date_for_deleted_occurrence(
+            occurrence_due_date=task.due_date,
+            recurrence_frequency=task.recurrence_frequency,
+            recurrence_weekday=task.recurrence_weekday,
+            recurrence_day_of_month=task.recurrence_day_of_month,
+        )
+        expected_day_of_month = (
+            next_day_of_month
+            if task.recurrence_frequency == "monthly"
+            else task.recurrence_day_of_month
+        )
+
+        if (
+            existing_open.title == task.title
+            and existing_open.group_id == task.group_id
+            and existing_open.capture_id is None
+            and existing_open.due_date == next_due_date
+            and existing_open.reminder_offset_minutes == task.reminder_offset_minutes
+            and existing_open.recurrence_frequency == task.recurrence_frequency
+            and existing_open.recurrence_interval == task.recurrence_interval
+            and existing_open.recurrence_weekday == task.recurrence_weekday
+            and existing_open.recurrence_day_of_month == expected_day_of_month
+        ):
+            update_task(
+                connection,
+                user_id=user_id,
+                task_id=existing_open.id,
+                values={"deleted_at": datetime.now(timezone.utc)},
+            )
+            cancel_reminder(connection, user_id=user_id, task_id=existing_open.id)
+            return
+
+        raise ConflictError(
+            "task_restore_conflict",
+            "Task cannot be restored while another open occurrence in this series exists.",
+        )
+
     def _due_bucket(self, *, task: TaskRecord, user_timezone: str) -> str:
         bucket = due_bucket_for_date(due_date=task.due_date, user_timezone=user_timezone)
         if bucket == "future":
@@ -642,3 +833,7 @@ class TaskService:
             due_value,
             -created_value.timestamp(),
         )
+
+    def _completed_task_sort_key(self, item: TaskListItem) -> tuple[object, ...]:
+        completed_value = item.task.completed_at or item.task.updated_at or item.task.created_at
+        return (-completed_value.timestamp(),)

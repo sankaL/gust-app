@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-25 00:10:00 EDT
+
+- Added explicit recurring delete scope at the task API and UI layers: `Delete this occurrence` and `Delete this and future`.
+- Chose due-date-based recurrence advancement for occurrence delete (instead of delete-time-based), with generation only when no other open occurrence exists in the series.
+- Kept completion as a single action that still generates the next occurrence, and added a dedicated per-group Completed Tasks page with reopen-to-To-do behavior.
+
 ## 2026-03-22 22:52:00 EDT
 
 - Switched the OpenRouter extraction default from `openai/gpt-4.1-mini` to `openai/gpt-5.4-mini` after validating that the current route supports structured outputs with the normalized strict schema used by capture submit.

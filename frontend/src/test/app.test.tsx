@@ -5,6 +5,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { AppProviders } from '../providers'
 import { AppShell } from '../components/AppShell'
 import { CaptureRoute } from '../routes/CaptureRoute'
+import { CompletedTasksRoute } from '../routes/CompletedTasksRoute'
 import { ManageGroupsRoute } from '../routes/ManageGroupsRoute'
 import { TaskDetailRoute } from '../routes/TaskDetailRoute'
 import { TasksRoute } from '../routes/TasksRoute'
@@ -23,6 +24,10 @@ function renderWithRoute(initialEntries: string[]) {
           {
             path: 'tasks',
             element: <TasksRoute />
+          },
+          {
+            path: 'tasks/completed',
+            element: <CompletedTasksRoute />
           },
           {
             path: 'tasks/groups',

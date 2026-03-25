@@ -133,8 +133,10 @@ The app is installable on iPhone Safari and Android Chrome and behaves like a fu
 4. `Due Soon` means today through the next 3 calendar days in the user's timezone.
 5. Flagged tasks are visually marked.
 6. User can complete or delete from the list with a visible undo path.
-7. User opens a task to edit it and saves the draft explicitly.
-8. Moving a flagged task to a different group clears `needs_review`.
+7. Deleting a recurring task prompts for `Delete this occurrence` or `Delete this and future`.
+8. User can open a per-group Completed Tasks page and move completed tasks back to To-do.
+9. User opens a task to edit it and saves the draft explicitly.
+10. Moving a flagged task to a different group clears `needs_review`.
 
 ### Flow D: Reminder Delivery
 
@@ -187,8 +189,21 @@ Task interactions:
 
 - Swipe right completes
 - Swipe left deletes with an undo affordance
+- Recurring delete requires explicit scope choice (`this occurrence` vs `this and future`)
 - Explicit complete and delete actions exist as keyboard/desktop fallbacks
 - Tap opens full-screen detail editing
+
+### Completed Tasks
+
+Completed tasks are available on a dedicated Tasks-adjacent route.
+
+Required behavior:
+
+- Completed list is filtered per selected group.
+- Soft-deleted tasks do not appear in the completed list.
+- Completed items are sorted newest-first by `completed_at`.
+- Each row can be moved back to To-do through reopen behavior.
+- Reopen conflicts must show a user-safe error.
 
 ### Task Detail
 
@@ -308,6 +323,7 @@ Task states in v1:
 Completing a task removes it from the default task list immediately and is recoverable through undo-backed reopen behavior.
 Deleting a task removes it from active use immediately through soft delete and is recoverable through undo-backed restore behavior.
 Completed tasks are hidden from the default task list in Phase 3.
+Completed tasks remain available in the per-group Completed Tasks page.
 
 ### Required Task Fields
 
@@ -385,6 +401,8 @@ Behavior:
 - Monthly recurrence repeats on the day-of-month of the completed occurrence; if that day does not exist in the next month, it falls to the last day of that month.
 - If a recurring task has a reminder, the next occurrence inherits the same relative offset from the due date.
 - If that inherited reminder would already be in the past at completion time, the generated occurrence does not schedule a reminder email.
+- Deleting a recurring occurrence generates the next occurrence based on the deleted occurrence due date when no other open occurrence exists in the series.
+- Deleting recurring `this and future` soft-deletes all open occurrences in the series and does not delete completed history.
 
 ## Timezone Contract
 

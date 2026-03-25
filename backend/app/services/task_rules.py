@@ -181,6 +181,31 @@ def next_due_date_for_completed_task(
     raise ValueError("Unsupported recurrence frequency.")
 
 
+def next_due_date_for_deleted_occurrence(
+    *,
+    occurrence_due_date: date,
+    recurrence_frequency: str,
+    recurrence_weekday: int | None,
+    recurrence_day_of_month: int | None,
+) -> tuple[date, int | None]:
+    if recurrence_frequency == "daily":
+        return (occurrence_due_date + timedelta(days=1), recurrence_day_of_month)
+
+    if recurrence_frequency == "weekly":
+        if recurrence_weekday is None:
+            raise ValueError("Weekly recurrence requires a weekday.")
+        days_until = (recurrence_weekday - _weekday_for_v1(occurrence_due_date)) % 7
+        if days_until == 0:
+            days_until = 7
+        return (occurrence_due_date + timedelta(days=days_until), recurrence_day_of_month)
+
+    if recurrence_frequency == "monthly":
+        next_month = _add_one_month(occurrence_due_date)
+        return (next_month, next_month.day)
+
+    raise ValueError("Unsupported recurrence frequency.")
+
+
 def due_bucket_for_date(
     *,
     due_date: date | None,

@@ -59,6 +59,7 @@ Responsibilities:
 - Voice capture via browser APIs
 - Transcript review and submission
 - Task list rendering and editing
+- Per-group completed-task browsing and reopen actions
 - Group management
 - PWA install experience
 
@@ -289,6 +290,8 @@ Required behavior:
 - daily recurrence advances to the next local calendar day after completion
 - monthly recurrence persists the generated occurrence day-of-month after month-end clamping
 - generated occurrences clear `reminder_at` when the inherited timestamp is already in the past
+- deleting one recurring occurrence can generate the next occurrence from the deleted due date when no other open occurrence exists
+- deleting recurring `this and future` soft-deletes all open occurrences in the series and keeps completed history untouched
 
 ### Retention Cleanup
 

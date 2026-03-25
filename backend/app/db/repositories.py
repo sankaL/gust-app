@@ -635,6 +635,30 @@ def get_open_task_in_series(
     return _row_to_task(row)
 
 
+def list_open_tasks_in_series(
+    connection: Connection,
+    *,
+    user_id: str,
+    series_id: str,
+    exclude_task_id: Optional[str] = None,
+) -> list[TaskRecord]:
+    conditions = [
+        tasks.c.user_id == user_id,
+        tasks.c.series_id == series_id,
+        tasks.c.status == "open",
+        tasks.c.deleted_at.is_(None),
+    ]
+    if exclude_task_id is not None:
+        conditions.append(tasks.c.id != exclude_task_id)
+
+    rows = connection.execute(
+        sa.select(tasks)
+        .where(*conditions)
+        .order_by(tasks.c.created_at.desc(), tasks.c.id.desc())
+    ).fetchall()
+    return [_row_to_task(row) for row in rows]
+
+
 def create_task(
     connection: Connection,
     *,

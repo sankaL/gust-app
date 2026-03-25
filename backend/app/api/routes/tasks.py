@@ -42,6 +42,7 @@ class SubtaskResponse(BaseModel):
 class TaskSummaryResponse(BaseModel):
     id: str
     title: str
+    series_id: Optional[str] = None
     status: str
     needs_review: bool
     due_date: Optional[date]
@@ -184,8 +185,15 @@ def delete_task_route(
     task_id: str,
     session_context: RequiredSessionContextDep,
     task_service: TaskServiceDep,
+    scope: str = Query("occurrence"),
 ) -> TaskDetailResponse:
-    detail = task_service.delete_task(user_id=session_context.user.id, task_id=task_id)
+    validated_scope = _validate_delete_scope(scope)
+    detail = task_service.delete_task(
+        user_id=session_context.user.id,
+        user_timezone=session_context.user.timezone,
+        task_id=task_id,
+        scope=validated_scope,
+    )
     return _build_task_detail(detail, session_context.user.timezone)
 
 
@@ -195,7 +203,11 @@ def restore_task_route(
     session_context: RequiredSessionContextDep,
     task_service: TaskServiceDep,
 ) -> TaskDetailResponse:
-    detail = task_service.restore_task(user_id=session_context.user.id, task_id=task_id)
+    detail = task_service.restore_task(
+        user_id=session_context.user.id,
+        user_timezone=session_context.user.timezone,
+        task_id=task_id,
+    )
     return _build_task_detail(detail, session_context.user.timezone)
 
 
@@ -257,10 +269,17 @@ def _validate_status(value: str) -> str:
     return value
 
 
+def _validate_delete_scope(value: str) -> str:
+    if value not in {"occurrence", "series"}:
+        raise InvalidTaskError("Delete scope must be `occurrence` or `series`.")
+    return value
+
+
 def _build_task_summary(item: TaskListItem) -> TaskSummaryResponse:
     return TaskSummaryResponse(
         id=item.task.id,
         title=item.task.title,
+        series_id=item.task.series_id,
         status=item.task.status,
         needs_review=item.task.needs_review,
         due_date=item.task.due_date,
@@ -283,6 +302,7 @@ def _build_task_detail(detail: TaskDetail, user_timezone: str) -> TaskDetailResp
     return TaskDetailResponse(
         id=detail.task.id,
         title=detail.task.title,
+        series_id=detail.task.series_id,
         status=detail.task.status,
         needs_review=detail.task.needs_review,
         due_date=detail.task.due_date,

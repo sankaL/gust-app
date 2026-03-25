@@ -11,6 +11,7 @@ import {
   listTasks,
   reopenTask,
   restoreTask,
+  type TaskDeleteScope,
   type SessionStatus,
   type TaskSummary
 } from '../lib/api'
@@ -36,6 +37,11 @@ type SwipeTaskCardProps = {
   onComplete: (taskId: string) => void
   onDelete: (taskId: string) => void
   isBusy: boolean
+}
+
+type DeleteMutationInput = {
+  task: TaskSummary
+  scope: TaskDeleteScope
 }
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
@@ -131,9 +137,16 @@ function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTask
         <span>Swipe right to complete</span>
         <span>Swipe left to delete</span>
       </div>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => onOpen(task.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onOpen(task.id)
+          }
+        }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -203,7 +216,7 @@ function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTask
             </div>
           </div>
         </div>
-      </button>
+      </div>
     </article>
   )
 }
@@ -215,6 +228,12 @@ export function TasksRoute() {
   const [undoState, setUndoState] = useState<UndoState>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
+  const [pendingRecurringDelete, setPendingRecurringDelete] = useState<TaskSummary | null>(null)
+
+  // Clear pending recurring delete modal state on navigation away
+  useEffect(() => {
+    return () => setPendingRecurringDelete(null)
+  }, [])
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -281,16 +300,22 @@ export function TasksRoute() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (task: TaskSummary) => {
+    mutationFn: async ({ task, scope }: DeleteMutationInput) => {
       const csrfToken = requireCsrf(sessionQuery.data)
-      return deleteTask(task.id, csrfToken)
+      return deleteTask(task.id, csrfToken, scope)
     },
-    onSuccess: (task) => {
-      setUndoState({ kind: 'delete', taskId: task.id, title: task.title })
+    onSuccess: (task, variables) => {
+      if (variables.scope === 'occurrence') {
+        setUndoState({ kind: 'delete', taskId: task.id, title: task.title })
+      } else {
+        setUndoState(null)
+      }
+      setPendingRecurringDelete(null)
       setActionError(null)
       void refreshTaskData()
     },
     onError: (error) => {
+      setPendingRecurringDelete(null)
       setActionError(buildFriendlyMessage(error, 'Task could not be deleted.'))
     }
   })
@@ -315,6 +340,14 @@ export function TasksRoute() {
 
   const isBusy =
     completeMutation.isPending || deleteMutation.isPending || undoMutation.isPending
+
+  function handleDeleteTask(task: TaskSummary) {
+    if (task.series_id) {
+      setPendingRecurringDelete(task)
+      return
+    }
+    deleteMutation.mutate({ task, scope: 'occurrence' })
+  }
 
   const bucketSections = [
     { key: 'overdue', label: 'Overdue' },
@@ -343,6 +376,15 @@ export function TasksRoute() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <Link
+                to={{
+                  pathname: '/tasks/completed',
+                  search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
+                }}
+                className="inline-flex items-center gap-2 rounded-pill bg-surface-container-high px-4 py-2 text-sm font-medium text-on-surface transition-all duration-200 hover:bg-surface-container-highest hover:shadow-ambient active:scale-95"
+              >
+                Completed
+              </Link>
               <button
                 type="button"
                 onClick={() => setIsAddTaskModalOpen(true)}
@@ -447,7 +489,7 @@ export function TasksRoute() {
                       onDelete={(taskId) => {
                         const current = (tasksQuery.data ?? []).find((item) => item.id === taskId)
                         if (current) {
-                          deleteMutation.mutate(current)
+                          handleDeleteTask(current)
                         }
                       }}
                     />
@@ -457,6 +499,56 @@ export function TasksRoute() {
             )
           })}
         </div>
+
+        {pendingRecurringDelete ? (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+            <div className="w-full max-w-md rounded-card bg-surface-container p-4 shadow-ambient">
+              <p className="font-display text-xl text-on-surface">Delete recurring task</p>
+              <p className="mt-2 font-body text-sm text-on-surface-variant">
+                Choose whether to delete only this occurrence or this and future open occurrences.
+              </p>
+              <p className="mt-2 truncate font-body text-sm text-on-surface">
+                {pendingRecurringDelete.title}
+              </p>
+              <div className="mt-4 space-y-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    deleteMutation.mutate({
+                      task: pendingRecurringDelete,
+                      scope: 'occurrence'
+                    })
+                  }
+                  disabled={deleteMutation.isPending}
+                  className="w-full rounded-pill bg-surface-container-high px-4 py-2 text-sm font-medium text-on-surface transition hover:bg-surface-container-highest disabled:opacity-50"
+                >
+                  Delete this occurrence
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    deleteMutation.mutate({
+                      task: pendingRecurringDelete,
+                      scope: 'series'
+                    })
+                  }
+                  disabled={deleteMutation.isPending}
+                  className="w-full rounded-pill bg-tertiary px-4 py-2 text-sm font-medium text-surface transition hover:bg-tertiary/85 disabled:opacity-50"
+                >
+                  Delete this and future
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingRecurringDelete(null)}
+                  disabled={deleteMutation.isPending}
+                  className="w-full rounded-pill bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:bg-surface-container-high disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {undoState ? (
           <div className={`fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-soft p-4 shadow-ambient ${
