@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import {
   ApiError,
@@ -137,9 +137,11 @@ export function CompletedTasksRoute() {
     }
   })
 
-  const selectedGroup =
-    groupsQuery.data?.find((group) => group.id === resolvedGroupId) ?? groupsQuery.data?.[0] ?? null
-  const visibleCompletedTasks = dedupeCompletedTasks(completedTasksQuery.data?.items ?? [])
+
+  const rawCompletedItems = Array.isArray(completedTasksQuery.data)
+    ? completedTasksQuery.data
+    : completedTasksQuery.data?.items ?? []
+  const visibleCompletedTasks = dedupeCompletedTasks(rawCompletedItems)
 
   return (
     <SessionGuard
@@ -151,55 +153,6 @@ export function CompletedTasksRoute() {
       description="Review completed tasks and move them back to To-do when needed."
     >
       <section className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-2">
-              <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
-                {selectedGroup?.name ?? 'Loading'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                to={{
-                  pathname: '/tasks',
-                  search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
-                }}
-                className="inline-flex items-center gap-2 rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface transition-all duration-200 hover:bg-primary-dim hover:shadow-ambient active:scale-95"
-              >
-                Open Tasks
-              </Link>
-              <Link
-                to={{
-                  pathname: '/tasks/groups',
-                  search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
-                }}
-                className="inline-flex items-center gap-2 rounded-pill bg-primary/20 px-4 py-2 text-sm font-medium text-primary transition-all duration-200 hover:bg-primary/30 hover:shadow-ambient active:scale-95"
-              >
-                Groups
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {groupsQuery.data?.length ? (
-          <div className="flex flex-wrap gap-2">
-            {groupsQuery.data.map((group) => (
-              <button
-                key={group.id}
-                type="button"
-                onClick={() => setSearchParams({ group: group.id })}
-                className={[
-                  'rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200',
-                  group.id === resolvedGroupId
-                    ? 'bg-primary text-surface shadow-ambient ring-2 ring-primary/50'
-                    : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest hover:shadow-ambient border border-outline/20'
-                ].join(' ')}
-              >
-                {group.name}
-              </button>
-            ))}
-          </div>
-        ) : null}
 
         {actionError ? (
           <div className="flex items-start gap-3 rounded-card bg-error/10 border border-error/20 p-4 shadow-ambient">

@@ -11,6 +11,7 @@ interface StagingTableProps {
   onTaskClick: (task: ExtractedTask) => void
   isLoading?: boolean
   title?: string
+  subtext?: string
   emptyMessage?: string
 }
 
@@ -23,6 +24,7 @@ export function StagingTable({
   onTaskClick,
   isLoading = false,
   title = 'Extracted Tasks',
+  subtext,
   emptyMessage = 'No extracted tasks to review'
 }: StagingTableProps) {
   const [isApprovingAll, setIsApprovingAll] = useState(false)
@@ -64,24 +66,30 @@ export function StagingTable({
       {/* Header Section */}
       <div className="space-y-3">
         {/* Top row: Title + Bulk Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-display text-on-surface truncate">
               {title} <span className="text-on-surface-variant font-body">({pendingTasks.length})</span>
             </h2>
+            {subtext && (
+              <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
+                {subtext}
+              </p>
+            )}
             {needsReviewCount > 0 && (
-              <p className="text-xs text-warning mt-0.5">
+              <p className="text-xs text-warning mt-1">
                 {needsReviewCount} task{needsReviewCount !== 1 ? 's' : ''} need{needsReviewCount === 1 ? 's' : ''} review
               </p>
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+          <div className="flex flex-col gap-2 shrink-0">
             <Button
               size="sm"
-              variant="secondary"
+              variant="solid"
               onClick={handleApproveAll}
               disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
+              className="w-full justify-center"
             >
               {isApprovingAll ? '...' : 'Approve All'}
             </Button>
@@ -90,7 +98,7 @@ export function StagingTable({
               variant="ghost"
               onClick={handleDiscardAll}
               disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
-              className="text-tertiary hover:text-tertiary hover:bg-tertiary/10"
+              className="text-tertiary hover:text-tertiary hover:bg-tertiary/10 w-full justify-center"
             >
               {isDiscardingAll ? '...' : 'Discard All'}
             </Button>

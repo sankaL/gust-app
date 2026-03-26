@@ -439,10 +439,10 @@ export function CaptureRoute() {
         <div className="rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient">
           <div className="space-y-6 text-center">
             <div className="space-y-1">
-              <p className="font-display text-xl text-on-surface">
+              <p className="font-body text-sm font-medium text-on-surface">
                 {isRecording
                   ? 'Recording...'
-                  : 'Ready to capture'}
+                  : 'Tap to record'}
               </p>
             </div>
 
@@ -515,9 +515,12 @@ export function CaptureRoute() {
             </svg>
             <p className="font-display text-lg font-medium tracking-wide">Write it</p>
           </div>
-          <p className="font-body text-sm font-medium text-white/50 transition-colors group-hover:text-white/90">
-            Expand
-          </p>
+          <div className="flex items-center gap-1 font-body text-sm font-medium text-white/50 transition-colors group-hover:text-white/90">
+            <span>Expand</span>
+            <svg className="h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
         </button>
       ) : (
         <div className="space-y-4 rounded-card px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] animate-in fade-in slide-in-from-top-2 duration-200">
@@ -616,7 +619,7 @@ export function CaptureRoute() {
       ) : null}
 
       {showStaging && reviewCaptureId ? (
-        <div className="space-y-3 rounded-card bg-surface-container p-4">
+        <div className="space-y-4 mt-4">
           <StagingTable
             tasks={extractedTasksQuery.data ?? []}
             onApprove={handleApproveTask}
@@ -625,7 +628,8 @@ export function CaptureRoute() {
             onDiscardAll={handleDiscardAll}
             onTaskClick={handleTaskClick}
             isLoading={isLoadingTasks}
-            title="Newly Captured Tasks"
+            title="Newly extracted tasks"
+            subtext="Review and approve tasks from your latest capture"
             emptyMessage="No newly captured tasks to review"
           />
 
@@ -661,10 +665,7 @@ export function CaptureRoute() {
 
       {/* Older pending tasks across previous captures */}
       {sessionQuery.data?.signed_in && visiblePendingTasks.length > 0 ? (
-        <div className="space-y-3 rounded-card bg-surface-container p-4">
-          <p className="font-body text-xs text-on-surface-variant">
-            Pending tasks from previous captures awaiting review
-          </p>
+        <div className="space-y-4 mt-4">
           <StagingTable
             tasks={visiblePendingTasks}
             onApprove={handleApproveTask}
@@ -673,7 +674,8 @@ export function CaptureRoute() {
             onDiscardAll={handleDiscardAllPending}
             onTaskClick={handleTaskClick}
             isLoading={isLoadingAllPending}
-            title="Older Pending Tasks"
+            title="Old pending tasks"
+            subtext="Pending tasks from previous captures awaiting review"
             emptyMessage="No older pending tasks to review"
           />
         </div>

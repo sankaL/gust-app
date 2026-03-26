@@ -240,19 +240,6 @@ export function AllTasksView({ onTaskOpen, onTaskComplete, isBusy }: AllTasksVie
     setHasMore(data.has_more)
   }, [data, cursor])
 
-  // Reset function
-  const resetPagination = useCallback(() => {
-    setCursor(null)
-    setAllTasks([])
-    setHasMore(true)
-    void queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] })
-  }, [queryClient])
-
-  // Reset when view becomes visible
-  useEffect(() => {
-    resetPagination()
-  }, [resetPagination])
-
   // Load more function
   const loadMore = useCallback(() => {
     if (!data?.next_cursor || isLoadingMore || !hasMore) return

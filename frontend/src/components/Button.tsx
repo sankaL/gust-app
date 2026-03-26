@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'mic'
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'mic' | 'solid'
   size?: 'sm' | 'md' | 'lg'
   fullWidth?: boolean
 }
@@ -18,6 +18,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variantClasses = {
       primary: 'bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.92),_rgba(132,85,239,0.82))] text-surface shadow-[0_0_40px_rgba(186,158,255,0.4)] hover:shadow-[0_0_60px_rgba(186,158,255,0.6)]',
+      solid: 'bg-[#9333ea] text-white hover:bg-[#7e22ce] border-0 shadow-none',
       secondary: 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest hover:shadow-ambient border border-outline/20',
       tertiary: 'bg-tertiary/10 text-tertiary hover:bg-tertiary/20 hover:shadow-ambient',
       ghost: 'bg-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/30',

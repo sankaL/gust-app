@@ -184,12 +184,12 @@ describe('capture pending list dedupe', () => {
     renderCaptureRoute()
     const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: 'Expand text input' }))
+    await user.click(await screen.findByText('Write it'))
     await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Review active capture')
     await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
 
-    const newlyCapturedHeading = await screen.findByRole('heading', { name: 'Newly Captured Tasks (1)' })
-    const olderPendingHeading = await screen.findByRole('heading', { name: 'Older Pending Tasks (1)' })
+    const newlyCapturedHeading = await screen.findByRole('heading', { name: /Newly extracted tasks/i })
+    const olderPendingHeading = await screen.findByRole('heading', { name: /Old pending tasks/i })
     expect(
       newlyCapturedHeading.compareDocumentPosition(olderPendingHeading) &
         Node.DOCUMENT_POSITION_FOLLOWING
@@ -199,11 +199,11 @@ describe('capture pending list dedupe', () => {
 
     await user.click(screen.getByRole('button', { name: 'Done' }))
 
-    expect(await screen.findByRole('heading', { name: 'Older Pending Tasks (2)' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /Old pending tasks/i })).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument()
     })
-    expect(screen.queryByRole('heading', { name: 'Newly Captured Tasks (1)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Newly extracted tasks/i })).not.toBeInTheDocument()
     expect(screen.getByText('Active capture task')).toBeInTheDocument()
     expect(screen.getByText('Other capture task')).toBeInTheDocument()
   })
@@ -215,11 +215,11 @@ describe('capture pending list dedupe', () => {
     renderCaptureRoute()
     const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: 'Expand text input' }))
+    await user.click(await screen.findByText('Write it'))
     await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Review active capture')
     await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
 
-    const pendingHeading = await screen.findByRole('heading', { name: 'Older Pending Tasks (1)' })
+    const pendingHeading = await screen.findByRole('heading', { name: /Old pending tasks/i })
     const pendingSection = pendingHeading.parentElement?.parentElement?.parentElement
     if (!pendingSection) {
       throw new Error('Could not resolve pending section container')
