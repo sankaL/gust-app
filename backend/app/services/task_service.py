@@ -59,6 +59,13 @@ class TaskListItem:
 
 
 @dataclass
+class PaginatedTaskList:
+    items: list[TaskListItem]
+    has_more: bool
+    next_cursor: Optional[str]
+
+
+@dataclass
 class TaskDetail:
     task: TaskRecord
     group: GroupRecord
@@ -92,23 +99,29 @@ class TaskService:
         *,
         user_id: str,
         user_timezone: str,
-        group_id: str,
+        group_id: Optional[str] = None,
         status: str = "open",
-    ) -> list[TaskListItem]:
+        limit: int = 50,
+        cursor: Optional[str] = None,
+    ) -> PaginatedTaskList:
         with connection_scope(self.settings.database_url) as connection:
-            group = get_group(connection, user_id=user_id, group_id=group_id)
-            if group is None:
-                raise GroupNotFoundError()
+            # Validate group exists if group_id is provided (skip validation for 'all')
+            if group_id is not None and group_id != 'all':
+                group = get_group(connection, user_id=user_id, group_id=group_id)
+                if group is None:
+                    raise GroupNotFoundError()
 
             group_lookup = {
                 candidate.id: candidate
                 for candidate in self._list_groups(connection, user_id=user_id)
             }
-            task_rows = list_tasks(
+            task_rows, has_more, next_cursor = list_tasks(
                 connection,
                 user_id=user_id,
                 group_id=group_id,
                 status=status,
+                limit=limit,
+                cursor=cursor,
             )
 
         items = [
@@ -124,7 +137,7 @@ class TaskService:
             items.sort(key=self._completed_task_sort_key)
         else:
             items.sort(key=lambda item: self._task_sort_key(item=item, user_timezone=user_timezone))
-        return items
+        return PaginatedTaskList(items=items, has_more=has_more, next_cursor=next_cursor)
 
     def get_task_detail(self, *, user_id: str, task_id: str) -> TaskDetail:
         with connection_scope(self.settings.database_url) as connection:

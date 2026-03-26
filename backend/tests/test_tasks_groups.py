@@ -311,7 +311,7 @@ def test_list_tasks_applies_sorting_and_user_scope(app: FastAPI, client: TestCli
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["title"] for item in payload] == [
+    assert [item["title"] for item in payload["items"]] == [
         "Old overdue",
         "Flagged today",
         "Tomorrow task",

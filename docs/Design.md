@@ -1,4 +1,4 @@
-# Design System Strategy: The Sonic Minimalist
+# Design System Strategy: The Gust Minimalist
 
 ## 1. Overview & Creative North Star
 The Creative North Star for this design system is **"The Digital Void."**

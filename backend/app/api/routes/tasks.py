@@ -85,21 +85,35 @@ class UpdateSubtaskRequest(BaseModel):
     is_completed: Optional[bool] = None
 
 
-@router.get("", response_model=list[TaskSummaryResponse])
+class PaginatedTaskListResponse(BaseModel):
+    items: list[TaskSummaryResponse]
+    has_more: bool
+    next_cursor: Optional[str]
+
+
+@router.get("", response_model=PaginatedTaskListResponse)
 def list_tasks_route(
     session_context: OptionalSessionContextDep,
     task_service: TaskServiceDep,
-    group_id: str = Query(...),
+    group_id: Optional[str] = Query(None),
     status_value: str = Query("open", alias="status"),
-) -> list[TaskSummaryResponse]:
+    limit: int = Query(50, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+) -> PaginatedTaskListResponse:
     validated_status = _validate_status(status_value)
-    items = task_service.list_tasks(
+    result = task_service.list_tasks(
         user_id=session_context.user.id,
         user_timezone=session_context.user.timezone,
         group_id=group_id,
         status=validated_status,
+        limit=limit,
+        cursor=cursor,
     )
-    return [_build_task_summary(item) for item in items]
+    return PaginatedTaskListResponse(
+        items=[_build_task_summary(item) for item in result.items],
+        has_more=result.has_more,
+        next_cursor=result.next_cursor,
+    )
 
 
 @router.post("", response_model=TaskDetailResponse, status_code=status.HTTP_201_CREATED)

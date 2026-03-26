@@ -139,7 +139,7 @@ export function CompletedTasksRoute() {
 
   const selectedGroup =
     groupsQuery.data?.find((group) => group.id === resolvedGroupId) ?? groupsQuery.data?.[0] ?? null
-  const visibleCompletedTasks = dedupeCompletedTasks(completedTasksQuery.data ?? [])
+  const visibleCompletedTasks = dedupeCompletedTasks(completedTasksQuery.data?.items ?? [])
 
   return (
     <SessionGuard

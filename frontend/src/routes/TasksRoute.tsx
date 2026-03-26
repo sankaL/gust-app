@@ -15,6 +15,7 @@ import {
   type SessionStatus,
   type TaskSummary
 } from '../lib/api'
+import { AllTasksView } from '../components/AllTasksView'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { SessionGuard } from '../components/SessionGuard'
 
@@ -256,14 +257,16 @@ export function TasksRoute() {
       return
     }
 
-    const nextGroupId = sessionQuery.data.inbox_group_id ?? groupsQuery.data[0].id
-    setSearchParams({ group: nextGroupId }, { replace: true })
+    // Default to 'all' view instead of a specific group
+    setSearchParams({ group: 'all' }, { replace: true })
   }, [groupsQuery.data, selectedGroupId, sessionQuery.data, setSearchParams])
+
+  const isAllView = selectedGroupId === 'all'
 
   const tasksQuery = useQuery({
     queryKey: ['tasks', resolvedGroupId, 'open'],
     queryFn: () => listTasks(resolvedGroupId as string),
-    enabled: sessionQuery.data?.signed_in === true && Boolean(resolvedGroupId)
+    enabled: sessionQuery.data?.signed_in === true && Boolean(resolvedGroupId) && !isAllView
   })
 
   function requireCsrf(session: SessionStatus | undefined) {
@@ -382,6 +385,18 @@ export function TasksRoute() {
 
         {groupsQuery.data?.length ? (
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSearchParams({ group: 'all' })}
+              className={[
+                'rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200',
+                selectedGroupId === 'all'
+                  ? 'bg-primary text-surface shadow-ambient ring-2 ring-primary/50'
+                  : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest hover:shadow-ambient border border-outline/20'
+              ].join(' ')}
+            >
+              All
+            </button>
             {groupsQuery.data.map((group) => (
               <button
                 key={group.id}
@@ -406,62 +421,78 @@ export function TasksRoute() {
           </p>
         ) : null}
 
-        {tasksQuery.isLoading ? (
-          <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
-            Loading open tasks.
-          </div>
-        ) : null}
-
-        {tasksQuery.data && tasksQuery.data.length === 0 ? (
-          <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
-            <p className="font-display text-2xl text-on-surface">No open tasks here</p>
-            <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
-              Capture a voice note or move tasks into this group from detail editing.
-            </p>
-          </div>
-        ) : null}
-
-        <div className="space-y-4">
-          {bucketSections.map((section) => {
-            const items = (tasksQuery.data ?? []).filter((task) => task.due_bucket === section.key)
-            if (items.length === 0) {
-              return null
+        {isAllView ? (
+          <AllTasksView
+            onTaskOpen={(taskId) =>
+              void navigate({
+                pathname: `/tasks/${taskId}`
+              })
             }
+            onTaskComplete={(task) => {
+              completeMutation.mutate(task)
+            }}
+            isBusy={isBusy}
+          />
+        ) : (
+          <>
+            {tasksQuery.isLoading ? (
+              <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
+                Loading open tasks.
+              </div>
+            ) : null}
 
-            return (
-              <section key={section.key} className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-display text-xl text-on-surface">{section.label}</h3>
-                  <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
-                    {items.length} tasks
-                  </span>
-                </div>
+            {tasksQuery.data && tasksQuery.data.items.length === 0 ? (
+              <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
+                <p className="font-display text-2xl text-on-surface">No open tasks here</p>
+                <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
+                  Capture a voice note or move tasks into this group from detail editing.
+                </p>
+              </div>
+            ) : null}
 
-                <div className="space-y-3">
-                  {items.map((task) => (
-                    <SwipeTaskCard
-                      key={task.id}
-                      task={task}
-                      isBusy={isBusy}
-                      onOpen={(taskId) =>
-                        void navigate({
-                          pathname: `/tasks/${taskId}`,
-                          search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
-                        })
-                      }
-                      onComplete={(taskId) => {
-                        const current = (tasksQuery.data ?? []).find((item) => item.id === taskId)
-                        if (current) {
-                          completeMutation.mutate(current)
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-              </section>
-            )
-          })}
-        </div>
+            <div className="space-y-4">
+              {bucketSections.map((section) => {
+                const items = (tasksQuery.data?.items ?? []).filter((task) => task.due_bucket === section.key)
+                if (items.length === 0) {
+                  return null
+                }
+
+                return (
+                  <section key={section.key} className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-display text-xl text-on-surface">{section.label}</h3>
+                      <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
+                        {items.length} tasks
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {items.map((task) => (
+                        <SwipeTaskCard
+                          key={task.id}
+                          task={task}
+                          isBusy={isBusy}
+                          onOpen={(taskId) =>
+                            void navigate({
+                              pathname: `/tasks/${taskId}`,
+                              search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
+                            })
+                          }
+                          onComplete={(taskId) => {
+                            const current = (tasksQuery.data?.items ?? []).find((item) => item.id === taskId)
+                            if (current) {
+                              completeMutation.mutate(current)
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+          </>
+        )}
 
         {undoState ? (
           <div className={`fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-soft p-4 shadow-ambient ${

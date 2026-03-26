@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 # ruff: noqa: UP045
+import base64
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -599,9 +601,12 @@ def list_tasks(
     group_id: Optional[str] = None,
     status: str = "open",
     include_deleted: bool = False,
-) -> list[TaskRecord]:
+    limit: int = 50,
+    cursor: Optional[str] = None,
+) -> tuple[list[TaskRecord], bool, Optional[str]]:
+    """Returns (tasks, has_more, next_cursor)."""
     conditions = [tasks.c.user_id == user_id, tasks.c.status == status]
-    if group_id is not None:
+    if group_id is not None and group_id != 'all':
         conditions.append(tasks.c.group_id == group_id)
     if not include_deleted:
         conditions.append(tasks.c.deleted_at.is_(None))
@@ -615,12 +620,51 @@ def list_tasks(
         .label('subtask_count')
     )
 
+    # Apply cursor-based pagination if provided
+    if cursor:
+        try:
+            cursor_data = json.loads(base64.b64decode(cursor).decode('utf-8'))
+            cursor_created_at = datetime.fromisoformat(cursor_data['created_at'])
+            cursor_id = cursor_data['id']
+            # Cursor condition: (created_at, id) < (cursor_created_at, cursor_id)
+            # i.e., items that come after the cursor in our DESC order
+            cursor_condition = (
+                sa.or_(
+                    tasks.c.created_at < cursor_created_at,
+                    sa.and_(
+                        tasks.c.created_at == cursor_created_at,
+                        tasks.c.id < cursor_id
+                    )
+                )
+            )
+            conditions.append(cursor_condition)
+        except (json.JSONDecodeError, KeyError, ValueError):
+            # Invalid cursor, ignore and fetch from beginning
+            pass
+
+    # Fetch limit+1 to determine if there are more results
     rows = connection.execute(
         sa.select(tasks, subtask_count_subquery)
         .where(*conditions)
         .order_by(tasks.c.created_at.desc(), tasks.c.id.desc())
+        .limit(limit + 1)
     ).fetchall()
-    return [_row_to_task(row) for row in rows]
+
+    has_more = len(rows) > limit
+    if has_more:
+        rows = rows[:limit]
+
+    # Generate next cursor from last item
+    next_cursor = None
+    if has_more and rows:
+        last_row = rows[-1]
+        cursor_data = {
+            'created_at': last_row.created_at.isoformat(),
+            'id': str(last_row.id)
+        }
+        next_cursor = base64.b64encode(json.dumps(cursor_data).encode('utf-8')).decode('utf-8')
+
+    return [_row_to_task(row) for row in rows], has_more, next_cursor
 
 
 def get_open_task_in_series(

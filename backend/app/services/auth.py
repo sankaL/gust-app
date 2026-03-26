@@ -208,7 +208,7 @@ class SupabaseAuthService:
 
     def _get_jwks_client(self) -> PyJWKClient:
         if self._jwks_client is None:
-            self._jwks_client = PyJWKClient(self.jwks_url)
+            self._jwks_client = PyJWKClient(self.jwks_url, timeout=10.0)
         return self._jwks_client
 
     async def _post_token_request(

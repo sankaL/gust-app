@@ -103,6 +103,8 @@ export function CaptureRoute() {
       // Refresh both queries
       queryClient.invalidateQueries({ queryKey: ['extracted-tasks', captureId] })
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+      // Also invalidate tasks query to ensure TasksRoute and AllTasksView stay in sync
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] })
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to approve task.'))
     }
@@ -121,6 +123,8 @@ export function CaptureRoute() {
       // Refresh both queries
       queryClient.invalidateQueries({ queryKey: ['extracted-tasks', captureId] })
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+      // Also invalidate tasks query to ensure TasksRoute and AllTasksView stay in sync
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] })
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to discard task.'))
     }
@@ -134,6 +138,8 @@ export function CaptureRoute() {
       // Refresh both queries
       queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+      // Also invalidate tasks query to ensure TasksRoute and AllTasksView stay in sync
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] })
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to approve all tasks.'))
     }
@@ -147,6 +153,8 @@ export function CaptureRoute() {
       // Refresh both queries
       queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+      // Also invalidate tasks query to ensure TasksRoute and AllTasksView stay in sync
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] })
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to discard all tasks.'))
     }
