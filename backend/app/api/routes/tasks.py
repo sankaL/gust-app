@@ -52,6 +52,7 @@ class TaskSummaryResponse(BaseModel):
     group: GroupSummaryResponse
     completed_at: Optional[datetime]
     deleted_at: Optional[datetime]
+    subtask_count: int = 0
 
 
 class TaskDetailResponse(TaskSummaryResponse):
@@ -294,6 +295,7 @@ def _build_task_summary(item: TaskListItem) -> TaskSummaryResponse:
         ),
         completed_at=item.task.completed_at,
         deleted_at=item.task.deleted_at,
+        subtask_count=item.subtask_count,
     )
 
 

@@ -81,6 +81,7 @@ class TaskRecord:
     deleted_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    subtask_count: int = 0
 
 
 @dataclass
@@ -212,6 +213,7 @@ def _row_to_task(row: sa.Row) -> TaskRecord:
         deleted_at=row.deleted_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        subtask_count=int(row.subtask_count) if hasattr(row, 'subtask_count') and row.subtask_count is not None else 0,
     )
 
 
@@ -604,8 +606,17 @@ def list_tasks(
     if not include_deleted:
         conditions.append(tasks.c.deleted_at.is_(None))
 
+    # Scalar subquery to count subtasks per task
+    subtask_count_subquery = (
+        sa.select(sa.func.count(subtasks.c.id))
+        .where(subtasks.c.task_id == tasks.c.id)
+        .correlate(tasks)
+        .scalar_subquery()
+        .label('subtask_count')
+    )
+
     rows = connection.execute(
-        sa.select(tasks)
+        sa.select(tasks, subtask_count_subquery)
         .where(*conditions)
         .order_by(tasks.c.created_at.desc(), tasks.c.id.desc())
     ).fetchall()

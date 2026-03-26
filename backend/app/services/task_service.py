@@ -55,6 +55,7 @@ class TaskListItem:
     task: TaskRecord
     group: GroupRecord
     due_bucket: str
+    subtask_count: int = 0
 
 
 @dataclass
@@ -115,6 +116,7 @@ class TaskService:
                 task=task,
                 group=group_lookup[task.group_id],
                 due_bucket=self._due_bucket(task=task, user_timezone=user_timezone),
+                subtask_count=task.subtask_count,
             )
             for task in task_rows
         ]

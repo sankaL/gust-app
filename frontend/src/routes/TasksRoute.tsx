@@ -35,13 +35,7 @@ type SwipeTaskCardProps = {
   task: TaskSummary
   onOpen: (taskId: string) => void
   onComplete: (taskId: string) => void
-  onDelete: (taskId: string) => void
   isBusy: boolean
-}
-
-type DeleteMutationInput = {
-  task: TaskSummary
-  scope: TaskDeleteScope
 }
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
@@ -90,7 +84,7 @@ function buildDueBadge(task: TaskSummary) {
   }
 }
 
-function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTaskCardProps) {
+function SwipeTaskCard({ task, onOpen, onComplete, isBusy }: SwipeTaskCardProps) {
   const startXRef = useRef<number | null>(null)
   const pointerIdRef = useRef<number | null>(null)
   const offsetRef = useRef(0)
@@ -125,17 +119,25 @@ function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTask
   function handlePointerEnd() {
     if (offsetRef.current >= 90) {
       onComplete(task.id)
-    } else if (offsetRef.current <= -90) {
-      onDelete(task.id)
     }
     resetSwipe()
   }
 
+  function formatReminder(reminderAt: string | null): string {
+    if (!reminderAt) return 'none'
+    const date = new Date(reminderAt)
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+  }
+
   return (
     <article className={`relative overflow-hidden rounded-card shadow-ambient ${!task.due_date ? 'bg-surface-container/50 opacity-70' : 'bg-surface-container'}`}>
-      <div className="absolute inset-0 flex items-center justify-between px-3 text-xs uppercase tracking-[0.1em] text-on-surface-variant">
+      <div className="absolute inset-0 flex items-center justify-center px-3 text-xs uppercase tracking-[0.1em] text-on-surface-variant">
         <span>Swipe right to complete</span>
-        <span>Swipe left to delete</span>
       </div>
       <div
         role="button"
@@ -167,9 +169,27 @@ function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTask
                   {badge.label}
                 </span>
               ) : null}
+              {task.recurrence_frequency ? (
+                <span className="inline-flex items-center gap-1 text-xs text-primary" title={`Recurring: ${task.recurrence_frequency}`}>
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </span>
+              ) : null}
+              {task.subtask_count > 0 ? (
+                <span className="inline-flex items-center gap-1 text-xs text-on-surface-variant" title={`${task.subtask_count} subtask${task.subtask_count > 1 ? 's' : ''}`}>
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  <span>{task.subtask_count}</span>
+                </span>
+              ) : null}
             </div>
             <p className="truncate font-display text-base text-on-surface">{task.title}</p>
             <p className="truncate font-body text-xs text-on-surface-variant">{task.group.name}</p>
+            <p className="font-body text-xs text-on-surface-variant/70">
+              Reminder: {formatReminder(task.reminder_at)}
+            </p>
           </div>
           <div className="flex flex-col items-end gap-2">
             {!task.due_date ? (
@@ -184,36 +204,20 @@ function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTask
                 {task.due_bucket.replace('_', ' ')}
               </div>
             )}
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onComplete(task.id)
-                }}
-                disabled={isBusy}
-                className="rounded-full bg-primary/20 p-1.5 text-primary disabled:opacity-50"
-                aria-label={`Complete ${task.title}`}
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDelete(task.id)
-                }}
-                disabled={isBusy}
-                className="rounded-full bg-surface-container-high p-1.5 text-on-surface-variant disabled:opacity-50"
-                aria-label={`Delete ${task.title}`}
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onComplete(task.id)
+              }}
+              disabled={isBusy}
+              className="rounded-full bg-primary/20 p-1.5 text-primary disabled:opacity-50"
+              aria-label={`Complete ${task.title}`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -228,7 +232,6 @@ export function TasksRoute() {
   const [undoState, setUndoState] = useState<UndoState>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
-  const [pendingRecurringDelete, setPendingRecurringDelete] = useState<TaskSummary | null>(null)
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -294,27 +297,6 @@ export function TasksRoute() {
     }
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: async ({ task, scope }: DeleteMutationInput) => {
-      const csrfToken = requireCsrf(sessionQuery.data)
-      return deleteTask(task.id, csrfToken, scope)
-    },
-    onSuccess: (task, variables) => {
-      if (variables.scope === 'occurrence') {
-        setUndoState({ kind: 'delete', taskId: task.id, title: task.title })
-      } else {
-        setUndoState(null)
-      }
-      setPendingRecurringDelete(null)
-      setActionError(null)
-      void refreshTaskData()
-    },
-    onError: (error) => {
-      setPendingRecurringDelete(null)
-      setActionError(buildFriendlyMessage(error, 'Task could not be deleted.'))
-    }
-  })
-
   const undoMutation = useMutation({
     mutationFn: async (undo: Exclude<UndoState, null>) => {
       const csrfToken = requireCsrf(sessionQuery.data)
@@ -334,15 +316,7 @@ export function TasksRoute() {
   })
 
   const isBusy =
-    completeMutation.isPending || deleteMutation.isPending || undoMutation.isPending
-
-  function handleDeleteTask(task: TaskSummary) {
-    if (task.series_id || task.recurrence_frequency) {
-      setPendingRecurringDelete(task)
-      return
-    }
-    deleteMutation.mutate({ task, scope: 'occurrence' })
-  }
+    completeMutation.isPending || undoMutation.isPending
 
   const bucketSections = [
     { key: 'overdue', label: 'Overdue' },
@@ -481,12 +455,6 @@ export function TasksRoute() {
                           completeMutation.mutate(current)
                         }
                       }}
-                      onDelete={(taskId) => {
-                        const current = (tasksQuery.data ?? []).find((item) => item.id === taskId)
-                        if (current) {
-                          handleDeleteTask(current)
-                        }
-                      }}
                     />
                   ))}
                 </div>
@@ -494,56 +462,6 @@ export function TasksRoute() {
             )
           })}
         </div>
-
-        {pendingRecurringDelete ? (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-            <div className="w-full max-w-md rounded-card bg-surface-container p-4 shadow-ambient">
-              <p className="font-display text-xl text-on-surface">Delete recurring task</p>
-              <p className="mt-2 font-body text-sm text-on-surface-variant">
-                Choose whether to delete only this occurrence or this and future open occurrences.
-              </p>
-              <p className="mt-2 truncate font-body text-sm text-on-surface">
-                {pendingRecurringDelete.title}
-              </p>
-              <div className="mt-4 space-y-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    deleteMutation.mutate({
-                      task: pendingRecurringDelete,
-                      scope: 'occurrence'
-                    })
-                  }
-                  disabled={deleteMutation.isPending}
-                  className="w-full rounded-pill bg-surface-container-high px-4 py-2 text-sm font-medium text-on-surface transition hover:bg-surface-container-highest disabled:opacity-50"
-                >
-                  Delete this occurrence
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    deleteMutation.mutate({
-                      task: pendingRecurringDelete,
-                      scope: 'series'
-                    })
-                  }
-                  disabled={deleteMutation.isPending}
-                  className="w-full rounded-pill bg-tertiary px-4 py-2 text-sm font-medium text-surface transition hover:bg-tertiary/85 disabled:opacity-50"
-                >
-                  Delete this and future
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPendingRecurringDelete(null)}
-                  disabled={deleteMutation.isPending}
-                  className="w-full rounded-pill bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:bg-surface-container-high disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
 
         {undoState ? (
           <div className={`fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-soft p-4 shadow-ambient ${

@@ -8,11 +8,14 @@ import {
   ApiError,
   createSubtask,
   deleteSubtask,
+  deleteTask,
   getSessionStatus,
   getTaskDetail,
   listGroups,
+  restoreTask,
   updateSubtask,
   updateTask,
+  type TaskDeleteScope,
   type TaskRecurrence
 } from '../lib/api'
 
@@ -98,6 +101,9 @@ export function TaskDetailRoute() {
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({})
   const [feedback, setFeedback] = useState<string | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<{ scope: TaskDeleteScope } | null>(null)
+  const [showUndoToast, setShowUndoToast] = useState(false)
+  const [deletedTaskTitle, setDeletedTaskTitle] = useState<string | null>(null)
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -229,11 +235,64 @@ export function TaskDetailRoute() {
     }
   })
 
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (scope: TaskDeleteScope) => {
+      if (!taskId) {
+        throw new Error('Task detail is not ready.')
+      }
+      const csrfToken = requireCsrf()
+      return deleteTask(taskId, csrfToken, scope)
+    },
+    onSuccess: () => {
+      setPendingDelete(null)
+      setDeletedTaskTitle(taskQuery.data?.title ?? null)
+      setShowUndoToast(true)
+      // Navigate after a delay to allow undo
+      setTimeout(() => {
+        setShowUndoToast(false)
+        void refreshTaskData()
+        void navigate(`/tasks${backSearch}`)
+      }, 5000)
+    },
+    onError: (error) => {
+      setFeedback(buildFriendlyMessage(error, 'Task could not be deleted.'))
+      setPendingDelete(null)
+    }
+  })
+
+  const restoreTaskMutation = useMutation({
+    mutationFn: async () => {
+      if (!taskId) {
+        throw new Error('Task detail is not ready.')
+      }
+      const csrfToken = requireCsrf()
+      return restoreTask(taskId, csrfToken)
+    },
+    onSuccess: () => {
+      setShowUndoToast(false)
+      setDeletedTaskTitle(null)
+      setFeedback('Task restored.')
+      void refreshTaskData()
+    },
+    onError: (error) => {
+      setFeedback(buildFriendlyMessage(error, 'Task could not be restored.'))
+    }
+  })
+
+  function handleDeleteTask() {
+    const task = taskQuery.data
+    if (!task) return
+    // Show confirmation dialog - modal handles recurring vs single task UI
+    setPendingDelete({ scope: 'occurrence' })
+  }
+
   const isBusy =
     saveTaskMutation.isPending ||
     createSubtaskMutation.isPending ||
     updateSubtaskMutation.isPending ||
-    deleteSubtaskMutation.isPending
+    deleteSubtaskMutation.isPending ||
+    deleteTaskMutation.isPending ||
+    restoreTaskMutation.isPending
 
   const backSearch = searchParams.get('group') ? `?group=${searchParams.get('group')}` : ''
 
@@ -577,10 +636,106 @@ export function TaskDetailRoute() {
               >
                 Back to List
               </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteTask()}
+                disabled={isBusy}
+                className="rounded-pill border border-tertiary/30 px-5 py-3 text-sm text-tertiary hover:bg-tertiary/10 disabled:opacity-50"
+              >
+                Delete Task
+              </button>
             </div>
+
+            {pendingDelete ? (
+              <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+                <div className="w-full max-w-md rounded-card bg-surface-container p-4 shadow-ambient">
+                  {(taskQuery.data?.series_id || taskQuery.data?.recurrence_frequency) ? (
+                    <>
+                      <p className="font-display text-xl text-on-surface">Delete recurring task</p>
+                      <p className="mt-2 font-body text-sm text-on-surface-variant">
+                        Choose whether to delete only this occurrence or this and future open occurrences.
+                      </p>
+                      <p className="mt-2 truncate font-body text-sm text-on-surface">
+                        {taskQuery.data?.title}
+                      </p>
+                      <div className="mt-4 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => deleteTaskMutation.mutate('occurrence')}
+                          disabled={deleteTaskMutation.isPending}
+                          className="w-full rounded-pill bg-surface-container-high px-4 py-2 text-sm font-medium text-on-surface transition hover:bg-surface-container-highest disabled:opacity-50"
+                        >
+                          Delete this occurrence
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteTaskMutation.mutate('series')}
+                          disabled={deleteTaskMutation.isPending}
+                          className="w-full rounded-pill bg-tertiary px-4 py-2 text-sm font-medium text-surface transition hover:bg-tertiary/85 disabled:opacity-50"
+                        >
+                          Delete this and future
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDelete(null)}
+                          disabled={deleteTaskMutation.isPending}
+                          className="w-full rounded-pill bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:bg-surface-container-high disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-display text-xl text-on-surface">Delete task</p>
+                      <p className="mt-2 truncate font-body text-sm text-on-surface">
+                        {taskQuery.data?.title}
+                      </p>
+                      <p className="mt-2 font-body text-sm text-on-surface-variant">
+                        Are you sure you want to delete this task?
+                      </p>
+                      <div className="mt-4 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => deleteTaskMutation.mutate('occurrence')}
+                          disabled={deleteTaskMutation.isPending}
+                          className="w-full rounded-pill bg-tertiary px-4 py-2 text-sm font-medium text-surface transition hover:bg-tertiary/85 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDelete(null)}
+                          disabled={deleteTaskMutation.isPending}
+                          className="w-full rounded-pill bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:bg-surface-container-high disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </section>
+
+      {showUndoToast ? (
+        <div className="fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-soft p-4 shadow-ambient bg-tertiary/10 border-t-2 border-tertiary">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-on-surface">Deleted "{deletedTaskTitle}"</span>
+            <button
+              type="button"
+              onClick={() => restoreTaskMutation.mutate()}
+              disabled={restoreTaskMutation.isPending}
+              className="rounded-pill bg-tertiary px-4 py-1.5 text-sm font-medium text-surface hover:bg-tertiary/80 disabled:opacity-50"
+            >
+              {restoreTaskMutation.isPending ? 'Restoring...' : 'Undo'}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </SessionGuard>
   )
 }
