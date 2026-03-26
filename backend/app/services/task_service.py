@@ -818,10 +818,9 @@ class TaskService:
             cancel_reminder(connection, user_id=user_id, task_id=existing_open.id)
             return "keep_recurrence"
 
-        raise ConflictError(
-            "task_reopen_conflict",
-            "Task cannot be reopened while another open occurrence in this series exists.",
-        )
+        # If another open occurrence exists but doesn't match the expected next occurrence,
+        # detach this task from the series so the user can still reopen it
+        return "detach_instance"
 
     def _reconcile_series_on_restore(
         self,
@@ -888,10 +887,9 @@ class TaskService:
             cancel_reminder(connection, user_id=user_id, task_id=existing_open.id)
             return "keep_recurrence"
 
-        raise ConflictError(
-            "task_restore_conflict",
-            "Task cannot be restored while another open occurrence in this series exists.",
-        )
+        # If another open occurrence exists but doesn't match the expected next occurrence,
+        # detach this task from the series so the user can still restore it
+        return "detach_instance"
 
     def _recurrence_reset_values(self, *, task: TaskRecord) -> dict[str, object]:
         if task.recurrence_frequency is None and task.series_id is None:

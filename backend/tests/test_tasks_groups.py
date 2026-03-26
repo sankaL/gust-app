@@ -1119,12 +1119,15 @@ def test_restore_deleted_recurring_task_returns_single_non_recurring_instance_wh
     assert task_row.recurrence_frequency is None
 
 
-def test_reopen_recurring_task_rejects_when_series_has_other_open_occurrence(
+def test_reopen_recurring_task_detaches_when_series_has_other_open_occurrence(
     app: FastAPI,
     client: TestClient,
 ) -> None:
+    """When reopening a recurring task that has another open occurrence in the series,
+    the task should be detached from the series (made non-recurring) so users can
+    still access their accidentally-completed work."""
     headers = _authenticated_headers(app, client)
-    group_id = _seed_group(client, user_id=USER_ID, name="Reopen Conflict")
+    group_id = _seed_group(client, user_id=USER_ID, name="Reopen Detach")
     series_id = str(uuid.uuid4())
     today = datetime.now(timezone.utc).date()
     task_id = _seed_task(
@@ -1149,6 +1152,7 @@ def test_reopen_recurring_task_rejects_when_series_has_other_open_occurrence(
                 updated_at=sa.text("CURRENT_TIMESTAMP"),
             )
         )
+    # Create a manually adjusted open task in the same series
     _seed_task(
         client,
         user_id=USER_ID,
@@ -1163,8 +1167,57 @@ def test_reopen_recurring_task_rejects_when_series_has_other_open_occurrence(
 
     reopen_response = client.post(f"/tasks/{task_id}/reopen", headers=headers)
 
-    assert reopen_response.status_code == 409
-    assert reopen_response.json()["error"]["code"] == "task_reopen_conflict"
+    # Should succeed by detaching the task from the series
+    assert reopen_response.status_code == 200
+    task_data = reopen_response.json()
+    assert task_data["status"] == "open"
+    assert task_data["series_id"] is None
+    assert task_data["recurrence_frequency"] is None
+
+
+def test_restore_deleted_recurring_task_detaches_when_series_has_other_open_occurrence(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    """When restoring a deleted recurring task that has another open occurrence in
+    the series, the task should be detached from the series (made non-recurring)."""
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Restore Detach")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Weekly sync",
+        due_date_value=today,
+        deleted_at_value=datetime.now(timezone.utc),
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=((today.weekday() + 2) % 7),
+    )
+    # Create a manually adjusted open task in the same series
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Manually adjusted weekly sync",
+        due_date_value=today + timedelta(days=14),
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=((today.weekday() + 2) % 7),
+    )
+
+    restore_response = client.post(f"/tasks/{task_id}/restore", headers=headers)
+
+    # Should succeed by detaching the task from the series
+    assert restore_response.status_code == 200
+    task_data = restore_response.json()
+    assert task_data["status"] == "open"
+    assert task_data["series_id"] is None
+    assert task_data["recurrence_frequency"] is None
 
 
 def test_subtask_crud_and_user_scoping(app: FastAPI, client: TestClient) -> None:
