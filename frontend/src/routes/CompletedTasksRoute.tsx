@@ -202,9 +202,12 @@ export function CompletedTasksRoute() {
         ) : null}
 
         {actionError ? (
-          <p className="rounded-card border border-tertiary/30 bg-tertiary/10 px-4 py-3 font-body text-sm text-on-surface">
-            {actionError}
-          </p>
+          <div className="flex items-start gap-3 rounded-card bg-error/10 border border-error/20 p-4 shadow-ambient">
+            <svg className="w-5 h-5 shrink-0 mt-0.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p className="font-body text-sm font-medium text-error leading-relaxed">{actionError}</p>
+          </div>
         ) : null}
 
         {completedTasksQuery.isLoading ? (
@@ -224,20 +227,43 @@ export function CompletedTasksRoute() {
 
         <div className="space-y-3">
           {visibleCompletedTasks.map((task) => (
-            <article key={task.id} className="rounded-card bg-surface-container p-4 shadow-ambient">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <p className="truncate font-display text-base text-on-surface">{task.title}</p>
-                  <p className="font-body text-xs text-on-surface-variant">{buildCompletedLabel(task)}</p>
+            <article key={task.id} className="rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4">
+              <div className="flex items-stretch justify-between gap-4">
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                  <div className="flex flex-col gap-1.5 align-top">
+                    <h3 className="font-display text-lg font-medium text-on-surface truncate leading-tight">
+                      {task.title}
+                    </h3>
+                    <p className="font-body text-xs text-on-surface-variant/80 font-medium">
+                      {task.group?.name || 'Inbox'}
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <span className="text-tertiary uppercase tracking-wider text-[0.65rem] font-bold">
+                      {buildCompletedLabel(task)}
+                    </span>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => reopenMutation.mutate(task)}
-                  disabled={reopenMutation.isPending}
-                  className="rounded-pill bg-primary/20 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/30 disabled:opacity-50"
-                >
-                  Move to To-do
-                </button>
+                
+                <div className="flex flex-col items-end justify-between gap-4 shrink-0 px-2">
+                  <div className="flex items-center gap-2">
+                    {task.recurrence_frequency && (
+                      <span className="font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-primary/20 text-primary">
+                        {task.recurrence_frequency}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => reopenMutation.mutate(task)}
+                      disabled={reopenMutation.isPending}
+                      className="rounded-pill bg-surface-dim px-3 py-1.5 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                </div>
               </div>
             </article>
           ))}

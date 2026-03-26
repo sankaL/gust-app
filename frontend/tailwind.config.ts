@@ -10,6 +10,7 @@ const config: Config = {
         'surface-container': 'var(--color-surface-container)',
         'surface-container-high': 'var(--color-surface-container-high)',
         'surface-container-highest': 'var(--color-surface-container-highest)',
+        'surface-bright': 'var(--color-surface-bright)',
         'surface-variant': 'var(--color-surface-variant)',
         primary: 'var(--color-primary)',
         'primary-dim': 'var(--color-primary-dim)',

@@ -7,7 +7,6 @@ import {
   createTextCapture,
   createVoiceCapture,
   getSessionStatus,
-  submitCapture,
   listExtractedTasks,
   listPendingTasks,
   approveExtractedTask,
@@ -22,6 +21,7 @@ import {
 import { SessionRequiredCard } from '../components/SessionRequiredCard'
 import { StagingTable } from '../components/StagingTable'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
+import { ExtractingLoader } from '../components/ExtractingLoader'
 
 type RecordedAudio = {
   blob: Blob
@@ -294,33 +294,7 @@ export function CaptureRoute() {
     }
   })
 
-  const submitMutation = useMutation({
-    mutationFn: async (payload: { captureId: string; transcriptText: string }) => {
-      const csrfToken = sessionQuery.data?.csrf_token
-      if (!csrfToken) {
-        throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
-      }
 
-      return submitCapture(payload.captureId, payload.transcriptText, csrfToken)
-    },
-    onSuccess: (payload) => {
-      setSummary(payload)
-      setTextDraft('')
-      setTextExpanded(false)
-      setReviewCaptureId(null)
-      setShowStaging(false)
-      setSubmitError(null)
-      setTranscriptionError(null)
-      retryAudioRef.current = null
-      // Refresh the persistent pending list
-      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
-    },
-    onError: (error) => {
-      setSubmitError(
-        buildFriendlyMessage(error, 'Extraction failed. Edit the transcript and retry.')
-      )
-    }
-  })
 
   useEffect(() => {
     return () => {
@@ -421,8 +395,7 @@ export function CaptureRoute() {
   const isBusy =
     isRecorderLoading ||
     voiceCaptureMutation.isPending ||
-    textCaptureMutation.isPending ||
-    submitMutation.isPending
+    textCaptureMutation.isPending
 
   if (sessionQuery.isLoading) {
     return (
@@ -460,73 +433,140 @@ export function CaptureRoute() {
 
   return (
     <section className="space-y-4">
-
-      <div className="rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient">
-        <div className="space-y-6 text-center">
-          <div className="space-y-1">
-            <p className="font-display text-xl text-on-surface">
-              {isRecording
-                ? 'Recording...'
-                : voiceCaptureMutation.isPending
-                  ? 'Transcribing...'
+      {voiceCaptureMutation.isPending ? (
+        <ExtractingLoader variant="voice" />
+      ) : (
+        <div className="rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient">
+          <div className="space-y-6 text-center">
+            <div className="space-y-1">
+              <p className="font-display text-xl text-on-surface">
+                {isRecording
+                  ? 'Recording...'
                   : 'Ready to capture'}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={isBusy && !isRecording}
-            className={[
-              'mx-auto flex h-48 w-48 items-center justify-center rounded-pill border border-white/10 transition-all duration-300 active:scale-95',
-              isRecording
-                ? 'bg-[radial-gradient(circle_at_top,_rgba(253,129,168,0.95),_rgba(140,43,87,0.72))] text-white shadow-[0_0_60px_rgba(253,129,168,0.5)]'
-                : 'bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.92),_rgba(132,85,239,0.82))] text-surface shadow-[0_0_40px_rgba(186,158,255,0.4)] hover:shadow-[0_0_60px_rgba(186,158,255,0.6)]'
-            ].join(' ')}
-            aria-label={isRecording ? 'Stop recording' : 'Start recording'}
-          >
-            {isRecording ? (
-              <svg className="h-16 w-16" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="6" y="6" width="12" height="12" rx="2" />
-              </svg>
-            ) : (
-              <svg className="h-16 w-16" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-              </svg>
-            )}
-          </button>
-
-          <div className="space-y-2">
-            {permissionError ? (
-              <p className="rounded-card bg-tertiary/10 px-3 py-2 font-body text-sm text-on-surface">
-                {permissionError}
               </p>
-            ) : null}
-            {transcriptionError ? (
-              <div className="space-y-2 rounded-card bg-tertiary/10 px-3 py-3">
-                <p className="font-body text-sm text-on-surface">{transcriptionError}</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={retryVoiceCapture}
-                    className="rounded-pill bg-primary px-3 py-1.5 text-sm font-medium text-surface"
-                  >
-                    Retry Same Recording
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTranscriptionError(null)}
-                    className="rounded-pill border border-outline px-3 py-1.5 text-sm text-on-surface-variant"
-                  >
-                    Dismiss
-                  </button>
-                </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isBusy && !isRecording}
+              className={[
+                'group relative mx-auto flex h-36 w-36 items-center justify-center rounded-full transition-all duration-200 outline-none select-none',
+                isRecording
+                  ? 'translate-y-[8px] bg-[radial-gradient(circle_at_top,_#fb7185_10%,_#be123c_90%)] text-white shadow-[inset_0_6px_12px_rgba(0,0,0,0.4),_0_2px_4px_rgba(0,0,0,0.4)]'
+                  : 'bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)]'
+              ].join(' ')}
+              aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+            >
+              <div className="flex items-center justify-center transition-all duration-200 drop-shadow-md">
+                {isRecording ? (
+                  <svg className="h-10 w-10 animate-pulse text-white/90" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                ) : (
+                  <svg className="h-14 w-14 text-white/95" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                )}
               </div>
-            ) : null}
+            </button>
+
+            <div className="space-y-2">
+              {permissionError ? (
+                <p className="rounded-card bg-tertiary/10 px-3 py-2 font-body text-sm text-on-surface">
+                  {permissionError}
+                </p>
+              ) : null}
+              {transcriptionError ? (
+                <div className="space-y-2 rounded-card bg-tertiary/10 px-3 py-3">
+                  <p className="font-body text-sm text-on-surface">{transcriptionError}</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={retryVoiceCapture}
+                      className="rounded-pill bg-primary px-3 py-1.5 text-sm font-medium text-surface"
+                    >
+                      Retry Same Recording
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTranscriptionError(null)}
+                      className="rounded-pill border border-outline px-3 py-1.5 text-sm text-on-surface-variant"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {!textExpanded ? (
+        <button
+          type="button"
+          onClick={() => setTextExpanded(true)}
+          className="group relative w-full flex items-center justify-between rounded-card transition-all duration-200 outline-none select-none px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_6px_0_#171033,_0_8px_15px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.2)] hover:-translate-y-[1px] hover:shadow-[0_7px_0_#171033,_0_12px_20px_rgba(0,0,0,0.5),_inset_0_1px_2px_rgba(255,255,255,0.2)] active:translate-y-[6px] active:shadow-[0_0px_0_#171033,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_6px_rgba(0,0,0,0.3)]"
+        >
+          <div className="flex items-center gap-3">
+            <svg className="h-6 w-6 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+            <p className="font-display text-lg font-medium tracking-wide">Write it</p>
+          </div>
+          <p className="font-body text-sm font-medium text-white/50 transition-colors group-hover:text-white/90">
+            Expand
+          </p>
+        </button>
+      ) : (
+        <div className="space-y-4 rounded-card px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <svg className="h-6 w-6 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+              <p className="font-display text-lg font-medium tracking-wide">Write it</p>
+            </div>
+            <button
+              onClick={() => setTextExpanded(false)}
+              className="rounded-full px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors focus:ring-2 focus:ring-white/30 outline-none"
+              aria-label="Collapse text input"
+            >
+              Hide
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <textarea
+              value={textDraft}
+              onChange={(event) => setTextDraft(event.target.value)}
+              rows={5}
+              placeholder="Type or paste here..."
+              className="w-full resize-none rounded-card bg-black/40 px-4 py-3 font-body text-sm text-white placeholder:text-white/40 outline-none transition focus:ring-2 focus:ring-white/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"
+            />
+            {textCaptureMutation.isError && submitError ? (
+              <p className="rounded-card bg-red-500/10 px-3 py-2 font-body text-sm text-red-200 shadow-sm border border-red-500/20">
+                {submitError}
+              </p>
+            ) : null}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => textCaptureMutation.mutate(textDraft)}
+                disabled={textCaptureMutation.isPending || !textDraft.trim()}
+                className="rounded-pill bg-white/10 hover:bg-white/20 text-white border border-white/5 px-5 py-2 text-sm font-semibold shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 disabled:hover:bg-white/10 backdrop-blur-sm"
+              >
+                {textCaptureMutation.isPending ? 'Preparing...' : 'Review Text Capture'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(voiceCaptureMutation.isPending || textCaptureMutation.isPending) ? (
+        <ExtractingLoader variant="tasks" />
+      ) : null}
 
       {summary ? (
         <div className="space-y-3 rounded-card bg-surface-container p-4">
@@ -638,47 +678,6 @@ export function CaptureRoute() {
           />
         </div>
       ) : null}
-
-      <div className="space-y-3 rounded-card bg-surface-container p-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="font-display text-lg text-on-surface">Write it</p>
-          <button
-            type="button"
-            onClick={() => setTextExpanded((current) => !current)}
-            className="rounded-full bg-primary/20 p-2 text-primary transition-colors hover:bg-primary/30"
-            aria-label={textExpanded ? 'Collapse text input' : 'Expand text input'}
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-        </div>
-
-        {textExpanded ? (
-          <div className="space-y-3">
-            <textarea
-              value={textDraft}
-              onChange={(event) => setTextDraft(event.target.value)}
-              rows={5}
-              placeholder="Type or paste here..."
-              className="w-full rounded-card bg-surface-dim px-3 py-3 font-body text-sm text-on-surface outline-none transition focus:ring-2 focus:ring-primary/50"
-            />
-            {textCaptureMutation.isError && submitError ? (
-              <p className="rounded-card bg-tertiary/10 px-3 py-2 font-body text-sm text-on-surface">
-                {submitError}
-              </p>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => textCaptureMutation.mutate(textDraft)}
-              disabled={textCaptureMutation.isPending}
-              className="rounded-pill bg-surface-container-highest px-3 py-1.5 text-sm text-on-surface"
-            >
-              {textCaptureMutation.isPending ? 'Preparing Review' : 'Review Text Capture'}
-            </button>
-          </div>
-        ) : null}
-      </div>
 
       {/* Edit Task Modal */}
       {editModalTask && sessionQuery.data?.csrf_token && (

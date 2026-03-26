@@ -34,7 +34,7 @@ from app.services.group_service import GroupService
 from app.services.reminders import INTERNAL_JOB_SECRET_HEADER, ReminderWorkerService, ResendReminderService
 from app.services.staging import StagingService
 from app.services.task_service import TaskService
-from app.services.transcription import MistralTranscriptionService
+from app.services.transcription import MistralTranscriptionService, MockTranscriptionService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -43,7 +43,15 @@ def get_auth_service(settings: SettingsDep) -> SupabaseAuthService:
     return SupabaseAuthService(settings)
 
 
-def get_transcription_service(settings: SettingsDep) -> MistralTranscriptionService:
+def get_transcription_service(settings: SettingsDep) -> MistralTranscriptionService | MockTranscriptionService:
+    """Return the appropriate transcription service based on environment.
+
+    In dev mode (GUST_DEV_MODE=true), returns a MockTranscriptionService
+    to avoid calling external APIs during local development.
+    In production, returns the real MistralTranscriptionService.
+    """
+    if settings.gust_dev_mode:
+        return MockTranscriptionService()
     return MistralTranscriptionService(settings)
 
 
@@ -54,7 +62,7 @@ def get_extraction_service(settings: SettingsDep) -> LangChainExtractionService:
 def get_capture_service(
     settings: SettingsDep,
     transcription_service: Annotated[
-        MistralTranscriptionService,
+        MistralTranscriptionService | MockTranscriptionService,
         Depends(get_transcription_service),
     ],
     extraction_service: Annotated[

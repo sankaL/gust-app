@@ -118,25 +118,18 @@ export function SelectDropdown({
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           className={`
-            w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors
-            bg-surface-container-low text-on-surface text-left
+            w-full flex items-center justify-between px-3 py-3 rounded-card transition-all
+            bg-surface-dim text-on-surface text-left outline-none text-sm
             ${disabled 
-              ? 'opacity-50 cursor-not-allowed border-outline' 
-              : 'cursor-pointer border-outline hover:border-on-surface-variant focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary'
+              ? 'opacity-50 cursor-not-allowed' 
+              : 'cursor-pointer hover:bg-surface-container-highest focus:ring-1 focus:ring-primary'
             }
           `}
         >
-          <span className={selectedOption ? 'text-on-surface' : 'text-on-surface-variant/60'}>
+          <span className={selectedOption ? 'text-on-surface' : 'text-on-surface-variant/40'}>
             {selectedOption?.label || placeholder}
           </span>
-          <svg
-            className={`w-4 h-4 text-on-surface-variant transition-transform ${isOpen ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          <span className={`text-on-surface-variant transition-transform text-[0.6rem] ${isOpen ? 'rotate-180' : ''}`}>▼</span>
         </button>
 
         {isOpen && (
@@ -145,9 +138,9 @@ export function SelectDropdown({
             role="listbox"
             aria-label={hasLabel ? label : placeholder}
             className="
-              absolute z-50 mt-1 w-full rounded-lg border border-outline/30
-              bg-surface-container-high/95 backdrop-blur-md shadow-lg
-              max-h-60 overflow-y-auto py-1
+              absolute z-50 mt-2 w-full rounded-card
+              bg-surface-container-high/95 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.5)]
+              max-h-60 overflow-y-auto py-1 border-t border-white/10
             "
           >
             {options.map((option, index) => (
@@ -165,13 +158,7 @@ export function SelectDropdown({
               >
                 <span>{option.label}</span>
                 {option.value === value && (
-                  <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <span className="text-primary font-bold text-lg leading-none">•</span>
                 )}
               </li>
             ))}

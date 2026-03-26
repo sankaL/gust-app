@@ -134,8 +134,7 @@ describe('app shell', () => {
   it('renders the capture route by default', async () => {
     renderWithRoute(['/'])
 
-    expect(await screen.findByRole('heading', { name: 'Capture' })).toBeInTheDocument()
-    expect(screen.getByText('Voice-first foundation')).toBeInTheDocument()
+    expect(await screen.findByText('Voice-first foundation')).toBeInTheDocument()
   })
 
   it('renders the tasks route', () => {

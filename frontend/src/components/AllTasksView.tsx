@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useCallback, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Card } from './Card'
 import { listAllTasks, type TaskSummary } from '../lib/api'
 
 interface AllTasksViewProps {
@@ -61,8 +62,31 @@ function TaskCard({
 }) {
   const badge = buildDueBadge(task)
 
+  let dueTextColor = 'text-on-surface-variant/50'
+  if (task.due_date) {
+    const today = new Date()
+    const due = new Date(`${task.due_date}T00:00:00`)
+    const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
+    const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
+    const diff = dueDay - todayDay
+    if (diff < 0) dueTextColor = 'text-error'
+    else if (diff === 0) dueTextColor = 'text-warning'
+    else dueTextColor = 'text-primary'
+  }
+
+  function formatReminder(reminderAt: string | null): string {
+    if (!reminderAt) return 'none'
+    const date = new Date(reminderAt)
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+  }
+
   return (
-    <article className="bg-surface-container">
+    <Card padding="none" interactive className="bg-surface-container-high border border-white/5">
       <div
         role="button"
         tabIndex={0}
@@ -73,44 +97,67 @@ function TaskCard({
             onOpen(task.id)
           }
         }}
-        className="p-3 cursor-pointer transition-opacity hover:opacity-80 active:opacity-60"
+        className="p-4 flex items-stretch justify-between gap-4"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {task.needs_review ? (
-                <span className="inline-flex rounded-pill bg-primary/20 px-2 py-0.5 text-xs uppercase tracking-[0.1em] text-primary">
-                  Needs review
+        {/* Left Column: Title & Metadata */}
+        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+          <div className="flex flex-col gap-1.5 align-top">
+            <h3 className="font-display text-lg font-medium text-on-surface truncate leading-tight">
+              {task.title}
+            </h3>
+            
+            <div className="flex items-center gap-2 font-body text-xs text-on-surface-variant flex-wrap">
+              <span className="text-on-surface-variant/80 font-medium">
+                {task.group?.name || 'Inbox'}
+              </span>
+              {task.reminder_at && (
+                <>
+                  <span className="text-on-surface-variant/40">•</span>
+                  <span className="text-on-surface-variant/80">
+                    Reminder: {formatReminder(task.reminder_at)}
+                  </span>
+                </>
+              )}
+              {task.needs_review && (
+                <span className="inline-block px-2 py-0.5 text-[0.65rem] uppercase tracking-widest font-bold bg-warning/20 text-warning rounded-pill">
+                  Needs Review
                 </span>
-              ) : null}
-              {badge ? (
-                <span className={`inline-flex rounded-pill px-2 py-0.5 text-xs uppercase tracking-[0.1em] ${badge.tone}`}>
-                  {badge.label}
-                </span>
-              ) : null}
-              {task.recurrence_frequency ? (
-                <span className="inline-flex items-center gap-1 text-xs text-primary" title={`Recurring: ${task.recurrence_frequency}`}>
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </span>
-              ) : null}
-              {task.subtask_count > 0 ? (
-                <span className="inline-flex items-center gap-1 text-xs text-on-surface-variant" title={`${task.subtask_count} subtask${task.subtask_count > 1 ? 's' : ''}`}>
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                  <span>{task.subtask_count}</span>
-                </span>
-              ) : null}
+              )}
             </div>
-            <p className="truncate font-display text-base text-on-surface">{task.title}</p>
-            <p className="truncate font-body text-xs text-on-surface-variant">{task.group.name}</p>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <div className="rounded-pill bg-surface-container-high px-2 py-1 text-xs uppercase tracking-[0.1em] text-on-surface-variant">
-              {task.due_bucket.replace('_', ' ')}
+
+          <div className="mt-4">
+            <span className={`${dueTextColor} uppercase tracking-wider text-[0.65rem] font-bold`}>
+              Due: {badge ? badge.label : '--'}
+            </span>
+          </div>
+        </div>
+
+        {/* Right Column: Badges & Actions */}
+        <div className="flex flex-col items-end justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className={`font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill ${
+              task.recurrence_frequency 
+                ? 'bg-primary/20 text-primary' 
+                : 'bg-surface-dim text-on-surface-variant/40'
+            }`} title={task.recurrence_frequency ? `Recurring: ${task.recurrence_frequency}` : 'No recurrence'}>
+              {task.recurrence_frequency ? task.recurrence_frequency : 'ONE-OFF'}
+            </span>
+            
+            <div 
+              className="flex items-center gap-1 bg-surface-dim px-2 py-0.5 rounded-pill"
+              title={`${task.subtask_count} subtasks`}
+            >
+              <span className="font-body text-[0.65rem] text-on-surface-variant uppercase tracking-widest">
+                {task.subtask_count > 0 ? `${task.subtask_count} SUBTASKS` : '0 SUBTASKS'}
+              </span>
             </div>
+          </div>
+
+          <div 
+            className="flex items-center gap-3 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               onClick={(e) => {
@@ -118,17 +165,16 @@ function TaskCard({
                 onComplete(task)
               }}
               disabled={isBusy}
-              className="rounded-full bg-primary/20 p-1.5 text-primary disabled:opacity-50 hover:bg-primary/30 transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-primary hover:bg-surface-container-highest hover:-translate-y-0.5 transition-all duration-200 active:scale-90 active:translate-y-0 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
               aria-label={`Complete ${task.title}`}
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
             </button>
           </div>
         </div>
+
       </div>
-    </article>
+    </Card>
   )
 }
 
@@ -266,8 +312,13 @@ export function AllTasksView({ onTaskOpen, onTaskComplete, isBusy }: AllTasksVie
 
   if (isError) {
     return (
-      <div className="rounded-card border border-tertiary/30 bg-tertiary/10 p-4 text-sm text-on-surface">
-        Error loading tasks: {error instanceof Error ? error.message : 'Unknown error'}
+      <div className="flex items-start gap-3 rounded-card bg-error/10 border border-error/20 p-4 shadow-ambient">
+        <svg className="w-5 h-5 shrink-0 mt-0.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <p className="font-body text-sm font-medium text-error leading-relaxed">
+          Error loading tasks: {error instanceof Error ? error.message : 'Unknown error'}
+        </p>
       </div>
     )
   }

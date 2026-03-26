@@ -672,10 +672,8 @@ describe('tasks flow', () => {
   })
 
   it('suppresses duplicate historical completed rows for the same logical occurrence', async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = requestUrl(input)
-      const method = init?.method ?? 'GET'
-
       if (url.includes('/auth/session')) {
         return Promise.resolve(jsonResponse(buildSessionResponse()))
       }

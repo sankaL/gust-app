@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { SessionGuard } from '../components/SessionGuard'
+import { SelectDropdown } from '../components/SelectDropdown'
 import {
   ApiError,
   createGroup,
@@ -136,42 +137,39 @@ export function ManageGroupsRoute() {
     >
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
-              Task organization
-            </p>
-            <h2 className="font-display text-2xl text-on-surface">Manage Groups</h2>
-          </div>
+          <h2 className="font-display text-2xl text-on-surface">Manage Groups</h2>
           <Link
             to={`/tasks${activeGroupSearch}`}
             className="inline-flex items-center gap-2 rounded-pill bg-primary/20 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/30"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Tasks
+            &larr; Back to Tasks
           </Link>
         </div>
 
         {feedback ? (
-          <p className={`rounded-card border px-4 py-3 font-body text-sm ${
+          <div className={`flex items-start gap-3 rounded-card border p-4 shadow-ambient ${
             feedback.type === 'success'
-              ? 'border-primary/30 bg-primary/10 text-primary'
-              : 'border-tertiary/30 bg-tertiary/10 text-tertiary'
+              ? 'bg-primary/10 border-primary/20 text-primary'
+              : 'bg-error/10 border-error/20 text-error'
           }`}>
-            {feedback.message}
-          </p>
+            <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {feedback.type === 'success' ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              )}
+            </svg>
+            <p className="font-body text-sm font-medium leading-relaxed">{feedback.message}</p>
+          </div>
         ) : null}
 
         <button
           type="button"
           onClick={() => setShowAddGroupModal(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-soft bg-primary p-4 text-surface shadow-ambient transition-all duration-200 hover:bg-primary/90 hover:shadow-lg active:scale-[0.98]"
+          className="group relative flex w-full items-center justify-center gap-2 rounded-soft p-4 transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_6px_0_#171033,_0_8px_15px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.2)] hover:-translate-y-[1px] hover:shadow-[0_7px_0_#171033,_0_12px_20px_rgba(0,0,0,0.5),_inset_0_1px_2px_rgba(255,255,255,0.2)] active:translate-y-[6px] active:shadow-[0_0px_0_#171033,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_6px_rgba(0,0,0,0.3)]"
         >
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          <span className="font-body text-sm font-medium">Add Group</span>
+          <span className="font-display text-lg drop-shadow-sm">+</span>
+          <span className="font-body text-sm font-medium drop-shadow-sm">Add Group</span>
         </button>
 
         {showAddGroupModal ? (
@@ -190,23 +188,21 @@ export function ManageGroupsRoute() {
                     className="rounded-full bg-surface-container-high p-2 text-on-surface-variant transition-colors hover:bg-surface-container-highest"
                     aria-label="Close modal"
                   >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                      <span className="font-body text-xs font-bold uppercase tracking-widest">Close</span>
                   </button>
                 </div>
                 <input
                   value={newGroupName}
                   onChange={(event) => setNewGroupName(event.target.value)}
                   placeholder="Group name"
-                  className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 text-on-surface outline-none focus:border-primary"
+                  className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40 transition-all"
                 />
                 <textarea
                   value={newGroupDescription}
                   onChange={(event) => setNewGroupDescription(event.target.value)}
                   placeholder="Optional description for AI routing"
                   rows={3}
-                  className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 text-on-surface outline-none focus:border-primary"
+                  className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40 transition-all"
                 />
                 <div className="flex gap-3">
                   <button
@@ -249,23 +245,34 @@ export function ManageGroupsRoute() {
             const isEditing = drafts[group.id] !== undefined
 
             return (
-              <section key={group.id} className="rounded-soft bg-surface-container p-4 shadow-ambient">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-display text-xl text-on-surface">{group.name}</p>
-                        {group.is_system ? (
-                          <span className="rounded-pill bg-primary/20 px-2 py-1 text-xs uppercase tracking-[0.1em] text-primary">
-                            Locked Inbox
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-1 font-body text-xs text-on-surface-variant">
-                        {group.open_task_count} open tasks
+              <section key={group.id} className="rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4">
+                <div className="flex items-start justify-between gap-4">
+                  {/* Left Column: Title & Metadata */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display text-lg font-medium text-on-surface truncate leading-tight">
+                      {group.name}
+                    </h3>
+                    {group.description && (
+                      <p className="font-body text-xs text-on-surface-variant line-clamp-2 mt-1">
+                        {group.description}
                       </p>
+                    )}
+                  </div>
+
+                  {/* Right Column: Badges & Actions */}
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-surface-dim text-on-surface-variant">
+                        {group.open_task_count > 0 ? `${group.open_task_count} TASKS` : '0 TASKS'}
+                      </span>
+                      {group.is_system && (
+                        <span className="font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-primary/20 text-primary">
+                          LOCKED
+                        </span>
+                      )}
                     </div>
-                    {!group.is_system ? (
+
+                    {!group.is_system && (
                       <button
                         type="button"
                         onClick={() => {
@@ -284,25 +291,18 @@ export function ManageGroupsRoute() {
                             })
                           }
                         }}
-                        className="rounded-full bg-surface-container-high p-2 text-on-surface-variant transition-colors hover:bg-surface-container-highest"
+                        className="rounded-pill bg-surface-dim px-3 py-1 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] hover:-translate-y-0.5 transition-all active:scale-95 mt-1"
                         aria-label={isEditing ? 'Cancel editing' : 'Edit group'}
                       >
-                        {isEditing ? (
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        ) : (
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        )}
+                        {isEditing ? 'Cancel' : 'Edit'}
                       </button>
-                    ) : null}
+                    )}
                   </div>
+                </div>
 
                   {isEditing ? (
                     <>
-                      <div className="grid gap-3">
+                      <div className="grid gap-3 pt-4 border-t border-white/5">
                         <input
                           value={draft.name}
                           onChange={(event) =>
@@ -314,7 +314,8 @@ export function ManageGroupsRoute() {
                               }
                             })
                           }
-                          className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 text-on-surface outline-none focus:border-primary"
+                          className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40 transition-all"
+                          placeholder="Group name"
                         />
                         <textarea
                           value={draft.description}
@@ -328,7 +329,8 @@ export function ManageGroupsRoute() {
                             })
                           }
                           rows={3}
-                          className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 text-on-surface outline-none focus:border-primary"
+                          className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40 transition-all"
+                          placeholder="Group description"
                         />
                       </div>
 
@@ -354,40 +356,34 @@ export function ManageGroupsRoute() {
                         </button>
                       </div>
 
-                      <div className="rounded-card bg-surface-dim p-3">
-                        <div className="space-y-2">
-                          <p className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
-                            Delete group
+                      <div className="rounded-card bg-surface-dim p-4">
+                        <div className="space-y-4">
+                          <p className="font-body text-[0.65rem] font-bold uppercase tracking-widest text-error">
+                            Danger Zone
                           </p>
-                          <select
+                          <SelectDropdown
+                            label=""
                             value={deleteTargets[group.id] ?? ''}
-                            onChange={(event) =>
+                            onChange={(val) => 
                               setDeleteTargets({
                                 ...deleteTargets,
-                                [group.id]: event.target.value
+                                [group.id]: String(val)
                               })
                             }
-                            className="w-full rounded-card border border-outline/20 bg-surface-container px-3 py-3 text-on-surface outline-none focus:border-primary"
-                          >
-                            <option value="">Choose destination group</option>
-                            {deletionOptions.map((candidate) => (
-                              <option key={candidate.id} value={candidate.id}>
-                                {candidate.name}
-                              </option>
-                            ))}
-                          </select>
+                            placeholder="Move all tasks to..."
+                            options={deletionOptions.map(c => ({ value: c.id, label: c.name }))}
+                          />
                           <button
                             type="button"
                             onClick={() => deleteGroupMutation.mutate(group.id)}
-                            className="rounded-pill border border-outline/30 px-4 py-2 text-sm text-on-surface-variant"
+                            className="rounded-pill bg-error/20 px-4 py-2 text-sm text-error font-medium w-full shadow-[0_4px_12px_rgba(0,0,0,0.5)] hover:-translate-y-0.5 transition-all active:scale-95"
                           >
-                            Delete and Reassign
+                            Delete Group & Reassign Tasks
                           </button>
                         </div>
                       </div>
                     </>
                   ) : null}
-                </div>
               </section>
             )
           })}

@@ -54,7 +54,11 @@ from app.services.extraction_models import (
 )
 from app.services.staging import StagingService
 from app.services.task_rules import RecurrenceInput, normalize_task_fields
-from app.services.transcription import TranscriptionServiceError
+from app.services.transcription import (
+    MistralTranscriptionService,
+    MockTranscriptionService,
+    TranscriptionServiceError,
+)
 
 logger = logging.getLogger("gust.api")
 
@@ -66,7 +70,7 @@ class TranscriptionClient(Protocol):
         audio_bytes: bytes,
         filename: str,
         content_type: str,
-    ): ...
+    ) -> TranscriptionResult: ...
 
 
 class ExtractionClient(Protocol):
@@ -131,7 +135,7 @@ class CaptureService:
         self,
         *,
         settings: Settings,
-        transcription_service: TranscriptionClient,
+        transcription_service: MistralTranscriptionService | MockTranscriptionService,
         extraction_service: ExtractionClient,
         staging_service: StagingService,
     ) -> None:

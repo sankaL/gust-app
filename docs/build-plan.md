@@ -88,6 +88,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-06 | Implement persistent pending extracted tasks list with user-scoped queries and Railway cron cleanup job | IN PROGRESS | 2026-03-24 | Backend: modified cleanup job to only delete approved/discarded, added /pending-tasks endpoint. Frontend: added listPendingTasks, persistent pending list UI. Database schema docs updated. | pending-list-redesign-plan.md |
 | ADH-07 | Enhance task extraction system prompt with multi-task and subtask decomposition guidance | DONE | 2026-03-24 | Added step-by-step extraction strategy, task boundary rules, signal word handling, comprehensive examples including test case, and self-verification checklist to extraction_prompts.py. Added test_extraction_comprehensive.py with regression coverage. | extraction-improvement-plan.md |
 | ADH-08 | Implement recurring delete scope and per-group completed tasks page | DONE | 2026-03-25 | Added recurring delete scope (`occurrence` / `series`) with backend lifecycle handling, new completed-tasks route with reopen actions, and regression coverage for recurring delete/restore behavior. | PRD, Tech |
+| ADH-09 | Refine Mic Button UI | DONE | 2026-03-26 | Updated the capture page mic button to reduce outer glow and introduce a 3D tactile material feel. | Design |
 
 ## Bug Fixes
 
