@@ -13,19 +13,18 @@ class JsonExtraFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
 
-        for key in (
-            "event",
-            "request_id",
-            "method",
-            "path",
-            "status_code",
-            "duration_ms",
-            "user_id",
-            "task_id",
-            "capture_id",
-            "error_code",
-        ):
-            value = getattr(record, key, None)
+        # Include all extra fields from the record
+        # This captures any additional fields passed via the 'extra' parameter
+        for key, value in record.__dict__.items():
+            # Skip standard LogRecord attributes and private attributes
+            if key.startswith("_") or key in (
+                "name", "msg", "args", "levelname", "levelno", "pathname",
+                "filename", "module", "exc_info", "exc_text", "stack_info",
+                "lineno", "funcName", "created", "msecs", "relativeCreated",
+                "thread", "threadName", "processName", "process", "message"
+            ):
+                continue
+            # Include the extra field if it's not None
             if value is not None:
                 payload[key] = value
 
@@ -44,3 +43,7 @@ def configure_logging(level: str) -> None:
 
     root_logger.addHandler(handler)
     root_logger.setLevel(level.upper())
+
+    # Suppress LangChain debug/info logging to prevent transcript content leakage
+    for logger_name in ("langchain", "langchain_core", "langchain_openai", "openai", "httpx", "httpcore"):
+        logging.getLogger(logger_name).setLevel(logging.WARNING)

@@ -311,7 +311,7 @@ def test_list_tasks_applies_sorting_and_user_scope(app: FastAPI, client: TestCli
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["title"] for item in payload] == [
+    assert [item["title"] for item in payload["items"]] == [
         "Old overdue",
         "Flagged today",
         "Tomorrow task",
@@ -425,6 +425,47 @@ def test_complete_reopen_delete_restore_manage_reminders(
     assert reminder_row.status == "pending"
 
 
+def test_complete_task_rejects_when_already_completed(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Already Completed")
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Done already",
+        status="completed",
+    )
+
+    response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "task_completion_conflict"
+
+
+def test_complete_recurring_task_rejects_if_due_date_is_in_future(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Future Completion Guard")
+    tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Future recurring",
+        due_date_value=tomorrow,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+        series_id=str(uuid.uuid4()),
+    )
+
+    response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "task_completion_conflict"
+
+
 def test_complete_task_creates_next_daily_occurrence_with_reset_subtasks(
     app: FastAPI,
     client: TestClient,
@@ -497,6 +538,229 @@ def test_complete_task_creates_next_daily_occurrence_with_reset_subtasks(
     assert next_subtask_rows[0].completed_at is None
     assert len(reminder_rows) == 1
     assert reminder_rows[0].status == "pending"
+
+
+def test_complete_task_repairs_missing_series_id_and_generates_next_occurrence(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Legacy Recurring")
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Legacy recurring",
+        due_date_value=today,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+        series_id=None,
+    )
+
+    response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        original_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+        assert original_row.series_id is not None
+        task_rows = connection.execute(
+            sa.select(tasks)
+            .where(tasks.c.series_id == original_row.series_id)
+            .order_by(tasks.c.created_at.asc(), tasks.c.id.asc())
+        ).fetchall()
+
+    assert len(task_rows) == 2
+    assert any(row.status == "open" and row.deleted_at is None for row in task_rows)
+
+
+def test_delete_task_occurrence_creates_next_occurrence_from_due_date(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Delete Occurrence")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    recurrence_weekday = (today.weekday() + 1) % 7
+    reminder_at_value = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc) + timedelta(
+        hours=23
+    )
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Weekly planning",
+        due_date_value=today,
+        reminder_at_value=reminder_at_value,
+        reminder_offset_minutes=1380,
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=recurrence_weekday,
+    )
+    _seed_reminder(client, user_id=USER_ID, task_id=task_id, scheduled_for=reminder_at_value)
+
+    response = client.request(
+        "DELETE",
+        f"/tasks/{task_id}?scope=occurrence",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks)
+            .where(tasks.c.series_id == series_id)
+            .order_by(tasks.c.created_at.asc(), tasks.c.id.asc())
+        ).fetchall()
+        original_row = next(row for row in task_rows if str(row.id) == task_id)
+        next_row = next(row for row in task_rows if str(row.id) != task_id)
+        original_reminder = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == task_id)
+        ).one()
+        next_reminder = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == next_row.id)
+        ).one()
+
+    assert len(task_rows) == 2
+    assert original_row.deleted_at is not None
+    assert original_row.status == "open"
+    assert next_row.status == "open"
+    assert next_row.deleted_at is None
+    assert next_row.due_date == today + timedelta(days=7)
+    assert original_reminder.status == "cancelled"
+    assert next_reminder.status == "pending"
+
+
+def test_delete_occurrence_repairs_missing_series_id_and_generates_next_occurrence(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Legacy Delete")
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Legacy delete recurring",
+        due_date_value=today,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+        series_id=None,
+    )
+
+    response = client.request(
+        "DELETE",
+        f"/tasks/{task_id}?scope=occurrence",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        original_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+        assert original_row.series_id is not None
+        task_rows = connection.execute(
+            sa.select(tasks)
+            .where(tasks.c.series_id == original_row.series_id)
+            .order_by(tasks.c.created_at.asc(), tasks.c.id.asc())
+        ).fetchall()
+
+    assert len(task_rows) == 2
+    assert any(row.status == "open" and row.deleted_at is None for row in task_rows)
+
+
+def test_delete_task_series_soft_deletes_open_occurrences_only(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Delete Series")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    open_task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Series task",
+        due_date_value=today,
+        series_id=series_id,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+    )
+    second_open_task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Series task",
+        due_date_value=today + timedelta(days=1),
+        series_id=series_id,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+    )
+    completed_task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Series task",
+        status="completed",
+        due_date_value=today - timedelta(days=1),
+        series_id=series_id,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+    )
+
+    first_reminder = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=2)
+    second_reminder = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=3)
+    _seed_reminder(client, user_id=USER_ID, task_id=open_task_id, scheduled_for=first_reminder)
+    _seed_reminder(client, user_id=USER_ID, task_id=second_open_task_id, scheduled_for=second_reminder)
+
+    response = client.request(
+        "DELETE",
+        f"/tasks/{open_task_id}?scope=series",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        open_row = connection.execute(sa.select(tasks).where(tasks.c.id == open_task_id)).one()
+        second_open_row = connection.execute(sa.select(tasks).where(tasks.c.id == second_open_task_id)).one()
+        completed_row = connection.execute(sa.select(tasks).where(tasks.c.id == completed_task_id)).one()
+        open_reminder = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == open_task_id)
+        ).one()
+        second_open_reminder = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == second_open_task_id)
+        ).one()
+
+    assert open_row.deleted_at is not None
+    assert second_open_row.deleted_at is not None
+    assert completed_row.deleted_at is None
+    assert completed_row.status == "completed"
+    assert open_reminder.status == "cancelled"
+    assert second_open_reminder.status == "cancelled"
+
+
+def test_delete_task_rejects_when_already_deleted(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Delete Guard")
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Deleted already",
+        deleted_at_value=datetime.now(timezone.utc),
+    )
+
+    response = client.request("DELETE", f"/tasks/{task_id}", headers=headers)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "task_delete_conflict"
 
 
 def test_complete_task_monthly_recurrence_uses_new_occurrence_day_of_month(
@@ -677,16 +941,193 @@ def test_reopen_recurring_task_reuses_generated_occurrence_as_undo_target(
 
     assert len(open_rows) == 1
     assert str(open_rows[0].id) == task_id
+    assert str(open_rows[0].series_id) == series_id
+    assert open_rows[0].recurrence_frequency == "daily"
     assert generated_task.deleted_at is not None
     assert generated_reminder.status == "cancelled"
 
 
-def test_reopen_recurring_task_rejects_when_series_has_other_open_occurrence(
+def test_reopen_recurring_task_keeps_series_and_generates_single_next_on_recomplete(
     app: FastAPI,
     client: TestClient,
 ) -> None:
     headers = _authenticated_headers(app, client)
-    group_id = _seed_group(client, user_id=USER_ID, name="Reopen Conflict")
+    group_id = _seed_group(client, user_id=USER_ID, name="Reopen Keep Series")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Daily mobility",
+        due_date_value=today,
+        series_id=series_id,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+    )
+
+    first_complete_response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+    reopen_response = client.post(f"/tasks/{task_id}/reopen", headers=headers)
+    second_complete_response = client.post(f"/tasks/{task_id}/complete", headers=headers)
+
+    assert first_complete_response.status_code == 200
+    assert reopen_response.status_code == 200
+    assert second_complete_response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks)
+            .where(tasks.c.series_id == series_id)
+            .order_by(tasks.c.created_at.asc(), tasks.c.id.asc())
+        ).fetchall()
+        open_rows = [
+            row
+            for row in task_rows
+            if row.status == "open" and row.deleted_at is None
+        ]
+        deleted_rows = [row for row in task_rows if row.deleted_at is not None]
+
+    assert len(task_rows) == 3
+    assert len(open_rows) == 1
+    assert open_rows[0].due_date == today + timedelta(days=1)
+    assert len(deleted_rows) == 1
+
+
+def test_restore_deleted_recurring_task_reuses_generated_occurrence_as_undo_target(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Restore Series")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    reminder_at_value = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc) + timedelta(
+        hours=9
+    )
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Daily cleanup",
+        due_date_value=today,
+        reminder_at_value=reminder_at_value,
+        reminder_offset_minutes=540,
+        series_id=series_id,
+        recurrence_frequency="daily",
+        recurrence_interval=1,
+    )
+    _seed_reminder(client, user_id=USER_ID, task_id=task_id, scheduled_for=reminder_at_value)
+
+    delete_response = client.request(
+        "DELETE",
+        f"/tasks/{task_id}?scope=occurrence",
+        headers=headers,
+    )
+    restore_response = client.post(f"/tasks/{task_id}/restore", headers=headers)
+
+    assert delete_response.status_code == 200
+    assert restore_response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks)
+            .where(tasks.c.series_id == series_id)
+            .order_by(tasks.c.created_at.asc(), tasks.c.id.asc())
+        ).fetchall()
+        generated_task = next(row for row in task_rows if str(row.id) != task_id)
+        generated_reminder = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == generated_task.id)
+        ).one()
+        open_rows = [
+            row
+            for row in task_rows
+            if row.status == "open" and row.deleted_at is None
+        ]
+
+    assert len(open_rows) == 1
+    assert str(open_rows[0].id) == task_id
+    assert str(open_rows[0].series_id) == series_id
+    assert open_rows[0].recurrence_frequency == "daily"
+    assert generated_task.deleted_at is not None
+    assert generated_reminder.status == "cancelled"
+
+
+def test_reopen_recurring_task_returns_single_non_recurring_instance_when_no_open_occurrence_exists(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Reopen Instance Only")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Weekly cleanup",
+        status="completed",
+        due_date_value=today,
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=((today.weekday() + 1) % 7),
+    )
+
+    response = client.post(f"/tasks/{task_id}/reopen", headers=headers)
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+
+    assert task_row.status == "open"
+    assert task_row.series_id is None
+    assert task_row.recurrence_frequency is None
+
+
+def test_restore_deleted_recurring_task_returns_single_non_recurring_instance_when_no_open_occurrence_exists(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Restore Instance Only")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Monthly cleanup",
+        due_date_value=today,
+        deleted_at_value=datetime.now(timezone.utc),
+        series_id=series_id,
+        recurrence_frequency="monthly",
+        recurrence_interval=1,
+        recurrence_day_of_month=today.day,
+    )
+
+    response = client.post(f"/tasks/{task_id}/restore", headers=headers)
+
+    assert response.status_code == 200
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+
+    assert task_row.status == "open"
+    assert task_row.deleted_at is None
+    assert task_row.series_id is None
+    assert task_row.recurrence_frequency is None
+
+
+def test_reopen_recurring_task_detaches_when_series_has_other_open_occurrence(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    """When reopening a recurring task that has another open occurrence in the series,
+    the task should be detached from the series (made non-recurring) so users can
+    still access their accidentally-completed work."""
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Reopen Detach")
     series_id = str(uuid.uuid4())
     today = datetime.now(timezone.utc).date()
     task_id = _seed_task(
@@ -711,6 +1152,7 @@ def test_reopen_recurring_task_rejects_when_series_has_other_open_occurrence(
                 updated_at=sa.text("CURRENT_TIMESTAMP"),
             )
         )
+    # Create a manually adjusted open task in the same series
     _seed_task(
         client,
         user_id=USER_ID,
@@ -725,8 +1167,57 @@ def test_reopen_recurring_task_rejects_when_series_has_other_open_occurrence(
 
     reopen_response = client.post(f"/tasks/{task_id}/reopen", headers=headers)
 
-    assert reopen_response.status_code == 409
-    assert reopen_response.json()["error"]["code"] == "task_reopen_conflict"
+    # Should succeed by detaching the task from the series
+    assert reopen_response.status_code == 200
+    task_data = reopen_response.json()
+    assert task_data["status"] == "open"
+    assert task_data["series_id"] is None
+    assert task_data["recurrence_frequency"] is None
+
+
+def test_restore_deleted_recurring_task_detaches_when_series_has_other_open_occurrence(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    """When restoring a deleted recurring task that has another open occurrence in
+    the series, the task should be detached from the series (made non-recurring)."""
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Restore Detach")
+    series_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date()
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Weekly sync",
+        due_date_value=today,
+        deleted_at_value=datetime.now(timezone.utc),
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=((today.weekday() + 2) % 7),
+    )
+    # Create a manually adjusted open task in the same series
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Manually adjusted weekly sync",
+        due_date_value=today + timedelta(days=14),
+        series_id=series_id,
+        recurrence_frequency="weekly",
+        recurrence_interval=1,
+        recurrence_weekday=((today.weekday() + 2) % 7),
+    )
+
+    restore_response = client.post(f"/tasks/{task_id}/restore", headers=headers)
+
+    # Should succeed by detaching the task from the series
+    assert restore_response.status_code == 200
+    task_data = restore_response.json()
+    assert task_data["status"] == "open"
+    assert task_data["series_id"] is None
+    assert task_data["recurrence_frequency"] is None
 
 
 def test_subtask_crud_and_user_scoping(app: FastAPI, client: TestClient) -> None:

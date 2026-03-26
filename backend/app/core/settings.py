@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     )
     database_url: str = Field(validation_alias=AliasChoices("DATABASE_URL"))
     required_alembic_revision: str = Field(
-        default="0004_phase4_reminders_retention",
+        default="0005_phase5_capture_staging",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -80,12 +80,32 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("OPENROUTER_API_KEY"),
     )
     openrouter_extraction_model: str = Field(
-        default="openai/gpt-4.1-mini",
+        default="google/gemini-3-flash-preview",
         validation_alias=AliasChoices("OPENROUTER_EXTRACTION_MODEL"),
     )
     extraction_timeout_seconds: float = Field(
         default=20.0,
         validation_alias=AliasChoices("EXTRACTION_TIMEOUT_SECONDS"),
+    )
+    extraction_max_retries: int = Field(
+        default=3,
+        validation_alias=AliasChoices("EXTRACTION_MAX_RETRIES"),
+    )
+    extraction_retry_base_delay: float = Field(
+        default=1.0,
+        validation_alias=AliasChoices("EXTRACTION_RETRY_BASE_DELAY"),
+    )
+    extraction_retry_max_delay: float = Field(
+        default=10.0,
+        validation_alias=AliasChoices("EXTRACTION_RETRY_MAX_DELAY"),
+    )
+    extraction_model_config_path: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("EXTRACTION_MODEL_CONFIG_PATH"),
+    )
+    extraction_ab_test_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("EXTRACTION_AB_TEST_ENABLED"),
     )
     resend_api_url: str = Field(
         default="https://api.resend.com/emails",

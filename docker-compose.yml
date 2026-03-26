@@ -5,8 +5,8 @@ services:
       dockerfile: frontend/Dockerfile
     working_dir: /workspace/frontend
     environment:
-      VITE_GUST_DEV_MODE: "true"
-      VITE_API_BASE_URL: "http://localhost:${GUST_BACKEND_PORT:-8000}"
+      VITE_GUST_DEV_MODE: "${VITE_GUST_DEV_MODE}"
+      VITE_API_BASE_URL: "${VITE_API_BASE_URL}"
     volumes:
       - .:/workspace
       - frontend-node-modules:/workspace/frontend/node_modules
@@ -22,17 +22,34 @@ services:
       dockerfile: backend/Dockerfile
     working_dir: /workspace/backend
     environment:
-      APP_ENV: development
-      GUST_DEV_MODE: "true"
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@host.docker.internal:${GUST_SUPABASE_DB_PORT:-54322}/postgres
-      REQUIRED_ALEMBIC_REVISION: 0003_phase2_capture_extraction
-      RUN_STARTUP_CHECKS: "true"
-      LOG_LEVEL: INFO
-      FRONTEND_APP_URL: "http://localhost:${GUST_FRONTEND_PORT:-3000}"
-      BACKEND_PUBLIC_URL: "http://localhost:${GUST_BACKEND_PORT:-8000}"
-      SUPABASE_URL: "http://host.docker.internal:${GUST_SUPABASE_API_PORT:-54321}"
-      SUPABASE_ANON_KEY: "${GUST_SUPABASE_ANON_KEY}"
-      SESSION_COOKIE_SECURE: "false"
+      APP_ENV: "${APP_ENV}"
+      GUST_DEV_MODE: "${GUST_DEV_MODE}"
+      DATABASE_URL: "${DATABASE_URL}"
+      REQUIRED_ALEMBIC_REVISION: "${REQUIRED_ALEMBIC_REVISION}"
+      RUN_STARTUP_CHECKS: "${RUN_STARTUP_CHECKS}"
+      LOG_LEVEL: "${LOG_LEVEL}"
+      FRONTEND_APP_URL: "${FRONTEND_APP_URL}"
+      BACKEND_PUBLIC_URL: "${BACKEND_PUBLIC_URL}"
+      SUPABASE_URL: "${SUPABASE_URL}"
+      SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY}"
+      SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE}"
+      SESSION_COOKIE_DOMAIN: "${SESSION_COOKIE_DOMAIN}"
+      CAPTURE_RETENTION_DAYS: "${CAPTURE_RETENTION_DAYS}"
+      MISTRAL_API_URL: "${MISTRAL_API_URL}"
+      MISTRAL_API_KEY: "${MISTRAL_API_KEY}"
+      MISTRAL_TRANSCRIPTION_MODEL: "${MISTRAL_TRANSCRIPTION_MODEL}"
+      TRANSCRIPTION_TIMEOUT_SECONDS: "${TRANSCRIPTION_TIMEOUT_SECONDS}"
+      OPENROUTER_API_URL: "${OPENROUTER_API_URL}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
+      OPENROUTER_EXTRACTION_MODEL: "${OPENROUTER_EXTRACTION_MODEL}"
+      EXTRACTION_TIMEOUT_SECONDS: "${EXTRACTION_TIMEOUT_SECONDS}"
+      RESEND_API_URL: "${RESEND_API_URL}"
+      RESEND_API_KEY: "${RESEND_API_KEY}"
+      RESEND_FROM_EMAIL: "${RESEND_FROM_EMAIL}"
+      INTERNAL_JOB_SHARED_SECRET: "${INTERNAL_JOB_SHARED_SECRET}"
+      REMINDER_BATCH_SIZE: "${REMINDER_BATCH_SIZE}"
+      REMINDER_CLAIM_TIMEOUT_SECONDS: "${REMINDER_CLAIM_TIMEOUT_SECONDS}"
+      REMINDER_REQUEST_TIMEOUT_SECONDS: "${REMINDER_REQUEST_TIMEOUT_SECONDS}"
     volumes:
       - .:/workspace
     ports:

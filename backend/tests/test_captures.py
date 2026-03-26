@@ -16,10 +16,11 @@ from app.core.dependencies import (
     get_extraction_service,
     get_transcription_service,
 )
+from app.core.errors import InvalidConfigurationError
 from app.core.security import ACCESS_TOKEN_COOKIE
 from app.db.engine import connection_scope
 from app.db.repositories import ensure_inbox_group, upsert_user
-from app.db.schema import captures, groups, reminders, subtasks, tasks
+from app.db.schema import captures, extracted_tasks, groups, reminders, subtasks, tasks
 from app.services.auth import AuthenticatedIdentity
 from app.services.extraction import ExtractorMalformedResponseError
 from app.services.transcription import TranscriptionResult, TranscriptionServiceError
@@ -68,10 +69,16 @@ class FakeExtractionService:
     call_count: int = 0
     requests: list[Any] = field(default_factory=list)
 
-    async def extract(self, *, request, schema: dict[str, object]) -> dict[str, object]:
+    async def extract(
+        self,
+        *,
+        request,
+        schema: Optional[dict[str, object]] = None,
+    ) -> dict[str, object]:
         self.call_count += 1
         self.requests.append(request)
-        assert "properties" in schema
+        if schema is not None:
+            assert "properties" in schema
         response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -148,6 +155,58 @@ def _seed_open_task(
                 needs_review=False,
             )
         )
+
+
+def _seed_capture(
+    client: TestClient,
+    *,
+    user_id: str,
+    status: str = "ready_for_review",
+) -> str:
+    capture_id = str(uuid.uuid4())
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            captures.insert().values(
+                id=capture_id,
+                user_id=user_id,
+                input_type="text",
+                status=status,
+                transcript_text="Plan roadmap",
+                expires_at=datetime(2026, 3, 29, tzinfo=timezone.utc),
+            )
+        )
+    return capture_id
+
+
+def _seed_extracted_task(
+    client: TestClient,
+    *,
+    user_id: str,
+    capture_id: str,
+    group_id: str,
+    status: str = "pending",
+) -> str:
+    extracted_task_id = str(uuid.uuid4())
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            extracted_tasks.insert().values(
+                id=extracted_task_id,
+                user_id=user_id,
+                capture_id=capture_id,
+                title="Review draft",
+                group_id=group_id,
+                group_name="Inbox",
+                due_date=None,
+                reminder_at=None,
+                recurrence_frequency=None,
+                recurrence_weekday=None,
+                recurrence_day_of_month=None,
+                top_confidence=0.9,
+                needs_review=False,
+                status=status,
+            )
+        )
+    return extracted_task_id
 
 
 def _authenticated_headers(app: FastAPI, client: TestClient) -> dict[str, str]:
@@ -251,6 +310,34 @@ def test_voice_capture_marks_capture_failed_on_transcription_error(
 
     assert capture_row.status == "transcription_failed"
     assert capture_row.error_code == "transcription_provider_error"
+
+
+def test_voice_capture_returns_config_invalid_for_invalid_transcription_model(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            error=InvalidConfigurationError("Configured Mistral transcription model is invalid."),
+        ),
+    )
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "config_invalid"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "transcription_failed"
+    assert capture_row.error_code == "config_invalid"
 
 
 def test_submit_capture_persists_tasks_subtasks_and_reminders(
@@ -545,6 +632,162 @@ def test_submit_capture_returns_zero_actionable_when_all_items_are_skipped(
     assert payload["zero_actionable"] is True
 
 
+def test_submit_capture_repairs_missing_guarded_intent_with_second_extraction(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    work_group_id = _seed_group(client, user_id=user_id, name="Work", description="Job")
+    transcript = (
+        "So I need to create a resume for AI product manager and start applying to some jobs "
+        "using it to do that. I need to fix up my resume, do some research on what skills they "
+        "should have and maybe upskill my skills too. And also I should uh I gotta call my "
+        "dentist to probably tomorrow. Um around 9 a.m. to fix my metal thing in my mouth. Yeah."
+    )
+
+    create_response = client.post("/captures/text", json={"text": transcript}, headers=headers)
+    capture_id = create_response.json()["capture_id"]
+    fake_extraction = FakeExtractionService(
+        responses=[
+            {
+                "tasks": [
+                    {
+                        "title": "Create resume for AI product manager",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Apply to AI product manager jobs",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                ]
+            },
+            {
+                "tasks": [
+                    {
+                        "title": "Create resume for AI product manager",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Apply to AI product manager jobs",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Call dentist tomorrow at 9am about metal thing in mouth",
+                        "group_name": "Inbox",
+                        "top_confidence": 0.92,
+                    },
+                ]
+            },
+        ]
+    )
+    _override_extraction_service(app, fake_extraction)
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": transcript},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tasks_created_count"] == 3
+    assert fake_extraction.call_count == 2
+    assert fake_extraction.requests[1].missing_guarded_clauses is not None
+    assert "call my dentist" in fake_extraction.requests[1].missing_guarded_clauses[0].lower()
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks).where(tasks.c.capture_id == capture_id).order_by(tasks.c.title)
+        ).fetchall()
+
+    assert [row.title for row in task_rows] == [
+        "Apply to AI product manager jobs",
+        "Call dentist tomorrow at 9am about metal thing in mouth",
+        "Create resume for AI product manager",
+    ]
+    assert task_rows[0].group_id == work_group_id
+
+
+def test_submit_capture_creates_fallback_review_task_when_guarded_intent_still_missing(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    _seed_group(client, user_id=user_id, name="Work", description="Job")
+    transcript = (
+        "So I need to create a resume for AI product manager and start applying to some jobs "
+        "using it to do that. I need to fix up my resume, do some research on what skills they "
+        "should have and maybe upskill my skills too. And also I should uh I gotta call my "
+        "dentist to probably tomorrow. Um around 9 a.m. to fix my metal thing in my mouth. Yeah."
+    )
+
+    create_response = client.post("/captures/text", json={"text": transcript}, headers=headers)
+    capture_id = create_response.json()["capture_id"]
+    fake_extraction = FakeExtractionService(
+        responses=[
+            {
+                "tasks": [
+                    {
+                        "title": "Create resume for AI product manager",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Apply to AI product manager jobs",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                ]
+            },
+            {
+                "tasks": [
+                    {
+                        "title": "Create resume for AI product manager",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                    {
+                        "title": "Apply to AI product manager jobs",
+                        "group_name": "Work",
+                        "top_confidence": 0.9,
+                    },
+                ]
+            },
+        ]
+    )
+    _override_extraction_service(app, fake_extraction)
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": transcript},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tasks_created_count"] == 3
+    assert response.json()["tasks_flagged_for_review_count"] == 1
+    assert fake_extraction.call_count == 2
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_rows = connection.execute(
+            sa.select(tasks).where(tasks.c.capture_id == capture_id).order_by(tasks.c.created_at.asc())
+        ).fetchall()
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+
+    fallback_task = next(row for row in task_rows if "call my dentist" in row.title.lower())
+    assert fallback_task.group_id == inbox_group.id
+    assert fallback_task.needs_review is True
+    assert fallback_task.title == (
+        "Call my dentist to probably tomorrow around 9 a.m "
+        "to fix my metal thing in my mouth"
+    )
+
+
 def test_submit_capture_is_scoped_to_the_authenticated_user(
     app: FastAPI,
     client: TestClient,
@@ -579,3 +822,116 @@ def test_submit_capture_is_scoped_to_the_authenticated_user(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "capture_not_found"
+
+
+def test_list_extracted_tasks_allows_authenticated_get_without_csrf(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    _override_auth_service(app)
+    _seed_user(client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    client.cookies.set(ACCESS_TOKEN_COOKIE, "access-token")
+
+    capture_id = _seed_capture(client, user_id=user_id)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+    _seed_extracted_task(
+        client,
+        user_id=user_id,
+        capture_id=capture_id,
+        group_id=inbox_group.id,
+        status="pending",
+    )
+
+    response = client.get(f"/captures/{capture_id}/extracted-tasks")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["status"] == "pending"
+
+
+def test_approve_extracted_task_returns_not_found_for_unknown_row(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    capture_id = _seed_capture(client, user_id=user_id)
+
+    response = client.post(
+        f"/captures/{capture_id}/extracted-tasks/{uuid.uuid4()}/approve",
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "extracted_task_not_found"
+
+
+def test_complete_capture_conflicts_when_pending_extracted_tasks_exist(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    capture_id = _seed_capture(client, user_id=user_id)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+    _seed_extracted_task(
+        client,
+        user_id=user_id,
+        capture_id=capture_id,
+        group_id=inbox_group.id,
+        status="pending",
+    )
+
+    response = client.post(f"/captures/{capture_id}/complete", headers=headers)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "capture_state_conflict"
+
+
+def test_re_extract_replaces_existing_staged_tasks_for_capture(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    capture_id = _seed_capture(client, user_id=user_id)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+    _seed_extracted_task(
+        client,
+        user_id=user_id,
+        capture_id=capture_id,
+        group_id=inbox_group.id,
+        status="pending",
+    )
+    _override_extraction_service(
+        app,
+        FakeExtractionService(
+            responses=[
+                {"tasks": [{"title": "New extracted task", "group_name": "Inbox", "top_confidence": 0.92}]}
+            ]
+        ),
+    )
+
+    response = client.post(
+        f"/captures/{capture_id}/re-extract",
+        json={"transcript_text": "New transcript text"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["title"] == "New extracted task"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        rows = connection.execute(
+            sa.select(extracted_tasks).where(extracted_tasks.c.capture_id == capture_id)
+        ).fetchall()
+
+    assert len(rows) == 1
+    assert rows[0].title == "New extracted task"

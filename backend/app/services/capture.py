@@ -7,12 +7,14 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Protocol
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 
 from app.core.errors import (
     CaptureNotFoundError,
     CaptureStateConflictError,
+    ConfigurationError,
     ExtractionFailedError,
+    InvalidConfigurationError,
     InvalidCaptureError,
     TranscriptionFailedError,
 )
@@ -23,12 +25,14 @@ from app.db.repositories import (
     GroupContextRecord,
     GroupRecord,
     create_capture,
+    delete_extracted_tasks_by_capture,
     create_reminder,
     create_subtasks,
     create_task,
     ensure_inbox_group,
     get_capture,
     get_user,
+    list_extracted_tasks,
     list_groups_with_recent_tasks,
     update_capture,
 )
@@ -37,8 +41,24 @@ from app.services.extraction import (
     ExtractionServiceError,
     ExtractorMalformedResponseError,
 )
+from app.services.extraction_guardrails import (
+    GuardedIntent,
+    build_fallback_title,
+    detect_guarded_intents,
+    find_missing_guarded_intents,
+)
+from app.services.extraction_models import (
+    ExtractionRecurrence,
+    ExtractedTaskCandidate,
+    ExtractorPayload,
+)
+from app.services.staging import StagingService
 from app.services.task_rules import RecurrenceInput, normalize_task_fields
-from app.services.transcription import TranscriptionServiceError
+from app.services.transcription import (
+    MistralTranscriptionService,
+    MockTranscriptionService,
+    TranscriptionServiceError,
+)
 
 logger = logging.getLogger("gust.api")
 
@@ -50,7 +70,7 @@ class TranscriptionClient(Protocol):
         audio_bytes: bytes,
         filename: str,
         content_type: str,
-    ): ...
+    ) -> TranscriptionResult: ...
 
 
 class ExtractionClient(Protocol):
@@ -58,50 +78,7 @@ class ExtractionClient(Protocol):
         self,
         *,
         request: ExtractionRequest,
-        schema: dict[str, object],
     ) -> dict[str, object]: ...
-
-
-class ExtractionAlternativeGroup(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    group_id: Optional[str] = None
-    group_name: Optional[str] = None
-    confidence: float = Field(ge=0.0, le=1.0)
-
-
-class ExtractionRecurrence(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    frequency: str
-    weekday: Optional[int] = None
-    day_of_month: Optional[int] = None
-
-
-class ExtractionSubtask(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    title: str
-
-
-class ExtractedTaskCandidate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    title: str
-    due_date: Optional[date] = None
-    reminder_at: Optional[datetime] = None
-    group_id: Optional[str] = None
-    group_name: Optional[str] = None
-    top_confidence: float = Field(ge=0.0, le=1.0)
-    alternative_groups: list[ExtractionAlternativeGroup] = Field(default_factory=list)
-    recurrence: Optional[ExtractionRecurrence] = None
-    subtasks: list[ExtractionSubtask] = Field(default_factory=list)
-
-
-class ExtractorPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    tasks: list[ExtractedTaskCandidate]
 
 
 @dataclass
@@ -158,12 +135,15 @@ class CaptureService:
         self,
         *,
         settings: Settings,
-        transcription_service: TranscriptionClient,
+        transcription_service: MistralTranscriptionService | MockTranscriptionService,
         extraction_service: ExtractionClient,
+        staging_service: StagingService,
     ) -> None:
         self.settings = settings
         self.transcription_service = transcription_service
         self.extraction_service = extraction_service
+        self.staging_service = staging_service
+        self.last_extraction_attempt_count = 0
 
     async def create_voice_capture(
         self,
@@ -220,6 +200,26 @@ class CaptureService:
                 "user_id": user_id,
             },
         )
+
+        # Automatically extract and store in staging
+        try:
+            await self._extract_and_store_in_staging(
+                user_id=user_id,
+                capture_id=updated.id,
+                transcript_text=updated.transcript_text or "",
+            )
+        except Exception as exc:
+            logger.warning(
+                "auto_extraction_failed",
+                extra={
+                    "event": "auto_extraction_failed",
+                    "capture_id": updated.id,
+                    "user_id": user_id,
+                    "error": str(exc),
+                },
+            )
+            # Don't fail the capture creation, just log the error
+
         return ReviewCaptureResult(
             capture_id=updated.id,
             status=updated.status,
@@ -238,6 +238,26 @@ class CaptureService:
             source_text=normalized,
             transcript_text=normalized,
         )
+
+        # Automatically extract and store in staging
+        try:
+            await self._extract_and_store_in_staging(
+                user_id=user_id,
+                capture_id=capture.id,
+                transcript_text=normalized,
+            )
+        except Exception as exc:
+            logger.warning(
+                "auto_extraction_failed",
+                extra={
+                    "event": "auto_extraction_failed",
+                    "capture_id": capture.id,
+                    "user_id": user_id,
+                    "error": str(exc),
+                },
+            )
+            # Don't fail the capture creation, just log the error
+
         return ReviewCaptureResult(
             capture_id=capture.id,
             status=capture.status,
@@ -274,40 +294,45 @@ class CaptureService:
             groups=[self._group_context_payload(group) for group in groups],
         )
 
-        attempts = 0
-        extractor_payload: Optional[ExtractorPayload] = None
-        while attempts < 2:
-            attempts += 1
-            try:
-                raw_payload = await self.extraction_service.extract(
-                    request=extraction_request,
-                    schema=ExtractorPayload.model_json_schema(),
-                )
-                extractor_payload = ExtractorPayload.model_validate(raw_payload)
-                break
-            except (ExtractorMalformedResponseError, ValidationError) as exc:
-                if attempts >= 2:
-                    self._mark_capture_failure(
-                        capture_id=capture_id,
-                        user_id=user_id,
-                        status="extraction_failed",
-                        error_code="extractor_payload_invalid",
-                        extraction_attempt_count=attempts,
-                        transcript_edited_text=normalized_transcript,
-                    )
-                    raise ExtractionFailedError() from exc
-            except Exception as exc:
-                self._mark_capture_failure(
-                    capture_id=capture_id,
-                    user_id=user_id,
-                    status="extraction_failed",
-                    error_code=self._error_code_for_exception(exc),
-                    extraction_attempt_count=attempts,
-                    transcript_edited_text=normalized_transcript,
-                )
-                raise self._map_extraction_error(exc) from exc
-
-        assert extractor_payload is not None
+        try:
+            extractor_payload, extraction_attempt_count = await self._extract_payload_with_guardrails(
+                transcript_text=normalized_transcript,
+                extraction_request=extraction_request,
+                inbox_group=inbox_group,
+            )
+        except (ExtractorMalformedResponseError, ValidationError) as exc:
+            extraction_attempt_count = self._resolve_extraction_attempt_count()
+            self._mark_capture_failure(
+                capture_id=capture_id,
+                user_id=user_id,
+                status="extraction_failed",
+                error_code="extractor_payload_invalid",
+                extraction_attempt_count=extraction_attempt_count,
+                transcript_edited_text=normalized_transcript,
+            )
+            raise ExtractionFailedError() from exc
+        except ExtractionServiceError as exc:
+            extraction_attempt_count = self._resolve_extraction_attempt_count()
+            self._mark_capture_failure(
+                capture_id=capture_id,
+                user_id=user_id,
+                status="extraction_failed",
+                error_code="extraction_provider_error",
+                extraction_attempt_count=extraction_attempt_count,
+                transcript_edited_text=normalized_transcript,
+            )
+            raise ExtractionFailedError() from exc
+        except Exception as exc:
+            extraction_attempt_count = self._resolve_extraction_attempt_count()
+            self._mark_capture_failure(
+                capture_id=capture_id,
+                user_id=user_id,
+                status="extraction_failed",
+                error_code=self._error_code_for_exception(exc),
+                extraction_attempt_count=extraction_attempt_count,
+                transcript_edited_text=normalized_transcript,
+            )
+            raise self._map_extraction_error(exc) from exc
 
         skipped_items: list[SkippedTaskItem] = []
         prepared_tasks: list[PreparedTask] = []
@@ -390,7 +415,7 @@ class CaptureService:
                 capture_id=capture_id,
                 status="completed",
                 transcript_edited_text=normalized_transcript,
-                extraction_attempt_count=attempts,
+                extraction_attempt_count=extraction_attempt_count,
                 tasks_created_count=created_count,
                 tasks_skipped_count=len(skipped_items),
                 error_code=None,
@@ -510,6 +535,9 @@ class CaptureService:
                 reminder_at=candidate.reminder_at,
                 recurrence=recurrence_input,
                 user_timezone=user_timezone,
+                # Lenient: accept AI-extracted tasks with imperfect datetime/recurrence
+                assume_utc_for_naive=True,
+                default_due_date_for_recurrence=True,
             )
         except ValueError as exc:
             message = str(exc)
@@ -591,6 +619,24 @@ class CaptureService:
     def _normalize_transcript_text(self, value: str) -> str:
         return value.strip()
 
+    def _resolve_extraction_attempt_count(self) -> int:
+        if self.last_extraction_attempt_count > 0:
+            return self.last_extraction_attempt_count
+        return self._resolve_service_attempt_count()
+
+    def _resolve_service_attempt_count(self) -> int:
+        attempts = getattr(self.extraction_service, "last_attempt_count", None)
+        if isinstance(attempts, int) and attempts > 0:
+            return attempts
+        return 1
+
+    def _reset_extraction_attempt_count(self) -> None:
+        self.last_extraction_attempt_count = 0
+
+    def _record_extraction_attempt_count(self, attempts: int) -> int:
+        self.last_extraction_attempt_count = attempts
+        return attempts
+
     def _map_transcription_error(self, exc: Exception) -> Exception:
         if isinstance(exc, TranscriptionServiceError):
             return TranscriptionFailedError()
@@ -604,6 +650,10 @@ class CaptureService:
     def _error_code_for_exception(self, exc: Exception) -> str:
         if isinstance(exc, ValidationError):
             return "payload_invalid"
+        if isinstance(exc, InvalidConfigurationError):
+            return "config_invalid"
+        if isinstance(exc, ConfigurationError):
+            return "config_missing"
         if isinstance(exc, TranscriptionServiceError):
             return "transcription_provider_error"
         if isinstance(exc, ExtractorMalformedResponseError):
@@ -611,3 +661,323 @@ class CaptureService:
         if isinstance(exc, ExtractionServiceError):
             return "extraction_provider_error"
         return "unknown_error"
+
+    async def _extract_payload_with_guardrails(
+        self,
+        *,
+        transcript_text: str,
+        extraction_request: ExtractionRequest,
+        inbox_group: GroupRecord,
+    ) -> tuple[ExtractorPayload, int]:
+        self._reset_extraction_attempt_count()
+        guarded_intents = detect_guarded_intents(transcript_text)
+        total_attempt_count = 0
+
+        payload, attempt_count = await self._extract_validated_payload(extraction_request)
+        total_attempt_count += attempt_count
+
+        missing_guarded_intents = find_missing_guarded_intents(
+            guarded_intents=guarded_intents,
+            extracted_tasks=payload.tasks,
+        )
+        if not missing_guarded_intents:
+            return payload, self._record_extraction_attempt_count(total_attempt_count)
+
+        repair_request = ExtractionRequest(
+            transcript_text=extraction_request.transcript_text,
+            user_timezone=extraction_request.user_timezone,
+            current_local_date=extraction_request.current_local_date,
+            groups=extraction_request.groups,
+            missing_guarded_clauses=[intent.raw_text for intent in missing_guarded_intents],
+        )
+        repaired_payload, repair_attempt_count = await self._extract_validated_payload(repair_request)
+        total_attempt_count += repair_attempt_count
+
+        missing_after_repair = find_missing_guarded_intents(
+            guarded_intents=guarded_intents,
+            extracted_tasks=repaired_payload.tasks,
+        )
+        if not missing_after_repair:
+            logger.info(
+                "extraction_guardrail_repair_succeeded",
+                extra={
+                    "event": "extraction_guardrail_repair_succeeded",
+                    "missing_count": len(missing_guarded_intents),
+                },
+            )
+            return repaired_payload, self._record_extraction_attempt_count(total_attempt_count)
+
+        fallback_payload = self._append_guarded_fallbacks(
+            payload=repaired_payload,
+            missing_guarded_intents=missing_after_repair,
+            inbox_group=inbox_group,
+        )
+        logger.warning(
+            "extraction_guardrail_fallback_created",
+            extra={
+                "event": "extraction_guardrail_fallback_created",
+                "missing_count": len(missing_after_repair),
+            },
+        )
+        return fallback_payload, self._record_extraction_attempt_count(total_attempt_count)
+
+    async def _extract_validated_payload(
+        self,
+        request: ExtractionRequest,
+    ) -> tuple[ExtractorPayload, int]:
+        total_attempt_count = 0
+        last_exception: Exception | None = None
+
+        for outer_attempt in range(2):
+            current_attempt_count = 0
+            try:
+                raw_payload = await self.extraction_service.extract(request=request)
+                current_attempt_count = self._resolve_service_attempt_count()
+                validated_payload = ExtractorPayload.model_validate(raw_payload)
+                total_attempt_count += current_attempt_count
+                return validated_payload, total_attempt_count
+            except (ExtractorMalformedResponseError, ValidationError) as exc:
+                total_attempt_count += current_attempt_count or self._resolve_service_attempt_count()
+                last_exception = exc
+                self._record_extraction_attempt_count(total_attempt_count)
+                if outer_attempt == 0:
+                    continue
+                raise
+            except Exception:
+                total_attempt_count += current_attempt_count or self._resolve_service_attempt_count()
+                self._record_extraction_attempt_count(total_attempt_count)
+                raise
+
+        assert last_exception is not None
+        raise last_exception
+
+    def _append_guarded_fallbacks(
+        self,
+        *,
+        payload: ExtractorPayload,
+        missing_guarded_intents: list[GuardedIntent],
+        inbox_group: GroupRecord,
+    ) -> ExtractorPayload:
+        existing_titles = {task.title.strip().lower() for task in payload.tasks}
+        fallback_tasks = list(payload.tasks)
+
+        for intent in missing_guarded_intents:
+            fallback_title = build_fallback_title(intent)
+            if fallback_title.strip().lower() in existing_titles:
+                continue
+            fallback_tasks.append(
+                ExtractedTaskCandidate(
+                    title=fallback_title,
+                    group_id=inbox_group.id,
+                    top_confidence=0.0,
+                )
+            )
+            existing_titles.add(fallback_title.strip().lower())
+
+        return ExtractorPayload(tasks=fallback_tasks)
+
+    async def _extract_and_store_in_staging(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript_text: str,
+    ) -> None:
+        """Extract tasks from transcript and store in staging table.
+
+        Args:
+            user_id: User ID.
+            capture_id: Capture ID.
+            transcript_text: Transcript text to extract from.
+        """
+        normalized_transcript = self._normalize_transcript_text(transcript_text)
+        if not normalized_transcript:
+            return
+
+        with connection_scope(self.settings.database_url) as connection:
+            user = get_user(connection, user_id)
+            if user is None:
+                raise CaptureNotFoundError("Authenticated user could not be resolved.")
+            inbox_group = ensure_inbox_group(connection, user_id=user_id)
+            groups = list_groups_with_recent_tasks(connection, user_id=user_id)
+
+        extraction_request = ExtractionRequest(
+            transcript_text=normalized_transcript,
+            user_timezone=user.timezone,
+            current_local_date=datetime.now(ZoneInfo(user.timezone)).date(),
+            groups=[self._group_context_payload(group) for group in groups],
+        )
+
+        try:
+            extractor_payload, _attempt_count = await self._extract_payload_with_guardrails(
+                transcript_text=normalized_transcript,
+                extraction_request=extraction_request,
+                inbox_group=inbox_group,
+            )
+        except (ExtractorMalformedResponseError, ValidationError) as exc:
+            logger.warning(
+                "extraction_failed_for_staging",
+                extra={
+                    "event": "extraction_failed_for_staging",
+                    "capture_id": capture_id,
+                    "user_id": user_id,
+                    "error": str(exc),
+                },
+            )
+            return
+        except ExtractionServiceError as exc:
+            logger.warning(
+                "extraction_failed_for_staging",
+                extra={
+                    "event": "extraction_failed_for_staging",
+                    "capture_id": capture_id,
+                    "user_id": user_id,
+                    "error": str(exc),
+                },
+            )
+            return
+
+        # Store extracted tasks in staging
+        await self.staging_service.store_extracted_tasks(
+            user_id=user_id,
+            capture_id=capture_id,
+            extracted_payload=extractor_payload,
+            groups=groups,
+            inbox_group=inbox_group,
+            user_timezone=user.timezone,
+        )
+
+        logger.info(
+            "auto_extraction_completed",
+            extra={
+                "event": "auto_extraction_completed",
+                "capture_id": capture_id,
+                "user_id": user_id,
+                "tasks_extracted": len(extractor_payload.tasks),
+            },
+        )
+
+    async def re_extract_capture(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript_text: str,
+    ) -> ReviewCaptureResult:
+        """Re-extract tasks from an edited transcript.
+
+        Args:
+            user_id: User ID.
+            capture_id: Capture ID.
+            transcript_text: Edited transcript text.
+
+        Returns:
+            ReviewCaptureResult with updated capture.
+
+        Raises:
+            CaptureNotFoundError: If capture not found.
+            CaptureStateConflictError: If capture is not in a valid state.
+            InvalidCaptureError: If transcript is empty.
+        """
+        normalized_transcript = self._normalize_transcript_text(transcript_text)
+        if not normalized_transcript:
+            raise InvalidCaptureError("Transcript cannot be empty.")
+
+        with connection_scope(self.settings.database_url) as connection:
+            capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
+            if capture is None:
+                raise CaptureNotFoundError()
+            if capture.status not in {"ready_for_review", "extraction_failed"}:
+                raise CaptureStateConflictError()
+
+            # Re-extraction should replace prior staged output for this capture.
+            delete_extracted_tasks_by_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+            )
+
+            # Update the capture with the edited transcript
+            updated = update_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                transcript_text=normalized_transcript,
+                transcript_edited_text=normalized_transcript,
+                status="ready_for_review",
+                error_code=None,
+            )
+
+        assert updated is not None
+
+        # Re-extract and store in staging
+        await self._extract_and_store_in_staging(
+            user_id=user_id,
+            capture_id=capture_id,
+            transcript_text=normalized_transcript,
+        )
+
+        logger.info(
+            "capture_re_extracted",
+            extra={
+                "event": "capture_re_extracted",
+                "capture_id": capture_id,
+                "user_id": user_id,
+            },
+        )
+
+        return ReviewCaptureResult(
+            capture_id=updated.id,
+            status=updated.status,
+            transcript_text=updated.transcript_text or "",
+        )
+
+    async def complete_capture(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+    ) -> None:
+        """Mark a capture as completed after staging tasks are resolved.
+
+        Args:
+            user_id: User ID.
+            capture_id: Capture ID.
+
+        Raises:
+            CaptureNotFoundError: If capture not found.
+            CaptureStateConflictError: If capture is not in a valid state for completion.
+        """
+        with connection_scope(self.settings.database_url) as connection:
+            capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
+            if capture is None:
+                raise CaptureNotFoundError()
+            if capture.status not in {"ready_for_review", "extraction_failed"}:
+                raise CaptureStateConflictError()
+            pending_tasks = list_extracted_tasks(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                status="pending",
+            )
+            if pending_tasks:
+                raise CaptureStateConflictError(
+                    "Capture still has pending extracted tasks to review."
+                )
+
+            # Transition capture to completed status
+            update_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                status="completed",
+            )
+
+        logger.info(
+            "capture_completed",
+            extra={
+                "event": "capture_completed",
+                "capture_id": capture_id,
+                "user_id": user_id,
+            },
+        )

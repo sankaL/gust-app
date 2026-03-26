@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.core.settings import get_settings
+from app.core.settings import Settings, get_settings
 
 
 def test_settings_fail_closed_when_required_config_is_missing(
@@ -12,4 +12,4 @@ def test_settings_fail_closed_when_required_config_is_missing(
     get_settings.cache_clear()
 
     with pytest.raises(ValidationError):
-        get_settings()
+        Settings(_env_file=None)

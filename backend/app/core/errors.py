@@ -55,6 +55,15 @@ class ConfigurationError(ApiError):
         )
 
 
+class InvalidConfigurationError(ApiError):
+    def __init__(self, message: str = "Required application configuration is invalid.") -> None:
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code="config_invalid",
+            message=message,
+        )
+
+
 class InvalidTimezoneError(ApiError):
     def __init__(self, message: str = "Invalid timezone provided.") -> None:
         super().__init__(
@@ -96,6 +105,26 @@ class CaptureStateConflictError(ApiError):
         super().__init__(
             status_code=status.HTTP_409_CONFLICT,
             code="capture_state_conflict",
+            message=message,
+        )
+
+
+class ExtractedTaskNotFoundError(ApiError):
+    def __init__(self, message: str = "Extracted task could not be found.") -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="extracted_task_not_found",
+            message=message,
+        )
+
+
+class ExtractedTaskStateConflictError(ApiError):
+    def __init__(
+        self, message: str = "Extracted task is not in a valid state for this action."
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            code="extracted_task_state_conflict",
             message=message,
         )
 

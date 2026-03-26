@@ -1,7 +1,7 @@
 # Tech Stack: Gust
 
 **Version:** 2.0  
-**Last Updated:** 2026-03-22  
+**Last Updated:** 2026-03-23  
 **Domain:** gustapp.ca
 
 ## Purpose
@@ -59,6 +59,8 @@ Responsibilities:
 - Voice capture via browser APIs
 - Transcript review and submission
 - Task list rendering and editing
+- Per-group completed-task browsing and reopen actions
+- Completed-task rendering with legacy duplicate suppression for known historical recurrence regressions
 - Group management
 - PWA install experience
 
@@ -213,6 +215,8 @@ Reason:
 
 Use Mistral's audio transcription endpoint as the initial speech-to-text provider.
 
+Current default model alias: `voxtral-mini-latest`.
+
 Operational contract:
 
 - audio is uploaded from backend to provider
@@ -231,12 +235,17 @@ Model selection is an operational setting, not a product contract. The required 
 - JSON-schema structured outputs
 - acceptable latency for synchronous task creation
 
+Current default model: `openai/gpt-5.4-mini`.
+
 Backend behavior:
 
 - construct prompt from transcript, user timezone, groups, descriptions, and recent tasks
 - request strict JSON-schema output
 - validate every returned task candidate with Pydantic
 - perform one bounded retry on malformed full-payload output
+- run a deterministic guarded-intent completeness check for medical calls, appointments, communication tasks, and similar standalone errands
+- perform one bounded corrective re-extraction when a guarded intent is missing from the extracted tasks (including subtasks)
+- synthesize a low-confidence Inbox review task when the guarded intent still cannot be recovered after the corrective retry
 
 Do not rely on regex cleanup or permissive JSON repair as the main parsing strategy.
 
@@ -282,6 +291,9 @@ Required behavior:
 - daily recurrence advances to the next local calendar day after completion
 - monthly recurrence persists the generated occurrence day-of-month after month-end clamping
 - generated occurrences clear `reminder_at` when the inherited timestamp is already in the past
+- deleting one recurring occurrence can generate the next occurrence from the deleted due date when no other open occurrence exists
+- deleting recurring `this and future` soft-deletes all open occurrences in the series and keeps completed history untouched
+- reopening/restoring recurring tasks keeps recurrence only when the expected generated undo-target open occurrence is present; otherwise the reopened/restored task detaches into a single non-recurring instance
 
 ### Retention Cleanup
 

@@ -1,5 +1,34 @@
 # Decisions Made
 
+## 2026-03-25 00:58:00 EDT
+
+- Updated recurring reopen/restore lifecycle semantics to be conditional: keep recurrence when the expected generated undo-target open occurrence is present, otherwise detach to a single non-recurring instance.
+- Kept conflict behavior fail-closed when another open occurrence exists but does not match the expected undo-target occurrence.
+- Chose UI-only suppression for historical duplicate completed rows caused by prior recurring lifecycle regressions, avoiding backend data mutation.
+
+## 2026-03-25 00:10:00 EDT
+
+- Added explicit recurring delete scope at the task API and UI layers: `Delete this occurrence` and `Delete this and future`.
+- Chose due-date-based recurrence advancement for occurrence delete (instead of delete-time-based), with generation only when no other open occurrence exists in the series.
+- Kept completion as a single action that still generates the next occurrence, and added a dedicated per-group Completed Tasks page with reopen-to-To-do behavior.
+
+## 2026-03-22 22:52:00 EDT
+
+- Switched the OpenRouter extraction default from `openai/gpt-4.1-mini` to `openai/gpt-5.4-mini` after validating that the current route supports structured outputs with the normalized strict schema used by capture submit.
+
+## 2026-03-22 22:37:00 EDT
+
+- Reverted the OpenRouter extraction default from `minimax/minimax-m2.7` to `openai/gpt-4.1-mini` and added strict-schema normalization because the Minimax route advertised `response_format` support but still returned fenced, schema-invalid payloads for capture extraction.
+
+## 2026-03-22 22:23:10 EDT
+
+- Reverted the Mistral transcription default from the invalid `voxtral-mini-transcribe-26-02` identifier to the official `voxtral-mini-latest` alias so `/captures/voice` stays aligned with the published provider model IDs.
+
+## 2026-03-22 22:10:28 EDT
+
+- Switched the default transcription model to Mistral `voxtral-mini-transcribe-26-02` while keeping the existing backend-owned multipart transcription flow and no-raw-audio retention behavior unchanged.
+- Switched the default extraction model to OpenRouter `minimax/minimax-m2.7` and kept strict JSON-schema response enforcement in place because the live OpenRouter model metadata advertises `response_format` support.
+
 ## 2026-03-22 17:48:11 EDT
 
 - Kept the Phase 4 scheduler on the existing `POST /internal/reminders/run` HTTP route and protected it with a shared-secret header instead of introducing a separate CLI entrypoint or unauthenticated private route.

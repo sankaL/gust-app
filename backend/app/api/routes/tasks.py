@@ -11,7 +11,7 @@ from app.core.dependencies import get_current_session_context, get_task_service,
 from app.core.errors import InvalidTaskError
 from app.db.repositories import SessionContext, SubtaskRecord, TaskRecord
 from app.services.task_rules import RecurrenceInput, due_bucket_for_date
-from app.services.task_service import TaskDetail, TaskListItem, TaskService, TaskUpdateInput
+from app.services.task_service import TaskCreateInput, TaskDetail, TaskListItem, TaskService, TaskUpdateInput
 
 router = APIRouter()
 
@@ -42,6 +42,8 @@ class SubtaskResponse(BaseModel):
 class TaskSummaryResponse(BaseModel):
     id: str
     title: str
+    series_id: Optional[str] = None
+    recurrence_frequency: Optional[str] = None
     status: str
     needs_review: bool
     due_date: Optional[date]
@@ -50,6 +52,7 @@ class TaskSummaryResponse(BaseModel):
     group: GroupSummaryResponse
     completed_at: Optional[datetime]
     deleted_at: Optional[datetime]
+    subtask_count: int = 0
 
 
 class TaskDetailResponse(TaskSummaryResponse):
@@ -58,6 +61,14 @@ class TaskDetailResponse(TaskSummaryResponse):
 
 
 class UpdateTaskRequest(BaseModel):
+    title: str
+    group_id: str
+    due_date: Optional[date] = None
+    reminder_at: Optional[datetime] = None
+    recurrence: Optional[RecurrenceResponse] = None
+
+
+class CreateTaskRequest(BaseModel):
     title: str
     group_id: str
     due_date: Optional[date] = None
@@ -74,21 +85,55 @@ class UpdateSubtaskRequest(BaseModel):
     is_completed: Optional[bool] = None
 
 
-@router.get("", response_model=list[TaskSummaryResponse])
+class PaginatedTaskListResponse(BaseModel):
+    items: list[TaskSummaryResponse]
+    has_more: bool
+    next_cursor: Optional[str]
+
+
+@router.get("", response_model=PaginatedTaskListResponse)
 def list_tasks_route(
     session_context: OptionalSessionContextDep,
     task_service: TaskServiceDep,
-    group_id: str = Query(...),
+    group_id: Optional[str] = Query(None),
     status_value: str = Query("open", alias="status"),
-) -> list[TaskSummaryResponse]:
+    limit: int = Query(50, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+) -> PaginatedTaskListResponse:
     validated_status = _validate_status(status_value)
-    items = task_service.list_tasks(
+    result = task_service.list_tasks(
         user_id=session_context.user.id,
         user_timezone=session_context.user.timezone,
         group_id=group_id,
         status=validated_status,
+        limit=limit,
+        cursor=cursor,
     )
-    return [_build_task_summary(item) for item in items]
+    return PaginatedTaskListResponse(
+        items=[_build_task_summary(item) for item in result.items],
+        has_more=result.has_more,
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.post("", response_model=TaskDetailResponse, status_code=status.HTTP_201_CREATED)
+def create_task_route(
+    payload: CreateTaskRequest,
+    session_context: RequiredSessionContextDep,
+    task_service: TaskServiceDep,
+) -> TaskDetailResponse:
+    detail = task_service.create_task(
+        user_id=session_context.user.id,
+        user_timezone=session_context.user.timezone,
+        payload=TaskCreateInput(
+            title=payload.title,
+            group_id=payload.group_id,
+            due_date=payload.due_date,
+            reminder_at=payload.reminder_at,
+            recurrence=_build_recurrence_input(payload.recurrence),
+        ),
+    )
+    return _build_task_detail(detail, session_context.user.timezone)
 
 
 @router.get("/{task_id}", response_model=TaskDetailResponse)
@@ -156,8 +201,15 @@ def delete_task_route(
     task_id: str,
     session_context: RequiredSessionContextDep,
     task_service: TaskServiceDep,
+    scope: str = Query("occurrence"),
 ) -> TaskDetailResponse:
-    detail = task_service.delete_task(user_id=session_context.user.id, task_id=task_id)
+    validated_scope = _validate_delete_scope(scope)
+    detail = task_service.delete_task(
+        user_id=session_context.user.id,
+        user_timezone=session_context.user.timezone,
+        task_id=task_id,
+        scope=validated_scope,
+    )
     return _build_task_detail(detail, session_context.user.timezone)
 
 
@@ -167,7 +219,11 @@ def restore_task_route(
     session_context: RequiredSessionContextDep,
     task_service: TaskServiceDep,
 ) -> TaskDetailResponse:
-    detail = task_service.restore_task(user_id=session_context.user.id, task_id=task_id)
+    detail = task_service.restore_task(
+        user_id=session_context.user.id,
+        user_timezone=session_context.user.timezone,
+        task_id=task_id,
+    )
     return _build_task_detail(detail, session_context.user.timezone)
 
 
@@ -229,10 +285,18 @@ def _validate_status(value: str) -> str:
     return value
 
 
+def _validate_delete_scope(value: str) -> str:
+    if value not in {"occurrence", "series"}:
+        raise InvalidTaskError("Delete scope must be `occurrence` or `series`.")
+    return value
+
+
 def _build_task_summary(item: TaskListItem) -> TaskSummaryResponse:
     return TaskSummaryResponse(
         id=item.task.id,
         title=item.task.title,
+        series_id=item.task.series_id,
+        recurrence_frequency=item.task.recurrence_frequency,
         status=item.task.status,
         needs_review=item.task.needs_review,
         due_date=item.task.due_date,
@@ -245,6 +309,7 @@ def _build_task_summary(item: TaskListItem) -> TaskSummaryResponse:
         ),
         completed_at=item.task.completed_at,
         deleted_at=item.task.deleted_at,
+        subtask_count=item.subtask_count,
     )
 
 
@@ -255,6 +320,8 @@ def _build_task_detail(detail: TaskDetail, user_timezone: str) -> TaskDetailResp
     return TaskDetailResponse(
         id=detail.task.id,
         title=detail.task.title,
+        series_id=detail.task.series_id,
+        recurrence_frequency=detail.task.recurrence_frequency,
         status=detail.task.status,
         needs_review=detail.task.needs_review,
         due_date=detail.task.due_date,

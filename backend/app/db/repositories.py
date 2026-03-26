@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 # ruff: noqa: UP045
+import base64
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -9,7 +11,7 @@ from typing import Optional
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
-from app.db.schema import captures, groups, reminders, subtasks, tasks, users
+from app.db.schema import captures, extracted_tasks, groups, reminders, subtasks, tasks, users
 
 CURRENT_TIMESTAMP = sa.text("CURRENT_TIMESTAMP")
 
@@ -81,6 +83,7 @@ class TaskRecord:
     deleted_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    subtask_count: int = 0
 
 
 @dataclass
@@ -111,6 +114,27 @@ class ReminderRecord:
     provider_message_id: Optional[str]
     sent_at: Optional[datetime]
     cancelled_at: Optional[datetime]
+
+
+@dataclass
+class ExtractedTaskRecord:
+    id: str
+    user_id: str
+    capture_id: str
+    title: str
+    group_id: str
+    group_name: Optional[str]
+    due_date: Optional[date]
+    reminder_at: Optional[datetime]
+    recurrence_frequency: Optional[str]
+    recurrence_weekday: Optional[int]
+    recurrence_day_of_month: Optional[int]
+    top_confidence: float
+    needs_review: bool
+    status: str
+    subtask_titles: list[str]
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass
@@ -191,6 +215,7 @@ def _row_to_task(row: sa.Row) -> TaskRecord:
         deleted_at=row.deleted_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        subtask_count=int(row.subtask_count) if hasattr(row, 'subtask_count') and row.subtask_count is not None else 0,
     )
 
 
@@ -223,6 +248,33 @@ def _row_to_reminder(row: sa.Row) -> ReminderRecord:
         provider_message_id=row.provider_message_id,
         sent_at=row.sent_at,
         cancelled_at=row.cancelled_at,
+    )
+
+
+def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
+    raw_subtasks = row.subtask_titles
+    if isinstance(raw_subtasks, list):
+        subtask_titles = [str(t) for t in raw_subtasks]
+    else:
+        subtask_titles = []
+    return ExtractedTaskRecord(
+        id=str(row.id),
+        user_id=str(row.user_id),
+        capture_id=str(row.capture_id),
+        title=row.title,
+        group_id=str(row.group_id),
+        group_name=row.group_name,
+        due_date=row.due_date,
+        reminder_at=row.reminder_at,
+        recurrence_frequency=row.recurrence_frequency,
+        recurrence_weekday=row.recurrence_weekday,
+        recurrence_day_of_month=row.recurrence_day_of_month,
+        top_confidence=float(row.top_confidence),
+        needs_review=bool(row.needs_review),
+        status=row.status,
+        subtask_titles=subtask_titles,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
 
 
@@ -549,19 +601,70 @@ def list_tasks(
     group_id: Optional[str] = None,
     status: str = "open",
     include_deleted: bool = False,
-) -> list[TaskRecord]:
+    limit: int = 50,
+    cursor: Optional[str] = None,
+) -> tuple[list[TaskRecord], bool, Optional[str]]:
+    """Returns (tasks, has_more, next_cursor)."""
     conditions = [tasks.c.user_id == user_id, tasks.c.status == status]
-    if group_id is not None:
+    if group_id is not None and group_id != 'all':
         conditions.append(tasks.c.group_id == group_id)
     if not include_deleted:
         conditions.append(tasks.c.deleted_at.is_(None))
 
+    # Scalar subquery to count subtasks per task
+    subtask_count_subquery = (
+        sa.select(sa.func.count(subtasks.c.id))
+        .where(subtasks.c.task_id == tasks.c.id)
+        .correlate(tasks)
+        .scalar_subquery()
+        .label('subtask_count')
+    )
+
+    # Apply cursor-based pagination if provided
+    if cursor:
+        try:
+            cursor_data = json.loads(base64.b64decode(cursor).decode('utf-8'))
+            cursor_created_at = datetime.fromisoformat(cursor_data['created_at'])
+            cursor_id = cursor_data['id']
+            # Cursor condition: (created_at, id) < (cursor_created_at, cursor_id)
+            # i.e., items that come after the cursor in our DESC order
+            cursor_condition = (
+                sa.or_(
+                    tasks.c.created_at < cursor_created_at,
+                    sa.and_(
+                        tasks.c.created_at == cursor_created_at,
+                        tasks.c.id < cursor_id
+                    )
+                )
+            )
+            conditions.append(cursor_condition)
+        except (json.JSONDecodeError, KeyError, ValueError):
+            # Invalid cursor, ignore and fetch from beginning
+            pass
+
+    # Fetch limit+1 to determine if there are more results
     rows = connection.execute(
-        sa.select(tasks)
+        sa.select(tasks, subtask_count_subquery)
         .where(*conditions)
         .order_by(tasks.c.created_at.desc(), tasks.c.id.desc())
+        .limit(limit + 1)
     ).fetchall()
-    return [_row_to_task(row) for row in rows]
+
+    has_more = len(rows) > limit
+    if has_more:
+        rows = rows[:limit]
+
+    # Generate next cursor from last item
+    next_cursor = None
+    if has_more and rows:
+        last_row = rows[-1]
+        cursor_data = {
+            'created_at': last_row.created_at.isoformat(),
+            'id': str(last_row.id)
+        }
+        next_cursor = base64.b64encode(json.dumps(cursor_data).encode('utf-8')).decode('utf-8')
+
+    return [_row_to_task(row) for row in rows], has_more, next_cursor
 
 
 def get_open_task_in_series(
@@ -585,6 +688,30 @@ def get_open_task_in_series(
     if row is None:
         return None
     return _row_to_task(row)
+
+
+def list_open_tasks_in_series(
+    connection: Connection,
+    *,
+    user_id: str,
+    series_id: str,
+    exclude_task_id: Optional[str] = None,
+) -> list[TaskRecord]:
+    conditions = [
+        tasks.c.user_id == user_id,
+        tasks.c.series_id == series_id,
+        tasks.c.status == "open",
+        tasks.c.deleted_at.is_(None),
+    ]
+    if exclude_task_id is not None:
+        conditions.append(tasks.c.id != exclude_task_id)
+
+    rows = connection.execute(
+        sa.select(tasks)
+        .where(*conditions)
+        .order_by(tasks.c.created_at.desc(), tasks.c.id.desc())
+    ).fetchall()
+    return [_row_to_task(row) for row in rows]
 
 
 def create_task(
@@ -641,6 +768,36 @@ def update_task(
         .where(tasks.c.id == task_id, tasks.c.user_id == user_id)
         .values(**update_values)
     )
+    return get_task(connection, user_id=user_id, task_id=task_id)
+
+
+def complete_task_if_open(
+    connection: Connection,
+    *,
+    user_id: str,
+    task_id: str,
+    completed_at: datetime,
+    series_id: Optional[str] = None,
+) -> Optional[TaskRecord]:
+    update_values: dict[str, object] = {
+        "status": "completed",
+        "completed_at": completed_at,
+        "updated_at": CURRENT_TIMESTAMP,
+    }
+    if series_id is not None:
+        update_values["series_id"] = series_id
+    result = connection.execute(
+        tasks.update()
+        .where(
+            tasks.c.id == task_id,
+            tasks.c.user_id == user_id,
+            tasks.c.status == "open",
+            tasks.c.deleted_at.is_(None),
+        )
+        .values(**update_values)
+    )
+    if int(result.rowcount or 0) == 0:
+        return None
     return get_task(connection, user_id=user_id, task_id=task_id)
 
 
@@ -1076,6 +1233,250 @@ def upsert_reminder(
     )
     row = connection.execute(sa.select(reminders).where(reminders.c.id == existing.id)).one()
     return _row_to_reminder(row)
+
+
+def create_extracted_task(
+    connection: Connection,
+    *,
+    user_id: str,
+    capture_id: str,
+    title: str,
+    group_id: str,
+    group_name: Optional[str],
+    due_date: Optional[date],
+    reminder_at: Optional[datetime],
+    recurrence_frequency: Optional[str],
+    recurrence_weekday: Optional[int],
+    recurrence_day_of_month: Optional[int],
+    top_confidence: float,
+    needs_review: bool,
+    subtask_titles: Optional[list[str]] = None,
+) -> ExtractedTaskRecord:
+    extracted_task_id = str(uuid.uuid4())
+    connection.execute(
+        extracted_tasks.insert().values(
+            id=extracted_task_id,
+            user_id=user_id,
+            capture_id=capture_id,
+            title=title,
+            group_id=group_id,
+            group_name=group_name,
+            due_date=due_date,
+            reminder_at=reminder_at,
+            recurrence_frequency=recurrence_frequency,
+            recurrence_weekday=recurrence_weekday,
+            recurrence_day_of_month=recurrence_day_of_month,
+            top_confidence=top_confidence,
+            needs_review=needs_review,
+            subtask_titles=subtask_titles or [],
+            status="pending",
+        )
+    )
+    row = connection.execute(
+        sa.select(extracted_tasks).where(extracted_tasks.c.id == extracted_task_id)
+    ).one()
+    return _row_to_extracted_task(row)
+
+
+def get_extracted_task(
+    connection: Connection,
+    *,
+    user_id: str,
+    extracted_task_id: str,
+) -> Optional[ExtractedTaskRecord]:
+    row = connection.execute(
+        sa.select(extracted_tasks).where(
+            extracted_tasks.c.id == extracted_task_id,
+            extracted_tasks.c.user_id == user_id,
+        )
+    ).first()
+    if row is None:
+        return None
+    return _row_to_extracted_task(row)
+
+
+def list_extracted_tasks(
+    connection: Connection,
+    *,
+    user_id: str,
+    capture_id: Optional[str] = None,
+    status: Optional[str] = None,
+) -> list[ExtractedTaskRecord]:
+    conditions = [extracted_tasks.c.user_id == user_id]
+    if capture_id is not None:
+        conditions.append(extracted_tasks.c.capture_id == capture_id)
+    if status is not None:
+        conditions.append(extracted_tasks.c.status == status)
+
+    rows = connection.execute(
+        sa.select(extracted_tasks)
+        .where(*conditions)
+        .order_by(extracted_tasks.c.created_at.asc(), extracted_tasks.c.id.asc())
+    ).fetchall()
+    return [_row_to_extracted_task(row) for row in rows]
+
+
+def update_extracted_task_status(
+    connection: Connection,
+    *,
+    user_id: str,
+    extracted_task_id: str,
+    status: str,
+) -> Optional[ExtractedTaskRecord]:
+    connection.execute(
+        extracted_tasks.update()
+        .where(
+            extracted_tasks.c.id == extracted_task_id,
+            extracted_tasks.c.user_id == user_id,
+        )
+        .values(status=status, updated_at=CURRENT_TIMESTAMP)
+    )
+    return get_extracted_task(
+        connection, user_id=user_id, extracted_task_id=extracted_task_id
+    )
+
+
+def update_extracted_task_due_date(
+    connection: Connection,
+    *,
+    user_id: str,
+    extracted_task_id: str,
+    due_date: Optional[date],
+) -> Optional[ExtractedTaskRecord]:
+    """Update the due_date of an extracted task.
+
+    Args:
+        connection: Database connection.
+        user_id: User ID for ownership verification.
+        extracted_task_id: Extracted task ID.
+        due_date: New due_date value (None to clear).
+
+    Returns:
+        Updated extracted task record or None if not found.
+    """
+    connection.execute(
+        extracted_tasks.update()
+        .where(
+            extracted_tasks.c.id == extracted_task_id,
+            extracted_tasks.c.user_id == user_id,
+        )
+        .values(due_date=due_date, updated_at=CURRENT_TIMESTAMP)
+    )
+    return get_extracted_task(
+        connection, user_id=user_id, extracted_task_id=extracted_task_id
+    )
+
+
+def update_extracted_task(
+    connection: Connection,
+    *,
+    user_id: str,
+    extracted_task_id: str,
+    values: dict[str, object],
+) -> Optional[ExtractedTaskRecord]:
+    """Update an extracted task with a partial set of fields.
+
+    The caller is responsible for validating that `values` only contains supported fields and
+    that those values are valid for the extracted-task -> task approval pipeline.
+
+    Args:
+        connection: Database connection.
+        user_id: User ID for ownership verification.
+        extracted_task_id: Extracted task ID.
+        values: A dict of fields to update. Keys not present are left unchanged. Values may be
+            explicitly set to None to clear nullable fields.
+
+    Returns:
+        Updated extracted task record or None if not found.
+    """
+    if not values:
+        return get_extracted_task(connection, user_id=user_id, extracted_task_id=extracted_task_id)
+
+    update_values = dict(values)
+    update_values["updated_at"] = CURRENT_TIMESTAMP
+
+    connection.execute(
+        extracted_tasks.update()
+        .where(
+            extracted_tasks.c.id == extracted_task_id,
+            extracted_tasks.c.user_id == user_id,
+        )
+        .values(**update_values)
+    )
+    return get_extracted_task(connection, user_id=user_id, extracted_task_id=extracted_task_id)
+
+
+def delete_extracted_tasks_by_capture(
+    connection: Connection,
+    *,
+    user_id: str,
+    capture_id: str,
+    status: Optional[str] = None,
+) -> int:
+    """Delete extracted tasks for a capture.
+
+    Args:
+        connection: Database connection.
+        user_id: User ID.
+        capture_id: Capture ID.
+        status: Optional status filter. If provided, only tasks with this status are deleted.
+                If None, only pending tasks are deleted (for re-extraction safety).
+
+    Returns:
+        Number of deleted rows.
+    """
+    conditions = [
+        extracted_tasks.c.user_id == user_id,
+        extracted_tasks.c.capture_id == capture_id,
+    ]
+    if status is not None:
+        conditions.append(extracted_tasks.c.status == status)
+    else:
+        # Default: only delete pending tasks (safety measure for re-extraction)
+        conditions.append(extracted_tasks.c.status == 'pending')
+
+    result = connection.execute(
+        extracted_tasks.delete().where(*conditions)
+    )
+    return int(result.rowcount or 0)
+
+
+def delete_expired_extracted_tasks(
+    connection: Connection,
+    *,
+    now: datetime,
+    limit: int,
+) -> int:
+    """Delete expired extracted tasks that have been approved or discarded.
+
+    Pending tasks are never automatically deleted - they persist until user action.
+
+    Args:
+        connection: Database connection.
+        now: Current datetime.
+        limit: Maximum number of rows to delete.
+
+    Returns:
+        Number of deleted rows.
+    """
+    cutoff = now - timedelta(days=7)
+    rows = connection.execute(
+        sa.select(extracted_tasks.c.id)
+        .where(
+            extracted_tasks.c.created_at <= cutoff,
+            extracted_tasks.c.status.in_(['approved', 'discarded'])
+        )
+        .order_by(extracted_tasks.c.created_at.asc(), extracted_tasks.c.id.asc())
+        .limit(limit)
+    ).fetchall()
+    extracted_task_ids = [str(row.id) for row in rows]
+    if not extracted_task_ids:
+        return 0
+
+    result = connection.execute(
+        extracted_tasks.delete().where(extracted_tasks.c.id.in_(extracted_task_ids))
+    )
+    return int(result.rowcount or 0)
 
 
 def cancel_reminder(

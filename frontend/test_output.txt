@@ -1,0 +1,3510 @@
+
+ RUN  v3.2.4 /Users/sankal/Documents/professional/gust-app/frontend
+
+ ✓ src/test/app.test.tsx (3 tests) 97ms
+ ✓ src/test/capture.pending-dedup.test.tsx (2 tests) 532ms
+   ✓ capture pending list dedupe > hides active-capture pending tasks during review and restores them after Done  368ms
+ ❯ src/test/tasks.test.tsx (9 tests | 5 failed) 4289ms
+   ✓ tasks flow > renders the selected group and review indicators from URL state 59ms
+   ✓ tasks flow > supports complete undo reopen from the task list 101ms
+   × tasks flow > renders overdue, today, and tomorrow due badges accurately 29ms
+     → expected null not to be null
+   × tasks flow > clears reminder and recurrence when saving a task with no due date 1034ms
+     → Unable to find a label with the text of: Due date
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-between"[39m
+            [36m>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"rounded-pill bg-surface-container px-3 py-2 text-sm text-on-surface"[39m
+                [33mdata-discover[39m=[32m"true"[39m
+                [33mhref[39m=[32m"/tasks?group=inbox-1"[39m
+              [36m>[39m
+                [0mBack to Tasks[0m
+              [36m</a>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill border border-outline/30 px-3 py-2 text-sm text-on-surface-variant"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mClose[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-start justify-between gap-3"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"space-y-1 flex-1"[39m
+                    [36m>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mCurrent task[0m
+                      [36m</p>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-display text-2xl text-on-surface"[39m
+                      [36m>[39m
+                        [0mRefine design system[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33maria-label[39m=[32m"Switch to edit mode"[39m
+                      [33mclass[39m=[32m"rounded-full bg-primary/20 p-2 text-primary transition-colors hover:bg-primary/30"[39m
+                      [33mtype[39m=[32m"button"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] font-bold uppercase tracking-widest text-primary"[39m
+                      [36m>[39m
+                        [0mEdit[0m
+                      [36m</span>[39m
+                    [36m</button>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"grid gap-3"[39m
+                  [36m>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mGroup[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0mInbox[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mDue date[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0m2026-03-24[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mReminder[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0m3/24/2026, 9:00:00 AM[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [0mRecurrence[0m
+                    [36m</p>[39m
+                  [36m</div>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                  [36m>[39m
+                    [0mWeekly[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-between"[39m
+                  [36m>[39m
+                    [36m<div>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-display text-xl text-on-surface"[39m
+                      [36m>[39m
+                        [0mSubtasks[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [0m0[0m
+                      [0m items[0m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"space-y-2"[39m
+                  [36m/>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex gap-3"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill bg-primary px-5 py-3 text-sm font-medium text-surface disabled:opacity-50"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mSave Changes[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill border border-outline/30 px-5 py-3 text-sm text-on-surface-variant"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mBack to List[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill border border-tertiary/30 px-5 py-3 text-sm text-tertiary hover:bg-tertiary/10 disabled:opacity-50"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mDelete Task[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-between"[39m
+            [36m>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"rounded-pill bg-surface-container px-3 py-2 text-sm text-on-surface"[39m
+                [33mdata-discover[39m=[32m"true"[39m
+                [33mhref[39m=[32m"/tasks?group=inbox-1"[39m
+              [36m>[39m
+                [0mBack to Tasks[0m
+              [36m</a>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill border border-outline/30 px-3 py-2 text-sm text-on-surface-variant"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mClose[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-start justify-between gap-3"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"space-y-1 flex-1"[39m
+                    [36m>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mCurrent task[0m
+                      [36m</p>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-display text-2xl text-on-surface"[39m
+                      [36m>[39m
+                        [0mRefine design system[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33maria-label[39m=[32m"Switch to edit mode"[39m
+                      [33mclass[39m=[32m"rounded-full bg-primary/20 p-2 text-primary transition-colors hover:bg-primary/30"[39m
+                      [33mtype[39m=[32m"button"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] font-bold uppercase tracking-widest text-primary"[39m
+                      [36m>[39m
+                        [0mEdit[0m
+                      [36m</span>[39m
+                    [36m</button>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"grid gap-3"[39m
+                  [36m>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mGroup[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0mInbox[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mDue date[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0m2026-03-24[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mReminder[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0m3/24/2026, 9:00:00 AM[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [0mRecurrence[0m
+                    [36m</p>[39m
+                  [36m</div>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                  [36m>[39m
+                    [0mWeekly[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-between"[39m
+                  [36m>[39m
+                    [36m<div>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-display text-xl text-on-surface"[39m
+                      [36m>[39m
+                        [0mSubtasks[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [0m0[0m
+                      [0m items[0m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"space-y-2"[39m
+                  [36m/>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex gap-3"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill bg-primary px-5 py-3 text-sm font-medium text-surface disabled:opacity-50"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mSave Changes[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill border border-outline/30 px-5 py-3 text-sm text-on-surface-variant"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mBack to List[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill border border-tertiary/30 px-5 py-3 text-sm text-tertiary hover:bg-tertiary/10 disabled:opacity-50"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mDelete Task[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   × tasks flow > manages groups with inbox protections 1019ms
+     → Unable to find an element with the text: Locked Inbox. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-between"[39m
+            [36m>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"font-display text-2xl text-on-surface"[39m
+              [36m>[39m
+                [0mManage Groups[0m
+              [36m</h2>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"inline-flex items-center gap-2 rounded-pill bg-primary/20 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/30"[39m
+                [33mdata-discover[39m=[32m"true"[39m
+                [33mhref[39m=[32m"/tasks?group=inbox-1"[39m
+              [36m>[39m
+                [0m← Back to Tasks[0m
+              [36m</a>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"group relative flex w-full items-center justify-center gap-2 rounded-soft p-4 transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_6px_0_#171033,_0_8px_15px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.2)] hover:-translate-y-[1px] hover:shadow-[0_7px_0_#171033,_0_12px_20px_rgba(0,0,0,0.5),_inset_0_1px_2px_rgba(255,255,255,0.2)] active:translate-y-[6px] active:shadow-[0_0px_0_#171033,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_6px_rgba(0,0,0,0.3)]"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-display text-lg drop-shadow-sm"[39m
+              [36m>[39m
+                [0m+[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-body text-sm font-medium drop-shadow-sm"[39m
+              [36m>[39m
+                [0mAdd Group[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-3"[39m
+            [36m>[39m
+              [36m<section[39m
+                [33mclass[39m=[32m"rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-start justify-between gap-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex-1 min-w-0"[39m
+                  [36m>[39m
+                    [36m<h3[39m
+                      [33mclass[39m=[32m"font-display text-lg font-medium text-on-surface truncate leading-tight"[39m
+                    [36m>[39m
+                      [0mInbox[0m
+                    [36m</h3>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex flex-col items-end gap-2 shrink-0"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex items-center gap-2"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-surface-dim text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0m1 TASKS[0m
+                      [36m</span>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-primary/20 text-primary"[39m
+                      [36m>[39m
+                        [0mLOCKED[0m
+                      [36m</span>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</section>[39m
+              [36m<section[39m
+                [33mclass[39m=[32m"rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-start justify-between gap-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex-1 min-w-0"[39m
+                  [36m>[39m
+                    [36m<h3[39m
+                      [33mclass[39m=[32m"font-display text-lg font-medium text-on-surface truncate leading-tight"[39m
+                    [36m>[39m
+                      [0mPersonal[0m
+                    [36m</h3>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"font-body text-xs text-on-surface-variant line-clamp-2 mt-1"[39m
+                    [36m>[39m
+                      [0mHome[0m
+                    [36m</p>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex flex-col items-end gap-2 shrink-0"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex items-center gap-2"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-surface-dim text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0m2 TASKS[0m
+                      [36m</span>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33maria-label[39m=[32m"Edit group"[39m
+                      [33mclass[39m=[32m"rounded-pill bg-surface-dim px-3 py-1 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] hover:-translate-y-0.5 transition-all active:scale-95 mt-1"[39m
+                      [33mtype[39m=[32m"button"[39m
+                    [36m>[39m
+                      [0mEdit[0m
+                    [36m</button>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</section>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-between"[39m
+            [36m>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"font-display text-2xl text-on-surface"[39m
+              [36m>[39m
+                [0mManage Groups[0m
+              [36m</h2>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"inline-flex items-center gap-2 rounded-pill bg-primary/20 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/30"[39m
+                [33mdata-discover[39m=[32m"true"[39m
+                [33mhref[39m=[32m"/tasks?group=inbox-1"[39m
+              [36m>[39m
+                [0m← Back to Tasks[0m
+              [36m</a>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"group relative flex w-full items-center justify-center gap-2 rounded-soft p-4 transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_6px_0_#171033,_0_8px_15px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.2)] hover:-translate-y-[1px] hover:shadow-[0_7px_0_#171033,_0_12px_20px_rgba(0,0,0,0.5),_inset_0_1px_2px_rgba(255,255,255,0.2)] active:translate-y-[6px] active:shadow-[0_0px_0_#171033,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_6px_rgba(0,0,0,0.3)]"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-display text-lg drop-shadow-sm"[39m
+              [36m>[39m
+                [0m+[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-body text-sm font-medium drop-shadow-sm"[39m
+              [36m>[39m
+                [0mAdd Group[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-3"[39m
+            [36m>[39m
+              [36m<section[39m
+                [33mclass[39m=[32m"rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-start justify-between gap-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex-1 min-w-0"[39m
+                  [36m>[39m
+                    [36m<h3[39m
+                      [33mclass[39m=[32m"font-display text-lg font-medium text-on-surface truncate leading-tight"[39m
+                    [36m>[39m
+                      [0mInbox[0m
+                    [36m</h3>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex flex-col items-end gap-2 shrink-0"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex items-center gap-2"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-surface-dim text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0m1 TASKS[0m
+                      [36m</span>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-primary/20 text-primary"[39m
+                      [36m>[39m
+                        [0mLOCKED[0m
+                      [36m</span>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</section>[39m
+              [36m<section[39m
+                [33mclass[39m=[32m"rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-start justify-between gap-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex-1 min-w-0"[39m
+                  [36m>[39m
+                    [36m<h3[39m
+                      [33mclass[39m=[32m"font-display text-lg font-medium text-on-surface truncate leading-tight"[39m
+                    [36m>[39m
+                      [0mPersonal[0m
+                    [36m</h3>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"font-body text-xs text-on-surface-variant line-clamp-2 mt-1"[39m
+                    [36m>[39m
+                      [0mHome[0m
+                    [36m</p>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex flex-col items-end gap-2 shrink-0"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex items-center gap-2"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-surface-dim text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0m2 TASKS[0m
+                      [36m</span>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33maria-label[39m=[32m"Edit group"[39m
+                      [33mclass[39m=[32m"rounded-pill bg-surface-dim px-3 py-1 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] hover:-translate-y-0.5 transition-all active:scale-95 mt-1"[39m
+                      [33mtype[39m=[32m"button"[39m
+                    [36m>[39m
+                      [0mEdit[0m
+                    [36m</button>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</section>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   × tasks flow > preserves unsaved task edits when a subtask mutation refetches detail 1006ms
+     → Unable to find a label with the text of: Task title
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-between"[39m
+            [36m>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"rounded-pill bg-surface-container px-3 py-2 text-sm text-on-surface"[39m
+                [33mdata-discover[39m=[32m"true"[39m
+                [33mhref[39m=[32m"/tasks?group=inbox-1"[39m
+              [36m>[39m
+                [0mBack to Tasks[0m
+              [36m</a>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill border border-outline/30 px-3 py-2 text-sm text-on-surface-variant"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mClose[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-start justify-between gap-3"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"space-y-1 flex-1"[39m
+                    [36m>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mCurrent task[0m
+                      [36m</p>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-display text-2xl text-on-surface"[39m
+                      [36m>[39m
+                        [0mRefine design system[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33maria-label[39m=[32m"Switch to edit mode"[39m
+                      [33mclass[39m=[32m"rounded-full bg-primary/20 p-2 text-primary transition-colors hover:bg-primary/30"[39m
+                      [33mtype[39m=[32m"button"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] font-bold uppercase tracking-widest text-primary"[39m
+                      [36m>[39m
+                        [0mEdit[0m
+                      [36m</span>[39m
+                    [36m</button>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"grid gap-3"[39m
+                  [36m>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mGroup[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0mInbox[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mDue date[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0mNo due date[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mReminder[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0mNo reminder[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [0mRecurrence[0m
+                    [36m</p>[39m
+                  [36m</div>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                  [36m>[39m
+                    [0mNo recurrence[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-between"[39m
+                  [36m>[39m
+                    [36m<div>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-display text-xl text-on-surface"[39m
+                      [36m>[39m
+                        [0mSubtasks[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [0m1[0m
+                      [0m items[0m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"space-y-2"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"rounded-card bg-surface-dim p-3"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex items-start gap-2"[39m
+                      [36m>[39m
+                        [36m<button[39m
+                          [33maria-label[39m=[32m"Toggle Audit tokens"[39m
+                          [33mclass[39m=[32m"mt-0.5 h-5 w-5 rounded-pill border border-outline/25 bg-surface-container-high"[39m
+                          [33mtype[39m=[32m"button"[39m
+                        [36m/>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex-1 space-y-2"[39m
+                        [36m>[39m
+                          [36m<p[39m
+                            [33mclass[39m=[32m"text-on-surface"[39m
+                          [36m>[39m
+                            [0mAudit tokens[0m
+                          [36m</p>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex gap-3"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill bg-primary px-5 py-3 text-sm font-medium text-surface disabled:opacity-50"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mSave Changes[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill border border-outline/30 px-5 py-3 text-sm text-on-surface-variant"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mBack to List[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill border border-tertiary/30 px-5 py-3 text-sm text-tertiary hover:bg-tertiary/10 disabled:opacity-50"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mDelete Task[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-between"[39m
+            [36m>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"rounded-pill bg-surface-container px-3 py-2 text-sm text-on-surface"[39m
+                [33mdata-discover[39m=[32m"true"[39m
+                [33mhref[39m=[32m"/tasks?group=inbox-1"[39m
+              [36m>[39m
+                [0mBack to Tasks[0m
+              [36m</a>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill border border-outline/30 px-3 py-2 text-sm text-on-surface-variant"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mClose[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-start justify-between gap-3"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"space-y-1 flex-1"[39m
+                    [36m>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mCurrent task[0m
+                      [36m</p>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-display text-2xl text-on-surface"[39m
+                      [36m>[39m
+                        [0mRefine design system[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33maria-label[39m=[32m"Switch to edit mode"[39m
+                      [33mclass[39m=[32m"rounded-full bg-primary/20 p-2 text-primary transition-colors hover:bg-primary/30"[39m
+                      [33mtype[39m=[32m"button"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-[0.65rem] font-bold uppercase tracking-widest text-primary"[39m
+                      [36m>[39m
+                        [0mEdit[0m
+                      [36m</span>[39m
+                    [36m</button>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"grid gap-3"[39m
+                  [36m>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mGroup[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0mInbox[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mDue date[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0mNo due date[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                    [36m<label[39m
+                      [33mclass[39m=[32m"space-y-1"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                      [36m>[39m
+                        [0mReminder[0m
+                      [36m</span>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                      [36m>[39m
+                        [0mNo reminder[0m
+                      [36m</p>[39m
+                    [36m</label>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [0mRecurrence[0m
+                    [36m</p>[39m
+                  [36m</div>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"rounded-card bg-surface-dim px-3 py-3 text-on-surface"[39m
+                  [36m>[39m
+                    [0mNo recurrence[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-soft bg-surface-container p-4 shadow-ambient"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-between"[39m
+                  [36m>[39m
+                    [36m<div>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"font-display text-xl text-on-surface"[39m
+                      [36m>[39m
+                        [0mSubtasks[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [0m1[0m
+                      [0m items[0m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"space-y-2"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"rounded-card bg-surface-dim p-3"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex items-start gap-2"[39m
+                      [36m>[39m
+                        [36m<button[39m
+                          [33maria-label[39m=[32m"Toggle Audit tokens"[39m
+                          [33mclass[39m=[32m"mt-0.5 h-5 w-5 rounded-pill border border-outline/25 bg-surface-container-high"[39m
+                          [33mtype[39m=[32m"button"[39m
+                        [36m/>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex-1 space-y-2"[39m
+                        [36m>[39m
+                          [36m<p[39m
+                            [33mclass[39m=[32m"text-on-surface"[39m
+                          [36m>[39m
+                            [0mAudit tokens[0m
+                          [36m</p>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex gap-3"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill bg-primary px-5 py-3 text-sm font-medium text-surface disabled:opacity-50"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mSave Changes[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill border border-outline/30 px-5 py-3 text-sm text-on-surface-variant"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mBack to List[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"rounded-pill border border-tertiary/30 px-5 py-3 text-sm text-tertiary hover:bg-tertiary/10 disabled:opacity-50"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mDelete Task[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   × tasks flow > asks recurring delete scope and sends series delete when selected 1006ms
+     → Unable to find role="button" and name "Delete Weekly planning"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mAll[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] -translate-y-[1px]"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mInbox[0m
+                [0m · [0m
+                [0m1[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mPersonal[0m
+                [0m · [0m
+                [0m2[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4"[39m
+            [36m>[39m
+              [36m<section[39m
+                [33mclass[39m=[32m"space-y-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center justify-between"[39m
+                [36m>[39m
+                  [36m<h3[39m
+                    [33mclass[39m=[32m"font-display text-xl text-on-surface"[39m
+                  [36m>[39m
+                    [0mNo Date[0m
+                  [36m</h3>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                  [36m>[39m
+                    [0m1[0m
+                    [0m tasks[0m
+                  [36m</span>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"rounded-card transition-all duration-300 bg-surface-container relative overflow-hidden bg-surface-container-high border border-white/5 opacity-70"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"absolute inset-0 flex items-center justify-start px-6 text-[0.65rem] font-bold uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [36m<span>[39m
+                        [0mSwipe right to complete[0m
+                      [36m</span>[39m
+                    [36m</div>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"relative z-10 w-full touch-pan-y bg-surface-container-high p-4 text-left transition-transform duration-200 flex items-stretch justify-between gap-4"[39m
+                      [33mrole[39m=[32m"button"[39m
+                      [33mstyle[39m=[32m"transform: translateX(0px);"[39m
+                      [33mtabindex[39m=[32m"0"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex-1 min-w-0 flex flex-col justify-between py-0.5"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex flex-col gap-1.5 align-top"[39m
+                        [36m>[39m
+                          [36m<h3[39m
+                            [33mclass[39m=[32m"font-display text-lg font-medium text-on-surface truncate leading-tight"[39m
+                          [36m>[39m
+                            [0mWeekly planning[0m
+                          [36m</h3>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"flex items-center gap-2 font-body text-xs text-on-surface-variant flex-wrap"[39m
+                          [36m>[39m
+                            [36m<span[39m
+                              [33mclass[39m=[32m"text-on-surface-variant/80 font-medium"[39m
+                            [36m>[39m
+                              [0mInbox[0m
+                            [36m</span>[39m
+                          [36m</div>[39m
+                        [36m</div>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"mt-4"[39m
+                        [36m>[39m
+                          [36m<span[39m
+                            [33mclass[39m=[32m"text-on-surface-variant/50 uppercase tracking-wider text-[0.65rem] font-bold"[39m
+                          [36m>[39m
+                            [0mDue: [0m
+                            [0m--[0m
+                          [36m</span>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex flex-col items-end justify-between gap-4 shrink-0 px-2"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex items-center gap-2"[39m
+                        [36m>[39m
+                          [36m<span[39m
+                            [33mclass[39m=[32m"font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-surface-dim text-on-surface-variant/40"[39m
+                            [33mtitle[39m=[32m"No recurrence"[39m
+                          [36m>[39m
+                            [0mONE-OFF[0m
+                          [36m</span>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"flex items-center gap-1 bg-surface-dim px-2 py-0.5 rounded-pill"[39m
+                            [33mtitle[39m=[32m"undefined subtasks"[39m
+                          [36m>[39m
+                            [36m<span[39m
+                              [33mclass[39m=[32m"font-body text-[0.65rem] text-on-surface-variant uppercase tracking-widest"[39m
+                            [36m>[39m
+                              [0m0 SUBTASKS[0m
+                            [36m</span>[39m
+                          [36m</div>[39m
+                        [36m</div>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex items-center gap-3 shrink-0"[39m
+                        [36m>[39m
+                          [36m<button[39m
+                            [33maria-label[39m=[32m"Complete Weekly planning"[39m
+                            [33mclass[39m=[32m"flex items-center justify-center w-8 h-8 rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-primary hover:bg-surface-container-highest hover:-translate-y-0.5 transition-all duration-200 active:scale-90 active:translate-y-0 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"[39m
+                            [33mtype[39m=[32m"button"[39m
+                          [36m>[39m
+                            [36m<svg[39m
+                              [33mclass[39m=[32m"w-4 h-4"[39m
+                              [33mfill[39m=[32m"none"[39m
+                              [33mstroke[39m=[32m"currentColor"[39m
+                              [33mviewBox[39m=[32m"0 0 24 24"[39m
+                            [36m>[39m
+                              [36m<path[39m
+                                [33md[39m=[32m"M5 13l4 4L19 7"[39m
+                                [33mstroke-linecap[39m=[32m"round"[39m
+                                [33mstroke-linejoin[39m=[32m"round"[39m
+                                [33mstroke-width[39m=[32m"2.5"[39m
+                              [36m/>[39m
+                            [36m</svg>[39m
+                          [36m</button>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</section>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"mt-8 mb-20 flex justify-center pb-8"[39m
+            [36m>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"inline-flex items-center gap-2 rounded-pill border border-outline/20 bg-surface-container px-4 py-2 text-sm font-medium text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface hover:shadow-ambient"[39m
+                [33mdata-discover[39m=[32m"true"[39m
+                [33mhref[39m=[32m"/tasks/completed?group=inbox-1"[39m
+              [36m>[39m
+                [0mView Completed Tasks[0m
+              [36m</a>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Add Task"[39m
+            [33mclass[39m=[32m"group fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)] transition-all duration-200 outline-none select-none"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"h-6 w-6 text-white/95"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 4v16m8-8H4"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2.5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+          [36m</button>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mAll[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] -translate-y-[1px]"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mInbox[0m
+                [0m · [0m
+                [0m1[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mPersonal[0m
+                [0m · [0m
+                [0m2[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4"[39m
+            [36m>[39m
+              [36m<section[39m
+                [33mclass[39m=[32m"space-y-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center justify-between"[39m
+                [36m>[39m
+                  [36m<h3[39m
+                    [33mclass[39m=[32m"font-display text-xl text-on-surface"[39m
+                  [36m>[39m
+                    [0mNo Date[0m
+                  [36m</h3>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant"[39m
+                  [36m>[39m
+                    [0m1[0m
+                    [0m tasks[0m
+                  [36m</span>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"rounded-card transition-all duration-300 bg-surface-container relative overflow-hidden bg-surface-container-high border border-white/5 opacity-70"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"absolute inset-0 flex items-center justify-start px-6 text-[0.65rem] font-bold uppercase tracking-[0.15em] text-on-surface-variant"[39m
+                    [36m>[39m
+                      [36m<span>[39m
+                        [0mSwipe right to complete[0m
+                      [36m</span>[39m
+                    [36m</div>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"relative z-10 w-full touch-pan-y bg-surface-container-high p-4 text-left transition-transform duration-200 flex items-stretch justify-between gap-4"[39m
+                      [33mrole[39m=[32m"button"[39m
+                      [33mstyle[39m=[32m"transform: translateX(0px);"[39m
+                      [33mtabindex[39m=[32m"0"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex-1 min-w-0 flex flex-col justify-between py-0.5"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex flex-col gap-1.5 align-top"[39m
+                        [36m>[39m
+                          [36m<h3[39m
+                            [33mclass[39m=[32m"font-display text-lg font-medium text-on-surface truncate leading-tight"[39m
+                          [36m>[39m
+                            [0mWeekly planning[0m
+                          [36m</h3>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"flex items-center gap-2 font-body text-xs text-on-surface-variant flex-wrap"[39m
+                          [36m>[39m
+                            [36m<span[39m
+                              [33mclass[39m=[32m"text-on-surface-variant/80 font-medium"[39m
+                            [36m>[39m
+                              [0mInbox[0m
+                            [36m</span>[39m
+                          [36m</div>[39m
+                        [36m</div>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"mt-4"[39m
+                        [36m>[39m
+                          [36m<span[39m
+                            [33mclass[39m=[32m"text-on-surface-variant/50 uppercase tracking-wider text-[0.65rem] font-bold"[39m
+                          [36m>[39m
+                            [0mDue: [0m
+                            [0m--[0m
+                          [36m</span>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex flex-col items-end justify-between gap-4 shrink-0 px-2"[39m
+                      [36m>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex items-center gap-2"[39m
+                        [36m>[39m
+                          [36m<span[39m
+                            [33mclass[39m=[32m"font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-surface-dim text-on-surface-variant/40"[39m
+                            [33mtitle[39m=[32m"No recurrence"[39m
+                          [36m>[39m
+                            [0mONE-OFF[0m
+                          [36m</span>[39m
+                          [36m<div[39m
+                            [33mclass[39m=[32m"flex items-center gap-1 bg-surface-dim px-2 py-0.5 rounded-pill"[39m
+                            [33mtitle[39m=[32m"undefined subtasks"[39m
+                          [36m>[39m
+                            [36m<span[39m
+                              [33mclass[39m=[32m"font-body text-[0.65rem] text-on-surface-variant uppercase tracking-widest"[39m
+                            [36m>[39m
+                              [0m0 SUBTASKS[0m
+                            [36m</span>[39m
+                          [36m</div>[39m
+                        [36m</div>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"flex items-center gap-3 shrink-0"[39m
+                        [36m>[39m
+                          [36m<button[39m
+                            [33maria-label[39m=[32m"Complete Weekly planning"[39m
+                            [33mclass[39m=[32m"flex items-center justify-center w-8 h-8 rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-primary hover:bg-surface-container-highest hover:-translate-y-0.5 transition-all duration-200 active:scale-90 active:translate-y-0 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"[39m
+                            [33mtype[39m=[32m"button"[39m
+                          [36m>[39m
+                            [36m<svg[39m
+                              [33mclass[39m=[32m"w-4 h-4"[39m
+                              [33mfill[39m=[32m"none"[39m
+                              [33mstroke[39m=[32m"currentColor"[39m
+                              [33mviewBox[39m=[32m"0 0 24 24"[39m
+                            [36m>[39m
+                              [36m<path[39m
+                                [33md[39m=[32m"M5 13l4 4L19 7"[39m
+                                [33mstroke-linecap[39m=[32m"round"[39m
+                                [33mstroke-linejoin[39m=[32m"round"[39m
+                                [33mstroke-width[39m=[32m"2.5"[39m
+                              [36m/>[39m
+                            [36m</svg>[39m
+                          [36m</button>[39m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</section>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"mt-8 mb-20 flex justify-center pb-8"[39m
+            [36m>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"inline-flex items-center gap-2 rounded-pill border border-outline/20 bg-surface-container px-4 py-2 text-sm font-medium text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface hover:shadow-ambient"[39m
+                [33mdata-discover[39m=[32m"true"[39m
+                [33mhref[39m=[32m"/tasks/completed?group=inbox-1"[39m
+              [36m>[39m
+                [0mView Completed Tasks[0m
+              [36m</a>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Add Task"[39m
+            [33mclass[39m=[32m"group fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)] transition-all duration-200 outline-none select-none"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"h-6 w-6 text-white/95"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 4v16m8-8H4"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2.5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+          [36m</button>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   ✓ tasks flow > shows completed tasks route and reopens a completed task 23ms
+   ✓ tasks flow > suppresses duplicate historical completed rows for the same logical occurrence 11ms
+ ❯ src/test/capture.test.tsx (6 tests | 4 failed) 4645ms
+   ✓ capture route > offers local test-account sign-in in local dev mode 131ms
+   ✓ capture route > keeps text fallback usable when microphone permission is denied 29ms
+   × capture route > routes text capture through a separate review step before submit 1164ms
+     → Unable to find role="heading" and name "Text draft review"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-6 text-center"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-1"[39m
+                [36m>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-body text-sm font-medium text-on-surface"[39m
+                  [36m>[39m
+                    [0mTap to record[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Start recording"[39m
+                  [33mclass[39m=[32m"group relative mx-auto flex h-36 w-36 items-center justify-center rounded-full transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)]"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33mclass[39m=[32m"h-14 w-14 text-white/95"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"1.5"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                  [36m</div>[39m
+                [36m</button>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-2"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4 rounded-card px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] animate-in fade-in slide-in-from-top-2 duration-200"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center gap-3"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"h-6 w-6 text-white/90"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"[39m
+                      [33mstroke-linecap[39m=[32m"round"[39m
+                      [33mstroke-linejoin[39m=[32m"round"[39m
+                      [33mstroke-width[39m=[32m"1.5"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-display text-lg font-medium tracking-wide"[39m
+                  [36m>[39m
+                    [0mWrite it[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Collapse text input"[39m
+                  [33mclass[39m=[32m"rounded-full px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors focus:ring-2 focus:ring-white/30 outline-none"[39m
+                [36m>[39m
+                  [0mHide[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-3"[39m
+              [36m>[39m
+                [36m<textarea[39m
+                  [33mclass[39m=[32m"w-full resize-none rounded-card bg-black/40 px-4 py-3 font-body text-sm text-white placeholder:text-white/40 outline-none transition focus:ring-2 focus:ring-white/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"[39m
+                  [33mplaceholder[39m=[32m"Type or paste here..."[39m
+                  [33mrows[39m=[32m"5"[39m
+                [36m>[39m
+                  [0mDraft follow-up email[0m
+                [36m</textarea>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"rounded-card bg-red-500/10 px-3 py-2 font-body text-sm text-red-200 shadow-sm border border-red-500/20"[39m
+                [36m>[39m
+                  [0mText capture could not be prepared.[0m
+                [36m</p>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex justify-end"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"rounded-pill bg-white/10 hover:bg-white/20 text-white border border-white/5 px-5 py-2 text-sm font-semibold shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 disabled:hover:bg-white/10 backdrop-blur-sm"[39m
+                    [33mtype[39m=[32m"button"[39m
+                  [36m>[39m
+                    [0mReview Text Capture[0m
+                  [36m</button>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-6 text-center"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-1"[39m
+                [36m>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-body text-sm font-medium text-on-surface"[39m
+                  [36m>[39m
+                    [0mTap to record[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Start recording"[39m
+                  [33mclass[39m=[32m"group relative mx-auto flex h-36 w-36 items-center justify-center rounded-full transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)]"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33mclass[39m=[32m"h-14 w-14 text-white/95"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"1.5"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                  [36m</div>[39m
+                [36m</button>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-2"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4 rounded-card px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] animate-in fade-in slide-in-from-top-2 duration-200"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center gap-3"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"h-6 w-6 text-white/90"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"[39m
+                      [33mstroke-linecap[39m=[32m"round"[39m
+                      [33mstroke-linejoin[39m=[32m"round"[39m
+                      [33mstroke-width[39m=[32m"1.5"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-display text-lg font-medium tracking-wide"[39m
+                  [36m>[39m
+                    [0mWrite it[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Collapse text input"[39m
+                  [33mclass[39m=[32m"rounded-full px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors focus:ring-2 focus:ring-white/30 outline-none"[39m
+                [36m>[39m
+                  [0mHide[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-3"[39m
+              [36m>[39m
+                [36m<textarea[39m
+                  [33mclass[39m=[32m"w-full resize-none rounded-card bg-black/40 px-4 py-3 font-body text-sm text-white placeholder:text-white/40 outline-none transition focus:ring-2 focus:ring-white/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"[39m
+                  [33mplaceholder[39m=[32m"Type or paste here..."[39m
+                  [33mrows[39m=[32m"5"[39m
+                [36m>[39m
+                  [0mDraft follow-up email[0m
+                [36m</textarea>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"rounded-card bg-red-500/10 px-3 py-2 font-body text-sm text-red-200 shadow-sm border border-red-500/20"[39m
+                [36m>[39m
+                  [0mText capture could not be prepared.[0m
+                [36m</p>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex justify-end"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"rounded-pill bg-white/10 hover:bg-white/20 text-white border border-white/5 px-5 py-2 text-sm font-semibold shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 disabled:hover:bg-white/10 backdrop-blur-sm"[39m
+                    [33mtype[39m=[32m"button"[39m
+                  [36m>[39m
+                    [0mReview Text Capture[0m
+                  [36m</button>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   × capture route > preserves edited transcript text when extraction fails 1198ms
+     → Unable to find a label with the text of: Transcript
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-6 text-center"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-1"[39m
+                [36m>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-body text-sm font-medium text-on-surface"[39m
+                  [36m>[39m
+                    [0mTap to record[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Start recording"[39m
+                  [33mclass[39m=[32m"group relative mx-auto flex h-36 w-36 items-center justify-center rounded-full transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)]"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33mclass[39m=[32m"h-14 w-14 text-white/95"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"1.5"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                  [36m</div>[39m
+                [36m</button>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-2"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4 rounded-card px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] animate-in fade-in slide-in-from-top-2 duration-200"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center gap-3"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"h-6 w-6 text-white/90"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"[39m
+                      [33mstroke-linecap[39m=[32m"round"[39m
+                      [33mstroke-linejoin[39m=[32m"round"[39m
+                      [33mstroke-width[39m=[32m"1.5"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-display text-lg font-medium tracking-wide"[39m
+                  [36m>[39m
+                    [0mWrite it[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Collapse text input"[39m
+                  [33mclass[39m=[32m"rounded-full px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors focus:ring-2 focus:ring-white/30 outline-none"[39m
+                [36m>[39m
+                  [0mHide[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-3"[39m
+              [36m>[39m
+                [36m<textarea[39m
+                  [33mclass[39m=[32m"w-full resize-none rounded-card bg-black/40 px-4 py-3 font-body text-sm text-white placeholder:text-white/40 outline-none transition focus:ring-2 focus:ring-white/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"[39m
+                  [33mplaceholder[39m=[32m"Type or paste here..."[39m
+                  [33mrows[39m=[32m"5"[39m
+                [36m>[39m
+                  [0mCall Sam[0m
+                [36m</textarea>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"rounded-card bg-red-500/10 px-3 py-2 font-body text-sm text-red-200 shadow-sm border border-red-500/20"[39m
+                [36m>[39m
+                  [0mText capture could not be prepared.[0m
+                [36m</p>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex justify-end"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"rounded-pill bg-white/10 hover:bg-white/20 text-white border border-white/5 px-5 py-2 text-sm font-semibold shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 disabled:hover:bg-white/10 backdrop-blur-sm"[39m
+                    [33mtype[39m=[32m"button"[39m
+                  [36m>[39m
+                    [0mReview Text Capture[0m
+                  [36m</button>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-6 text-center"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-1"[39m
+                [36m>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-body text-sm font-medium text-on-surface"[39m
+                  [36m>[39m
+                    [0mTap to record[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Start recording"[39m
+                  [33mclass[39m=[32m"group relative mx-auto flex h-36 w-36 items-center justify-center rounded-full transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)]"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33mclass[39m=[32m"h-14 w-14 text-white/95"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"1.5"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                  [36m</div>[39m
+                [36m</button>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-2"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4 rounded-card px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] animate-in fade-in slide-in-from-top-2 duration-200"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center gap-3"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"h-6 w-6 text-white/90"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"[39m
+                      [33mstroke-linecap[39m=[32m"round"[39m
+                      [33mstroke-linejoin[39m=[32m"round"[39m
+                      [33mstroke-width[39m=[32m"1.5"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-display text-lg font-medium tracking-wide"[39m
+                  [36m>[39m
+                    [0mWrite it[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Collapse text input"[39m
+                  [33mclass[39m=[32m"rounded-full px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors focus:ring-2 focus:ring-white/30 outline-none"[39m
+                [36m>[39m
+                  [0mHide[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-3"[39m
+              [36m>[39m
+                [36m<textarea[39m
+                  [33mclass[39m=[32m"w-full resize-none rounded-card bg-black/40 px-4 py-3 font-body text-sm text-white placeholder:text-white/40 outline-none transition focus:ring-2 focus:ring-white/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"[39m
+                  [33mplaceholder[39m=[32m"Type or paste here..."[39m
+                  [33mrows[39m=[32m"5"[39m
+                [36m>[39m
+                  [0mCall Sam[0m
+                [36m</textarea>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"rounded-card bg-red-500/10 px-3 py-2 font-body text-sm text-red-200 shadow-sm border border-red-500/20"[39m
+                [36m>[39m
+                  [0mText capture could not be prepared.[0m
+                [36m</p>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex justify-end"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"rounded-pill bg-white/10 hover:bg-white/20 text-white border border-white/5 px-5 py-2 text-sm font-semibold shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 disabled:hover:bg-white/10 backdrop-blur-sm"[39m
+                    [33mtype[39m=[32m"button"[39m
+                  [36m>[39m
+                    [0mReview Text Capture[0m
+                  [36m</button>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   × capture route > retries voice transcription with the same recording blob 1037ms
+     → Unable to find an element with the text: Transcription failed. Please retry.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-6 text-center"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-1"[39m
+                [36m>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-body text-sm font-medium text-on-surface"[39m
+                  [36m>[39m
+                    [0mTap to record[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Start recording"[39m
+                  [33mclass[39m=[32m"group relative mx-auto flex h-36 w-36 items-center justify-center rounded-full transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)]"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33mclass[39m=[32m"h-14 w-14 text-white/95"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"1.5"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                  [36m</div>[39m
+                [36m</button>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-2"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"space-y-2 rounded-card bg-tertiary/10 px-3 py-3"[39m
+                  [36m>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"font-body text-sm text-on-surface"[39m
+                    [36m>[39m
+                      [0mTranscription failed. Please retry the same recording.[0m
+                    [36m</p>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex flex-wrap justify-center gap-2"[39m
+                    [36m>[39m
+                      [36m<button[39m
+                        [33mclass[39m=[32m"rounded-pill bg-primary px-3 py-1.5 text-sm font-medium text-surface"[39m
+                        [33mtype[39m=[32m"button"[39m
+                      [36m>[39m
+                        [0mRetry Same Recording[0m
+                      [36m</button>[39m
+                      [36m<button[39m
+                        [33mclass[39m=[32m"rounded-pill border border-outline px-3 py-1.5 text-sm text-on-surface-variant"[39m
+                        [33mtype[39m=[32m"button"[39m
+                      [36m>[39m
+                        [0mDismiss[0m
+                      [36m</button>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"group relative w-full flex items-center justify-between rounded-card transition-all duration-200 outline-none select-none px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_6px_0_#171033,_0_8px_15px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.2)] hover:-translate-y-[1px] hover:shadow-[0_7px_0_#171033,_0_12px_20px_rgba(0,0,0,0.5),_inset_0_1px_2px_rgba(255,255,255,0.2)] active:translate-y-[6px] active:shadow-[0_0px_0_#171033,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_6px_rgba(0,0,0,0.3)]"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center gap-3"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33mclass[39m=[32m"h-6 w-6 text-white/90"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"1.5"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"font-display text-lg font-medium tracking-wide"[39m
+                [36m>[39m
+                  [0mWrite it[0m
+                [36m</p>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center gap-1 font-body text-sm font-medium text-white/50 transition-colors group-hover:text-white/90"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mExpand[0m
+                [36m</span>[39m
+                [36m<svg[39m
+                  [33mclass[39m=[32m"h-4 w-4 opacity-70"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M19 9l-7 7-7-7"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</div>[39m
+            [36m</button>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-6 text-center"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-1"[39m
+                [36m>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-body text-sm font-medium text-on-surface"[39m
+                  [36m>[39m
+                    [0mTap to record[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Start recording"[39m
+                  [33mclass[39m=[32m"group relative mx-auto flex h-36 w-36 items-center justify-center rounded-full transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)]"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33mclass[39m=[32m"h-14 w-14 text-white/95"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"1.5"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                  [36m</div>[39m
+                [36m</button>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-2"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"space-y-2 rounded-card bg-tertiary/10 px-3 py-3"[39m
+                  [36m>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"font-body text-sm text-on-surface"[39m
+                    [36m>[39m
+                      [0mTranscription failed. Please retry the same recording.[0m
+                    [36m</p>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex flex-wrap justify-center gap-2"[39m
+                    [36m>[39m
+                      [36m<button[39m
+                        [33mclass[39m=[32m"rounded-pill bg-primary px-3 py-1.5 text-sm font-medium text-surface"[39m
+                        [33mtype[39m=[32m"button"[39m
+                      [36m>[39m
+                        [0mRetry Same Recording[0m
+                      [36m</button>[39m
+                      [36m<button[39m
+                        [33mclass[39m=[32m"rounded-pill border border-outline px-3 py-1.5 text-sm text-on-surface-variant"[39m
+                        [33mtype[39m=[32m"button"[39m
+                      [36m>[39m
+                        [0mDismiss[0m
+                      [36m</button>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"group relative w-full flex items-center justify-between rounded-card transition-all duration-200 outline-none select-none px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_6px_0_#171033,_0_8px_15px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.2)] hover:-translate-y-[1px] hover:shadow-[0_7px_0_#171033,_0_12px_20px_rgba(0,0,0,0.5),_inset_0_1px_2px_rgba(255,255,255,0.2)] active:translate-y-[6px] active:shadow-[0_0px_0_#171033,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_6px_rgba(0,0,0,0.3)]"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center gap-3"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33mclass[39m=[32m"h-6 w-6 text-white/90"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"1.5"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"font-display text-lg font-medium tracking-wide"[39m
+                [36m>[39m
+                  [0mWrite it[0m
+                [36m</p>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center gap-1 font-body text-sm font-medium text-white/50 transition-colors group-hover:text-white/90"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mExpand[0m
+                [36m</span>[39m
+                [36m<svg[39m
+                  [33mclass[39m=[32m"h-4 w-4 opacity-70"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M19 9l-7 7-7-7"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</div>[39m
+            [36m</button>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   × capture route > clears a stale review before starting a new recording 1084ms
+     → Unable to find role="heading" and name "Text draft review"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-6 text-center"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-1"[39m
+                [36m>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-body text-sm font-medium text-on-surface"[39m
+                  [36m>[39m
+                    [0mTap to record[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Start recording"[39m
+                  [33mclass[39m=[32m"group relative mx-auto flex h-36 w-36 items-center justify-center rounded-full transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)]"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33mclass[39m=[32m"h-14 w-14 text-white/95"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"1.5"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                  [36m</div>[39m
+                [36m</button>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-2"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4 rounded-card px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] animate-in fade-in slide-in-from-top-2 duration-200"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center gap-3"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"h-6 w-6 text-white/90"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"[39m
+                      [33mstroke-linecap[39m=[32m"round"[39m
+                      [33mstroke-linejoin[39m=[32m"round"[39m
+                      [33mstroke-width[39m=[32m"1.5"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-display text-lg font-medium tracking-wide"[39m
+                  [36m>[39m
+                    [0mWrite it[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Collapse text input"[39m
+                  [33mclass[39m=[32m"rounded-full px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors focus:ring-2 focus:ring-white/30 outline-none"[39m
+                [36m>[39m
+                  [0mHide[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-3"[39m
+              [36m>[39m
+                [36m<textarea[39m
+                  [33mclass[39m=[32m"w-full resize-none rounded-card bg-black/40 px-4 py-3 font-body text-sm text-white placeholder:text-white/40 outline-none transition focus:ring-2 focus:ring-white/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"[39m
+                  [33mplaceholder[39m=[32m"Type or paste here..."[39m
+                  [33mrows[39m=[32m"5"[39m
+                [36m>[39m
+                  [0mDraft follow-up email[0m
+                [36m</textarea>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"rounded-card bg-red-500/10 px-3 py-2 font-body text-sm text-red-200 shadow-sm border border-red-500/20"[39m
+                [36m>[39m
+                  [0mText capture could not be prepared.[0m
+                [36m</p>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex justify-end"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"rounded-pill bg-white/10 hover:bg-white/20 text-white border border-white/5 px-5 py-2 text-sm font-semibold shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 disabled:hover:bg-white/10 backdrop-blur-sm"[39m
+                    [33mtype[39m=[32m"button"[39m
+                  [36m>[39m
+                    [0mReview Text Capture[0m
+                  [36m</button>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-surface text-on-surface"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<img[39m
+                [33malt[39m=[32m"Gust"[39m
+                [33mclass[39m=[32m"h-6 w-6"[39m
+                [33msrc[39m=[32m"/logos/gust-wind-electric.svg"[39m
+              [36m/>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"font-display text-2xl leading-none text-on-surface"[39m
+              [36m>[39m
+                [0mGust[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-body text-xs font-medium"[39m
+              [36m>[39m
+                [0mStandard mode[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Primary"[39m
+            [33mclass[39m=[32m"grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition bg-surface-container-highest text-primary shadow-ambient"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/"[39m
+            [36m>[39m
+              [0mCapture[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks"[39m
+            [36m>[39m
+              [0mTasks[0m
+            [36m</a>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"rounded-soft px-3 py-2 text-center font-body text-sm transition text-on-surface-variant hover:bg-surface-container-high"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/tasks/groups"[39m
+            [36m>[39m
+              [0mGroups[0m
+            [36m</a>[39m
+          [36m</nav>[39m
+        [36m</header>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"flex-1"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-5 shadow-ambient"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-6 text-center"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-1"[39m
+                [36m>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-body text-sm font-medium text-on-surface"[39m
+                  [36m>[39m
+                    [0mTap to record[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Start recording"[39m
+                  [33mclass[39m=[32m"group relative mx-auto flex h-36 w-36 items-center justify-center rounded-full transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)]"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center justify-center transition-all duration-200 drop-shadow-md"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33mclass[39m=[32m"h-14 w-14 text-white/95"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"1.5"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                  [36m</div>[39m
+                [36m</button>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-2"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4 rounded-card px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] animate-in fade-in slide-in-from-top-2 duration-200"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center gap-3"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"h-6 w-6 text-white/90"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"[39m
+                      [33mstroke-linecap[39m=[32m"round"[39m
+                      [33mstroke-linejoin[39m=[32m"round"[39m
+                      [33mstroke-width[39m=[32m"1.5"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<p[39m
+                    [33mclass[39m=[32m"font-display text-lg font-medium tracking-wide"[39m
+                  [36m>[39m
+                    [0mWrite it[0m
+                  [36m</p>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Collapse text input"[39m
+                  [33mclass[39m=[32m"rounded-full px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors focus:ring-2 focus:ring-white/30 outline-none"[39m
+                [36m>[39m
+                  [0mHide[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-3"[39m
+              [36m>[39m
+                [36m<textarea[39m
+                  [33mclass[39m=[32m"w-full resize-none rounded-card bg-black/40 px-4 py-3 font-body text-sm text-white placeholder:text-white/40 outline-none transition focus:ring-2 focus:ring-white/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"[39m
+                  [33mplaceholder[39m=[32m"Type or paste here..."[39m
+                  [33mrows[39m=[32m"5"[39m
+                [36m>[39m
+                  [0mDraft follow-up email[0m
+                [36m</textarea>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"rounded-card bg-red-500/10 px-3 py-2 font-body text-sm text-red-200 shadow-sm border border-red-500/20"[39m
+                [36m>[39m
+                  [0mText capture could not be prepared.[0m
+                [36m</p>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex justify-end"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"rounded-pill bg-white/10 hover:bg-white/20 text-white border border-white/5 px-5 py-2 text-sm font-semibold shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 disabled:hover:bg-white/10 backdrop-blur-sm"[39m
+                    [33mtype[39m=[32m"button"[39m
+                  [36m>[39m
+                    [0mReview Text Capture[0m
+                  [36m</button>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+        [36m</main>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  9 failed | 11 passed (20)
+   Start at  19:03:05
+   Duration  5.85s (transform 308ms, setup 264ms, collect 1.23s, tests 9.56s, environment 1.50s, prepare 281ms)
+

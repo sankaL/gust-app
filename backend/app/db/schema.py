@@ -160,6 +160,43 @@ captures = sa.Table(
     ),
 )
 
+extracted_tasks = sa.Table(
+    "extracted_tasks",
+    metadata,
+    sa.Column("id", sa.Uuid(as_uuid=False), primary_key=True),
+    sa.Column("user_id", sa.Uuid(as_uuid=False), sa.ForeignKey("users.id"), nullable=False),
+    sa.Column("capture_id", sa.Uuid(as_uuid=False), sa.ForeignKey("captures.id"), nullable=False),
+    sa.Column("title", sa.Text(), nullable=False),
+    sa.Column("group_id", sa.Uuid(as_uuid=False), sa.ForeignKey("groups.id"), nullable=False),
+    sa.Column("group_name", sa.Text(), nullable=True),
+    sa.Column("due_date", sa.Date(), nullable=True),
+    sa.Column("reminder_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("recurrence_frequency", sa.Text(), nullable=True),
+    sa.Column("recurrence_weekday", sa.SmallInteger(), nullable=True),
+    sa.Column("recurrence_day_of_month", sa.SmallInteger(), nullable=True),
+    sa.Column("top_confidence", sa.Float(), nullable=False),
+    sa.Column("needs_review", sa.Boolean(), nullable=False, server_default=sa.false()),
+    sa.Column("status", sa.Text(), nullable=False, server_default="'pending'"),
+    # Ordered list of subtask titles extracted from the transcript.
+    # Stored as a JSON array of strings; null when no subtasks were identified.
+    sa.Column("subtask_titles", sa.JSON(), nullable=True),
+    sa.Column(
+        "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+    sa.Column(
+        "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+    sa.CheckConstraint("length(trim(title)) > 0", name="ck_extracted_tasks_title_not_blank"),
+    sa.CheckConstraint(
+        "top_confidence >= 0.0 AND top_confidence <= 1.0",
+        name="ck_extracted_tasks_confidence_range",
+    ),
+    sa.CheckConstraint(
+        "status IN ('pending', 'approved', 'discarded')",
+        name="ck_extracted_tasks_status_valid",
+    ),
+)
+
 reminders = sa.Table(
     "reminders",
     metadata,
@@ -209,3 +246,6 @@ sa.Index("ix_captures_user_created_at", captures.c.user_id, captures.c.created_a
 sa.Index("ix_captures_expires_at", captures.c.expires_at)
 sa.Index("ix_reminders_status_scheduled_for", reminders.c.status, reminders.c.scheduled_for)
 sa.Index("ix_reminders_claim_expires_at", reminders.c.claim_expires_at)
+sa.Index("ix_extracted_tasks_user_id", extracted_tasks.c.user_id)
+sa.Index("ix_extracted_tasks_capture_id", extracted_tasks.c.capture_id)
+sa.Index("ix_extracted_tasks_user_status", extracted_tasks.c.user_id, extracted_tasks.c.status)

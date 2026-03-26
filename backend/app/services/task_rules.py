@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import calendar
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -35,16 +36,48 @@ def normalize_task_fields(
     recurrence: RecurrenceInput | None,
     user_timezone: str,
     current_series_id: str | None = None,
+    # Explicit opt-in behavior flags (default False = strict validation)
+    assume_utc_for_naive: bool = False,
+    default_due_date_for_recurrence: bool = False,
 ) -> NormalizedTaskFields:
     normalized_title = title.strip()
     if not normalized_title:
         raise ValueError("Task title cannot be blank.")
+
+    # Handle naive datetime: either assume UTC (opt-in) or raise error (strict)
     if reminder_at is not None and reminder_at.tzinfo is None:
-        raise ValueError("Reminder timestamp must include a timezone.")
+        if assume_utc_for_naive:
+            logger = logging.getLogger("gust.api")
+            logger.warning(
+                "normalization_assuming_utc_for_naive_datetime",
+                extra={
+                    "event": "normalization_assuming_utc_for_naive_datetime",
+                    "original_reminder_at": str(reminder_at),
+                    "title": normalized_title,
+                },
+            )
+            reminder_at = reminder_at.replace(tzinfo=ZoneInfo("UTC"))
+        else:
+            raise ValueError("Reminder timestamp must include a timezone.")
+
     if due_date is None and reminder_at is not None:
         raise ValueError("Reminder requires a due date.")
-    if due_date is None and recurrence is not None:
-        raise ValueError("Recurrence requires a due date.")
+
+    # For weekly/monthly recurrence: either default to today (opt-in) or raise error (strict)
+    if due_date is None and recurrence is not None and recurrence.frequency != "daily":
+        if default_due_date_for_recurrence:
+            logger = logging.getLogger("gust.api")
+            logger.warning(
+                "normalization_defaulting_due_date_for_recurrence",
+                extra={
+                    "event": "normalization_defaulting_due_date_for_recurrence",
+                    "recurrence_frequency": recurrence.frequency,
+                    "title": normalized_title,
+                },
+            )
+            due_date = date.today()
+        else:
+            raise ValueError("Recurrence requires a due date.")
 
     recurrence_frequency = None
     recurrence_interval = None
@@ -143,6 +176,31 @@ def next_due_date_for_completed_task(
 
     if recurrence_frequency == "monthly":
         next_month = _add_one_month(local_completed_date)
+        return (next_month, next_month.day)
+
+    raise ValueError("Unsupported recurrence frequency.")
+
+
+def next_due_date_for_deleted_occurrence(
+    *,
+    occurrence_due_date: date,
+    recurrence_frequency: str,
+    recurrence_weekday: int | None,
+    recurrence_day_of_month: int | None,
+) -> tuple[date, int | None]:
+    if recurrence_frequency == "daily":
+        return (occurrence_due_date + timedelta(days=1), recurrence_day_of_month)
+
+    if recurrence_frequency == "weekly":
+        if recurrence_weekday is None:
+            raise ValueError("Weekly recurrence requires a weekday.")
+        days_until = (recurrence_weekday - _weekday_for_v1(occurrence_due_date)) % 7
+        if days_until == 0:
+            days_until = 7
+        return (occurrence_due_date + timedelta(days=days_until), recurrence_day_of_month)
+
+    if recurrence_frequency == "monthly":
+        next_month = _add_one_month(occurrence_due_date)
         return (next_month, next_month.day)
 
     raise ValueError("Unsupported recurrence frequency.")

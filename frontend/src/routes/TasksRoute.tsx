@@ -5,7 +5,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ApiError,
   completeTask,
-  deleteTask,
   getSessionStatus,
   listGroups,
   listTasks,
@@ -14,7 +13,10 @@ import {
   type SessionStatus,
   type TaskSummary
 } from '../lib/api'
+import { AllTasksView } from '../components/AllTasksView'
+import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { SessionGuard } from '../components/SessionGuard'
+import { Card } from '../components/Card'
 
 type UndoState =
   | {
@@ -33,7 +35,6 @@ type SwipeTaskCardProps = {
   task: TaskSummary
   onOpen: (taskId: string) => void
   onComplete: (taskId: string) => void
-  onDelete: (taskId: string) => void
   isBusy: boolean
 }
 
@@ -65,6 +66,15 @@ function buildDueBadge(task: TaskSummary) {
   if (diffDays === 1) {
     return { label: 'Tomorrow', tone: 'bg-primary/20 text-on-surface' }
   }
+  if (diffDays <= 7) {
+    return {
+      label: new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric'
+      }).format(due),
+      tone: 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+    }
+  }
   return {
     label: new Intl.DateTimeFormat(undefined, {
       month: 'short',
@@ -74,7 +84,7 @@ function buildDueBadge(task: TaskSummary) {
   }
 }
 
-function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTaskCardProps) {
+function SwipeTaskCard({ task, onOpen, onComplete, isBusy }: SwipeTaskCardProps) {
   const startXRef = useRef<number | null>(null)
   const pointerIdRef = useRef<number | null>(null)
   const offsetRef = useRef(0)
@@ -109,74 +119,131 @@ function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTask
   function handlePointerEnd() {
     if (offsetRef.current >= 90) {
       onComplete(task.id)
-    } else if (offsetRef.current <= -90) {
-      onDelete(task.id)
     }
     resetSwipe()
   }
 
+  let dueTextColor = 'text-on-surface-variant/50'
+  if (task.due_date) {
+    const today = new Date()
+    const due = new Date(`${task.due_date}T00:00:00`)
+    const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
+    const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
+    const diff = dueDay - todayDay
+    if (diff < 0) dueTextColor = 'text-error'
+    else if (diff === 0) dueTextColor = 'text-warning'
+    else dueTextColor = 'text-primary'
+  }
+
+  function formatReminder(reminderAt: string | null): string {
+    if (!reminderAt) return 'none'
+    const date = new Date(reminderAt)
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+  }
+
   return (
-    <article className="relative overflow-hidden rounded-card bg-surface-container shadow-ambient">
-      <div className="absolute inset-0 flex items-center justify-between px-4 text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+    <Card padding="none" className={`relative overflow-hidden bg-surface-container-high border border-white/5 ${!task.due_date ? 'opacity-70' : ''}`}>
+      <div className="absolute inset-0 flex items-center justify-start px-6 text-[0.65rem] font-bold uppercase tracking-[0.15em] text-on-surface-variant">
         <span>Swipe right to complete</span>
-        <span>Swipe left to delete</span>
       </div>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => onOpen(task.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onOpen(task.id)
+          }
+        }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={resetSwipe}
-        className="relative z-10 w-full touch-pan-y rounded-card bg-surface-container p-5 text-left transition"
+        className="relative z-10 w-full touch-pan-y bg-surface-container-high p-4 text-left transition-transform duration-200 flex items-stretch justify-between gap-4"
         style={{ transform: `translateX(${offsetX}px)` }}
       >
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {task.needs_review ? (
-                <span className="inline-flex rounded-pill bg-primary/20 px-3 py-1 text-xs uppercase tracking-[0.18em] text-primary">
-                  Needs review
+        {/* Left Column: Title & Metadata */}
+        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+          <div className="flex flex-col gap-1.5 align-top">
+            <h3 className="font-display text-lg font-medium text-on-surface truncate leading-tight">
+              {task.title}
+            </h3>
+            
+            <div className="flex items-center gap-2 font-body text-xs text-on-surface-variant flex-wrap">
+              <span className="text-on-surface-variant/80 font-medium">
+                {task.group?.name || 'Inbox'}
+              </span>
+              {task.reminder_at && (
+                <>
+                  <span className="text-on-surface-variant/40">•</span>
+                  <span className="text-on-surface-variant/80">
+                    Reminder: {formatReminder(task.reminder_at)}
+                  </span>
+                </>
+              )}
+              {task.needs_review && (
+                <span className="inline-block px-2 py-0.5 text-[0.65rem] uppercase tracking-widest font-bold bg-warning/20 text-warning rounded-pill">
+                  Needs Review
                 </span>
-              ) : null}
-              {badge ? (
-                <span className={`inline-flex rounded-pill px-3 py-1 text-xs uppercase tracking-[0.18em] ${badge.tone}`}>
-                  {badge.label}
-                </span>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              <p className="font-display text-xl text-on-surface">{task.title}</p>
-              <p className="font-body text-sm text-on-surface-variant">{task.group.name}</p>
+              )}
             </div>
           </div>
-          <div className="mt-1 rounded-pill bg-surface-container-high px-3 py-2 text-xs uppercase tracking-[0.18em] text-on-surface-variant">
-            {task.due_bucket.replace('_', ' ')}
+
+          <div className="mt-4">
+            <span className={`${dueTextColor} uppercase tracking-wider text-[0.65rem] font-bold`}>
+              Due: {badge ? badge.label : '--'}
+            </span>
           </div>
         </div>
-      </button>
 
-      <div className="relative z-10 flex gap-3 border-t border-outline/15 bg-surface-container-high px-4 py-3">
-        <button
-          type="button"
-          onClick={() => onComplete(task.id)}
-          disabled={isBusy}
-          className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
-          aria-label={`Complete ${task.title}`}
-        >
-          Complete
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(task.id)}
-          disabled={isBusy}
-          className="rounded-pill border border-outline/30 px-4 py-2 text-sm text-on-surface-variant disabled:opacity-50"
-          aria-label={`Delete ${task.title}`}
-        >
-          Delete
-        </button>
+        {/* Right Column: Badges & Actions */}
+        <div className="flex flex-col items-end justify-between gap-4 shrink-0 px-2">
+          <div className="flex items-center gap-2">
+            <span className={`font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill ${
+              task.recurrence_frequency 
+                ? 'bg-primary/20 text-primary' 
+                : 'bg-surface-dim text-on-surface-variant/40'
+            }`} title={task.recurrence_frequency ? `Recurring: ${task.recurrence_frequency}` : 'No recurrence'}>
+              {task.recurrence_frequency ? task.recurrence_frequency : 'ONE-OFF'}
+            </span>
+            
+            <div 
+              className="flex items-center gap-1 bg-surface-dim px-2 py-0.5 rounded-pill"
+              title={`${task.subtask_count} subtasks`}
+            >
+              <span className="font-body text-[0.65rem] text-on-surface-variant uppercase tracking-widest">
+                {task.subtask_count > 0 ? `${task.subtask_count} SUBTASKS` : '0 SUBTASKS'}
+              </span>
+            </div>
+          </div>
+
+          <div 
+            className="flex items-center gap-3 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onComplete(task.id)
+              }}
+              disabled={isBusy}
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-primary hover:bg-surface-container-highest hover:-translate-y-0.5 transition-all duration-200 active:scale-90 active:translate-y-0 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
+              aria-label={`Complete ${task.title}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+            </button>
+          </div>
+        </div>
+
       </div>
-    </article>
+    </Card>
   )
 }
 
@@ -186,6 +253,7 @@ export function TasksRoute() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [undoState, setUndoState] = useState<UndoState>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -210,14 +278,16 @@ export function TasksRoute() {
       return
     }
 
-    const nextGroupId = sessionQuery.data.inbox_group_id ?? groupsQuery.data[0].id
-    setSearchParams({ group: nextGroupId }, { replace: true })
+    // Default to 'all' view instead of a specific group
+    setSearchParams({ group: 'all' }, { replace: true })
   }, [groupsQuery.data, selectedGroupId, sessionQuery.data, setSearchParams])
+
+  const isAllView = selectedGroupId === 'all'
 
   const tasksQuery = useQuery({
     queryKey: ['tasks', resolvedGroupId, 'open'],
     queryFn: () => listTasks(resolvedGroupId as string),
-    enabled: sessionQuery.data?.signed_in === true && Boolean(resolvedGroupId)
+    enabled: sessionQuery.data?.signed_in === true && Boolean(resolvedGroupId) && !isAllView
   })
 
   function requireCsrf(session: SessionStatus | undefined) {
@@ -251,21 +321,6 @@ export function TasksRoute() {
     }
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: async (task: TaskSummary) => {
-      const csrfToken = requireCsrf(sessionQuery.data)
-      return deleteTask(task.id, csrfToken)
-    },
-    onSuccess: (task) => {
-      setUndoState({ kind: 'delete', taskId: task.id, title: task.title })
-      setActionError(null)
-      void refreshTaskData()
-    },
-    onError: (error) => {
-      setActionError(buildFriendlyMessage(error, 'Task could not be deleted.'))
-    }
-  })
-
   const undoMutation = useMutation({
     mutationFn: async (undo: Exclude<UndoState, null>) => {
       const csrfToken = requireCsrf(sessionQuery.data)
@@ -285,7 +340,7 @@ export function TasksRoute() {
   })
 
   const isBusy =
-    completeMutation.isPending || deleteMutation.isPending || undoMutation.isPending
+    completeMutation.isPending || undoMutation.isPending
 
   const bucketSections = [
     { key: 'overdue', label: 'Overdue' },
@@ -293,8 +348,6 @@ export function TasksRoute() {
     { key: 'no_date', label: 'No Date' }
   ] as const
 
-  const selectedGroup =
-    groupsQuery.data?.find((group) => group.id === resolvedGroupId) ?? groupsQuery.data?.[0] ?? null
 
   return (
     <SessionGuard
@@ -305,44 +358,33 @@ export function TasksRoute() {
       eyebrow="Focused task surface"
       description="Review, sort, and correct extracted tasks without leaving the protected backend session."
     >
-      <section className="space-y-6">
-        <div className="space-y-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-3">
-              <p className="font-body text-sm uppercase tracking-[0.25em] text-on-surface-variant">
-                Grouped open work
-              </p>
-              <h2 className="font-display text-3xl text-on-surface">Tasks</h2>
-              <p className="max-w-sm font-body text-base leading-7 text-on-surface-variant">
-                {selectedGroup
-                  ? `Focused on ${selectedGroup.name}. Swipe for fast changes or open a task for full editing.`
-                  : 'Loading your groups and open tasks.'}
-              </p>
-            </div>
-            <Link
-              to={{
-                pathname: '/tasks/groups',
-                search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
-              }}
-              className="inline-flex rounded-pill bg-surface-container-high px-4 py-3 text-sm text-on-surface"
-            >
-              Manage Groups
-            </Link>
-          </div>
-        </div>
+      <section className="space-y-4">
+
 
         {groupsQuery.data?.length ? (
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSearchParams({ group: 'all' })}
+              className={[
+                'rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none',
+                selectedGroupId === 'all'
+                  ? 'bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] -translate-y-[1px]'
+                  : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5'
+              ].join(' ')}
+            >
+              All
+            </button>
             {groupsQuery.data.map((group) => (
               <button
                 key={group.id}
                 type="button"
                 onClick={() => setSearchParams({ group: group.id })}
                 className={[
-                  'rounded-pill px-4 py-3 font-body text-sm transition',
+                  'rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none',
                   group.id === resolvedGroupId
-                    ? 'bg-primary text-surface shadow-ambient'
-                    : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                    ? 'bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] -translate-y-[1px]'
+                    : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5'
                 ].join(' ')}
               >
                 {group.name} · {group.open_task_count}
@@ -352,82 +394,103 @@ export function TasksRoute() {
         ) : null}
 
         {actionError ? (
-          <p className="rounded-card border border-tertiary/30 bg-tertiary/10 px-4 py-3 font-body text-sm text-on-surface">
-            {actionError}
-          </p>
-        ) : null}
-
-        {tasksQuery.isLoading ? (
-          <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
-            Loading open tasks.
+          <div className="flex items-start gap-3 rounded-card bg-error/10 border border-error/20 p-4 shadow-ambient">
+            <svg className="w-5 h-5 shrink-0 mt-0.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p className="font-body text-sm font-medium text-error leading-relaxed">{actionError}</p>
           </div>
         ) : null}
 
-        {tasksQuery.data && tasksQuery.data.length === 0 ? (
-          <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
-            <p className="font-display text-2xl text-on-surface">No open tasks here</p>
-            <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
-              Capture a voice note or move tasks into this group from detail editing.
-            </p>
-          </div>
-        ) : null}
-
-        <div className="space-y-6">
-          {bucketSections.map((section) => {
-            const items = (tasksQuery.data ?? []).filter((task) => task.due_bucket === section.key)
-            if (items.length === 0) {
-              return null
+        {isAllView ? (
+          <AllTasksView
+            onTaskOpen={(taskId) =>
+              void navigate({
+                pathname: `/tasks/${taskId}`
+              })
             }
+            onTaskComplete={(task) => {
+              completeMutation.mutate(task)
+            }}
+            isBusy={isBusy}
+          />
+        ) : (
+          <>
+            {tasksQuery.isLoading ? (
+              <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
+                Loading open tasks.
+              </div>
+            ) : null}
 
-            return (
-              <section key={section.key} className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-display text-2xl text-on-surface">{section.label}</h3>
-                  <span className="font-body text-xs uppercase tracking-[0.18em] text-on-surface-variant">
-                    {items.length} tasks
-                  </span>
-                </div>
+            {tasksQuery.data && (Array.isArray(tasksQuery.data) ? tasksQuery.data : tasksQuery.data.items).length === 0 ? (
+              <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
+                <p className="font-display text-2xl text-on-surface">No open tasks here</p>
+                <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
+                  Capture a voice note or move tasks into this group from detail editing.
+                </p>
+              </div>
+            ) : null}
 
-                <div className="space-y-4">
-                  {items.map((task) => (
-                    <SwipeTaskCard
-                      key={task.id}
-                      task={task}
-                      isBusy={isBusy}
-                      onOpen={(taskId) =>
-                        void navigate({
-                          pathname: `/tasks/${taskId}`,
-                          search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
-                        })
-                      }
-                      onComplete={(taskId) => {
-                        const current = (tasksQuery.data ?? []).find((item) => item.id === taskId)
-                        if (current) {
-                          completeMutation.mutate(current)
-                        }
-                      }}
-                      onDelete={(taskId) => {
-                        const current = (tasksQuery.data ?? []).find((item) => item.id === taskId)
-                        if (current) {
-                          deleteMutation.mutate(current)
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-              </section>
-            )
-          })}
-        </div>
+            <div className="space-y-4">
+              {bucketSections.map((section) => {
+                const rawData = tasksQuery.data;
+                const itemsList = Array.isArray(rawData) ? rawData : (rawData?.items ?? [])
+                const items = itemsList.filter((task) => task.due_bucket === section.key)
+                if (items.length === 0) {
+                  return null
+                }
+
+                return (
+                  <section key={section.key} className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-display text-xl text-on-surface">{section.label}</h3>
+                      <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
+                        {items.length} tasks
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {items.map((task) => (
+                        <SwipeTaskCard
+                          key={task.id}
+                          task={task}
+                          isBusy={isBusy}
+                          onOpen={(taskId) =>
+                            void navigate({
+                              pathname: `/tasks/${taskId}`,
+                              search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
+                            })
+                          }
+                          onComplete={(taskId) => {
+                            const rawData = tasksQuery.data;
+                            const itemsList = Array.isArray(rawData) ? rawData : (rawData?.items ?? [])
+                            const current = itemsList.find((item) => item.id === taskId)
+                            if (current) {
+                              completeMutation.mutate(current)
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+          </>
+        )}
 
         {undoState ? (
-          <div className="sticky bottom-4 rounded-soft bg-surface-container-highest p-4 shadow-ambient">
-            <div className="flex items-center justify-between gap-4">
+          <div className={`fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-soft p-4 shadow-ambient ${
+            undoState.kind === 'complete'
+              ? 'bg-primary/10 border-t-2 border-primary'
+              : 'bg-surface-container-highest border-t-2 border-error/50'
+          }`}>
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="font-body text-sm text-on-surface">
+                <p className="font-body text-sm font-medium text-on-surface">
                   {undoState.kind === 'complete' ? 'Completed' : 'Deleted'} {undoState.title}
                 </p>
-                <p className="font-body text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+                <p className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
                   Undo is available while this message is visible
                 </p>
               </div>
@@ -435,14 +498,55 @@ export function TasksRoute() {
                 type="button"
                 onClick={() => undoMutation.mutate(undoState)}
                 disabled={undoMutation.isPending}
-                className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
+                className={`rounded-pill px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-50 ${
+                  undoState.kind === 'complete'
+                    ? 'bg-primary hover:bg-primary-dim'
+                    : 'bg-tertiary hover:bg-tertiary/80'
+                }`}
               >
                 Undo
               </button>
             </div>
           </div>
         ) : null}
+        <div className="mt-8 mb-20 flex justify-center pb-8">
+          <Link
+            to={{
+              pathname: '/tasks/completed',
+              search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
+            }}
+            className="inline-flex items-center gap-2 rounded-pill border border-outline/20 bg-surface-container px-4 py-2 text-sm font-medium text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface hover:shadow-ambient"
+          >
+            View Completed Tasks
+          </Link>
+        </div>
       </section>
+
+      <button
+        type="button"
+        onClick={() => setIsAddTaskModalOpen(true)}
+        className="group fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] text-white shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] hover:-translate-y-[2px] hover:shadow-[0_10px_0_#4c1d95,_0_18px_24px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)] active:translate-y-[8px] active:shadow-[0_0px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.4),_inset_0_4px_8px_rgba(0,0,0,0.3)] transition-all duration-200 outline-none select-none"
+        aria-label="Add Task"
+      >
+        <div className="flex items-center justify-center transition-all duration-200 drop-shadow-md">
+          <svg className="h-6 w-6 text-white/95" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          </svg>
+        </div>
+      </button>
+
+      <EditExtractedTaskModal
+        task={null}
+        groups={groupsQuery.data ?? []}
+        isOpen={isAddTaskModalOpen}
+        onClose={() => setIsAddTaskModalOpen(false)}
+        onSave={async (_taskId, _updates) => {
+          // Refresh task data after creation
+          await refreshTaskData()
+        }}
+        csrfToken={sessionQuery.data?.csrf_token ?? ''}
+        defaultGroupId={resolvedGroupId ?? undefined}
+      />
     </SessionGuard>
   )
 }

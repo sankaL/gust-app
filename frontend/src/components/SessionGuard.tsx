@@ -24,13 +24,13 @@ export function SessionGuard({
 }: SessionGuardProps) {
   if (isLoading) {
     return (
-      <section className="space-y-6" aria-busy="true">
-        <div className="space-y-3">
-          <p className="font-body text-sm uppercase tracking-[0.25em] text-on-surface-variant">
+      <section className="space-y-4" aria-busy="true">
+        <div className="space-y-2">
+          <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
             Session check
           </p>
-          <h2 className="font-display text-3xl text-on-surface">{title}</h2>
-          <p className="max-w-sm font-body text-base leading-7 text-on-surface-variant">
+          <h2 className="font-display text-2xl text-on-surface">{title}</h2>
+          <p className="max-w-sm font-body text-sm leading-6 text-on-surface-variant">
             Verifying your session before loading this screen.
           </p>
         </div>
@@ -40,13 +40,13 @@ export function SessionGuard({
 
   if (isError || !session?.signed_in) {
     return (
-      <section className="space-y-6">
-        <div className="space-y-3">
-          <p className="font-body text-sm uppercase tracking-[0.25em] text-on-surface-variant">
+      <section className="space-y-4">
+        <div className="space-y-2">
+          <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
             {eyebrow}
           </p>
-          <h2 className="font-display text-3xl text-on-surface">{title}</h2>
-          <p className="max-w-sm font-body text-base leading-7 text-on-surface-variant">
+          <h2 className="font-display text-2xl text-on-surface">{title}</h2>
+          <p className="max-w-sm font-body text-sm leading-6 text-on-surface-variant">
             {description}
           </p>
         </div>
