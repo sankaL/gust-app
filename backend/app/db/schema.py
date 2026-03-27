@@ -24,6 +24,19 @@ reminder_status = sa.Enum(
     name="reminder_status",
     native_enum=False,
 )
+digest_type = sa.Enum(
+    "daily",
+    "weekly",
+    name="digest_type",
+    native_enum=False,
+)
+digest_dispatch_status = sa.Enum(
+    "sent",
+    "failed",
+    "skipped_empty",
+    name="digest_dispatch_status",
+    native_enum=False,
+)
 recurrence_frequency = sa.Enum(
     "daily",
     "weekly",
@@ -224,6 +237,27 @@ reminders = sa.Table(
     ),
 )
 
+digest_dispatches = sa.Table(
+    "digest_dispatches",
+    metadata,
+    sa.Column("id", sa.Uuid(as_uuid=False), primary_key=True),
+    sa.Column("user_id", sa.Uuid(as_uuid=False), sa.ForeignKey("users.id"), nullable=False),
+    sa.Column("digest_type", digest_type, nullable=False),
+    sa.Column("period_start_date", sa.Date(), nullable=False),
+    sa.Column("period_end_date", sa.Date(), nullable=False),
+    sa.Column("status", digest_dispatch_status, nullable=False),
+    sa.Column("idempotency_key", sa.Text(), nullable=False, unique=True),
+    sa.Column("provider_message_id", sa.Text(), nullable=True),
+    sa.Column("last_error_code", sa.Text(), nullable=True),
+    sa.Column("attempted_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column(
+        "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+    sa.Column(
+        "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+)
+
 sa.Index(
     "uq_groups_user_lower_name",
     groups.c.user_id,
@@ -246,6 +280,20 @@ sa.Index("ix_captures_user_created_at", captures.c.user_id, captures.c.created_a
 sa.Index("ix_captures_expires_at", captures.c.expires_at)
 sa.Index("ix_reminders_status_scheduled_for", reminders.c.status, reminders.c.scheduled_for)
 sa.Index("ix_reminders_claim_expires_at", reminders.c.claim_expires_at)
+sa.Index(
+    "uq_digest_dispatches_user_period",
+    digest_dispatches.c.user_id,
+    digest_dispatches.c.digest_type,
+    digest_dispatches.c.period_start_date,
+    digest_dispatches.c.period_end_date,
+    unique=True,
+)
+sa.Index(
+    "ix_digest_dispatches_type_period",
+    digest_dispatches.c.digest_type,
+    digest_dispatches.c.period_start_date,
+    digest_dispatches.c.period_end_date,
+)
 sa.Index("ix_extracted_tasks_user_id", extracted_tasks.c.user_id)
 sa.Index("ix_extracted_tasks_capture_id", extracted_tasks.c.capture_id)
 sa.Index("ix_extracted_tasks_user_status", extracted_tasks.c.user_id, extracted_tasks.c.status)

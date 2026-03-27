@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -103,7 +103,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
-  vi.unstubAllGlobals()
 })
 
 describe('tasks flow', () => {
@@ -552,7 +551,6 @@ describe('tasks flow', () => {
 
     renderTaskRoute(['/tasks/completed?group=inbox-1'])
 
-    expect(await screen.findByRole('heading', { name: 'Completed Tasks' })).toBeInTheDocument()
     expect(await screen.findByText('Review extraction contract')).toBeInTheDocument()
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Restore' }))
@@ -561,6 +559,66 @@ describe('tasks flow', () => {
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('/tasks/task-1/reopen'),
         expect.objectContaining({ method: 'POST', credentials: 'include' })
+      )
+    })
+  })
+
+  it('loads completed tasks across all groups when group=all is selected', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?status=completed')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                id: 'task-1',
+                title: 'Inbox done',
+                status: 'completed',
+                needs_review: false,
+                due_date: null,
+                reminder_at: null,
+                due_bucket: 'no_date',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: '2026-03-24T12:00:00Z',
+                deleted_at: null
+              },
+              {
+                id: 'task-2',
+                title: 'Personal done',
+                status: 'completed',
+                needs_review: false,
+                due_date: null,
+                reminder_at: null,
+                due_bucket: 'no_date',
+                group: { id: 'personal-1', name: 'Personal', is_system: false },
+                completed_at: '2026-03-24T13:00:00Z',
+                deleted_at: null
+              }
+            ],
+            has_more: false,
+            next_cursor: null
+          })
+        )
+      }
+
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks/completed?group=all'])
+
+    expect(await screen.findByText('Inbox done')).toBeInTheDocument()
+    expect(screen.getByText('Personal done')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/tasks?status=completed'),
+        expect.objectContaining({ credentials: 'include' })
       )
     })
   })
@@ -623,7 +681,6 @@ describe('tasks flow', () => {
 
     renderTaskRoute(['/tasks/completed?group=inbox-1'])
 
-    expect(await screen.findByRole('heading', { name: 'Completed Tasks' })).toBeInTheDocument()
     expect(await screen.findByText('Install the fanhood')).toBeInTheDocument()
     expect(screen.getAllByText('Clean the vents')).toHaveLength(1)
   })

@@ -67,6 +67,9 @@ supabase-stop:
 	fi
 
 supabase-start: prepare-dev-runtime
+	@set -a; \
+	. "$(DEV_RUNTIME_ENV)"; \
+	set +a; \
 	$(SUPABASE) start --workdir "$(DEV_SUPABASE_WORKDIR)"
 
 app-up: prepare-dev-runtime

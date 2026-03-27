@@ -1,7 +1,7 @@
 # Gust Database Schema
 
-**Version:** 1.2
-**Last Updated:** 2026-03-23
+**Version:** 1.3
+**Last Updated:** 2026-03-27
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
 
@@ -10,7 +10,7 @@ The schema is designed to support:
 - explicit per-user scoping
 - a non-null Inbox group per user
 - typed recurrence for v1
-- idempotent reminder delivery
+- idempotent digest delivery
 - bounded capture retention
 - backend-owned correctness independent of implicit RLS behavior
 
@@ -22,7 +22,8 @@ The schema is designed to support:
 - All relative date resolution uses the persisted user IANA timezone.
 - `group_id` is never null for tasks.
 - Raw audio is never persisted in the application schema.
-- Reminder delivery state is normalized into a dedicated reminders table.
+- Active digest delivery state is normalized into a dedicated `digest_dispatches` table.
+- Legacy per-task reminder rows are preserved for compatibility but are no longer the active email-send source.
 - Group names must be unique per user.
 
 ## Enumerations
@@ -50,6 +51,17 @@ Use PostgreSQL check constraints or named enums for the following value sets.
 - `sent`
 - `cancelled`
 - `failed`
+
+### `digest_type`
+
+- `daily`
+- `weekly`
+
+### `digest_dispatch_status`
+
+- `sent`
+- `failed`
+- `skipped_empty`
 
 ### `recurrence_frequency`
 
@@ -117,7 +129,7 @@ Primary task record for open and completed tasks.
 | `status` | `task_status` | No | `open` or `completed`. |
 | `needs_review` | `boolean` | No | Defaults to `false`. |
 | `due_date` | `date` | Yes | Optional due date in the user's calendar context. |
-| `reminder_at` | `timestamptz` | Yes | Canonical task-level reminder timestamp when the capture flow or task editing sets a reminder. |
+| `reminder_at` | `timestamptz` | Yes | Optional reminder metadata timestamp captured from extraction or task editing. |
 | `reminder_offset_minutes` | `integer` | Yes | Relative offset from the due date/time for inherited recurrence reminders. |
 | `recurrence_frequency` | `recurrence_frequency` | Yes | Null when not recurring. |
 | `recurrence_interval` | `integer` | Yes | Reserved for v1 default `1`; must be `1` in v1. |
@@ -135,7 +147,7 @@ Constraints and invariants:
 - `completed_at` is required when `status = 'completed'` and must be null when `status = 'open'`.
 - If `reminder_at` is populated, `due_date` must also be populated at the application layer in v1.
 - Clearing `due_date` in task editing must also clear `reminder_at`, `reminder_offset_minutes`, and recurrence columns at the application layer.
-- `reminder_at` is the canonical task-level reminder timestamp. `reminder_offset_minutes` is retained to support recurrence inheritance.
+- `reminder_at` and `reminder_offset_minutes` are retained task metadata fields; digest sending is not driven by the `reminders` table.
 - Recurrence columns are all null for non-recurring tasks.
 - Recurring task rules:
   - `recurrence_frequency = 'daily'` requires no weekday or day-of-month.
@@ -237,41 +249,61 @@ Constraints and invariants:
 
 ### `reminders`
 
-Single reminder event per task occurrence with transactional claim/send tracking.
+Legacy per-task reminder lifecycle table retained for compatibility and historical audit.
 
 | Column | Type | Null | Notes |
 |---|---|---|---|
 | `id` | `uuid` | No | Primary key. |
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
-| `task_id` | `uuid` | No | Foreign key to `tasks.id`. One reminder row per task occurrence in v1. |
-| `scheduled_for` | `timestamptz` | No | Absolute reminder send target in UTC. |
-| `status` | `reminder_status` | No | Pending lifecycle state. |
-| `idempotency_key` | `text` | No | Deterministic key for provider-safe retries. |
-| `claim_token` | `uuid` | Yes | Worker-claim token for in-flight sends. |
-| `claimed_at` | `timestamptz` | Yes | When a worker claimed the row. |
-| `claim_expires_at` | `timestamptz` | Yes | Claim timeout for retry-safe recovery. |
-| `send_attempt_count` | `integer` | No | Defaults to `0`. |
-| `last_error_code` | `text` | Yes | Sanitized provider or validation error code. |
-| `provider_message_id` | `text` | Yes | Message identifier returned by Resend. |
-| `sent_at` | `timestamptz` | Yes | When delivery was accepted by the provider. |
-| `cancelled_at` | `timestamptz` | Yes | When reminder was cancelled due to task completion or deletion. |
+| `task_id` | `uuid` | No | Foreign key to `tasks.id`. Historically one reminder row per task occurrence. |
+| `scheduled_for` | `timestamptz` | No | Historical per-item send target in UTC. |
+| `status` | `reminder_status` | No | Lifecycle state retained for legacy rows. |
+| `idempotency_key` | `text` | No | Historical deterministic key for per-item sends. |
+| `claim_token` | `uuid` | Yes | Legacy worker-claim token. |
+| `claimed_at` | `timestamptz` | Yes | Legacy claim timestamp. |
+| `claim_expires_at` | `timestamptz` | Yes | Legacy claim timeout marker. |
+| `send_attempt_count` | `integer` | No | Historical attempt counter. |
+| `last_error_code` | `text` | Yes | Historical provider/validation error code. |
+| `provider_message_id` | `text` | Yes | Historical provider message identifier. |
+| `sent_at` | `timestamptz` | Yes | Historical accepted-at timestamp. |
+| `cancelled_at` | `timestamptz` | Yes | When legacy reminder rows were cancelled. |
 | `created_at` | `timestamptz` | No | Default `now()`. |
 | `updated_at` | `timestamptz` | No | Default `now()`. |
 
 Constraints and invariants:
 
-- Unique constraint on `task_id` to enforce one reminder per task occurrence in v1.
+- Unique constraint on `task_id` and `idempotency_key` remains.
+- During digest cutover, legacy rows in `pending`/`claimed` are marked `cancelled` so per-item sends cannot continue.
+- Task lifecycle updates cancel any existing legacy reminder row and do not create new reminder rows.
+
+### `digest_dispatches`
+
+Per-user digest dispatch tracker for idempotency, retry safety, and auditability.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `uuid` | No | Primary key. |
+| `user_id` | `uuid` | No | Foreign key to `users.id`. |
+| `digest_type` | `digest_type` | No | `daily` or `weekly`. |
+| `period_start_date` | `date` | No | Inclusive period start date in Eastern date semantics. |
+| `period_end_date` | `date` | No | Inclusive period end date in Eastern date semantics. |
+| `status` | `digest_dispatch_status` | No | `sent`, `failed`, or `skipped_empty`. |
+| `idempotency_key` | `text` | No | Deterministic key built from user + digest type + period. |
+| `provider_message_id` | `text` | Yes | Resend message ID when sent. |
+| `last_error_code` | `text` | Yes | Last sanitized failure code when status is `failed`. |
+| `attempted_at` | `timestamptz` | Yes | Most recent attempt timestamp. |
+| `created_at` | `timestamptz` | No | Default `now()`. |
+| `updated_at` | `timestamptz` | No | Default `now()`. |
+
+Constraints and invariants:
+
+- Unique period constraint on `(`user_id`, `digest_type`, `period_start_date`, `period_end_date`)`.
 - Unique constraint on `idempotency_key`.
-- Only due, unsent, still-open reminders are eligible for claiming.
-- Completion or deletion of the task cancels a pending reminder instead of sending it.
-- Task edits must keep reminder rows in sync so there is never more than one reminder row per task occurrence.
-- Reopen or restore only reactivates a reminder when the task still has a future `reminder_at`.
-- Worker logic must claim rows transactionally before send.
-- Retryable delivery failures return claimed reminders to `pending`; terminal provider failures may move them to `failed`.
+- One logical send outcome per user/digest/period, retry-safe across reruns.
 
 ## Cross-Table Rules
 
-- `tasks.user_id`, `groups.user_id`, `subtasks.user_id`, `captures.user_id`, and `reminders.user_id` must all match the owning `users.id`.
+- `tasks.user_id`, `groups.user_id`, `subtasks.user_id`, `captures.user_id`, `reminders.user_id`, and `digest_dispatches.user_id` must all match the owning `users.id`.
 - `tasks.group_id` must reference a group owned by the same user.
 - `subtasks.task_id` must reference a task owned by the same user.
 - `reminders.task_id` must reference a task owned by the same user.
@@ -294,6 +326,9 @@ The initial migration set should include indexes for:
 - `reminders (task_id)` unique
 - `reminders (idempotency_key)` unique
 - `reminders (claim_expires_at)` for reclaiming stuck claims
+- `digest_dispatches (user_id, digest_type, period_start_date, period_end_date)` unique
+- `digest_dispatches (idempotency_key)` unique
+- `digest_dispatches (digest_type, period_start_date, period_end_date)`
 - `extracted_tasks (user_id)` for user queries
 - `extracted_tasks (capture_id)` for capture queries
 - `extracted_tasks (user_id, status)` for pending task queries
@@ -303,7 +338,8 @@ The initial migration set should include indexes for:
 - Capture rows are retained only until `expires_at`, with an initial default target of 7 days after creation.
 - Retention cleanup hard-deletes expired capture rows in bounded batches.
 - Extracted task rows: **pending** tasks persist until user action (approve/discard); **approved/discarded** tasks are retained for 7 days and then cleaned up by the retention job.
-- Reminder rows may be retained for audit and idempotency protection after send or cancellation.
+- Reminder rows may be retained for legacy audit history.
+- Digest dispatch rows are retained for idempotency and operational audit.
 - Task, subtask, group, and user retention policy is outside Phase 0 and should not conflict with reminder or capture cleanup.
 
 ## Deferred Decisions

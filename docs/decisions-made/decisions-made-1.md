@@ -1,5 +1,25 @@
 # Decisions Made
 
+## 2026-03-27 14:25:00 EDT
+
+- Replaced per-task reminder email delivery with exactly two digest modes (`daily`, `weekly`) executed through the existing internal backend job route using explicit `mode` selection.
+- Kept Railway scheduling split into two cron services (`digest-daily-cron`, `digest-weekly-cron`) as configuration-only callers and rejected a separate cron microservice/container codebase.
+- Chose fixed Eastern (`America/New_York`) as the digest period window basis for all users, with manual UTC cron schedule updates at DST transitions captured in the migration runbook.
+- Added `digest_dispatches` as the idempotency/audit source of truth per `user + digest_type + period` and cancelled legacy `reminders` rows in `pending/claimed` during migration cutover.
+
+## 2026-03-27 09:40:00 EDT
+
+- Switched frontend auth entry to a dedicated `/login` route and made the main app shell hard-redirect signed-out users there instead of rendering inline session-required states on protected pages.
+- Added an authenticated top-right account avatar menu with `Completed Tasks` (all-groups view), `Desktop Mode` placeholder routing, and `Logout`.
+- Chose logout-time TanStack Query cache clearing as the client-side isolation boundary so account switches never reuse prior-user cached groups/tasks.
+- Enabled local Supabase Google OAuth wiring through Makefile-managed runtime env propagation, while keeping the backend-mediated local test-account sign-in as a dev fallback.
+
+## 2026-03-26 19:59:56 EDT
+
+- Finalized PWA install UX around a persistent app-shell header CTA when install is available, with iPhone-specific fallback instructions when the browser does not expose `beforeinstallprompt`.
+- Finalized service-worker updates around an explicit in-app `Update` prompt that reloads only after user confirmation, instead of silent activation.
+- Standardized the production PWA asset set on generated PNG icons for Android, maskable installs, and Apple touch icon support while keeping caching limited to app-shell/static assets only.
+
 ## 2026-03-25 00:58:00 EDT
 
 - Updated recurring reopen/restore lifecycle semantics to be conditional: keep recurrence when the expected generated undo-target open occurrence is present, otherwise detach to a single non-recurring instance.

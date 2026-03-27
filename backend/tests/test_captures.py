@@ -340,7 +340,7 @@ def test_voice_capture_returns_config_invalid_for_invalid_transcription_model(
     assert capture_row.error_code == "config_invalid"
 
 
-def test_submit_capture_persists_tasks_subtasks_and_reminders(
+def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
     app: FastAPI,
     client: TestClient,
 ) -> None:
@@ -420,8 +420,7 @@ def test_submit_capture_persists_tasks_subtasks_and_reminders(
     assert task_rows[1].needs_review is False
     assert task_rows[1].reminder_at == datetime(2026, 3, 23, 13, 0)
     assert task_rows[1].reminder_offset_minutes == 780
-    assert len(reminder_rows) == 1
-    assert reminder_rows[0].scheduled_for == datetime(2026, 3, 23, 13, 0)
+    assert reminder_rows == []
     assert [row.title for row in subtask_rows] == ["Draft email"]
     assert capture_row.status == "completed"
     assert capture_row.extraction_attempt_count == 1

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from dataclasses import dataclass, field
+from datetime import date, datetime, time, timedelta, timezone
+from typing import get_args
 
 import pytest
 import sqlalchemy as sa
@@ -10,21 +11,20 @@ import sqlalchemy as sa
 from app.core.errors import ConfigurationError
 from app.db.engine import connection_scope
 from app.db.repositories import (
-    claim_due_reminders,
     create_capture,
-    create_reminder,
     create_task,
     ensure_inbox_group,
-    get_reminder_by_id,
-    get_task,
     upsert_user,
 )
-from app.db.schema import captures, reminders, tasks
+from app.db.schema import captures, digest_dispatches
 from app.services.reminders import (
+    DIGEST_TIMEZONE,
+    DigestMode,
     ReminderDeliveryError,
     ReminderRunSummary,
     ReminderSendResult,
     ReminderWorkerService,
+    ResendReminderService,
 )
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
@@ -33,22 +33,34 @@ USER_ID = "11111111-1111-1111-1111-111111111111"
 @dataclass
 class FakeReminderDeliveryService:
     mode: str = "success"
+    requests: list[dict[str, str]] = field(default_factory=list)
 
     def ensure_configured(self) -> None:
         return None
 
-    async def send(self, **kwargs) -> ReminderSendResult:
-        del kwargs
+    async def send_digest(
+        self,
+        *,
+        to_email: str,
+        subject: str,
+        text_body: str,
+        html_body: str,
+        idempotency_key: str,
+    ) -> ReminderSendResult:
+        self.requests.append(
+            {
+                "to_email": to_email,
+                "subject": subject,
+                "text_body": text_body,
+                "html_body": html_body,
+                "idempotency_key": idempotency_key,
+            }
+        )
         if self.mode == "success":
             return ReminderSendResult(provider_message_id="provider-msg-123")
-        if self.mode == "retryable":
-            raise ReminderDeliveryError(
-                error_code="reminder_provider_retryable",
-                retryable=True,
-            )
         raise ReminderDeliveryError(
-            error_code="reminder_provider_rejected",
-            retryable=False,
+            error_code="digest_provider_retryable",
+            retryable=True,
         )
 
 
@@ -56,12 +68,30 @@ class MissingConfigReminderDeliveryService:
     def ensure_configured(self) -> None:
         raise ConfigurationError("Resend reminder configuration is missing.")
 
-    async def send(self, **kwargs) -> ReminderSendResult:
+    async def send_digest(self, **kwargs) -> ReminderSendResult:
         del kwargs
         raise AssertionError("send should not be called when provider config is missing")
 
 
-def _seed_user_and_inbox(client) -> str:
+class FlakyReminderDeliveryService:
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def ensure_configured(self) -> None:
+        return None
+
+    async def send_digest(self, **kwargs) -> ReminderSendResult:
+        del kwargs
+        self.attempts += 1
+        if self.attempts == 1:
+            raise ReminderDeliveryError(
+                error_code="digest_provider_retryable",
+                retryable=True,
+            )
+        return ReminderSendResult(provider_message_id="provider-msg-123")
+
+
+def _seed_user_and_inbox(client) -> tuple[str, str]:
     with connection_scope(client.app.state.settings.database_url) as connection:
         upsert_user(
             connection,
@@ -71,12 +101,44 @@ def _seed_user_and_inbox(client) -> str:
             timezone="UTC",
         )
         inbox = ensure_inbox_group(connection, user_id=USER_ID)
-    return inbox.id
+    return USER_ID, inbox.id
 
 
-def _seed_due_task_with_reminder(client, *, title: str = "Pay rent") -> tuple[str, str]:
-    now = datetime.now(timezone.utc).replace(microsecond=0)
-    inbox_id = _seed_user_and_inbox(client)
+def _seed_open_task(
+    client,
+    *,
+    title: str,
+    due_date: date,
+    recurrence_frequency: str | None = None,
+    recurrence_weekday: int | None = None,
+    recurrence_day_of_month: int | None = None,
+) -> None:
+    _, inbox_id = _seed_user_and_inbox(client)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        create_task(
+            connection,
+            user_id=USER_ID,
+            group_id=inbox_id,
+            capture_id=None,
+            title=title,
+            needs_review=False,
+            due_date=due_date,
+            reminder_at=None,
+            recurrence_frequency=recurrence_frequency,
+            recurrence_interval=1 if recurrence_frequency is not None else None,
+            recurrence_weekday=recurrence_weekday,
+            recurrence_day_of_month=recurrence_day_of_month,
+        )
+
+
+def _seed_completed_task(
+    client,
+    *,
+    title: str,
+    due_date: date,
+    completed_at_utc: datetime,
+) -> None:
+    _, inbox_id = _seed_user_and_inbox(client)
     with connection_scope(client.app.state.settings.database_url) as connection:
         task = create_task(
             connection,
@@ -85,111 +147,176 @@ def _seed_due_task_with_reminder(client, *, title: str = "Pay rent") -> tuple[st
             capture_id=None,
             title=title,
             needs_review=False,
-            due_date=date(2026, 3, 24),
-            reminder_at=now - timedelta(minutes=1),
-        )
-        reminder = create_reminder(
-            connection,
-            user_id=USER_ID,
-            task_id=task.id,
-            scheduled_for=now - timedelta(minutes=1),
-        )
-    return (task.id, reminder.id)
-
-
-def test_reminder_worker_marks_successful_delivery_as_sent(client) -> None:
-    task_id, reminder_id = _seed_due_task_with_reminder(client)
-    worker = ReminderWorkerService(
-        settings=client.app.state.settings,
-        reminder_delivery_service=FakeReminderDeliveryService(mode="success"),
-    )
-
-    summary = asyncio.run(worker.run_due_work())
-
-    with connection_scope(client.app.state.settings.database_url) as connection:
-        reminder = get_reminder_by_id(connection, reminder_id=reminder_id)
-
-    assert summary == ReminderRunSummary(claimed=1, sent=1, cancelled=0, requeued=0, failed=0, captures_deleted=0)
-    assert reminder is not None
-    assert reminder.status == "sent"
-    assert reminder.provider_message_id == "provider-msg-123"
-    assert reminder.send_attempt_count == 1
-    assert reminder.sent_at is not None
-    assert reminder.task_id == task_id
-
-
-def test_reminder_worker_requeues_retryable_failures(client) -> None:
-    _task_id, reminder_id = _seed_due_task_with_reminder(client, title="Retry me")
-    worker = ReminderWorkerService(
-        settings=client.app.state.settings,
-        reminder_delivery_service=FakeReminderDeliveryService(mode="retryable"),
-    )
-
-    summary = asyncio.run(worker.run_due_work())
-
-    with connection_scope(client.app.state.settings.database_url) as connection:
-        reminder = get_reminder_by_id(connection, reminder_id=reminder_id)
-
-    assert summary.requeued == 1
-    assert summary.failed == 0
-    assert reminder is not None
-    assert reminder.status == "pending"
-    assert reminder.send_attempt_count == 1
-    assert reminder.last_error_code == "reminder_provider_retryable"
-
-
-def test_reminder_worker_marks_terminal_failures_failed(client) -> None:
-    _task_id, reminder_id = _seed_due_task_with_reminder(client, title="Fail me")
-    worker = ReminderWorkerService(
-        settings=client.app.state.settings,
-        reminder_delivery_service=FakeReminderDeliveryService(mode="failed"),
-    )
-
-    summary = asyncio.run(worker.run_due_work())
-
-    with connection_scope(client.app.state.settings.database_url) as connection:
-        reminder = get_reminder_by_id(connection, reminder_id=reminder_id)
-
-    assert summary.failed == 1
-    assert reminder is not None
-    assert reminder.status == "failed"
-    assert reminder.send_attempt_count == 1
-    assert reminder.last_error_code == "reminder_provider_rejected"
-
-
-def test_claimed_reminder_cancels_when_task_becomes_invalid_before_send(client) -> None:
-    task_id, reminder_id = _seed_due_task_with_reminder(client, title="Cancel me")
-    worker = ReminderWorkerService(
-        settings=client.app.state.settings,
-        reminder_delivery_service=FakeReminderDeliveryService(mode="success"),
-    )
-
-    now = datetime.now(timezone.utc).replace(microsecond=0)
-    with connection_scope(client.app.state.settings.database_url) as connection:
-        claimed = claim_due_reminders(
-            connection,
-            now=now,
-            limit=10,
-            claim_timeout_seconds=600,
+            due_date=due_date,
+            reminder_at=None,
         )
         connection.execute(
-            tasks.update()
-            .where(tasks.c.id == task_id)
-            .values(status="completed", completed_at=now, updated_at=sa.text("CURRENT_TIMESTAMP"))
+            sa.text(
+                """
+                UPDATE tasks
+                   SET status = 'completed',
+                       completed_at = :completed_at,
+                       updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :task_id
+                """
+            ),
+            {
+                "completed_at": completed_at_utc,
+                "task_id": task.id,
+            },
         )
 
-    outcome = asyncio.run(worker._process_claimed_reminder(claimed=claimed[0], now=now))
+
+def test_daily_digest_sends_and_tracks_dispatch(client) -> None:
+    today_eastern = datetime.now(DIGEST_TIMEZONE).date()
+    _seed_open_task(
+        client,
+        title="Pay rent",
+        due_date=today_eastern,
+        recurrence_frequency="weekly",
+        recurrence_weekday=0,
+    )
+    _seed_open_task(
+        client,
+        title="Submit taxes",
+        due_date=today_eastern - timedelta(days=2),
+    )
+
+    delivery = FakeReminderDeliveryService(mode="success")
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=delivery,
+    )
+
+    summary = asyncio.run(worker.run_due_work(mode="daily"))
 
     with connection_scope(client.app.state.settings.database_url) as connection:
-        reminder = get_reminder_by_id(connection, reminder_id=reminder_id)
-        task = get_task(connection, user_id=USER_ID, task_id=task_id)
+        dispatch_rows = connection.execute(sa.select(digest_dispatches)).fetchall()
 
-    assert outcome == "cancelled"
-    assert task is not None
-    assert task.status == "completed"
-    assert reminder is not None
-    assert reminder.status == "cancelled"
-    assert reminder.cancelled_at is not None
+    assert summary == ReminderRunSummary(
+        mode="daily",
+        users_processed=1,
+        sent=1,
+        skipped_empty=0,
+        failed=0,
+        captures_deleted=0,
+    )
+    assert len(delivery.requests) == 1
+    assert "Due today" in delivery.requests[0]["text_body"]
+    assert "Overdue" in delivery.requests[0]["text_body"]
+    assert "weekly (Sunday)" in delivery.requests[0]["text_body"]
+    assert len(dispatch_rows) == 1
+    assert dispatch_rows[0].status == "sent"
+    assert dispatch_rows[0].provider_message_id == "provider-msg-123"
+
+
+def test_daily_digest_skips_empty_and_tracks_status(client) -> None:
+    today_eastern = datetime.now(DIGEST_TIMEZONE).date()
+    _seed_open_task(client, title="Future task", due_date=today_eastern + timedelta(days=2))
+
+    delivery = FakeReminderDeliveryService(mode="success")
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=delivery,
+    )
+
+    summary = asyncio.run(worker.run_due_work(mode="daily"))
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        dispatch_rows = connection.execute(sa.select(digest_dispatches)).fetchall()
+
+    assert summary.sent == 0
+    assert summary.skipped_empty == 1
+    assert summary.failed == 0
+    assert delivery.requests == []
+    assert len(dispatch_rows) == 1
+    assert dispatch_rows[0].status == "skipped_empty"
+
+
+def test_weekly_digest_sends_completed_and_due_uncompleted_sections(client) -> None:
+    now_eastern = datetime.now(DIGEST_TIMEZONE)
+    week_start = now_eastern.date() - timedelta(days=now_eastern.date().weekday())
+    week_end = week_start + timedelta(days=6)
+
+    completed_local = datetime.combine(week_start + timedelta(days=1), time(12, 0), tzinfo=DIGEST_TIMEZONE)
+    _seed_completed_task(
+        client,
+        title="Completed item",
+        due_date=week_start + timedelta(days=1),
+        completed_at_utc=completed_local.astimezone(timezone.utc),
+    )
+    _seed_open_task(
+        client,
+        title="Uncompleted due item",
+        due_date=week_end,
+        recurrence_frequency="monthly",
+        recurrence_day_of_month=week_end.day,
+    )
+
+    delivery = FakeReminderDeliveryService(mode="success")
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=delivery,
+    )
+
+    summary = asyncio.run(worker.run_due_work(mode="weekly"))
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        dispatch_rows = connection.execute(sa.select(digest_dispatches)).fetchall()
+
+    assert summary.sent == 1
+    assert summary.skipped_empty == 0
+    assert summary.failed == 0
+    assert len(delivery.requests) == 1
+    text_body = delivery.requests[0]["text_body"]
+    assert "Completed this week" in text_body
+    assert "Due this week and not completed" in text_body
+    assert "completed:" in text_body
+    assert "monthly (day" in text_body
+    assert len(dispatch_rows) == 1
+    assert dispatch_rows[0].status == "sent"
+
+
+def test_digest_dispatch_idempotency_skips_already_sent_period(client) -> None:
+    today_eastern = datetime.now(DIGEST_TIMEZONE).date()
+    _seed_open_task(client, title="Pay rent", due_date=today_eastern)
+
+    delivery = FakeReminderDeliveryService(mode="success")
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=delivery,
+    )
+
+    first_summary = asyncio.run(worker.run_due_work(mode="daily"))
+    second_summary = asyncio.run(worker.run_due_work(mode="daily"))
+
+    assert first_summary.sent == 1
+    assert second_summary.sent == 0
+    assert second_summary.skipped_empty == 0
+    assert len(delivery.requests) == 1
+
+
+def test_digest_retries_failed_period_on_next_run(client) -> None:
+    today_eastern = datetime.now(DIGEST_TIMEZONE).date()
+    _seed_open_task(client, title="Pay rent", due_date=today_eastern)
+
+    flaky_delivery = FlakyReminderDeliveryService()
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=flaky_delivery,
+    )
+
+    first_summary = asyncio.run(worker.run_due_work(mode="daily"))
+    second_summary = asyncio.run(worker.run_due_work(mode="daily"))
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        dispatch_rows = connection.execute(sa.select(digest_dispatches)).fetchall()
+
+    assert first_summary.failed == 1
+    assert first_summary.sent == 0
+    assert second_summary.sent == 1
+    assert len(dispatch_rows) == 1
+    assert dispatch_rows[0].status == "sent"
 
 
 def test_reminder_worker_still_cleans_up_expired_captures_when_provider_unconfigured(client) -> None:
@@ -213,7 +340,7 @@ def test_reminder_worker_still_cleans_up_expired_captures_when_provider_unconfig
     )
 
     with pytest.raises(ConfigurationError):
-        asyncio.run(worker.run_due_work())
+        asyncio.run(worker.run_due_work(mode="daily"))
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         remaining_capture = connection.execute(
@@ -221,3 +348,49 @@ def test_reminder_worker_still_cleans_up_expired_captures_when_provider_unconfig
         ).first()
 
     assert remaining_capture is None
+
+
+def test_resolve_weekly_period_uses_monday_start_in_eastern(client) -> None:
+    service = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=FakeReminderDeliveryService(),
+    )
+
+    # 2026-04-01T15:00:00Z is Wednesday in Eastern.
+    period = service._resolve_period(
+        mode="weekly",
+        now_utc=datetime(2026, 4, 1, 15, 0, tzinfo=timezone.utc),
+    )
+
+    assert period.start_date == date(2026, 3, 30)
+    assert period.end_date == date(2026, 4, 5)
+
+
+def test_daily_period_is_today_in_eastern(client) -> None:
+    service = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=FakeReminderDeliveryService(),
+    )
+
+    period = service._resolve_period(
+        mode="daily",
+        now_utc=datetime(2026, 4, 1, 3, 30, tzinfo=timezone.utc),
+    )
+
+    # 03:30 UTC is still previous day in Eastern during DST.
+    assert period.start_date == date(2026, 3, 31)
+    assert period.end_date == date(2026, 3, 31)
+
+
+def test_digest_mode_type_alias_is_str_literal() -> None:
+    # Smoke check that the mode alias remains constrained.
+    assert get_args(DigestMode) == ("daily", "weekly")
+
+
+def test_resend_service_still_exposes_configuration_guard(client) -> None:
+    settings = client.app.state.settings
+    settings.resend_api_key = None
+    service = ResendReminderService(settings)
+
+    with pytest.raises(ConfigurationError):
+        service.ensure_configured()

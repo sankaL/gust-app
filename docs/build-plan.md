@@ -69,7 +69,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
-| P5-01 | Finalize PWA manifest, icons, install flow, and app-shell-only service-worker caching | TODO | TBD | Never cache authenticated task data | Tech, Design |
+| P5-01 | Finalize PWA manifest, icons, install flow, and app-shell-only service-worker caching | DONE | 2026-03-26 | Added production icon pack, header install CTA, prompt-based update UX, and static-only service-worker caching | Tech, Design |
 | P5-02 | Add backend automated coverage for auth, extraction validation, reminder idempotency, recurrence, and timezone logic | TODO | TBD | Regression safety requirement | Tech, AGENTS |
 | P5-03 | Add frontend automated coverage for capture states, transcript retry, flagged tasks, swipe actions, and auth-gated routing | TODO | TBD | Regression safety requirement | Tech, AGENTS |
 | P5-04 | Add end-to-end coverage for sign-in, voice capture, text capture, reminder flow, and install path | TODO | TBD | Use test/local services only | Tech, AGENTS |
@@ -89,6 +89,11 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-07 | Enhance task extraction system prompt with multi-task and subtask decomposition guidance | DONE | 2026-03-24 | Added step-by-step extraction strategy, task boundary rules, signal word handling, comprehensive examples including test case, and self-verification checklist to extraction_prompts.py. Added test_extraction_comprehensive.py with regression coverage. | extraction-improvement-plan.md |
 | ADH-08 | Implement recurring delete scope and per-group completed tasks page | DONE | 2026-03-25 | Added recurring delete scope (`occurrence` / `series`) with backend lifecycle handling, new completed-tasks route with reopen actions, and regression coverage for recurring delete/restore behavior. | PRD, Tech |
 | ADH-09 | Refine Mic Button UI | DONE | 2026-03-26 | Updated the capture page mic button to reduce outer glow and introduce a 3D tactile material feel. | Design |
+| ADH-10 | Implement login route, account avatar menu, and local-dev Google OAuth wiring | DONE | 2026-03-27 | Added protected-shell redirect to `/login`, account menu (`Completed Tasks`, `Desktop Mode`, `Logout`), all-groups completed route support, logout cache clearing for per-user isolation, and Makefile/runtime/Supabase config support for local Google OAuth with dev fallback test-account sign-in. | PRD, Tech, Runbook, AGENTS |
+| ADH-11 | Refine Avatar Dropdown UI | DONE | 2026-03-26 | Updated the avatar dropdown menu to use a glass frosted effect matching the group dropdown. | Design |
+| ADH-13 | Roll out digest-only email delivery with Railway daily/weekly cron split | DONE | 2026-03-27 | Added digest dispatch persistence + migration, switched internal reminder worker to explicit daily/weekly digest modes, disabled per-item reminder row creation/sending, and documented Eastern-time digest contracts plus DST cron maintenance runbook. | PRD, Tech, Schema, Runbook |
+| ADH-12 | Refine Avatar Button Tactile Design | DONE | 2026-03-26 | Redesigned the avatar button to mirror the 3D physics-based shadow-and-lift styling of the floating + button, using a high-contrast white profile. | Design |
+| ADH-14 | Redesign Login Page Buttons | DONE | 2026-03-26 | Completely overhauled the login screen buttons to use the 3D tactile materials and physics established on the capture page, mapping Google Auth to the mic button and Local Dev to the fallback input. | Design |
 
 ## Bug Fixes
 

@@ -680,12 +680,12 @@ def test_resend_service_wraps_transport_failures_as_retryable(
 
     with pytest.raises(ReminderDeliveryError) as exc_info:
         asyncio.run(
-            service.send(
+            service.send_digest(
                 to_email="user@example.com",
-                task_title="Pay rent",
-                due_date=date(2026, 3, 24),
-                scheduled_for=datetime(2026, 3, 24, 9, 0),
-                idempotency_key="task:1",
+                subject="Gust Daily Brief",
+                text_body="Digest text",
+                html_body="<p>Digest html</p>",
+                idempotency_key="digest:daily:user:1:start:2026-03-24:end:2026-03-24",
             )
         )
 
@@ -704,12 +704,12 @@ def test_resend_service_marks_provider_rejections_as_terminal(
 
     with pytest.raises(ReminderDeliveryError) as exc_info:
         asyncio.run(
-            service.send(
+            service.send_digest(
                 to_email="user@example.com",
-                task_title="Pay rent",
-                due_date=date(2026, 3, 24),
-                scheduled_for=datetime(2026, 3, 24, 9, 0),
-                idempotency_key="task:1",
+                subject="Gust Daily Brief",
+                text_body="Digest text",
+                html_body="<p>Digest html</p>",
+                idempotency_key="digest:daily:user:1:start:2026-03-24:end:2026-03-24",
             )
         )
 
@@ -720,35 +720,51 @@ def test_resend_service_returns_provider_message_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = ResendReminderService(build_settings())
+    client = FakeAsyncClient(
+        response=FakeJsonResponse(status_code=200, json_value={"id": "provider-msg-123"})
+    )
     monkeypatch.setattr(
         httpx,
         "AsyncClient",
-        lambda timeout: FakeAsyncClient(
-            response=FakeJsonResponse(status_code=200, json_value={"id": "provider-msg-123"})
-        ),
+        lambda timeout: client,
     )
 
     result = asyncio.run(
-        service.send(
+        service.send_digest(
             to_email="user@example.com",
-            task_title="Pay rent",
-            due_date=date(2026, 3, 24),
-            scheduled_for=datetime(2026, 3, 24, 9, 0),
-            idempotency_key="task:1",
+            subject="Gust Daily Brief",
+            text_body="Digest text",
+            html_body="<p>Digest html</p>",
+            idempotency_key="digest:daily:user:1:start:2026-03-24:end:2026-03-24",
         )
     )
 
     assert result.provider_message_id == "provider-msg-123"
-
-
-def test_resend_service_escapes_task_title_in_html_body() -> None:
-    service = ResendReminderService(build_settings())
-
-    body = service._build_html_body(
-        task_title='</p><a href="https://evil.test">click me</a>',
-        due_date=date(2026, 3, 24),
-        scheduled_for=datetime(2026, 3, 24, 9, 0),
+    request_kwargs = client.post_calls[0]["kwargs"]
+    assert request_kwargs["headers"]["Idempotency-Key"] == (
+        "digest:daily:user:1:start:2026-03-24:end:2026-03-24"
     )
 
-    assert '</p><a href="https://evil.test">click me</a>' not in body
-    assert "&lt;/p&gt;&lt;a href=&quot;https://evil.test&quot;&gt;click me&lt;/a&gt;" in body
+
+def test_resend_service_forwards_html_digest_body_without_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = ResendReminderService(build_settings())
+    malicious_html = '<p>User supplied:</p><a href="https://evil.test">click me</a>'
+    client = FakeAsyncClient(
+        response=FakeJsonResponse(status_code=200, json_value={"id": "provider-msg-123"})
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", lambda timeout: client)
+
+    asyncio.run(
+        service.send_digest(
+            to_email="user@example.com",
+            subject="Gust Daily Brief",
+            text_body="Digest text",
+            html_body=malicious_html,
+            idempotency_key="digest:daily:user:1:start:2026-03-24:end:2026-03-24",
+        )
+    )
+
+    request_kwargs = client.post_calls[0]["kwargs"]
+    assert request_kwargs["json"]["html"] == malicious_html

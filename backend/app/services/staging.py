@@ -21,7 +21,6 @@ from app.db.repositories import (
     GroupRecord,
     TaskRecord,
     create_extracted_task,
-    create_reminder,
     create_subtasks,
     create_task,
     delete_extracted_tasks_by_capture,
@@ -229,15 +228,6 @@ class StagingService:
                     user_id=user_id,
                     task_id=task.id,
                     titles=extracted_task.subtask_titles,
-                )
-
-            # Create reminder if needed
-            if extracted_task.reminder_at is not None:
-                create_reminder(
-                    connection,
-                    user_id=user_id,
-                    task_id=task.id,
-                    scheduled_for=extracted_task.reminder_at,
                 )
 
             # Update extracted task status

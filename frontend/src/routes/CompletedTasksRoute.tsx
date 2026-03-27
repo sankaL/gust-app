@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import {
   ApiError,
   getSessionStatus,
+  listAllTasks,
   listGroups,
   listTasks,
   reopenTask,
@@ -86,11 +87,10 @@ export function CompletedTasksRoute() {
   })
 
   const selectedGroupId = searchParams.get('group')
-  const resolvedGroupId =
-    selectedGroupId ??
-    sessionQuery.data?.inbox_group_id ??
-    groupsQuery.data?.[0]?.id ??
-    null
+  const isAllGroupsView = selectedGroupId === 'all'
+  const resolvedGroupId = isAllGroupsView
+    ? null
+    : selectedGroupId ?? sessionQuery.data?.inbox_group_id ?? groupsQuery.data?.[0]?.id ?? null
 
   useEffect(() => {
     if (!sessionQuery.data?.signed_in || !groupsQuery.data?.length || selectedGroupId) {
@@ -102,9 +102,11 @@ export function CompletedTasksRoute() {
   }, [groupsQuery.data, selectedGroupId, sessionQuery.data, setSearchParams])
 
   const completedTasksQuery = useQuery({
-    queryKey: ['tasks', resolvedGroupId, 'completed'],
-    queryFn: () => listTasks(resolvedGroupId as string, 'completed'),
-    enabled: sessionQuery.data?.signed_in === true && Boolean(resolvedGroupId)
+    queryKey: ['tasks', isAllGroupsView ? 'all' : resolvedGroupId, 'completed'],
+    queryFn: () =>
+      isAllGroupsView ? listAllTasks('completed') : listTasks(resolvedGroupId as string, 'completed'),
+    enabled:
+      sessionQuery.data?.signed_in === true && (isAllGroupsView || Boolean(resolvedGroupId))
   })
 
   function requireCsrf(session: SessionStatus | undefined) {
@@ -150,7 +152,11 @@ export function CompletedTasksRoute() {
       isError={sessionQuery.isError}
       title="Completed Tasks"
       eyebrow="Completed history"
-      description="Review completed tasks and move them back to To-do when needed."
+      description={
+        isAllGroupsView
+          ? 'Review completed tasks across every group and move them back to To-do when needed.'
+          : 'Review completed tasks and move them back to To-do when needed.'
+      }
     >
       <section className="space-y-4">
 
