@@ -1,5 +1,13 @@
 # Decisions Made
 
+## 2026-03-26 22:39:24 EDT
+
+- Kept the production backend on Railway service-generated hostname `https://backend-production-496e.up.railway.app` and pointed the cron callers there until `api.gustapp.ca` can be attached, instead of blocking backend/cron bring-up on custom-domain setup.
+- Switched Railway production deploys for `frontend/` and `backend/` to explicit production-only Dockerfiles so hosted builds no longer depend on the dev Dockerfiles already present in those directories.
+- Treated hosted Supabase database schema ownership as Alembic-only and executed `alembic upgrade head` against the Supabase pooler connection string (`postgres.<ref>@aws-1-ca-central-1.pooler.supabase.com`) after the direct `db.<ref>.supabase.co` hostname failed to resolve from this environment.
+- Stopped `supabase config push` before applying hosted auth changes because enabling Google without real `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` would have published a broken provider configuration.
+- Recorded the hosted rollout as partially complete rather than done because three external blockers remain outside repo code: Railway custom-domain CLI authorization failures, Supabase custom-domain add-on requirements, and missing Google OAuth client credentials.
+
 ## 2026-03-27 14:25:00 EDT
 
 - Replaced per-task reminder email delivery with exactly two digest modes (`daily`, `weekly`) executed through the existing internal backend job route using explicit `mode` selection.

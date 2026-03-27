@@ -94,6 +94,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-13 | Roll out digest-only email delivery with Railway daily/weekly cron split | DONE | 2026-03-27 | Added digest dispatch persistence + migration, switched internal reminder worker to explicit daily/weekly digest modes, disabled per-item reminder row creation/sending, and documented Eastern-time digest contracts plus DST cron maintenance runbook. | PRD, Tech, Schema, Runbook |
 | ADH-12 | Refine Avatar Button Tactile Design | DONE | 2026-03-26 | Redesigned the avatar button to mirror the 3D physics-based shadow-and-lift styling of the floating + button, using a high-contrast white profile. | Design |
 | ADH-14 | Redesign Login Page Buttons | DONE | 2026-03-26 | Completely overhauled the login screen buttons to use the 3D tactile materials and physics established on the capture page, mapping Google Auth to the mic button and Local Dev to the fallback input. | Design |
+| ADH-15 | Provision production Railway, Supabase, Resend, and digest cron infrastructure | IN PROGRESS | 2026-03-26 | Fresh Supabase project created and linked, Alembic upgraded to `0008_digest_dispatches`, Railway backend/frontend/daily-cron/weekly-cron services are live on provider domains, and manual digest runs succeed. Remaining blockers: Railway custom-domain CLI auth failure, Supabase custom domain requires paid add-on, and Google OAuth client credentials are still needed before pushing hosted auth config. | Tech, Runbook, AGENTS |
 
 ## Bug Fixes
 
