@@ -61,6 +61,12 @@ function TaskCard({
   isBusy: boolean
 }) {
   const badge = buildDueBadge(task)
+  const clampTwoLines = {
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical' as const,
+    WebkitLineClamp: 2,
+    overflow: 'hidden'
+  }
 
   let dueTextColor = 'text-on-surface-variant/50'
   if (task.due_date) {
@@ -99,14 +105,26 @@ function TaskCard({
         }}
         className="p-4 flex items-stretch justify-between gap-4"
       >
-        {/* Left Column: Title & Metadata */}
+        {/* Left Column: Task Content */}
         <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-          <div className="flex flex-col gap-1.5 align-top">
-            <h3 className="font-display text-lg font-medium text-on-surface truncate leading-tight">
+          <div className="flex flex-col gap-2">
+            <h3
+              className="font-display text-base font-medium text-on-surface leading-tight"
+              style={clampTwoLines}
+            >
               {task.title}
             </h3>
-            
-            <div className="flex items-center gap-2 font-body text-xs text-on-surface-variant flex-wrap">
+
+            {task.description ? (
+              <p
+                className="text-[0.78rem] leading-5 text-on-surface-variant/85"
+                style={clampTwoLines}
+              >
+                {task.description}
+              </p>
+            ) : null}
+
+            <div className="flex items-center gap-2 font-body text-[0.72rem] text-on-surface-variant flex-wrap">
               <span className="text-on-surface-variant/80 font-medium">
                 {task.group?.name || 'Inbox'}
               </span>
@@ -126,34 +144,33 @@ function TaskCard({
             </div>
           </div>
 
-          <div className="mt-4">
-            <span className={`${dueTextColor} uppercase tracking-wider text-[0.65rem] font-bold`}>
+          <div className="mt-4 space-y-2">
+            <span className={`${dueTextColor} block uppercase tracking-wider text-[0.65rem] font-bold`}>
               Due: {badge ? badge.label : '--'}
             </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill ${
+                task.recurrence_frequency 
+                  ? 'bg-primary/20 text-primary' 
+                  : 'bg-surface-dim text-on-surface-variant/40'
+              }`} title={task.recurrence_frequency ? `Recurring: ${task.recurrence_frequency}` : 'No recurrence'}>
+                {task.recurrence_frequency ? task.recurrence_frequency : 'ONE-OFF'}
+              </span>
+              
+              <div 
+                className="flex items-center gap-1 bg-surface-dim px-2 py-0.5 rounded-pill"
+                title={`${task.subtask_count} subtasks`}
+              >
+                <span className="font-body text-[0.65rem] text-on-surface-variant uppercase tracking-widest">
+                  {task.subtask_count > 0 ? `${task.subtask_count} SUBTASKS` : '0 SUBTASKS'}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Right Column: Badges & Actions */}
-        <div className="flex flex-col items-end justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className={`font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill ${
-              task.recurrence_frequency 
-                ? 'bg-primary/20 text-primary' 
-                : 'bg-surface-dim text-on-surface-variant/40'
-            }`} title={task.recurrence_frequency ? `Recurring: ${task.recurrence_frequency}` : 'No recurrence'}>
-              {task.recurrence_frequency ? task.recurrence_frequency : 'ONE-OFF'}
-            </span>
-            
-            <div 
-              className="flex items-center gap-1 bg-surface-dim px-2 py-0.5 rounded-pill"
-              title={`${task.subtask_count} subtasks`}
-            >
-              <span className="font-body text-[0.65rem] text-on-surface-variant uppercase tracking-widest">
-                {task.subtask_count > 0 ? `${task.subtask_count} SUBTASKS` : '0 SUBTASKS'}
-              </span>
-            </div>
-          </div>
-
+        {/* Right Column: Actions */}
+        <div className="flex flex-col items-end justify-end gap-4 shrink-0">
           <div 
             className="flex items-center gap-3 shrink-0"
             onClick={(e) => e.stopPropagation()}

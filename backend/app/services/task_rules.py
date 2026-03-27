@@ -28,6 +28,24 @@ class NormalizedTaskFields:
     series_id: str | None
 
 
+def normalize_task_description(description: str | None, *, title: str | None = None) -> str | None:
+    if description is None:
+        return None
+    if not isinstance(description, str):
+        return None
+
+    normalized_description = " ".join(description.strip().split())
+    if not normalized_description:
+        return None
+
+    if title is not None:
+        normalized_title = " ".join(title.strip().split()).casefold()
+        if normalized_description.casefold() == normalized_title:
+            return None
+
+    return normalized_description
+
+
 def normalize_task_fields(
     *,
     title: str,

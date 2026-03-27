@@ -1,6 +1,6 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.3  
+**Version:** 1.4  
 **Last Updated:** 2026-03-27
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
@@ -135,6 +135,19 @@ Deployment implication:
 
 - environments must apply `0008_digest_dispatches` before running digest-mode backend jobs, because startup revision checks now require that revision by default
 
+## Phase 9 Revision (Task Descriptions)
+
+Phase 9 introduces `0009_task_descriptions` as the required application revision.
+
+That revision establishes:
+
+- nullable `tasks.description` for first-class saved-task context
+- nullable `extracted_tasks.description` so staged extraction output can preserve short context before approval
+
+Deployment implication:
+
+- environments must apply `0009_task_descriptions` before running the backend that reads or writes task descriptions, because startup revision checks now require that revision by default
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -178,12 +191,14 @@ Production database ownership rules:
 Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
-- The required revision configured for the backend matches `0008_digest_dispatches` or the current deployed head.
+- The required revision configured for the backend matches `0009_task_descriptions` or the current deployed head.
 - Backend startup revision check passes.
 - `users.timezone` exists and accepts valid IANA timezone data.
 - Each sampled user has exactly one Inbox group with `system_key = 'inbox'`.
 - No task row has a null `group_id`.
 - `tasks.reminder_at` exists and remains nullable for legacy rows without reminders.
+- `tasks.description` exists and remains nullable for legacy rows.
+- `extracted_tasks.description` exists and remains nullable for legacy rows.
 - Group names are unique per user.
 - Digest dispatch uniqueness and idempotency constraints exist:
   - one `digest_dispatches` row per `user + digest_type + period`

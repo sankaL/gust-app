@@ -42,6 +42,7 @@ class SubtaskResponse(BaseModel):
 class TaskSummaryResponse(BaseModel):
     id: str
     title: str
+    description: Optional[str] = None
     series_id: Optional[str] = None
     recurrence_frequency: Optional[str] = None
     status: str
@@ -62,6 +63,7 @@ class TaskDetailResponse(TaskSummaryResponse):
 
 class UpdateTaskRequest(BaseModel):
     title: str
+    description: Optional[str] = None
     group_id: str
     due_date: Optional[date] = None
     reminder_at: Optional[datetime] = None
@@ -70,6 +72,7 @@ class UpdateTaskRequest(BaseModel):
 
 class CreateTaskRequest(BaseModel):
     title: str
+    description: Optional[str] = None
     group_id: str
     due_date: Optional[date] = None
     reminder_at: Optional[datetime] = None
@@ -127,6 +130,7 @@ def create_task_route(
         user_timezone=session_context.user.timezone,
         payload=TaskCreateInput(
             title=payload.title,
+            description=payload.description,
             group_id=payload.group_id,
             due_date=payload.due_date,
             reminder_at=payload.reminder_at,
@@ -159,6 +163,8 @@ def update_task_route(
         task_id=task_id,
         payload=TaskUpdateInput(
             title=payload.title,
+            description=payload.description,
+            description_provided="description" in payload.model_fields_set,
             group_id=payload.group_id,
             due_date=payload.due_date,
             reminder_at=payload.reminder_at,
@@ -295,6 +301,7 @@ def _build_task_summary(item: TaskListItem) -> TaskSummaryResponse:
     return TaskSummaryResponse(
         id=item.task.id,
         title=item.task.title,
+        description=item.task.description,
         series_id=item.task.series_id,
         recurrence_frequency=item.task.recurrence_frequency,
         status=item.task.status,
@@ -320,6 +327,7 @@ def _build_task_detail(detail: TaskDetail, user_timezone: str) -> TaskDetailResp
     return TaskDetailResponse(
         id=detail.task.id,
         title=detail.task.title,
+        description=detail.task.description,
         series_id=detail.task.series_id,
         recurrence_frequency=detail.task.recurrence_frequency,
         status=detail.task.status,

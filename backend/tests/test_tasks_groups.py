@@ -80,6 +80,7 @@ def _seed_task(
     user_id: str,
     group_id: str,
     title: str,
+    description: Optional[str] = None,
     status: str = "open",
     needs_review: bool = False,
     due_date_value: Optional[date] = None,
@@ -103,6 +104,7 @@ def _seed_task(
                 capture_id=None,
                 series_id=series_id,
                 title=title,
+                description=description,
                 status=status,
                 needs_review=needs_review,
                 due_date=due_date_value,
@@ -232,6 +234,36 @@ def test_group_delete_reassigns_tasks_and_clears_review(app: FastAPI, client: Te
     assert task_row.needs_review is False
 
 
+def test_create_task_persists_description(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Work")
+
+    response = client.post(
+        "/tasks",
+        json={
+            "title": "Review extraction contract",
+            "description": "Capture the schema and UI contract changes for descriptions.",
+            "group_id": group_id,
+            "due_date": None,
+            "reminder_at": None,
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["description"] == "Capture the schema and UI contract changes for descriptions."
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == payload["id"])).one()
+
+    assert task_row.description == "Capture the schema and UI contract changes for descriptions."
+
+
 def test_group_delete_reassigns_soft_deleted_tasks_too(app: FastAPI, client: TestClient) -> None:
     headers = _authenticated_headers(app, client)
     source_group_id = _seed_group(client, user_id=USER_ID, name="Archive Source")
@@ -345,6 +377,7 @@ def test_update_task_keeps_digest_only_reminder_state_and_series_id(
         f"/tasks/{task_id}",
         json={
             "title": "Review task route contracts",
+            "description": "Keep the task route contract aligned with the new API shape.",
             "group_id": second_group_id,
             "due_date": str(date.today() + timedelta(days=2)),
             "reminder_at": reminder_at_value.isoformat().replace("+00:00", "Z"),
@@ -360,6 +393,10 @@ def test_update_task_keeps_digest_only_reminder_state_and_series_id(
         reminder_rows = connection.execute(sa.select(reminders)).fetchall()
 
     assert str(task_row.group_id) == second_group_id
+    assert (
+        task_row.description
+        == "Keep the task route contract aligned with the new API shape."
+    )
     assert task_row.needs_review is False
     assert task_row.series_id is not None
     assert task_row.recurrence_frequency == "weekly"
@@ -369,6 +406,7 @@ def test_update_task_keeps_digest_only_reminder_state_and_series_id(
         f"/tasks/{task_id}",
         json={
             "title": "Review task route contracts",
+            "description": None,
             "group_id": second_group_id,
             "due_date": None,
             "reminder_at": None,
@@ -386,7 +424,47 @@ def test_update_task_keeps_digest_only_reminder_state_and_series_id(
     assert cleared_task_row.series_id is None
     assert cleared_task_row.recurrence_frequency is None
     assert cleared_task_row.reminder_at is None
+    assert cleared_task_row.description is None
     assert cleared_reminder_rows == []
+
+
+def test_update_task_preserves_description_when_patch_omits_field(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    first_group_id = _seed_group(client, user_id=USER_ID, name="Inbox Mirror")
+    second_group_id = _seed_group(client, user_id=USER_ID, name="Work")
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=first_group_id,
+        title="Review route contracts",
+        description="Keep the existing description while editing other task fields.",
+    )
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={
+            "title": "Review task route contracts",
+            "group_id": second_group_id,
+            "due_date": None,
+            "reminder_at": None,
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert (
+        response.json()["description"]
+        == "Keep the existing description while editing other task fields."
+    )
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+
+    assert task_row.description == "Keep the existing description while editing other task fields."
 
 
 def test_complete_reopen_delete_restore_manage_reminders(

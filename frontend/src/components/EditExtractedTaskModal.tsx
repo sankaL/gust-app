@@ -49,6 +49,7 @@ export function EditExtractedTaskModal({
 
   // Default values for create mode
   const defaultTitle = ''
+  const defaultDescription = ''
   const defaultGroupIdFinal = defaultGroupId ?? groups[0]?.id ?? ''
   const defaultDueDate = ''
   const defaultReminderEnabled = false
@@ -57,6 +58,9 @@ export function EditExtractedTaskModal({
   const defaultRecurrenceDayOfMonth: number | null = null
 
   const [title, setTitle] = useState(isCreateMode ? defaultTitle : task.title)
+  const [description, setDescription] = useState(
+    isCreateMode ? defaultDescription : (task.description ?? '')
+  )
   const [groupId, setGroupId] = useState(isCreateMode ? defaultGroupIdFinal : task.group_id)
   const [dueDate, setDueDate] = useState(isCreateMode ? defaultDueDate : (task.due_date ? task.due_date.split('T')[0] : ''))
   const [reminderEnabled, setReminderEnabled] = useState(isCreateMode ? defaultReminderEnabled : !!task.reminder_at)
@@ -72,6 +76,7 @@ export function EditExtractedTaskModal({
   useEffect(() => {
     if (isCreateMode) {
       setTitle(defaultTitle)
+      setDescription(defaultDescription)
       setGroupId(defaultGroupIdFinal)
       setDueDate(defaultDueDate)
       setReminderEnabled(defaultReminderEnabled)
@@ -80,6 +85,7 @@ export function EditExtractedTaskModal({
       setRecurrenceDayOfMonth(defaultRecurrenceDayOfMonth)
     } else {
       setTitle(task.title)
+      setDescription(task.description ?? '')
       setGroupId(task.group_id)
       setDueDate(task.due_date ? task.due_date.split('T')[0] : '')
       setReminderEnabled(!!task.reminder_at)
@@ -131,6 +137,7 @@ export function EditExtractedTaskModal({
         const created = await createTask(
           {
             title: title.trim(),
+            description: description.trim() || null,
             group_id: groupId || '',
             due_date: dueDate || null,
             reminder_at: null,  // Frontend has no time picker; reminder set via due_date in edit mode
@@ -144,12 +151,16 @@ export function EditExtractedTaskModal({
         const cleanUpdates: ExtractedTaskUpdates = {}
 
         const trimmedTitle = title.trim()
+        const trimmedDescription = description.trim()
         const initialDueDate = task.due_date ? task.due_date.split('T')[0] : ''
         const initialReminderEnabled = !!task.reminder_at
         const initialRecurrenceFrequency = task.recurrence_frequency || 'none'
 
         if (trimmedTitle !== task.title) {
           cleanUpdates.title = trimmedTitle
+        }
+        if ((trimmedDescription || null) !== task.description) {
+          cleanUpdates.description = trimmedDescription || null
         }
         if (groupId !== task.group_id) {
           cleanUpdates.group_id = groupId
@@ -271,6 +282,17 @@ export function EditExtractedTaskModal({
               rows={2}
               className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline focus:border-primary outline-none resize-none"
               placeholder="Task title"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-on-surface-variant">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full bg-surface-container-low text-on-surface px-3 py-2 rounded-lg border border-outline focus:border-primary outline-none resize-none"
+              placeholder="Optional short context"
             />
           </div>
 

@@ -52,7 +52,11 @@ from app.services.extraction_models import (
     ExtractorPayload,
 )
 from app.services.staging import StagingService
-from app.services.task_rules import RecurrenceInput, normalize_task_fields
+from app.services.task_rules import (
+    RecurrenceInput,
+    normalize_task_description,
+    normalize_task_fields,
+)
 from app.services.transcription import (
     MistralTranscriptionService,
     MockTranscriptionService,
@@ -108,6 +112,7 @@ class SubmitCaptureResult:
 @dataclass
 class PreparedTask:
     title: str
+    description: Optional[str]
     group_id: str
     needs_review: bool
     due_date: Optional[date]
@@ -381,6 +386,7 @@ class CaptureService:
                     capture_id=capture_id,
                     title=prepared.title,
                     needs_review=prepared.needs_review,
+                    description=prepared.description,
                     due_date=prepared.due_date,
                     reminder_at=prepared.reminder_at,
                     reminder_offset_minutes=prepared.reminder_offset_minutes,
@@ -557,8 +563,10 @@ class CaptureService:
             raise
 
         subtasks = [subtask.title for subtask in candidate.subtasks]
+        description = normalize_task_description(candidate.description, title=normalized.title)
         return PreparedTask(
             title=normalized.title,
+            description=description,
             group_id=group_id,
             needs_review=needs_review,
             due_date=normalized.due_date,
@@ -760,6 +768,9 @@ class CaptureService:
             fallback_tasks.append(
                 ExtractedTaskCandidate(
                     title=fallback_title,
+                    # Guarded-intent fallbacks only preserve the missing task itself.
+                    # There is no reliable extra context to synthesize into description.
+                    description=None,
                     group_id=inbox_group.id,
                     top_confidence=0.0,
                 )

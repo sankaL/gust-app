@@ -1,6 +1,6 @@
 # Gust Database Schema
 
-**Version:** 1.3
+**Version:** 1.4
 **Last Updated:** 2026-03-27
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
@@ -126,6 +126,7 @@ Primary task record for open and completed tasks.
 | `capture_id` | `uuid` | Yes | Foreign key to `captures.id` when task originated from a capture. Uses `ON DELETE SET NULL` so bounded capture cleanup does not delete long-lived tasks. |
 | `series_id` | `uuid` | Yes | Stable recurrence-series identifier shared by occurrences. Null for non-recurring tasks and actively maintained when recurrence is added, edited, or removed. |
 | `title` | `text` | No | Non-empty task title. |
+| `description` | `text` | Yes | Optional short plain-text context for the task. Not a rich-notes field. |
 | `status` | `task_status` | No | `open` or `completed`. |
 | `needs_review` | `boolean` | No | Defaults to `false`. |
 | `due_date` | `date` | Yes | Optional due date in the user's calendar context. |
@@ -144,6 +145,7 @@ Constraints and invariants:
 
 - Foreign key ownership must align by user in application logic and migration-time integrity checks.
 - `title` must not be blank after trimming.
+- `description` is optional plain text and may be null when the title already captures the task fully.
 - `completed_at` is required when `status = 'completed'` and must be null when `status = 'open'`.
 - If `reminder_at` is populated, `due_date` must also be populated at the application layer in v1.
 - Clearing `due_date` in task editing must also clear `reminder_at`, `reminder_offset_minutes`, and recurrence columns at the application layer.
@@ -193,6 +195,7 @@ Staging table for extracted tasks before user approval. Tasks remain here until 
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
 | `capture_id` | `uuid` | No | Foreign key to `captures.id`. |
 | `title` | `text` | No | Non-empty task title. |
+| `description` | `text` | Yes | Optional short plain-text context extracted from the transcript. |
 | `group_id` | `uuid` | No | Foreign key to `groups.id`. |
 | `group_name` | `text` | Yes | Denormalized group name for display. |
 | `due_date` | `date` | Yes | Optional due date. |
@@ -212,6 +215,7 @@ Constraints and invariants:
 - `status` must be one of: `pending`, `approved`, `discarded`.
 - `top_confidence` must be between 0.0 and 1.0.
 - `needs_review` is `true` when `top_confidence < 0.7`.
+- `description` is nullable and should be null when extraction does not produce meaningful extra context beyond the title.
 - `subtask_titles` is a JSON array of non-empty strings; null means no subtasks were extracted.
 - When an extracted task is approved, its `subtask_titles` are written as rows to the `subtasks` table linked to the new `task_id`.
 - Tasks are linked to captures for traceability.

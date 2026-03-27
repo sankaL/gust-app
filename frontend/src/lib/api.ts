@@ -63,6 +63,7 @@ export type TaskSubtask = {
 export type TaskSummary = {
   id: string
   title: string
+  description: string | null
   series_id?: string | null
   recurrence_frequency?: 'daily' | 'weekly' | 'monthly' | null
   status: 'open' | 'completed'
@@ -87,6 +88,7 @@ export type ExtractedTask = {
   id: string
   capture_id: string
   title: string
+  description: string | null
   group_id: string
   group_name: string | null
   due_date: string | null
@@ -318,6 +320,7 @@ export function updateTask(
   taskId: string,
   payload: {
     title: string
+    description: string | null
     group_id: string
     due_date: string | null
     reminder_at: string | null
@@ -338,6 +341,7 @@ export function updateTask(
 export function createTask(
   payload: {
     title: string
+    description: string | null
     group_id: string
     due_date: string | null
     reminder_at: string | null
@@ -533,6 +537,7 @@ export function updateExtractedTaskDueDate(
 
 export type ExtractedTaskUpdates = {
   title?: string
+  description?: string | null
   group_id?: string
   due_date?: string | null
   reminder_at?: string | null

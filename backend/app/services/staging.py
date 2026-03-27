@@ -32,7 +32,11 @@ from app.db.repositories import (
     update_extracted_task_status,
 )
 from app.services.extraction_models import ExtractedTaskCandidate, ExtractorPayload
-from app.services.task_rules import RecurrenceInput, normalize_task_fields
+from app.services.task_rules import (
+    RecurrenceInput,
+    normalize_task_description,
+    normalize_task_fields,
+)
 
 logger = logging.getLogger("gust.api")
 
@@ -136,6 +140,9 @@ class StagingService:
                         user_id=user_id,
                         capture_id=capture_id,
                         title=normalized.title,
+                        description=normalize_task_description(
+                            candidate.description, title=normalized.title
+                        ),
                         group_id=resolved_group.id if resolved_group else inbox_group.id,
                         group_name=resolved_group.name if resolved_group else inbox_group.name,
                         due_date=normalized.due_date,
@@ -214,6 +221,7 @@ class StagingService:
                 capture_id=capture_id,
                 title=extracted_task.title,
                 needs_review=extracted_task.needs_review,
+                description=extracted_task.description,
                 due_date=extracted_task.due_date,
                 reminder_at=extracted_task.reminder_at,
                 recurrence_frequency=extracted_task.recurrence_frequency,
@@ -377,6 +385,7 @@ class StagingService:
         """
         allowed_update_fields: set[str] = {
             "title",
+            "description",
             "group_id",
             "due_date",
             "reminder_at",
@@ -407,6 +416,11 @@ class StagingService:
                     raise InvalidTaskError("Title cannot be blank.")
                 values["title"] = title.strip()
 
+            if "description" in values:
+                values["description"] = normalize_task_description(
+                    values["description"], title=str(values.get("title", extracted_task.title))
+                )
+
             if "group_id" in values:
                 group_id = values["group_id"]
                 if not isinstance(group_id, str) or not group_id.strip():
@@ -414,6 +428,7 @@ class StagingService:
                 group = get_group(connection, user_id=user_id, group_id=group_id)
                 if group is None:
                     raise GroupNotFoundError("Destination group could not be found.")
+                values["group_name"] = group.name
 
             # If due_date is explicitly cleared, also clear reminders unless the caller
             # explicitly provided reminder_at.

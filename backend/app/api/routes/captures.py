@@ -59,6 +59,7 @@ class ExtractedTaskResponse(BaseModel):
     id: str
     capture_id: str
     title: str
+    description: Optional[str] = None
     group_id: str
     group_name: Optional[str]
     due_date: Optional[str]
@@ -80,6 +81,7 @@ class ReExtractRequest(BaseModel):
 
 class UpdateExtractedTaskRequest(BaseModel):
     title: Optional[str] = None
+    description: Optional[str] = None
     group_id: Optional[str] = None
     due_date: Optional[date] = None
     reminder_at: Optional[datetime] = None  # ISO datetime string (with timezone) or null
@@ -160,6 +162,7 @@ def _build_extracted_task_response(task) -> ExtractedTaskResponse:
         id=task.id,
         capture_id=task.capture_id,
         title=task.title,
+        description=task.description,
         group_id=task.group_id,
         group_name=task.group_name,
         due_date=task.due_date.isoformat() if task.due_date else None,

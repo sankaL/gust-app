@@ -50,6 +50,12 @@ class TestExtractionPromptManager:
         prompt = self.manager.get_system_prompt()
         assert '"top_confidence": 0.9' in prompt
 
+    def test_system_prompt_mentions_optional_description(self) -> None:
+        """Prompt should teach the model to emit nullable descriptions."""
+        prompt = self.manager.get_system_prompt()
+        assert '"description": "string or null' in prompt
+        assert "Set description to null" in prompt
+
     def test_system_prompt_includes_domain_separation_rule(self) -> None:
         """Prompt should state that different-domain tasks are always separate."""
         prompt = self.manager.get_system_prompt()
@@ -142,6 +148,7 @@ class TestExtractionExamples:
         # Should have 3 main tasks and a PASS 2 OUTPUT marker
         assert "PASS 2 OUTPUT:" in self.prompt
         assert '"title": "Create resume for AI product manager"' in self.prompt
+        assert '"description": "Tailor it for AI product manager applications."' in self.prompt
         assert '"title": "Apply to AI product manager jobs"' in self.prompt
         assert '"title": "Call dentist tomorrow at 9am about metal thing in mouth"' in self.prompt
 

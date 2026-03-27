@@ -43,6 +43,7 @@ from app.services.task_rules import (
     RecurrenceInput,
     compute_reminder_at_from_offset,
     due_bucket_for_date,
+    normalize_task_description,
     next_due_date_for_deleted_occurrence,
     next_due_date_for_completed_task,
     normalize_task_fields,
@@ -74,6 +75,8 @@ class TaskDetail:
 @dataclass
 class TaskUpdateInput:
     title: str
+    description: Optional[str]
+    description_provided: bool
     group_id: str
     due_date: Optional[date]
     reminder_at: Optional[datetime]
@@ -83,6 +86,7 @@ class TaskUpdateInput:
 @dataclass
 class TaskCreateInput:
     title: str
+    description: Optional[str]
     group_id: str
     due_date: Optional[date]
     reminder_at: Optional[datetime]
@@ -177,6 +181,7 @@ class TaskService:
                 capture_id=None,
                 title=normalized.title,
                 needs_review=False,
+                description=normalize_task_description(payload.description, title=normalized.title),
                 due_date=normalized.due_date,
                 reminder_at=normalized.reminder_at,
                 reminder_offset_minutes=normalized.reminder_offset_minutes,
@@ -240,6 +245,11 @@ class TaskService:
                 "recurrence_day_of_month": normalized.recurrence_day_of_month,
                 "series_id": normalized.series_id,
             }
+            if payload.description_provided:
+                values["description"] = normalize_task_description(
+                    payload.description,
+                    title=normalized.title,
+                )
             updated = update_task(connection, user_id=user_id, task_id=task_id, values=values)
             assert updated is not None
             self._sync_reminder(
@@ -646,6 +656,7 @@ class TaskService:
             capture_id=None,
             title=task.title,
             needs_review=False,
+            description=task.description,
             due_date=next_due_date,
             reminder_at=next_reminder_at,
             reminder_offset_minutes=task.reminder_offset_minutes,
@@ -724,6 +735,7 @@ class TaskService:
             capture_id=None,
             title=task.title,
             needs_review=False,
+            description=task.description,
             due_date=next_due_date,
             reminder_at=next_reminder_at,
             reminder_offset_minutes=task.reminder_offset_minutes,

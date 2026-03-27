@@ -141,6 +141,7 @@ def _seed_open_task(
     user_id: str,
     group_id: str,
     title: str,
+    description: Optional[str] = None,
 ) -> None:
     with connection_scope(client.app.state.settings.database_url) as connection:
         connection.execute(
@@ -151,6 +152,7 @@ def _seed_open_task(
                 capture_id=None,
                 series_id=None,
                 title=title,
+                description=description,
                 status="open",
                 needs_review=False,
             )
@@ -184,6 +186,7 @@ def _seed_extracted_task(
     user_id: str,
     capture_id: str,
     group_id: str,
+    description: Optional[str] = None,
     status: str = "pending",
 ) -> str:
     extracted_task_id = str(uuid.uuid4())
@@ -194,6 +197,7 @@ def _seed_extracted_task(
                 user_id=user_id,
                 capture_id=capture_id,
                 title="Review draft",
+                description=description,
                 group_id=group_id,
                 group_name="Inbox",
                 due_date=None,
@@ -362,6 +366,7 @@ def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
                 "tasks": [
                     {
                         "title": "Send invoice",
+                        "description": "For the client follow-up after the draft is ready.",
                         "due_date": "2026-03-23",
                         "reminder_at": "2026-03-23T13:00:00Z",
                         "group_name": "Work",
@@ -371,6 +376,7 @@ def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
                     },
                     {
                         "title": "Buy groceries",
+                        "description": "Pick up food for the house tomorrow.",
                         "due_date": "2026-03-24",
                         "group_name": "Unknown",
                         "top_confidence": 0.65,
@@ -414,8 +420,10 @@ def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
         inbox_group = ensure_inbox_group(connection, user_id=user_id)
 
     assert [row.title for row in task_rows] == ["Buy groceries", "Send invoice"]
+    assert task_rows[0].description == "Pick up food for the house tomorrow."
     assert task_rows[0].group_id == inbox_group.id
     assert task_rows[0].needs_review is True
+    assert task_rows[1].description == "For the client follow-up after the draft is ready."
     assert task_rows[1].group_id == work_group_id
     assert task_rows[1].needs_review is False
     assert task_rows[1].reminder_at == datetime(2026, 3, 23, 13, 0)
@@ -849,6 +857,7 @@ def test_list_extracted_tasks_allows_authenticated_get_without_csrf(
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["status"] == "pending"
+    assert payload[0]["description"] is None
 
 
 def test_approve_extracted_task_returns_not_found_for_unknown_row(
@@ -934,3 +943,38 @@ def test_re_extract_replaces_existing_staged_tasks_for_capture(
 
     assert len(rows) == 1
     assert rows[0].title == "New extracted task"
+
+
+def test_approve_extracted_task_copies_description_to_saved_task(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    capture_id = _seed_capture(client, user_id=user_id)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+    extracted_task_id = _seed_extracted_task(
+        client,
+        user_id=user_id,
+        capture_id=capture_id,
+        group_id=inbox_group.id,
+        description="Follow up with a short summary after reviewing the draft.",
+        status="pending",
+    )
+
+    response = client.post(
+        f"/captures/{capture_id}/extracted-tasks/{extracted_task_id}/approve",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["description"] == "Follow up with a short summary after reviewing the draft."
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(
+            sa.select(tasks).where(tasks.c.capture_id == capture_id)
+        ).one()
+
+    assert task_row.description == "Follow up with a short summary after reviewing the draft."

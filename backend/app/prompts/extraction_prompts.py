@@ -92,6 +92,7 @@ Then, for each enumerated task:
 - Determine if it's a main task or a subtask
 - Group related subtasks under their parent task
 - Extract dates, reminders, groups
+- Add a short optional description only when the transcript provides useful context beyond the title
 
 ## PASS 1 EXAMPLE (MANDATORY FORMAT)
 
@@ -171,6 +172,7 @@ PASS 2 OUTPUT:
   "tasks": [
     {
       "title": "Create resume for AI product manager",
+      "description": "Tailor it for AI product manager applications.",
       "top_confidence": 0.9,
       "subtasks": [
         {"title": "Fix up my resume"},
@@ -180,10 +182,12 @@ PASS 2 OUTPUT:
     },
     {
       "title": "Apply to AI product manager jobs",
+      "description": "Use the updated resume for the applications.",
       "top_confidence": 0.9
     },
     {
       "title": "Call dentist tomorrow at 9am about metal thing in mouth",
+      "description": "Need to fix the metal thing in my mouth.",
       "due_date": "2026-03-25",
       "reminder_at": "2026-03-25T09:00:00+00:00",
       "top_confidence": 0.9
@@ -210,9 +214,9 @@ PASS 2 OUTPUT:
 ```json
 {
   "tasks": [
-    {"title": "Buy groceries", "top_confidence": 0.9},
-    {"title": "Call my mom", "top_confidence": 0.9},
-    {"title": "Schedule dentist appointment", "top_confidence": 0.9}
+    {"title": "Buy groceries", "description": null, "top_confidence": 0.9},
+    {"title": "Call my mom", "description": null, "top_confidence": 0.9},
+    {"title": "Schedule dentist appointment", "description": null, "top_confidence": 0.9}
   ]
 }
 ```
@@ -237,6 +241,7 @@ PASS 2 OUTPUT:
   "tasks": [
     {
       "title": "Learn guitar",
+      "description": "This is the parent goal that the next steps support.",
       "top_confidence": 0.9,
       "subtasks": [
         {"title": "Buy a guitar"},
@@ -265,6 +270,7 @@ PASS 2 OUTPUT:
   "tasks": [
     {
       "title": "Call John about the project proposal",
+      "description": "The call is specifically about the project proposal.",
       "due_date": "2026-03-25",
       "reminder_at": "2026-03-25T14:00:00+00:00",
       "top_confidence": 0.9
@@ -297,6 +303,7 @@ JSON SCHEMA:
   "tasks": [
     {
       "title": "string (required, non-empty)",
+      "description": "string or null (optional short context that adds value beyond the title; use null if no extra context)",
       "due_date": "string (ISO date YYYY-MM-DD, optional but REQUIRED if reminder_at is set or if recurrence is weekly/monthly)",
       "reminder_at": "string (ISO datetime WITH timezone, e.g. 2026-03-25T09:00:00+00:00, optional)",
       "group_id": "string (UUID, optional)",
@@ -321,7 +328,8 @@ JSON SCHEMA:
 7. Set reminder_at ONLY when a specific time is mentioned — ALWAYS include timezone (e.g., +00:00 for UTC)
 8. For weekly or monthly recurrence, you MUST set due_date to the first occurrence date
 9. Always include top_confidence (use 0.9 when not otherwise specified)
-10. Return ONLY the enumeration text, cross-domain check, and JSON — nothing else"""
+10. Set description to null when the title already captures the full task or no extra context is available
+11. Return ONLY the enumeration text, cross-domain check, and JSON — nothing else"""
 
     def get_user_prompt(
         self,

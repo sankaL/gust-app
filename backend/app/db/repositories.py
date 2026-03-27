@@ -79,6 +79,7 @@ class TaskRecord:
     capture_id: Optional[str]
     series_id: Optional[str]
     title: str
+    description: Optional[str]
     status: str
     needs_review: bool
     due_date: Optional[date]
@@ -157,6 +158,7 @@ class ExtractedTaskRecord:
     user_id: str
     capture_id: str
     title: str
+    description: Optional[str]
     group_id: str
     group_name: Optional[str]
     due_date: Optional[date]
@@ -237,6 +239,7 @@ def _row_to_task(row: sa.Row) -> TaskRecord:
         capture_id=str(row.capture_id) if row.capture_id is not None else None,
         series_id=str(row.series_id) if row.series_id is not None else None,
         title=row.title,
+        description=row.description,
         status=row.status,
         needs_review=bool(row.needs_review),
         due_date=row.due_date,
@@ -325,6 +328,7 @@ def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
         user_id=str(row.user_id),
         capture_id=str(row.capture_id),
         title=row.title,
+        description=row.description,
         group_id=str(row.group_id),
         group_name=row.group_name,
         due_date=row.due_date,
@@ -915,6 +919,7 @@ def create_task(
     capture_id: Optional[str],
     title: str,
     needs_review: bool,
+    description: Optional[str] = None,
     due_date: Optional[date] = None,
     reminder_at: Optional[datetime] = None,
     reminder_offset_minutes: Optional[int] = None,
@@ -933,6 +938,7 @@ def create_task(
             capture_id=capture_id,
             series_id=series_id,
             title=title,
+            description=description,
             status="open",
             needs_review=needs_review,
             due_date=due_date,
@@ -1516,6 +1522,7 @@ def create_extracted_task(
     user_id: str,
     capture_id: str,
     title: str,
+    description: Optional[str],
     group_id: str,
     group_name: Optional[str],
     due_date: Optional[date],
@@ -1534,6 +1541,7 @@ def create_extracted_task(
             user_id=user_id,
             capture_id=capture_id,
             title=title,
+            description=description,
             group_id=group_id,
             group_name=group_name,
             due_date=due_date,

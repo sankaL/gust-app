@@ -25,11 +25,28 @@ def test_check_required_revision_accepts_matching_revision(tmp_path: Path) -> No
         connection.execute(
             text(
                 "INSERT INTO alembic_version (version_num) "
-                "VALUES ('0008_digest_dispatches')"
+                "VALUES ('0009_task_descriptions')"
             )
         )
 
-    check_required_revision(database_url, "0008_digest_dispatches")
+    check_required_revision(database_url, "0009_task_descriptions")
+
+
+def test_check_required_revision_accepts_newer_revision_than_required(tmp_path: Path) -> None:
+    database_path = tmp_path / "gust-newer.db"
+    database_url = f"sqlite+pysqlite:///{database_path}"
+    engine = create_engine(database_url)
+
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
+        connection.execute(
+            text(
+                "INSERT INTO alembic_version (version_num) "
+                "VALUES ('0009_task_descriptions')"
+            )
+        )
+
+    check_required_revision(database_url, "0007_add_tasks_pagination_index")
 
 
 def test_schema_metadata_contains_required_tables_and_phase4_capture_retention_contract(
@@ -56,6 +73,8 @@ def test_schema_metadata_contains_required_tables_and_phase4_capture_retention_c
         "digest_dispatches",
     } <= table_names
     assert "reminder_at" in tasks.c
+    assert "description" in tasks.c
+    assert "description" in metadata.tables["extracted_tasks"].c
     capture_fk = next(
         foreign_key for foreign_key in foreign_keys if foreign_key["constrained_columns"] == ["capture_id"]
     )
@@ -143,3 +162,34 @@ def test_phase8_migration_adds_digest_dispatch_table_and_cancels_legacy_reminder
         "UPDATE reminders" in statement and "status IN ('pending', 'claimed')" in statement
         for statement in executed_sql
     )
+
+
+def test_phase9_migration_adds_task_description_columns() -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0009_task_descriptions.py"
+    )
+    spec = importlib.util.spec_from_file_location("task_descriptions_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    added_columns: list[tuple[str, str]] = []
+    dropped_columns: list[tuple[str, str]] = []
+
+    module.op.add_column = lambda table_name, column: added_columns.append((table_name, column.name))
+    module.op.drop_column = lambda table_name, column_name: dropped_columns.append((table_name, column_name))
+
+    module.upgrade()
+    module.downgrade()
+
+    assert module.revision == "0009_task_descriptions"
+    assert module.down_revision == "0008_digest_dispatches"
+    assert ("tasks", "description") in added_columns
+    assert ("extracted_tasks", "description") in added_columns
+    assert ("tasks", "description") in dropped_columns
+    assert ("extracted_tasks", "description") in dropped_columns

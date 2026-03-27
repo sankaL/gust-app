@@ -21,6 +21,7 @@ import {
 
 type DraftState = {
   title: string
+  description: string
   groupId: string
   dueDate: string
   reminderAt: string
@@ -75,6 +76,7 @@ function recurrenceForDueDate(
 function buildDraftState(task: Awaited<ReturnType<typeof getTaskDetail>>): DraftState {
   return {
     title: task.title,
+    description: task.description ?? '',
     groupId: task.group.id,
     dueDate: task.due_date ?? '',
     reminderAt: toDateTimeLocalValue(task.reminder_at),
@@ -165,6 +167,7 @@ export function TaskDetailRoute() {
         taskId,
         {
           title: draft.title,
+          description: draft.description || null,
           group_id: draft.groupId,
           due_date: draft.dueDate || null,
           reminder_at: draft.reminderAt ? new Date(draft.reminderAt).toISOString() : null,
@@ -344,14 +347,33 @@ export function TaskDetailRoute() {
                       Current task
                     </p>
                     {isEditMode ? (
-                      <input
-                        value={draft.title}
-                        onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                        className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 font-display text-2xl text-on-surface outline-none focus:border-primary"
-                        aria-label="Task title"
-                      />
+                      <div className="space-y-3">
+                        <input
+                          value={draft.title}
+                          onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                          className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 font-display text-2xl text-on-surface outline-none focus:border-primary"
+                          aria-label="Task title"
+                        />
+                        <textarea
+                          value={draft.description}
+                          onChange={(event) =>
+                            setDraft({ ...draft, description: event.target.value })
+                          }
+                          rows={3}
+                          className="w-full rounded-card border border-outline/20 bg-surface-dim px-3 py-3 text-sm text-on-surface outline-none focus:border-primary resize-none"
+                          aria-label="Task description"
+                          placeholder="Optional short context"
+                        />
+                      </div>
                     ) : (
-                      <p className="font-display text-2xl text-on-surface">{draft.title}</p>
+                      <div className="space-y-2">
+                        <p className="font-display text-2xl text-on-surface">{draft.title}</p>
+                        {draft.description ? (
+                          <p className="text-sm leading-relaxed text-on-surface-variant">
+                            {draft.description}
+                          </p>
+                        ) : null}
+                      </div>
                     )}
                   </div>
                   <button

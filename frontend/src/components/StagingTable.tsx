@@ -29,11 +29,17 @@ export function StagingTable({
 }: StagingTableProps) {
   const [isApprovingAll, setIsApprovingAll] = useState(false)
   const [isDiscardingAll, setIsDiscardingAll] = useState(false)
+  const [bulkActionError, setBulkActionError] = useState<string | null>(null)
 
   const handleApproveAll = async () => {
     setIsApprovingAll(true)
+    setBulkActionError(null)
     try {
       await onApproveAll()
+    } catch (error) {
+      setBulkActionError(
+        error instanceof Error ? error.message : 'Approve all could not be completed.'
+      )
     } finally {
       setIsApprovingAll(false)
     }
@@ -41,8 +47,13 @@ export function StagingTable({
 
   const handleDiscardAll = async () => {
     setIsDiscardingAll(true)
+    setBulkActionError(null)
     try {
       await onDiscardAll()
+    } catch (error) {
+      setBulkActionError(
+        error instanceof Error ? error.message : 'Discard all could not be completed.'
+      )
     } finally {
       setIsDiscardingAll(false)
     }
@@ -87,7 +98,9 @@ export function StagingTable({
             <Button
               size="sm"
               variant="solid"
-              onClick={handleApproveAll}
+              onClick={() => {
+                void handleApproveAll()
+              }}
               disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
               className="w-full justify-center"
             >
@@ -96,7 +109,9 @@ export function StagingTable({
             <Button
               size="sm"
               variant="ghost"
-              onClick={handleDiscardAll}
+              onClick={() => {
+                void handleDiscardAll()
+              }}
               disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
               className="text-tertiary hover:text-tertiary hover:bg-tertiary/10 w-full justify-center"
             >
@@ -104,6 +119,12 @@ export function StagingTable({
             </Button>
           </div>
         </div>
+
+        {bulkActionError && (
+          <p className="rounded-card border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
+            {bulkActionError}
+          </p>
+        )}
       </div>
 
       {/* Task List */}

@@ -44,6 +44,7 @@ class ExtractedTaskCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str
+    description: Optional[str] = None
     due_date: Optional[date] = None
     reminder_at: Optional[datetime] = None
     group_id: Optional[str] = None

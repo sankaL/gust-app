@@ -220,6 +220,7 @@ Required behavior:
 Editable fields:
 
 - Title
+- Description
 - Group
 - Due date
 - Reminder time
@@ -272,6 +273,7 @@ For each submitted transcript, the backend sends the extractor:
 The extractor must return structured JSON matching the backend schema. Each returned task candidate can include:
 
 - `title`
+- `description`
 - `due_date`
 - `reminder_at`
 - `group_id` or `group_name`
@@ -283,6 +285,7 @@ The extractor must return structured JSON matching the backend schema. Each retu
 Behavioral rules:
 
 - Extract every actionable item from the transcript.
+- Preserve useful short context in `description` when the title alone would lose meaning; use null when there is no meaningful extra context.
 - Resolve relative dates using the user's timezone and the server-provided current date.
 - Never invent new groups.
 - Prefer Inbox when confidence is low.
@@ -343,6 +346,7 @@ At the product-contract level, a task must support:
 - User ID
 - Group ID
 - Title
+- Optional short description
 - Status
 - `needs_review`
 - Due date, nullable
