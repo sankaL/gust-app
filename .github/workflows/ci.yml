@@ -38,6 +38,6 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --extra dev
       - run: uv run ruff check app tests
-      - run: APP_ENV=test DATABASE_URL=sqlite+pysqlite:///:memory: RUN_STARTUP_CHECKS=false uv run pytest
-      - run: APP_ENV=test DATABASE_URL=sqlite+pysqlite:///:memory: RUN_STARTUP_CHECKS=false uv run python -c "from app.core.app import create_app; create_app()"
+      - run: "APP_ENV=test DATABASE_URL=sqlite+pysqlite:///:memory: RUN_STARTUP_CHECKS=false uv run pytest"
+      - run: "APP_ENV=test DATABASE_URL=sqlite+pysqlite:///:memory: RUN_STARTUP_CHECKS=false uv run python -c \"from app.core.app import create_app; create_app()\""
       - run: uv run alembic heads
