@@ -14,7 +14,6 @@ from app.core.settings import Settings
 ACCESS_TOKEN_COOKIE = "gust_access_token"
 REFRESH_TOKEN_COOKIE = "gust_refresh_token"
 CSRF_COOKIE = "gust_csrf_token"
-OAUTH_STATE_COOKIE = "gust_oauth_state"
 OAUTH_CODE_VERIFIER_COOKIE = "gust_oauth_code_verifier"
 CSRF_HEADER = "X-CSRF-Token"
 
@@ -27,8 +26,7 @@ class TokenBundle:
 
 
 @dataclass
-class PkceState:
-    state: str
+class PkceChallenge:
     verifier: str
     challenge: str
 
@@ -37,12 +35,11 @@ def generate_csrf_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def generate_pkce_state() -> PkceState:
+def generate_pkce_challenge() -> PkceChallenge:
     verifier = secrets.token_urlsafe(64)
     challenge_bytes = hashlib.sha256(verifier.encode("utf-8")).digest()
     challenge = base64.urlsafe_b64encode(challenge_bytes).decode("utf-8").rstrip("=")
-    return PkceState(
-        state=secrets.token_urlsafe(32),
+    return PkceChallenge(
         verifier=verifier,
         challenge=challenge,
     )
@@ -110,10 +107,10 @@ def clear_csrf_cookie(response: Response, settings: Settings) -> None:
     )
 
 
-def set_oauth_state_cookies(
+def set_oauth_code_verifier_cookie(
     response: Response,
     settings: Settings,
-    pkce_state: PkceState,
+    pkce_challenge: PkceChallenge,
 ) -> None:
     cookie_kwargs = {
         "httponly": True,
@@ -123,20 +120,18 @@ def set_oauth_state_cookies(
         "domain": settings.session_cookie_domain,
         "max_age": 600,
     }
-    response.set_cookie(OAUTH_STATE_COOKIE, pkce_state.state, **cookie_kwargs)
-    response.set_cookie(OAUTH_CODE_VERIFIER_COOKIE, pkce_state.verifier, **cookie_kwargs)
+    response.set_cookie(OAUTH_CODE_VERIFIER_COOKIE, pkce_challenge.verifier, **cookie_kwargs)
 
 
-def clear_oauth_state_cookies(response: Response, settings: Settings) -> None:
-    for cookie_name in (OAUTH_STATE_COOKIE, OAUTH_CODE_VERIFIER_COOKIE):
-        response.delete_cookie(
-            cookie_name,
-            path="/auth/session",
-            domain=settings.session_cookie_domain,
-            secure=settings.session_cookie_secure,
-            httponly=True,
-            samesite="lax",
-        )
+def clear_oauth_code_verifier_cookie(response: Response, settings: Settings) -> None:
+    response.delete_cookie(
+        OAUTH_CODE_VERIFIER_COOKIE,
+        path="/auth/session",
+        domain=settings.session_cookie_domain,
+        secure=settings.session_cookie_secure,
+        httponly=True,
+        samesite="lax",
+    )
 
 
 def ensure_csrf_cookie(

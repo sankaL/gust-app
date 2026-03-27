@@ -93,7 +93,6 @@ class SupabaseAuthService:
     def build_google_authorize_url(
         self,
         *,
-        state: str,
         code_challenge: str,
     ) -> str:
         self.ensure_configured()
@@ -103,7 +102,6 @@ class SupabaseAuthService:
                 "redirect_to": self.callback_url,
                 "code_challenge": code_challenge,
                 "code_challenge_method": "S256",
-                "state": state,
             }
         )
         return f"{self.authorize_url}?{query}"

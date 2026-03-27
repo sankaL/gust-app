@@ -13,7 +13,6 @@ from app.core.security import (
     ACCESS_TOKEN_COOKIE,
     CSRF_COOKIE,
     OAUTH_CODE_VERIFIER_COOKIE,
-    OAUTH_STATE_COOKIE,
     REFRESH_TOKEN_COOKIE,
     TokenBundle,
 )
@@ -33,10 +32,10 @@ class FakeAuthService:
     def ensure_configured(self) -> None:
         return None
 
-    def build_google_authorize_url(self, *, state: str, code_challenge: str) -> str:
+    def build_google_authorize_url(self, *, code_challenge: str) -> str:
         return (
             "https://supabase.example/auth/v1/authorize"
-            f"?provider=google&state={state}&code_challenge={code_challenge}"
+            f"?provider=google&code_challenge={code_challenge}"
         )
 
     async def exchange_code_for_session(
@@ -174,16 +173,14 @@ def test_google_start_sets_pkce_cookies(app: FastAPI, client: TestClient) -> Non
 
     assert response.status_code == 302
     assert response.headers["location"].startswith("https://supabase.example/auth/v1/authorize")
-    assert OAUTH_STATE_COOKIE in response.headers["set-cookie"]
     assert OAUTH_CODE_VERIFIER_COOKIE in response.headers["set-cookie"]
 
 
 def test_callback_bootstraps_user_session_and_inbox(app: FastAPI, client: TestClient) -> None:
     _override_auth_service(app, FakeAuthService())
-    client.cookies.set(OAUTH_STATE_COOKIE, "expected-state")
     client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
 
-    response = client.get("/auth/session/callback?code=valid-code&state=expected-state")
+    response = client.get("/auth/session/callback?code=valid-code")
 
     assert response.status_code == 302
     assert response.headers["location"] == "http://frontend.test"
@@ -256,10 +253,9 @@ def test_callback_preserves_existing_timezone(app: FastAPI, client: TestClient) 
             timezone="America/Toronto",
         )
 
-    client.cookies.set(OAUTH_STATE_COOKIE, "expected-state")
     client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
 
-    response = client.get("/auth/session/callback?code=valid-code&state=expected-state")
+    response = client.get("/auth/session/callback?code=valid-code")
 
     assert response.status_code == 302
 

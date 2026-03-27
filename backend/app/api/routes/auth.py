@@ -21,14 +21,13 @@ from app.core.errors import (
 from app.core.security import (
     CSRF_COOKIE,
     OAUTH_CODE_VERIFIER_COOKIE,
-    OAUTH_STATE_COOKIE,
     REFRESH_TOKEN_COOKIE,
     clear_csrf_cookie,
-    clear_oauth_state_cookies,
+    clear_oauth_code_verifier_cookie,
     clear_session_cookies,
     ensure_csrf_cookie,
-    generate_pkce_state,
-    set_oauth_state_cookies,
+    generate_pkce_challenge,
+    set_oauth_code_verifier_cookie,
     set_session_cookies,
 )
 from app.core.settings import Settings, get_settings
@@ -98,15 +97,14 @@ async def start_google_sign_in(
     auth_service: AuthServiceDep,
 ) -> RedirectResponse:
     auth_service.ensure_configured()
-    pkce_state = generate_pkce_state()
+    pkce_challenge = generate_pkce_challenge()
     response = RedirectResponse(
         url=auth_service.build_google_authorize_url(
-            state=pkce_state.state,
-            code_challenge=pkce_state.challenge,
+            code_challenge=pkce_challenge.challenge,
         ),
         status_code=302,
     )
-    set_oauth_state_cookies(response, settings, pkce_state)
+    set_oauth_code_verifier_cookie(response, settings, pkce_challenge)
     return response
 
 
@@ -116,14 +114,12 @@ async def auth_callback(
     settings: SettingsDep,
     auth_service: AuthServiceDep,
     code: str = Query(...),
-    state: Optional[str] = Query(default=None),
 ) -> RedirectResponse:
     auth_service.ensure_configured()
 
-    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
     code_verifier = request.cookies.get(OAUTH_CODE_VERIFIER_COOKIE)
-    if not expected_state or not code_verifier or not state or state != expected_state:
-        raise CsrfValidationError("OAuth state validation failed.")
+    if not code_verifier:
+        raise CsrfValidationError("OAuth PKCE verifier was missing or expired.")
 
     session = await auth_service.exchange_code_for_session(code=code, code_verifier=code_verifier)
     with connection_scope(settings.database_url) as connection:
@@ -134,7 +130,7 @@ async def auth_callback(
         raise AuthRequiredError("Authenticated user could not be resolved locally.")
 
     response = RedirectResponse(url=settings.frontend_app_url or "/", status_code=302)
-    clear_oauth_state_cookies(response, settings)
+    clear_oauth_code_verifier_cookie(response, settings)
     set_session_cookies(response, settings, session.tokens)
     ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
     return response
