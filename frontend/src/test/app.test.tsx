@@ -111,6 +111,35 @@ function requestUrl(input: RequestInfo | URL) {
   return input.url
 }
 
+type MatchMediaState = {
+  standalone?: boolean
+  coarsePointer?: boolean
+  landscape?: boolean
+}
+
+function setMatchMedia({
+  standalone = false,
+  coarsePointer = false,
+  landscape = false
+}: MatchMediaState = {}) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches:
+        (query === '(display-mode: standalone)' && standalone) ||
+        (query === '(pointer: coarse)' && coarsePointer) ||
+        (query === '(orientation: landscape)' && landscape),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    }))
+  })
+}
+
 const defaultUserAgent = window.navigator.userAgent
 
 function setUserAgent(value: string) {
@@ -129,19 +158,7 @@ beforeEach(() => {
     value: false,
     configurable: true
   })
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches: query === '(display-mode: standalone)' ? false : false,
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn()
-    }))
-  })
+  setMatchMedia()
 
   let isSignedIn = true
   vi.stubGlobal(
@@ -249,6 +266,17 @@ describe('app shell', () => {
     renderWithRoute(['/'])
 
     expect(await screen.findByText('Tap to record')).toBeInTheDocument()
+  })
+
+  it('blocks mobile landscape viewports behind a portrait-only guard', async () => {
+    setUserAgent(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+    )
+    setMatchMedia({ coarsePointer: true, landscape: true })
+
+    renderWithRoute(['/'])
+
+    expect(await screen.findByRole('heading', { name: 'Rotate your device upright' })).toBeInTheDocument()
   })
 
   it('redirects signed-out protected routes to /login', async () => {

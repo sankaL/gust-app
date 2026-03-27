@@ -159,7 +159,7 @@ describe('capture route', () => {
       )
     })
 
-    expect(await screen.findByText('Local dev mode')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Open account menu' })).toHaveTextContent('LD')
   })
 
   it('keeps text fallback usable when microphone permission is denied', async () => {

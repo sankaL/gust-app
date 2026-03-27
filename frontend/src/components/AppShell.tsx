@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRegisterSW } from 'virtual:pwa-register/react'
-import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { ApiError, getSessionStatus, logoutSession } from '../lib/api'
-import { getAppConfig } from '../lib/config'
 import { Button } from './Button'
 import { Card } from './Card'
+import { PortraitOrientationGuard } from './PortraitOrientationGuard'
 
 const navigation = [
   { to: '/', label: 'Capture', end: true },
@@ -50,7 +50,6 @@ function buildLoginPath(pathname: string, search: string) {
 }
 
 export function AppShell() {
-  const config = getAppConfig()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
@@ -162,7 +161,8 @@ export function AppShell() {
 
   if (sessionQuery.isLoading) {
     return (
-      <div className="min-h-screen bg-surface text-on-surface">
+      <div className="safe-area-shell min-h-screen bg-surface text-on-surface">
+        <PortraitOrientationGuard />
         <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
           <section className="w-full space-y-3" aria-busy="true">
             <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
@@ -209,14 +209,15 @@ export function AppShell() {
   }
 
   return (
-    <div className="min-h-screen bg-surface text-on-surface">
+    <div className="safe-area-shell min-h-screen bg-surface text-on-surface">
+      <PortraitOrientationGuard />
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3">
-        <header className="sticky top-0 z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm">
+        <header className="safe-area-sticky-top sticky z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2">
               <img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-6 w-6" />
               <h1 className="font-display text-2xl leading-none text-on-surface">Gust</h1>
-            </div>
+            </Link>
             <div className="flex items-center gap-2">
               {shouldShowInstallButton ? (
                 <Button
@@ -231,9 +232,6 @@ export function AppShell() {
                   {installPrompt ? 'Install' : 'Add to Home'}
                 </Button>
               ) : null}
-              <div className="rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient">
-                <p className="font-body text-xs font-medium">{config.environmentLabel}</p>
-              </div>
               <div className="relative" ref={accountMenuRef}>
                 <button
                   type="button"

@@ -1,7 +1,6 @@
 type AppConfig = {
   apiBaseUrl: string
   devMode: boolean
-  environmentLabel: string
 }
 
 function normalizeBaseUrl(value: string): string {
@@ -36,7 +35,6 @@ export function getAppConfig(): AppConfig {
 
   return {
     apiBaseUrl,
-    devMode,
-    environmentLabel: devMode ? 'Local dev mode' : 'Standard mode'
+    devMode
   }
 }

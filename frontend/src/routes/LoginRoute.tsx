@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Navigate, useSearchParams } from 'react-router-dom'
 
+import { PortraitOrientationGuard } from '../components/PortraitOrientationGuard'
 import { SessionRequiredCard } from '../components/SessionRequiredCard'
 import { getSessionStatus } from '../lib/api'
-import { getAppConfig } from '../lib/config'
 
 function resolveNextPath(nextPath: string | null): string {
   if (!nextPath) {
@@ -32,13 +32,13 @@ export function LoginRoute() {
     queryKey: ['session-status'],
     queryFn: getSessionStatus
   })
-  const config = getAppConfig()
 
   const nextPath = resolveNextPath(searchParams.get('next'))
 
   if (sessionQuery.isLoading) {
     return (
-      <main className="min-h-screen bg-surface text-on-surface">
+      <main className="safe-area-shell min-h-screen bg-surface text-on-surface">
+        <PortraitOrientationGuard />
         <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
           <section className="w-full space-y-3 flex flex-col items-center text-center" aria-busy="true">
             <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
@@ -59,7 +59,8 @@ export function LoginRoute() {
   }
 
   return (
-    <main className="min-h-screen bg-surface text-on-surface">
+    <main className="safe-area-shell min-h-screen bg-surface text-on-surface">
+      <PortraitOrientationGuard />
       <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8">
         <section className="w-full space-y-6">
           <div className="space-y-2 flex flex-col items-center text-center">
@@ -69,9 +70,6 @@ export function LoginRoute() {
             </div>
             <p className="font-body text-sm leading-6 text-on-surface-variant">
               Sign in to open your personal task workspace.
-            </p>
-            <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
-              {config.environmentLabel}
             </p>
           </div>
 
