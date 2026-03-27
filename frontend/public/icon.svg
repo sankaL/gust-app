@@ -1,25 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Gust app icon</title>
   <defs>
-    <linearGradient id="gustGradient" x1="0%" x2="100%" y1="0%" y2="100%">
+    <linearGradient id="gustBadgeGradient" x1="110" y1="84" x2="404" y2="428" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#ba9eff" />
       <stop offset="100%" stop-color="#8455ef" />
     </linearGradient>
+    <filter id="gustGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18" result="blur" />
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="1 0 0 0 0.5176 0 1 0 0 0.3333 0 0 1 0 0.9373 0 0 0 0.45 0"
+      />
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="128" fill="#0e0e0e" />
-  <circle cx="256" cy="256" r="156" fill="url(#gustGradient)" opacity="0.95" />
-  <rect x="214" y="136" width="84" height="164" rx="42" fill="#0e0e0e" />
-  <path
-    d="M172 256c0 46 38 84 84 84s84-38 84-84"
+  <rect width="512" height="512" rx="112" fill="#151515" />
+  <rect x="48" y="48" width="416" height="416" rx="88" fill="#1e1d1f" />
+  <g
     fill="none"
-    stroke="#0e0e0e"
-    stroke-linecap="round"
-    stroke-width="28"
-  />
-  <path
-    d="M256 340v44M214 384h84"
+    stroke="#ba9eff"
+    stroke-width="40"
+    stroke-linecap="butt"
+    stroke-linejoin="round"
+    filter="url(#gustGlow)"
+    opacity="0.68"
+    transform="translate(256 256) scale(0.68) translate(-282 -245)"
+  >
+    <path d="M108 154H268C304 154 332 126 332 92C332 58 304 30 270 30C240 30 214 48 196 78" />
+    <path d="M76 252H126" />
+    <path d="M156 252H424C460 252 488 224 488 190C488 156 460 128 426 128C396 128 370 146 352 176" />
+    <path d="M156 348H360A56 56 0 1 1 360 460" />
+  </g>
+  <g
     fill="none"
-    stroke="#0e0e0e"
-    stroke-linecap="round"
-    stroke-width="28"
-  />
+    stroke="url(#gustBadgeGradient)"
+    stroke-width="40"
+    stroke-linecap="butt"
+    stroke-linejoin="round"
+    transform="translate(256 256) scale(0.68) translate(-282 -245)"
+  >
+    <path d="M108 154H268C304 154 332 126 332 92C332 58 304 30 270 30C240 30 214 48 196 78" />
+    <path d="M76 252H126" />
+    <path d="M156 252H424C460 252 488 224 488 190C488 156 460 128 426 128C396 128 370 146 352 176" />
+    <path d="M156 348H360A56 56 0 1 1 360 460" />
+  </g>
 </svg>

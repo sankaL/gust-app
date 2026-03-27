@@ -69,7 +69,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
-| P5-01 | Finalize PWA manifest, icons, install flow, and app-shell-only service-worker caching | TODO | TBD | Never cache authenticated task data | Tech, Design |
+| P5-01 | Finalize PWA manifest, icons, install flow, and app-shell-only service-worker caching | DONE | 2026-03-26 | Added production icon pack, header install CTA, prompt-based update UX, and static-only service-worker caching | Tech, Design |
 | P5-02 | Add backend automated coverage for auth, extraction validation, reminder idempotency, recurrence, and timezone logic | TODO | TBD | Regression safety requirement | Tech, AGENTS |
 | P5-03 | Add frontend automated coverage for capture states, transcript retry, flagged tasks, swipe actions, and auth-gated routing | TODO | TBD | Regression safety requirement | Tech, AGENTS |
 | P5-04 | Add end-to-end coverage for sign-in, voice capture, text capture, reminder flow, and install path | TODO | TBD | Use test/local services only | Tech, AGENTS |

@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-26 19:59:56 EDT
+
+- Finalized PWA install UX around a persistent app-shell header CTA when install is available, with iPhone-specific fallback instructions when the browser does not expose `beforeinstallprompt`.
+- Finalized service-worker updates around an explicit in-app `Update` prompt that reloads only after user confirmation, instead of silent activation.
+- Standardized the production PWA asset set on generated PNG icons for Android, maskable installs, and Apple touch icon support while keeping caching limited to app-shell/static assets only.
+
 ## 2026-03-25 00:58:00 EDT
 
 - Updated recurring reopen/restore lifecycle semantics to be conditional: keep recurrence when the expected generated undo-target open occurrence is present, otherwise detach to a single non-recurring instance.
