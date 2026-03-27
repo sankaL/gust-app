@@ -25,11 +25,11 @@ def test_check_required_revision_accepts_matching_revision(tmp_path: Path) -> No
         connection.execute(
             text(
                 "INSERT INTO alembic_version (version_num) "
-                "VALUES ('0004_phase4_reminders_retention')"
+                "VALUES ('0008_digest_dispatches')"
             )
         )
 
-    check_required_revision(database_url, "0004_phase4_reminders_retention")
+    check_required_revision(database_url, "0008_digest_dispatches")
 
 
 def test_schema_metadata_contains_required_tables_and_phase4_capture_retention_contract(
@@ -46,7 +46,15 @@ def test_schema_metadata_contains_required_tables_and_phase4_capture_retention_c
         table_names = set(inspector.get_table_names())
         foreign_keys = inspector.get_foreign_keys("tasks")
 
-    assert {"users", "groups", "tasks", "subtasks", "captures", "reminders"} <= table_names
+    assert {
+        "users",
+        "groups",
+        "tasks",
+        "subtasks",
+        "captures",
+        "reminders",
+        "digest_dispatches",
+    } <= table_names
     assert "reminder_at" in tasks.c
     capture_fk = next(
         foreign_key for foreign_key in foreign_keys if foreign_key["constrained_columns"] == ["capture_id"]
@@ -97,3 +105,41 @@ def test_phase4_migration_targets_capture_fk_change() -> None:
 
     assert module.revision == "0004_phase4_reminders_retention"
     assert module.down_revision == "0003_phase2_capture_extraction"
+
+
+def test_phase8_migration_adds_digest_dispatch_table_and_cancels_legacy_reminders() -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0008_digest_dispatches.py"
+    )
+    spec = importlib.util.spec_from_file_location("digest_dispatches_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    created_tables: list[str] = []
+    created_indexes: list[str] = []
+    executed_sql: list[str] = []
+
+    module.op.create_table = lambda name, *args, **kwargs: created_tables.append(name)
+    module.op.create_index = (
+        lambda name, *args, **kwargs: created_indexes.append(name)
+    )
+    module.op.execute = lambda statement: executed_sql.append(statement)
+
+    module.upgrade()
+
+    assert module.revision == "0008_digest_dispatches"
+    assert module.down_revision == "0007_add_tasks_pagination_index"
+    assert "digest_dispatches" in created_tables
+    assert "uq_digest_dispatches_user_period" in created_indexes
+    assert "ix_digest_dispatches_type_period" in created_indexes
+    assert "ix_digest_dispatches_idempotency_key" in created_indexes
+    assert any(
+        "UPDATE reminders" in statement and "status IN ('pending', 'claimed')" in statement
+        for statement in executed_sql
+    )

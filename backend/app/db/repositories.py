@@ -6,12 +6,21 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Optional
+from typing import Literal, Optional
 
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
-from app.db.schema import captures, extracted_tasks, groups, reminders, subtasks, tasks, users
+from app.db.schema import (
+    captures,
+    digest_dispatches,
+    extracted_tasks,
+    groups,
+    reminders,
+    subtasks,
+    tasks,
+    users,
+)
 
 CURRENT_TIMESTAMP = sa.text("CURRENT_TIMESTAMP")
 
@@ -114,6 +123,32 @@ class ReminderRecord:
     provider_message_id: Optional[str]
     sent_at: Optional[datetime]
     cancelled_at: Optional[datetime]
+
+
+@dataclass
+class DigestDispatchRecord:
+    id: str
+    user_id: str
+    digest_type: str
+    period_start_date: date
+    period_end_date: date
+    status: str
+    idempotency_key: str
+    provider_message_id: Optional[str]
+    last_error_code: Optional[str]
+    attempted_at: Optional[datetime]
+
+
+@dataclass
+class DigestTaskRecord:
+    id: str
+    title: str
+    due_date: Optional[date]
+    completed_at: Optional[datetime]
+    group_name: str
+    recurrence_frequency: Optional[str]
+    recurrence_weekday: Optional[int]
+    recurrence_day_of_month: Optional[int]
 
 
 @dataclass
@@ -251,6 +286,34 @@ def _row_to_reminder(row: sa.Row) -> ReminderRecord:
     )
 
 
+def _row_to_digest_dispatch(row: sa.Row) -> DigestDispatchRecord:
+    return DigestDispatchRecord(
+        id=str(row.id),
+        user_id=str(row.user_id),
+        digest_type=row.digest_type,
+        period_start_date=row.period_start_date,
+        period_end_date=row.period_end_date,
+        status=row.status,
+        idempotency_key=row.idempotency_key,
+        provider_message_id=row.provider_message_id,
+        last_error_code=row.last_error_code,
+        attempted_at=row.attempted_at,
+    )
+
+
+def _row_to_digest_task(row: sa.Row) -> DigestTaskRecord:
+    return DigestTaskRecord(
+        id=str(row.id),
+        title=row.title,
+        due_date=row.due_date,
+        completed_at=row.completed_at,
+        group_name=row.group_name,
+        recurrence_frequency=row.recurrence_frequency,
+        recurrence_weekday=row.recurrence_weekday,
+        recurrence_day_of_month=row.recurrence_day_of_month,
+    )
+
+
 def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
     raw_subtasks = row.subtask_titles
     if isinstance(raw_subtasks, list):
@@ -327,6 +390,136 @@ def get_user(connection: Connection, user_id: str) -> Optional[UserRecord]:
     if row is None:
         return None
     return _row_to_user(row)
+
+
+def list_users(connection: Connection) -> list[UserRecord]:
+    rows = connection.execute(
+        sa.select(users).where(users.c.email.is_not(None)).order_by(users.c.created_at.asc(), users.c.id.asc())
+    ).fetchall()
+    return [_row_to_user(row) for row in rows]
+
+
+def list_open_tasks_due_on_date(
+    connection: Connection,
+    *,
+    user_id: str,
+    due_date: date,
+) -> list[DigestTaskRecord]:
+    rows = connection.execute(
+        sa.select(
+            tasks.c.id,
+            tasks.c.title,
+            tasks.c.due_date,
+            tasks.c.completed_at,
+            groups.c.name.label("group_name"),
+            tasks.c.recurrence_frequency,
+            tasks.c.recurrence_weekday,
+            tasks.c.recurrence_day_of_month,
+        )
+        .select_from(tasks.join(groups, groups.c.id == tasks.c.group_id))
+        .where(
+            tasks.c.user_id == user_id,
+            tasks.c.status == "open",
+            tasks.c.deleted_at.is_(None),
+            tasks.c.due_date == due_date,
+        )
+        .order_by(sa.func.lower(groups.c.name), tasks.c.created_at.asc(), tasks.c.id.asc())
+    ).fetchall()
+    return [_row_to_digest_task(row) for row in rows]
+
+
+def list_open_tasks_overdue_before_date(
+    connection: Connection,
+    *,
+    user_id: str,
+    due_date: date,
+) -> list[DigestTaskRecord]:
+    rows = connection.execute(
+        sa.select(
+            tasks.c.id,
+            tasks.c.title,
+            tasks.c.due_date,
+            tasks.c.completed_at,
+            groups.c.name.label("group_name"),
+            tasks.c.recurrence_frequency,
+            tasks.c.recurrence_weekday,
+            tasks.c.recurrence_day_of_month,
+        )
+        .select_from(tasks.join(groups, groups.c.id == tasks.c.group_id))
+        .where(
+            tasks.c.user_id == user_id,
+            tasks.c.status == "open",
+            tasks.c.deleted_at.is_(None),
+            tasks.c.due_date.is_not(None),
+            tasks.c.due_date < due_date,
+        )
+        .order_by(tasks.c.due_date.asc(), sa.func.lower(groups.c.name), tasks.c.created_at.asc(), tasks.c.id.asc())
+    ).fetchall()
+    return [_row_to_digest_task(row) for row in rows]
+
+
+def list_completed_tasks_between(
+    connection: Connection,
+    *,
+    user_id: str,
+    completed_start: datetime,
+    completed_end: datetime,
+) -> list[DigestTaskRecord]:
+    rows = connection.execute(
+        sa.select(
+            tasks.c.id,
+            tasks.c.title,
+            tasks.c.due_date,
+            tasks.c.completed_at,
+            groups.c.name.label("group_name"),
+            tasks.c.recurrence_frequency,
+            tasks.c.recurrence_weekday,
+            tasks.c.recurrence_day_of_month,
+        )
+        .select_from(tasks.join(groups, groups.c.id == tasks.c.group_id))
+        .where(
+            tasks.c.user_id == user_id,
+            tasks.c.status == "completed",
+            tasks.c.completed_at.is_not(None),
+            tasks.c.completed_at >= completed_start,
+            tasks.c.completed_at <= completed_end,
+            tasks.c.deleted_at.is_(None),
+        )
+        .order_by(tasks.c.completed_at.desc(), sa.func.lower(groups.c.name), tasks.c.id.asc())
+    ).fetchall()
+    return [_row_to_digest_task(row) for row in rows]
+
+
+def list_open_tasks_due_between_dates(
+    connection: Connection,
+    *,
+    user_id: str,
+    due_date_start: date,
+    due_date_end: date,
+) -> list[DigestTaskRecord]:
+    rows = connection.execute(
+        sa.select(
+            tasks.c.id,
+            tasks.c.title,
+            tasks.c.due_date,
+            tasks.c.completed_at,
+            groups.c.name.label("group_name"),
+            tasks.c.recurrence_frequency,
+            tasks.c.recurrence_weekday,
+            tasks.c.recurrence_day_of_month,
+        )
+        .select_from(tasks.join(groups, groups.c.id == tasks.c.group_id))
+        .where(
+            tasks.c.user_id == user_id,
+            tasks.c.status == "open",
+            tasks.c.deleted_at.is_(None),
+            tasks.c.due_date.is_not(None),
+            tasks.c.due_date >= due_date_start,
+            tasks.c.due_date <= due_date_end,
+        )
+        .order_by(tasks.c.due_date.asc(), sa.func.lower(groups.c.name), tasks.c.created_at.asc(), tasks.c.id.asc())
+    ).fetchall()
+    return [_row_to_digest_task(row) for row in rows]
 
 
 def update_user_timezone(
@@ -937,6 +1130,88 @@ def get_reminder_by_id(connection: Connection, *, reminder_id: str) -> Optional[
     if row is None:
         return None
     return _row_to_reminder(row)
+
+
+def get_digest_dispatch(
+    connection: Connection,
+    *,
+    user_id: str,
+    digest_type: Literal["daily", "weekly"],
+    period_start_date: date,
+    period_end_date: date,
+) -> Optional[DigestDispatchRecord]:
+    row = connection.execute(
+        sa.select(digest_dispatches).where(
+            digest_dispatches.c.user_id == user_id,
+            digest_dispatches.c.digest_type == digest_type,
+            digest_dispatches.c.period_start_date == period_start_date,
+            digest_dispatches.c.period_end_date == period_end_date,
+        )
+    ).first()
+    if row is None:
+        return None
+    return _row_to_digest_dispatch(row)
+
+
+def upsert_digest_dispatch(
+    connection: Connection,
+    *,
+    user_id: str,
+    digest_type: Literal["daily", "weekly"],
+    period_start_date: date,
+    period_end_date: date,
+    status: Literal["sent", "failed", "skipped_empty"],
+    idempotency_key: str,
+    attempted_at: datetime,
+    provider_message_id: Optional[str] = None,
+    last_error_code: Optional[str] = None,
+) -> DigestDispatchRecord:
+    digest_dispatch_id = str(uuid.uuid4())
+    values = {
+        "id": digest_dispatch_id,
+        "user_id": user_id,
+        "digest_type": digest_type,
+        "period_start_date": period_start_date,
+        "period_end_date": period_end_date,
+        "status": status,
+        "idempotency_key": idempotency_key,
+        "provider_message_id": provider_message_id,
+        "last_error_code": last_error_code,
+        "attempted_at": attempted_at,
+    }
+
+    if connection.dialect.name == "sqlite":
+        insert_stmt = sa.dialects.sqlite.insert(digest_dispatches).values(**values)
+    else:
+        insert_stmt = sa.dialects.postgresql.insert(digest_dispatches).values(**values)
+
+    statement = insert_stmt.on_conflict_do_update(
+        index_elements=[
+            digest_dispatches.c.user_id,
+            digest_dispatches.c.digest_type,
+            digest_dispatches.c.period_start_date,
+            digest_dispatches.c.period_end_date,
+        ],
+        set_={
+            "status": status,
+            "idempotency_key": idempotency_key,
+            "provider_message_id": provider_message_id,
+            "last_error_code": last_error_code,
+            "attempted_at": attempted_at,
+            "updated_at": CURRENT_TIMESTAMP,
+        },
+    )
+    connection.execute(statement)
+
+    row = connection.execute(
+        sa.select(digest_dispatches).where(
+            digest_dispatches.c.user_id == user_id,
+            digest_dispatches.c.digest_type == digest_type,
+            digest_dispatches.c.period_start_date == period_start_date,
+            digest_dispatches.c.period_end_date == period_end_date,
+        )
+    ).one()
+    return _row_to_digest_dispatch(row)
 
 
 def create_reminder(

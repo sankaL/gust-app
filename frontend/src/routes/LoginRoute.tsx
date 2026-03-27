@@ -40,7 +40,7 @@ export function LoginRoute() {
     return (
       <main className="min-h-screen bg-surface text-on-surface">
         <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
-          <section className="w-full space-y-3" aria-busy="true">
+          <section className="w-full space-y-3 flex flex-col items-center text-center" aria-busy="true">
             <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
               Session check
             </p>
@@ -62,8 +62,8 @@ export function LoginRoute() {
     <main className="min-h-screen bg-surface text-on-surface">
       <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8">
         <section className="w-full space-y-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
+          <div className="space-y-2 flex flex-col items-center text-center">
+            <div className="flex items-center justify-center gap-2">
               <img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-7 w-7" />
               <h1 className="font-display text-3xl text-on-surface">Gust</h1>
             </div>

@@ -1,6 +1,6 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.2  
+**Version:** 1.3  
 **Last Updated:** 2026-03-27
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
@@ -121,6 +121,20 @@ Deployment implication:
 
 - environments must apply `0004_phase4_reminders_retention` before running the Phase 4 backend, because startup revision checks now require that revision by default
 
+## Phase 8 Revision (Digest Cutover)
+
+Phase 8 introduces `0008_digest_dispatches` as the required application revision.
+
+That revision establishes:
+
+- `digest_dispatches` table for per-user/per-period digest idempotency and outcomes
+- one-time cancellation of legacy `reminders` rows in `pending`/`claimed` states
+- the migration floor required by split daily/weekly Railway digest cron services
+
+Deployment implication:
+
+- environments must apply `0008_digest_dispatches` before running digest-mode backend jobs, because startup revision checks now require that revision by default
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -144,17 +158,17 @@ Why this order:
 Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
-- The required revision configured for the backend matches `0004_phase4_reminders_retention` or the current deployed head.
+- The required revision configured for the backend matches `0008_digest_dispatches` or the current deployed head.
 - Backend startup revision check passes.
 - `users.timezone` exists and accepts valid IANA timezone data.
 - Each sampled user has exactly one Inbox group with `system_key = 'inbox'`.
 - No task row has a null `group_id`.
 - `tasks.reminder_at` exists and remains nullable for legacy rows without reminders.
 - Group names are unique per user.
-- Reminder uniqueness and idempotency constraints exist:
-  - one reminder row per task occurrence
-  - unique `idempotency_key`
-- Reminder lifecycle fields exist for claiming and send tracking.
+- Digest dispatch uniqueness and idempotency constraints exist:
+  - one `digest_dispatches` row per `user + digest_type + period`
+  - unique `digest_dispatches.idempotency_key`
+- Legacy reminder rows in `pending` or `claimed` were cancelled during migration.
 - Capture retention fields exist and new rows receive an `expires_at` value.
 - `tasks.capture_id` supports capture cleanup without orphaning tasks.
 
@@ -163,13 +177,35 @@ For capture/extraction releases, also verify:
 - `POST /captures/text`, `POST /captures/voice`, and `POST /captures/{capture_id}/submit` succeed against the deployed schema
 - failed transcription or extraction attempts leave capture rows in explicit failure states without creating partial task writes
 
-For reminder-related releases, also verify:
+For digest-related releases, also verify:
 
-- pending reminders can be claimed transactionally
-- claimed rows expire safely if a worker dies
-- sent reminders store provider message IDs
-- the internal reminder route rejects missing or invalid shared-secret auth
+- the internal digest route rejects missing or invalid shared-secret auth
+- `POST /internal/reminders/run?mode=daily` succeeds with shared-secret auth
+- `POST /internal/reminders/run?mode=weekly` succeeds with shared-secret auth
+- digest summary response returns mode-specific counters (`users_processed`, `sent`, `skipped_empty`, `failed`, `captures_deleted`)
+- digest dispatch rows store provider message IDs for `sent` rows and `skipped_empty` status for empty periods
 - expired captures are deleted in bounded batches and task rows survive with `capture_id = null`
+
+## Railway Cron DST Maintenance
+
+Digest schedules are interpreted in Eastern time but Railway cron expressions are UTC-based.
+
+Required active schedules:
+
+- Standard time (EST):
+  - daily digest run: `13:30 UTC` (8:30 AM EST)
+  - weekly digest run: Sunday `14:00 UTC` (9:00 AM EST)
+- Daylight time (EDT):
+  - daily digest run: `12:30 UTC` (8:30 AM EDT)
+  - weekly digest run: Sunday `13:00 UTC` (9:00 AM EDT)
+
+Runbook procedure at DST boundary:
+
+1. Confirm Eastern offset transition date for the current year.
+2. Update both Railway cron service schedules (`digest-daily-cron`, `digest-weekly-cron`) to the matching UTC times above.
+3. Trigger a manual dry run against `POST /internal/reminders/run?mode=daily` and `mode=weekly` with shared-secret auth.
+4. Confirm job logs show expected mode and non-error completion.
+5. Confirm one test user generates either `sent` or `skipped_empty` in `digest_dispatches` for the expected Eastern period.
 
 ## Rollback Guidance
 
@@ -189,7 +225,7 @@ High-risk rollback categories requiring explicit recovery planning:
 - dropped columns or tables
 - type narrowing
 - uniqueness enforcement on dirty historical data
-- reminder or recurrence contract rewrites that can duplicate or orphan lifecycle rows
+- digest or recurrence contract rewrites that can duplicate or orphan lifecycle rows
 
 When rollback is necessary:
 

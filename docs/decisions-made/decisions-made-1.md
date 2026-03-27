@@ -1,5 +1,12 @@
 # Decisions Made
 
+## 2026-03-27 14:25:00 EDT
+
+- Replaced per-task reminder email delivery with exactly two digest modes (`daily`, `weekly`) executed through the existing internal backend job route using explicit `mode` selection.
+- Kept Railway scheduling split into two cron services (`digest-daily-cron`, `digest-weekly-cron`) as configuration-only callers and rejected a separate cron microservice/container codebase.
+- Chose fixed Eastern (`America/New_York`) as the digest period window basis for all users, with manual UTC cron schedule updates at DST transitions captured in the migration runbook.
+- Added `digest_dispatches` as the idempotency/audit source of truth per `user + digest_type + period` and cancelled legacy `reminders` rows in `pending/claimed` during migration cutover.
+
 ## 2026-03-27 09:40:00 EDT
 
 - Switched frontend auth entry to a dedicated `/login` route and made the main app shell hard-redirect signed-out users there instead of rendering inline session-required states on protected pages.

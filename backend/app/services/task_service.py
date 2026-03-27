@@ -38,7 +38,6 @@ from app.db.repositories import (
     list_tasks,
     update_subtask,
     update_task,
-    upsert_reminder,
 )
 from app.services.task_rules import (
     RecurrenceInput,
@@ -389,11 +388,17 @@ class TaskService:
                 updated = get_task(connection, user_id=user_id, task_id=task_id)
                 assert updated is not None
             else:
+                series_id_to_assign: Optional[str] = None
+                if task.recurrence_frequency is not None and task.series_id is None:
+                    series_id_to_assign = str(uuid.uuid4())
                 updated = update_task(
                     connection,
                     user_id=user_id,
                     task_id=task_id,
-                    values={"deleted_at": deleted_at},
+                    values={
+                        "deleted_at": deleted_at,
+                        "series_id": series_id_to_assign or task.series_id,
+                    },
                 )
                 assert updated is not None
                 cancel_reminder(connection, user_id=user_id, task_id=task_id)
@@ -587,23 +592,10 @@ class TaskService:
         task: TaskRecord,
         now: datetime,
     ) -> None:
-        reminder_at = task.reminder_at
-        if reminder_at is not None and reminder_at.tzinfo is None:
-            reminder_at = reminder_at.replace(tzinfo=timezone.utc)
-        if (
-            task.deleted_at is not None
-            or task.status != "open"
-            or reminder_at is None
-            or reminder_at <= now
-        ):
-            cancel_reminder(connection, user_id=user_id, task_id=task.id)
-            return
-        upsert_reminder(
-            connection,
-            user_id=user_id,
-            task_id=task.id,
-            scheduled_for=reminder_at,
-        )
+        # Digest-only rollout: keep reminder fields but stop creating/updating
+        # per-task reminder rows; cancel any existing legacy row.
+        del now
+        cancel_reminder(connection, user_id=user_id, task_id=task.id)
 
     def _create_next_occurrence_on_completion(
         self,

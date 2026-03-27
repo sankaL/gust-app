@@ -15,7 +15,7 @@ Gust is a mobile-first web application with:
 - a React frontend
 - a FastAPI backend
 - Supabase-hosted Postgres and Google OAuth
-- server-side integrations for transcription, extraction, and email reminders
+- server-side integrations for transcription, extraction, and digest email delivery
 
 The frontend talks only to the backend API. It does not call the database, transcription provider, extraction provider, or email provider directly.
 
@@ -158,7 +158,7 @@ The backend is a REST API with narrowly scoped resources:
 - captures
 - tasks
 - groups
-- internal reminder jobs
+- internal digest jobs
 
 ### Service Modules
 
@@ -169,7 +169,7 @@ Keep backend code separated by responsibility:
 - transcription client
 - extraction client
 - task write logic
-- reminder delivery
+- digest delivery
 - recurrence generation
 
 Avoid large “god modules” and keep source files under repository limits.
@@ -252,13 +252,13 @@ Backend behavior:
 
 Do not rely on regex cleanup or permissive JSON repair as the main parsing strategy.
 
-## Reminder and Recurrence Processing
+## Digest and Recurrence Processing
 
 ### Scheduler
 
-Use Railway cron jobs for scheduled work.
+Use Railway cron services for scheduled work.
 
-This fits Gust because the reminder worker is a short-lived job that should start, process due reminders, and exit.
+This fits Gust because the digest worker is a short-lived backend job that should start, process the selected digest mode, and exit.
 
 Constraints to design around:
 
@@ -266,21 +266,29 @@ Constraints to design around:
 - schedules are UTC-based
 - jobs must exit cleanly or future runs may be skipped
 
-### Reminder Delivery
+Committed cron split:
 
-Reminder processing must be idempotent.
+- `digest-daily-cron` calls `POST /internal/reminders/run?mode=daily`
+- `digest-weekly-cron` calls `POST /internal/reminders/run?mode=weekly`
+- both jobs use the same shared-secret header as other internal jobs
+- no separate cron microservice codebase is required; this is deployment configuration only
+
+### Digest Delivery
+
+Digest processing must be idempotent and backend-owned.
 
 Required behavior:
 
-- select only due, unsent, still-open reminders
-- requeue expired claims safely before the next claim pass
-- claim rows transactionally before send
+- run one explicit mode per invocation: `daily` or `weekly`
+- compute period windows in fixed Eastern timezone (`America/New_York`)
+- send at most one digest email per user per digest type and period
+- use deterministic idempotency keys per `user + digest_type + period`
 - send through Resend
-- use a deterministic idempotency key per reminder event
-- record send result and provider message ID
-- retry transient send failures without duplicate-send and mark terminal provider failures as failed
+- record dispatch outcome as `sent`, `failed`, or `skipped_empty`
+- skip sending when the digest is empty
+- retry transient send failures without duplicate-send
 
-This prevents duplicate emails during retries or overlapping job executions.
+Per-item reminder rows remain in the schema for compatibility but are no longer the active send path.
 
 ### Recurrence
 
@@ -316,7 +324,7 @@ The schema source of truth should live outside this document, but the stack assu
 - tasks with group ownership, review state, due date, reminder state, and recurrence metadata
 - subtasks
 - capture records with bounded-retention transcript storage
-- reminder send state and idempotency markers
+- digest dispatch state and idempotency markers
 
 If the schema cannot represent those contracts cleanly, the product spec is not implementable.
 
@@ -332,10 +340,10 @@ If the schema cannot represent those contracts cleanly, the product spec is not 
 
 ### Privacy
 
-- Do not log transcripts or reminder email bodies in plaintext.
+- Do not log transcripts or digest email bodies in plaintext.
 - Do not store raw audio after transcription.
 - Keep capture retention bounded.
-- Keep reminder email content minimal.
+- Keep digest email content minimal.
 
 ## Observability
 
@@ -346,7 +354,7 @@ Log:
 - auth failures
 - provider latency
 - extractor validation failures
-- reminder send outcomes
+- digest dispatch outcomes
 - recurrence generation outcomes
 
 Do not log:
@@ -354,7 +362,7 @@ Do not log:
 - raw audio
 - auth tokens
 - full transcript text
-- full reminder email bodies
+- full digest email bodies
 
 ## Testing Requirements
 
@@ -366,7 +374,7 @@ Required automated coverage:
 - confidence-routing logic
 - extractor payload validation
 - partial-invalid-item handling
-- reminder idempotency
+- digest idempotency
 - recurrence generation rules
 - timezone-aware relative date resolution
 
@@ -388,15 +396,15 @@ Required end-to-end coverage:
 - local dev Google sign-in through local Supabase OAuth config, with optional backend-mediated local test-account fallback
 - voice capture with mocked transcription response
 - text capture fallback
-- reminder job flow with mocked Resend provider
+- digest job flow with mocked Resend provider
 
-Every bug fix touching capture, routing, reminders, or recurrence must add or update a regression test.
+Every bug fix touching capture, routing, digests, or recurrence must add or update a regression test.
 
 ## Explicitly Rejected Options
 
 - Browser localStorage auth sessions
 - Direct frontend reads/writes to the database
-- In-process always-on schedulers for reminders
+- In-process always-on schedulers for digest delivery
 - LangChain in the first implementation
 - “DEV_MODE” code paths that bypass auth in the application itself
 - Schema designs where Inbox is represented by `NULL`

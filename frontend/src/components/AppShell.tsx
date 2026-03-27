@@ -235,7 +235,7 @@ export function AppShell() {
               <div className="relative" ref={accountMenuRef}>
                 <button
                   type="button"
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-outline/40 bg-surface-container-high font-body text-xs font-semibold uppercase tracking-[0.08em] text-on-surface transition hover:bg-surface-container-highest"
+                  className="flex h-10 w-10 items-center justify-center rounded-full font-body text-xs font-bold uppercase tracking-[0.08em] text-black bg-[radial-gradient(circle_at_top,_#ffffff_10%,_#e5e5e5_90%)] shadow-[0_4px_0_#a1a1aa,_0_6px_10px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.8)] hover:-translate-y-[1px] hover:shadow-[0_5px_0_#a1a1aa,_0_8px_12px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.8)] active:translate-y-[4px] active:shadow-[0_0px_0_#a1a1aa,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_4px_rgba(0,0,0,0.1)] transition-all duration-200 outline-none select-none"
                   aria-haspopup="menu"
                   aria-expanded={isAccountMenuOpen}
                   aria-label="Open account menu"
@@ -249,22 +249,22 @@ export function AppShell() {
                 {isAccountMenuOpen ? (
                   <div
                     role="menu"
-                    className="absolute right-0 top-12 z-50 w-64 rounded-card bg-surface-container-highest shadow-[0_4px_24px_rgba(0,0,0,0.6)] border border-white/10 p-3"
+                    className="absolute right-0 top-12 z-50 w-64 rounded-card bg-surface-container-high shadow-[0_4px_24px_rgba(0,0,0,0.6)] border border-white/10 py-1"
                   >
-                    <div className="space-y-1 px-1 pb-2">
-                      <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
+                    <div className="px-3 py-2 border-b border-white/5 mb-1">
+                      <p className="font-body text-[0.65rem] uppercase tracking-[0.15em] text-on-surface-variant">
                         Signed in
                       </p>
                       <p className="truncate font-body text-sm text-on-surface">
                         {sessionQuery.data.user?.email}
                       </p>
                     </div>
-                    <div className="space-y-1">
+                    <div className="flex flex-col">
                       <button
                         type="button"
                         role="menuitem"
                         onClick={openCompletedTasks}
-                        className="w-full rounded-soft px-3 py-2 text-left font-body text-sm text-on-surface transition hover:bg-surface-container-high"
+                        className="w-full px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
                       >
                         Completed Tasks
                       </button>
@@ -272,7 +272,7 @@ export function AppShell() {
                         type="button"
                         role="menuitem"
                         onClick={openDesktopMode}
-                        className="w-full rounded-soft px-3 py-2 text-left font-body text-sm text-on-surface transition hover:bg-surface-container-high"
+                        className="w-full px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
                       >
                         Desktop Mode
                       </button>
@@ -281,13 +281,13 @@ export function AppShell() {
                         role="menuitem"
                         onClick={() => logoutMutation.mutate()}
                         disabled={logoutMutation.isPending}
-                        className="w-full rounded-soft px-3 py-2 text-left font-body text-sm text-tertiary transition hover:bg-surface-container-high disabled:opacity-60"
+                        className="w-full px-3 py-2 text-left font-body text-sm text-tertiary transition-colors hover:bg-surface-container-highest disabled:opacity-60"
                       >
                         {logoutMutation.isPending ? 'Logging out...' : 'Logout'}
                       </button>
                     </div>
                     {menuError ? (
-                      <p className="px-1 pt-2 font-body text-xs text-tertiary">{menuError}</p>
+                      <p className="px-3 py-2 font-body text-xs text-tertiary">{menuError}</p>
                     ) : null}
                   </div>
                 ) : null}

@@ -13,7 +13,7 @@ Gust is a personal, voice-first task manager designed for fast capture on mobile
 3. Speak naturally
 4. Review the transcript
 5. Submit
-6. Receive structured tasks in the correct group with dates, reminders, and review flags where needed
+6. Receive structured tasks in the correct group with dates, reminder metadata, and review flags where needed
 
 The product is optimized for low-friction capture, not for deep project management.
 
@@ -96,9 +96,14 @@ Users sign in with Google. All application data is scoped per user.
 Authentication uses a dedicated `/login` screen and redirects signed-out access away from protected task/capture routes.
 The authenticated shell includes a top-right account avatar menu with entries for `Completed Tasks`, `Desktop Mode` (placeholder), and `Logout`.
 
-### 5. Email Reminders
+### 5. Email Digests
 
-Users can receive one reminder email per task occurrence.
+Users receive exactly two digest email types from this workflow:
+
+- Daily brief per user at 8:30 AM Eastern with open tasks due today and overdue open tasks
+- Weekly summary per user on Sunday at 9:00 AM Eastern with tasks completed this week and due-this-week tasks still open
+
+No other reminder or digest email type is sent from this flow.
 
 ### 6. Installable PWA
 
@@ -140,11 +145,12 @@ The app is installable on iPhone Safari and Android Chrome and behaves like a fu
 9. User opens a task to edit it and saves the draft explicitly.
 10. Moving a flagged task to a different group clears `needs_review`.
 
-### Flow D: Reminder Delivery
+### Flow D: Digest Delivery
 
-1. User sets a reminder time for a task with a due date.
-2. Server-side reminder processing sends a single email when due.
-3. If the task is completed or deleted before the reminder is sent, no email is sent.
+1. User creates and updates tasks through normal capture/task flows.
+2. A daily backend digest job (8:30 AM Eastern) sends one per-user brief with due-today and overdue open tasks.
+3. A weekly backend digest job (Sunday 9:00 AM Eastern) sends one per-user summary for the Monday-Sunday week window.
+4. If a user's digest has no items for that period, the send is skipped.
 
 ## Page Requirements
 
@@ -361,21 +367,20 @@ Subtasks:
 - do not nest
 - do not auto-complete the parent task
 
-## Reminder Contract
+## Digest Contract
 
-- Reminder email is optional.
-- V1 supports one reminder per task occurrence.
-- Reminders are only supported for tasks with a due date.
-- Reminder delivery is best-effort, not exact to the minute.
-- The product target is delivery within 15 minutes of `reminder_at`.
-- No batched reminder digests in v1.
+- Digest email delivery is optional per user but, when enabled, only two job-triggered digest types are active: `daily` and `weekly`.
+- Daily digest period basis is fixed Eastern (`America/New_York`) and includes:
+  - open tasks due on the current Eastern date
+  - open tasks overdue before the current Eastern date
+- Weekly digest period basis is fixed Eastern (`America/New_York`) and includes:
+  - completed tasks with `completed_at` in the Monday-Sunday Eastern window
+  - open tasks with `due_date` in that Monday-Sunday Eastern window
+- Digest sending is idempotent per `user + digest_type + period`.
+- Empty digests are not sent and must be tracked as skipped.
+- Retryable delivery failures may retry without duplicate-send; terminal provider failures must not duplicate-send.
+- No per-task reminder emails are sent in v1 from this workflow.
 - No push notifications in v1.
-
-Cancellation behavior:
-
-- Completing a task before send cancels the reminder.
-- Deleting a task before send cancels the reminder.
-- Retryable delivery failures may be retried automatically, but terminal provider failures must not duplicate-send.
 
 ## Recurrence Contract
 
@@ -403,21 +408,23 @@ Behavior:
 - Daily recurrence creates the next local calendar day after completion.
 - Weekly recurrence repeats on a single weekday.
 - Monthly recurrence repeats on the day-of-month of the completed occurrence; if that day does not exist in the next month, it falls to the last day of that month.
-- If a recurring task has a reminder, the next occurrence inherits the same relative offset from the due date.
-- If that inherited reminder would already be in the past at completion time, the generated occurrence does not schedule a reminder email.
+- If a recurring task has reminder metadata, the next occurrence inherits the same relative offset from the due date.
+- If that inherited reminder timestamp would already be in the past at completion time, the generated occurrence clears `reminder_at`.
 - Deleting a recurring occurrence generates the next occurrence based on the deleted occurrence due date when no other open occurrence exists in the series.
 - Deleting recurring `this and future` soft-deletes all open occurrences in the series and does not delete completed history.
 - Reopening or restoring a recurring occurrence keeps recurrence only when the generated undo-target occurrence is found; otherwise it reopens/restores as a single detached non-recurring instance.
 
 ## Timezone Contract
 
-All relative date resolution and reminder delivery use the user's IANA timezone.
+Relative date resolution for extraction, due buckets, and task semantics uses the user's IANA timezone.
+
+Digest delivery windows use fixed Eastern (`America/New_York`) period boundaries.
 
 V1 behavior:
 
 - The frontend provides the browser timezone after sign-in.
 - The backend persists the current user timezone.
-- If the client reports a different timezone later, the backend updates it for future resolution and reminders.
+- If the client reports a different timezone later, the backend updates it for future resolution and reminder metadata handling.
 
 ## Privacy and Data Handling
 
@@ -426,7 +433,7 @@ V1 behavior:
 - Transcripts may be retained temporarily for troubleshooting and replay of a failed extraction flow, but only for a bounded retention period.
 - The initial retention target is 7 days for capture records.
 - Logs must not contain auth tokens, raw provider payloads, or full transcript text.
-- Reminder emails contain only the minimum task information needed to be useful.
+- Digest emails contain only the minimum task information needed to be useful.
 
 ## Security Requirements
 
@@ -444,7 +451,7 @@ Launch metrics for v1:
 - P90 voice-capture-to-task-write time under 8 seconds for the same scenario
 - Group assignment accuracy above 80% on a labeled validation set
 - Less than 10% of created tasks marked `needs_review`
-- Reminder duplicate-send rate of 0
+- Digest duplicate-send rate of 0
 - Successful install and core flow operation on:
   - iPhone Safari
   - Android Chrome

@@ -10,16 +10,17 @@ from app.services.reminders import INTERNAL_JOB_SECRET_HEADER, ReminderRunSummar
 class FakeReminderWorkerService:
     summary: ReminderRunSummary
 
-    async def run_due_work(self) -> ReminderRunSummary:
+    async def run_due_work(self, *, mode: str) -> ReminderRunSummary:
+        assert mode in {"daily", "weekly"}
         return self.summary
 
 
 def test_internal_reminder_route_requires_shared_secret(client: TestClient) -> None:
     client.app.state.settings.internal_job_shared_secret = "phase4-secret"
 
-    missing_response = client.post("/internal/reminders/run")
+    missing_response = client.post("/internal/reminders/run?mode=daily")
     invalid_response = client.post(
-        "/internal/reminders/run",
+        "/internal/reminders/run?mode=daily",
         headers={INTERNAL_JOB_SECRET_HEADER: "wrong-secret"},
     )
 
@@ -31,26 +32,26 @@ def test_internal_reminder_route_returns_summary_when_authorized(client: TestCli
     client.app.state.settings.internal_job_shared_secret = "phase4-secret"
     client.app.dependency_overrides[get_reminder_worker_service] = lambda: FakeReminderWorkerService(
         summary=ReminderRunSummary(
-            claimed=3,
+            mode="daily",
+            users_processed=3,
             sent=2,
-            cancelled=1,
-            requeued=4,
+            skipped_empty=1,
             failed=0,
             captures_deleted=5,
         )
     )
 
     response = client.post(
-        "/internal/reminders/run",
+        "/internal/reminders/run?mode=daily",
         headers={INTERNAL_JOB_SECRET_HEADER: "phase4-secret"},
     )
 
     assert response.status_code == 200
     assert response.json() == {
-        "claimed": 3,
+        "mode": "daily",
+        "users_processed": 3,
         "sent": 2,
-        "cancelled": 1,
-        "requeued": 4,
+        "skipped_empty": 1,
         "failed": 0,
         "captures_deleted": 5,
     }

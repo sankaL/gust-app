@@ -1,10 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from app.core.dependencies import get_reminder_worker_service, require_internal_job_secret
-from app.services.reminders import ReminderWorkerService
+from app.services.reminders import DigestMode, ReminderWorkerService
 
 router = APIRouter()
 
@@ -13,10 +13,10 @@ InternalJobSecretDep = Annotated[None, Depends(require_internal_job_secret)]
 
 
 class RunRemindersResponse(BaseModel):
-    claimed: int
+    mode: DigestMode
+    users_processed: int
     sent: int
-    cancelled: int
-    requeued: int
+    skipped_empty: int
     failed: int
     captures_deleted: int
 
@@ -25,6 +25,7 @@ class RunRemindersResponse(BaseModel):
 async def run_due_reminders(
     _job_secret: InternalJobSecretDep,
     reminder_worker_service: ReminderWorkerServiceDep,
+    mode: DigestMode = Query(...),
 ) -> RunRemindersResponse:
-    summary = await reminder_worker_service.run_due_work()
+    summary = await reminder_worker_service.run_due_work(mode=mode)
     return RunRemindersResponse(**summary.to_dict())

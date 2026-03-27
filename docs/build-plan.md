@@ -91,6 +91,9 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-09 | Refine Mic Button UI | DONE | 2026-03-26 | Updated the capture page mic button to reduce outer glow and introduce a 3D tactile material feel. | Design |
 | ADH-10 | Implement login route, account avatar menu, and local-dev Google OAuth wiring | DONE | 2026-03-27 | Added protected-shell redirect to `/login`, account menu (`Completed Tasks`, `Desktop Mode`, `Logout`), all-groups completed route support, logout cache clearing for per-user isolation, and Makefile/runtime/Supabase config support for local Google OAuth with dev fallback test-account sign-in. | PRD, Tech, Runbook, AGENTS |
 | ADH-11 | Refine Avatar Dropdown UI | DONE | 2026-03-26 | Updated the avatar dropdown menu to use a glass frosted effect matching the group dropdown. | Design |
+| ADH-13 | Roll out digest-only email delivery with Railway daily/weekly cron split | DONE | 2026-03-27 | Added digest dispatch persistence + migration, switched internal reminder worker to explicit daily/weekly digest modes, disabled per-item reminder row creation/sending, and documented Eastern-time digest contracts plus DST cron maintenance runbook. | PRD, Tech, Schema, Runbook |
+| ADH-12 | Refine Avatar Button Tactile Design | DONE | 2026-03-26 | Redesigned the avatar button to mirror the 3D physics-based shadow-and-lift styling of the floating + button, using a high-contrast white profile. | Design |
+| ADH-14 | Redesign Login Page Buttons | DONE | 2026-03-26 | Completely overhauled the login screen buttons to use the 3D tactile materials and physics established on the capture page, mapping Google Auth to the mic button and Local Dev to the fallback input. | Design |
 
 ## Bug Fixes
 

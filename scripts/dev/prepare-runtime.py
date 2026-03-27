@@ -34,7 +34,7 @@ LOCAL_SUPABASE_ANON_KEY = (
 LOCAL_ENV_DEFAULTS = {
     "APP_ENV": "development",
     "GUST_DEV_MODE": "true",
-    "REQUIRED_ALEMBIC_REVISION": "0004_phase4_reminders_retention",
+    "REQUIRED_ALEMBIC_REVISION": "0008_digest_dispatches",
     "RUN_STARTUP_CHECKS": "true",
     "LOG_LEVEL": "INFO",
     "SESSION_COOKIE_SECURE": "false",

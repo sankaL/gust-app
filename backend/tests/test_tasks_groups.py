@@ -317,7 +317,7 @@ def test_list_tasks_applies_sorting_and_user_scope(app: FastAPI, client: TestCli
         "Tomorrow task",
         "No date task",
     ]
-    assert [item["due_bucket"] for item in payload] == [
+    assert [item["due_bucket"] for item in payload["items"]] == [
         "overdue",
         "due_soon",
         "due_soon",
@@ -325,7 +325,10 @@ def test_list_tasks_applies_sorting_and_user_scope(app: FastAPI, client: TestCli
     ]
 
 
-def test_update_task_syncs_reminder_and_series_id(app: FastAPI, client: TestClient) -> None:
+def test_update_task_keeps_digest_only_reminder_state_and_series_id(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
     headers = _authenticated_headers(app, client)
     first_group_id = _seed_group(client, user_id=USER_ID, name="Inbox Mirror")
     second_group_id = _seed_group(client, user_id=USER_ID, name="Work")
@@ -354,13 +357,13 @@ def test_update_task_syncs_reminder_and_series_id(app: FastAPI, client: TestClie
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
-        reminder_row = connection.execute(sa.select(reminders)).one()
+        reminder_rows = connection.execute(sa.select(reminders)).fetchall()
 
     assert str(task_row.group_id) == second_group_id
     assert task_row.needs_review is False
     assert task_row.series_id is not None
     assert task_row.recurrence_frequency == "weekly"
-    assert reminder_row.status == "pending"
+    assert reminder_rows == []
 
     clear_response = client.patch(
         f"/tasks/{task_id}",
@@ -378,12 +381,12 @@ def test_update_task_syncs_reminder_and_series_id(app: FastAPI, client: TestClie
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         cleared_task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
-        cleared_reminder_row = connection.execute(sa.select(reminders)).one()
+        cleared_reminder_rows = connection.execute(sa.select(reminders)).fetchall()
 
     assert cleared_task_row.series_id is None
     assert cleared_task_row.recurrence_frequency is None
     assert cleared_task_row.reminder_at is None
-    assert cleared_reminder_row.status == "cancelled"
+    assert cleared_reminder_rows == []
 
 
 def test_complete_reopen_delete_restore_manage_reminders(
@@ -422,7 +425,7 @@ def test_complete_reopen_delete_restore_manage_reminders(
     assert task_row.status == "open"
     assert task_row.completed_at is None
     assert task_row.deleted_at is None
-    assert reminder_row.status == "pending"
+    assert reminder_row.status == "cancelled"
 
 
 def test_complete_task_rejects_when_already_completed(app: FastAPI, client: TestClient) -> None:
@@ -536,8 +539,7 @@ def test_complete_task_creates_next_daily_occurrence_with_reset_subtasks(
     assert next_subtask_rows[0].title == "Review blockers"
     assert next_subtask_rows[0].is_completed is False
     assert next_subtask_rows[0].completed_at is None
-    assert len(reminder_rows) == 1
-    assert reminder_rows[0].status == "pending"
+    assert reminder_rows == []
 
 
 def test_complete_task_repairs_missing_series_id_and_generates_next_occurrence(
@@ -623,7 +625,7 @@ def test_delete_task_occurrence_creates_next_occurrence_from_due_date(
         ).one()
         next_reminder = connection.execute(
             sa.select(reminders).where(reminders.c.task_id == next_row.id)
-        ).one()
+        ).fetchall()
 
     assert len(task_rows) == 2
     assert original_row.deleted_at is not None
@@ -632,7 +634,7 @@ def test_delete_task_occurrence_creates_next_occurrence_from_due_date(
     assert next_row.deleted_at is None
     assert next_row.due_date == today + timedelta(days=7)
     assert original_reminder.status == "cancelled"
-    assert next_reminder.status == "pending"
+    assert next_reminder == []
 
 
 def test_delete_occurrence_repairs_missing_series_id_and_generates_next_occurrence(
@@ -932,7 +934,7 @@ def test_reopen_recurring_task_reuses_generated_occurrence_as_undo_target(
         generated_task = next(row for row in task_rows if str(row.id) != task_id)
         generated_reminder = connection.execute(
             sa.select(reminders).where(reminders.c.task_id == generated_task.id)
-        ).one()
+        ).fetchall()
         open_rows = [
             row
             for row in task_rows
@@ -944,7 +946,7 @@ def test_reopen_recurring_task_reuses_generated_occurrence_as_undo_target(
     assert str(open_rows[0].series_id) == series_id
     assert open_rows[0].recurrence_frequency == "daily"
     assert generated_task.deleted_at is not None
-    assert generated_reminder.status == "cancelled"
+    assert generated_reminder == []
 
 
 def test_reopen_recurring_task_keeps_series_and_generates_single_next_on_recomplete(
@@ -1037,7 +1039,7 @@ def test_restore_deleted_recurring_task_reuses_generated_occurrence_as_undo_targ
         generated_task = next(row for row in task_rows if str(row.id) != task_id)
         generated_reminder = connection.execute(
             sa.select(reminders).where(reminders.c.task_id == generated_task.id)
-        ).one()
+        ).fetchall()
         open_rows = [
             row
             for row in task_rows
@@ -1049,7 +1051,7 @@ def test_restore_deleted_recurring_task_reuses_generated_occurrence_as_undo_targ
     assert str(open_rows[0].series_id) == series_id
     assert open_rows[0].recurrence_frequency == "daily"
     assert generated_task.deleted_at is not None
-    assert generated_reminder.status == "cancelled"
+    assert generated_reminder == []
 
 
 def test_reopen_recurring_task_returns_single_non_recurring_instance_when_no_open_occurrence_exists(

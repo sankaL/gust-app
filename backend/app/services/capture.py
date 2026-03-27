@@ -26,7 +26,6 @@ from app.db.repositories import (
     GroupRecord,
     create_capture,
     delete_extracted_tasks_by_capture,
-    create_reminder,
     create_subtasks,
     create_task,
     ensure_inbox_group,
@@ -397,13 +396,6 @@ class CaptureService:
                         user_id=user_id,
                         task_id=task.id,
                         titles=prepared.subtasks,
-                    )
-                if prepared.reminder_at is not None:
-                    create_reminder(
-                        connection,
-                        user_id=user_id,
-                        task_id=task.id,
-                        scheduled_for=prepared.reminder_at,
                     )
                 created_count += 1
                 if task.needs_review:
