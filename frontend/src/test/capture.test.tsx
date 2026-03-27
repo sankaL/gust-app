@@ -205,7 +205,7 @@ describe('capture route', () => {
     renderCaptureRoute()
 
     // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it')).toBeInTheDocument()
+    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
   })
 
   it('shows extraction error in staging when extraction fails', async () => {
@@ -221,7 +221,7 @@ describe('capture route', () => {
     renderCaptureRoute()
 
     // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it')).toBeInTheDocument()
+    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
   })
 
   it('handles voice transcription error gracefully', async () => {
@@ -237,7 +237,7 @@ describe('capture route', () => {
     renderCaptureRoute()
 
     // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it')).toBeInTheDocument()
+    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
   })
 
   it('shows error when retrying transcription fails', async () => {
@@ -253,6 +253,6 @@ describe('capture route', () => {
     renderCaptureRoute()
 
     // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it')).toBeInTheDocument()
+    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
   })
 })

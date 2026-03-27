@@ -1,197 +1,38 @@
 import { useEffect, useMemo, useRef, useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Card } from './Card'
 import { listAllTasks, type TaskSummary } from '../lib/api'
+import { OpenTaskCard } from './OpenTaskCard'
 
 interface AllTasksViewProps {
   onTaskOpen: (taskId: string) => void
   onTaskComplete: (task: TaskSummary) => void
+  onTaskDelete: (task: TaskSummary) => void
   isBusy: boolean
 }
 
 const PAGE_SIZE = 50
 
-function buildDueBadge(task: TaskSummary) {
-  if (!task.due_date) {
-    return null
-  }
-
-  const today = new Date()
-  const due = new Date(`${task.due_date}T00:00:00`)
-  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
-  const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
-  const diffDays = dueDay - todayDay
-
-  if (diffDays < 0) {
-    return { label: 'Overdue', tone: 'bg-tertiary text-surface' }
-  }
-  if (diffDays === 0) {
-    return { label: 'Today', tone: 'bg-primary text-surface' }
-  }
-  if (diffDays === 1) {
-    return { label: 'Tomorrow', tone: 'bg-primary/20 text-on-surface' }
-  }
-  if (diffDays <= 7) {
-    return {
-      label: new Intl.DateTimeFormat(undefined, {
-        month: 'short',
-        day: 'numeric'
-      }).format(due),
-      tone: 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-    }
-  }
-  return {
-    label: new Intl.DateTimeFormat(undefined, {
-      month: 'short',
-      day: 'numeric'
-    }).format(due),
-    tone: 'bg-surface-container-high text-on-surface-variant'
-  }
-}
-
 function TaskCard({
   task,
   onOpen,
   onComplete,
+  onDelete,
   isBusy
 }: {
   task: TaskSummary
   onOpen: (taskId: string) => void
   onComplete: (task: TaskSummary) => void
+  onDelete: (task: TaskSummary) => void
   isBusy: boolean
 }) {
-  const badge = buildDueBadge(task)
-  const clampTwoLines = {
-    display: '-webkit-box',
-    WebkitBoxOrient: 'vertical' as const,
-    WebkitLineClamp: 2,
-    overflow: 'hidden'
-  }
-
-  let dueTextColor = 'text-on-surface-variant/50'
-  if (task.due_date) {
-    const today = new Date()
-    const due = new Date(`${task.due_date}T00:00:00`)
-    const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
-    const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
-    const diff = dueDay - todayDay
-    if (diff < 0) dueTextColor = 'text-error'
-    else if (diff === 0) dueTextColor = 'text-warning'
-    else dueTextColor = 'text-primary'
-  }
-
-  function formatReminder(reminderAt: string | null): string {
-    if (!reminderAt) return 'none'
-    const date = new Date(reminderAt)
-    return date.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    })
-  }
-
   return (
-    <Card padding="none" interactive className="bg-surface-container-high border border-white/5">
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onOpen(task.id)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            onOpen(task.id)
-          }
-        }}
-        className="p-4 flex items-stretch justify-between gap-4"
-      >
-        {/* Left Column: Task Content */}
-        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-          <div className="flex flex-col gap-2">
-            <h3
-              className="font-display text-base font-medium text-on-surface leading-tight"
-              style={clampTwoLines}
-            >
-              {task.title}
-            </h3>
-
-            {task.description ? (
-              <p
-                className="text-[0.78rem] leading-5 text-on-surface-variant/85"
-                style={clampTwoLines}
-              >
-                {task.description}
-              </p>
-            ) : null}
-
-            <div className="flex items-center gap-2 font-body text-[0.72rem] text-on-surface-variant flex-wrap">
-              <span className="text-on-surface-variant/80 font-medium">
-                {task.group?.name || 'Inbox'}
-              </span>
-              {task.reminder_at && (
-                <>
-                  <span className="text-on-surface-variant/40">•</span>
-                  <span className="text-on-surface-variant/80">
-                    Reminder: {formatReminder(task.reminder_at)}
-                  </span>
-                </>
-              )}
-              {task.needs_review && (
-                <span className="inline-block px-2 py-0.5 text-[0.65rem] uppercase tracking-widest font-bold bg-warning/20 text-warning rounded-pill">
-                  Needs Review
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <span className={`${dueTextColor} block uppercase tracking-wider text-[0.65rem] font-bold`}>
-              Due: {badge ? badge.label : '--'}
-            </span>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill ${
-                task.recurrence_frequency 
-                  ? 'bg-primary/20 text-primary' 
-                  : 'bg-surface-dim text-on-surface-variant/40'
-              }`} title={task.recurrence_frequency ? `Recurring: ${task.recurrence_frequency}` : 'No recurrence'}>
-                {task.recurrence_frequency ? task.recurrence_frequency : 'ONE-OFF'}
-              </span>
-              
-              <div 
-                className="flex items-center gap-1 bg-surface-dim px-2 py-0.5 rounded-pill"
-                title={`${task.subtask_count} subtasks`}
-              >
-                <span className="font-body text-[0.65rem] text-on-surface-variant uppercase tracking-widest">
-                  {task.subtask_count > 0 ? `${task.subtask_count} SUBTASKS` : '0 SUBTASKS'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Actions */}
-        <div className="flex flex-col items-end justify-end gap-4 shrink-0">
-          <div 
-            className="flex items-center gap-3 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onComplete(task)
-              }}
-              disabled={isBusy}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-primary hover:bg-surface-container-highest hover:-translate-y-0.5 transition-all duration-200 active:scale-90 active:translate-y-0 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
-              aria-label={`Complete ${task.title}`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </Card>
+    <OpenTaskCard
+      task={task}
+      onOpen={onOpen}
+      onComplete={onComplete}
+      onDelete={onDelete}
+      isBusy={isBusy}
+    />
   )
 }
 
@@ -226,7 +67,7 @@ function useAllTasksPage(cursor: string | null) {
   })
 }
 
-export function AllTasksView({ onTaskOpen, onTaskComplete, isBusy }: AllTasksViewProps) {
+export function AllTasksView({ onTaskOpen, onTaskComplete, onTaskDelete, isBusy }: AllTasksViewProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
   const {
@@ -254,14 +95,14 @@ export function AllTasksView({ onTaskOpen, onTaskComplete, isBusy }: AllTasksVie
       setAllTasks(prev => [...prev, ...data.items])
     }
     setHasMore(data.has_more)
-  }, [data, cursor])
+  }, [data, cursor, setAllTasks, setHasMore])
 
   // Load more function
   const loadMore = useCallback(() => {
     if (!data?.next_cursor || isLoadingMore || !hasMore) return
     setIsLoadingMore(true)
     setCursor(data.next_cursor)
-  }, [data?.next_cursor, isLoadingMore, hasMore])
+  }, [data?.next_cursor, hasMore, isLoadingMore, setCursor, setIsLoadingMore])
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -354,6 +195,7 @@ export function AllTasksView({ onTaskOpen, onTaskComplete, isBusy }: AllTasksVie
                 task={task}
                 onOpen={onTaskOpen}
                 onComplete={onTaskComplete}
+                onDelete={onTaskDelete}
                 isBusy={isBusy}
               />
             ))}

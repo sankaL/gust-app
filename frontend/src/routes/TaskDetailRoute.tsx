@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { SessionGuard } from '../components/SessionGuard'
 import { SelectDropdown } from '../components/SelectDropdown'
+import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
 import {
   ApiError,
   createSubtask,
@@ -663,77 +664,15 @@ export function TaskDetailRoute() {
               </button>
             </div>
 
-            {pendingDelete ? (
-              <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-                <div className="w-full max-w-md rounded-card bg-surface-container p-4 shadow-ambient">
-                  {(taskQuery.data?.series_id || taskQuery.data?.recurrence_frequency) ? (
-                    <>
-                      <p className="font-display text-xl text-on-surface">Delete recurring task</p>
-                      <p className="mt-2 font-body text-sm text-on-surface-variant">
-                        Choose whether to delete only this occurrence or this and future open occurrences.
-                      </p>
-                      <p className="mt-2 truncate font-body text-sm text-on-surface">
-                        {taskQuery.data?.title}
-                      </p>
-                      <div className="mt-4 flex flex-col gap-2">
-                        <button
-                          type="button"
-                          onClick={() => deleteTaskMutation.mutate('occurrence')}
-                          disabled={deleteTaskMutation.isPending}
-                          className="w-full rounded-pill bg-surface-container-high px-4 py-2 text-sm font-medium text-on-surface transition hover:bg-surface-container-highest disabled:opacity-50"
-                        >
-                          Delete this occurrence
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteTaskMutation.mutate('series')}
-                          disabled={deleteTaskMutation.isPending}
-                          className="w-full rounded-pill bg-tertiary px-4 py-2 text-sm font-medium text-surface transition hover:bg-tertiary/85 disabled:opacity-50"
-                        >
-                          Delete this and future
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPendingDelete(null)}
-                          disabled={deleteTaskMutation.isPending}
-                          className="w-full rounded-pill bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:bg-surface-container-high disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="font-display text-xl text-on-surface">Delete task</p>
-                      <p className="mt-2 truncate font-body text-sm text-on-surface">
-                        {taskQuery.data?.title}
-                      </p>
-                      <p className="mt-2 font-body text-sm text-on-surface-variant">
-                        Are you sure you want to delete this task?
-                      </p>
-                      <div className="mt-4 flex flex-col gap-2">
-                        <button
-                          type="button"
-                          onClick={() => deleteTaskMutation.mutate('occurrence')}
-                          disabled={deleteTaskMutation.isPending}
-                          className="w-full rounded-pill bg-tertiary px-4 py-2 text-sm font-medium text-surface transition hover:bg-tertiary/85 disabled:opacity-50"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPendingDelete(null)}
-                          disabled={deleteTaskMutation.isPending}
-                          className="w-full rounded-pill bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:bg-surface-container-high disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            ) : null}
+            <TaskDeleteDialog
+              isOpen={pendingDelete !== null}
+              taskTitle={taskQuery.data?.title ?? ''}
+              isRecurring={Boolean(taskQuery.data?.series_id || taskQuery.data?.recurrence_frequency)}
+              isDeleting={deleteTaskMutation.isPending}
+              onDeleteOccurrence={() => deleteTaskMutation.mutate('occurrence')}
+              onDeleteSeries={() => deleteTaskMutation.mutate('series')}
+              onClose={() => setPendingDelete(null)}
+            />
           </div>
         )}
       </section>

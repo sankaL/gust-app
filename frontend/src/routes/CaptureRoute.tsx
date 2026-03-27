@@ -513,7 +513,7 @@ export function CaptureRoute() {
             <svg className="h-6 w-6 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
-            <p className="font-display text-lg font-medium tracking-wide">Write it</p>
+            <p className="font-display text-lg font-medium tracking-wide">Write it instead</p>
           </div>
           <div className="flex items-center gap-1 font-body text-sm font-medium text-white/50 transition-colors group-hover:text-white/90">
             <span>Expand</span>
@@ -529,7 +529,7 @@ export function CaptureRoute() {
               <svg className="h-6 w-6 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
-              <p className="font-display text-lg font-medium tracking-wide">Write it</p>
+              <p className="font-display text-lg font-medium tracking-wide">Write it instead</p>
             </div>
             <button
               onClick={() => setTextExpanded(false)}

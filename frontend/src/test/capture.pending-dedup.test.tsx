@@ -184,7 +184,7 @@ describe('capture pending list dedupe', () => {
     renderCaptureRoute()
     const user = userEvent.setup()
 
-    await user.click(await screen.findByText('Write it'))
+    await user.click(await screen.findByText('Write it instead'))
     await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Review active capture')
     await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
 
@@ -215,7 +215,7 @@ describe('capture pending list dedupe', () => {
     renderCaptureRoute()
     const user = userEvent.setup()
 
-    await user.click(await screen.findByText('Write it'))
+    await user.click(await screen.findByText('Write it instead'))
     await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Review active capture')
     await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
 

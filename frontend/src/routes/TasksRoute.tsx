@@ -1,22 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   ApiError,
   completeTask,
+  deleteTask,
   getSessionStatus,
   listGroups,
   listTasks,
   reopenTask,
   restoreTask,
+  type TaskDeleteScope,
   type SessionStatus,
   type TaskSummary
 } from '../lib/api'
 import { AllTasksView } from '../components/AllTasksView'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
+import { OpenTaskCard } from '../components/OpenTaskCard'
 import { SessionGuard } from '../components/SessionGuard'
-import { Card } from '../components/Card'
+import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
 
 type UndoState =
   | {
@@ -35,6 +38,7 @@ type SwipeTaskCardProps = {
   task: TaskSummary
   onOpen: (taskId: string) => void
   onComplete: (taskId: string) => void
+  onDelete: (task: TaskSummary) => void
   isBusy: boolean
 }
 
@@ -46,222 +50,33 @@ function buildFriendlyMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-function buildDueBadge(task: TaskSummary) {
-  if (!task.due_date) {
-    return null
+function normalizeOpenTaskItems(data: unknown): TaskSummary[] {
+  if (Array.isArray(data)) {
+    return data as TaskSummary[]
   }
 
-  const today = new Date()
-  const due = new Date(`${task.due_date}T00:00:00`)
-  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
-  const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
-  const diffDays = dueDay - todayDay
+  if (
+    data &&
+    typeof data === 'object' &&
+    'items' in data &&
+    Array.isArray((data as { items?: unknown }).items)
+  ) {
+    return (data as { items: TaskSummary[] }).items
+  }
 
-  if (diffDays < 0) {
-    return { label: 'Overdue', tone: 'bg-tertiary text-surface' }
-  }
-  if (diffDays === 0) {
-    return { label: 'Today', tone: 'bg-primary text-surface' }
-  }
-  if (diffDays === 1) {
-    return { label: 'Tomorrow', tone: 'bg-primary/20 text-on-surface' }
-  }
-  if (diffDays <= 7) {
-    return {
-      label: new Intl.DateTimeFormat(undefined, {
-        month: 'short',
-        day: 'numeric'
-      }).format(due),
-      tone: 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-    }
-  }
-  return {
-    label: new Intl.DateTimeFormat(undefined, {
-      month: 'short',
-      day: 'numeric'
-    }).format(due),
-    tone: 'bg-surface-container-high text-on-surface-variant'
-  }
+  return []
 }
 
-function SwipeTaskCard({ task, onOpen, onComplete, isBusy }: SwipeTaskCardProps) {
-  const startXRef = useRef<number | null>(null)
-  const pointerIdRef = useRef<number | null>(null)
-  const offsetRef = useRef(0)
-  const [offsetX, setOffsetX] = useState(0)
-  const badge = buildDueBadge(task)
-
-  function resetSwipe() {
-    startXRef.current = null
-    pointerIdRef.current = null
-    offsetRef.current = 0
-    setOffsetX(0)
-  }
-
-  function handlePointerDown(event: React.PointerEvent<HTMLElement>) {
-    if (isBusy) {
-      return
-    }
-    startXRef.current = event.clientX
-    pointerIdRef.current = event.pointerId
-  }
-
-  function handlePointerMove(event: React.PointerEvent<HTMLElement>) {
-    if (startXRef.current === null || pointerIdRef.current !== event.pointerId) {
-      return
-    }
-    const delta = event.clientX - startXRef.current
-    const clamped = Math.max(-120, Math.min(120, delta))
-    offsetRef.current = clamped
-    setOffsetX(clamped)
-  }
-
-  function handlePointerEnd() {
-    if (offsetRef.current >= 90) {
-      onComplete(task.id)
-    }
-    resetSwipe()
-  }
-
-  let dueTextColor = 'text-on-surface-variant/50'
-  if (task.due_date) {
-    const today = new Date()
-    const due = new Date(`${task.due_date}T00:00:00`)
-    const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
-    const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
-    const diff = dueDay - todayDay
-    if (diff < 0) dueTextColor = 'text-error'
-    else if (diff === 0) dueTextColor = 'text-warning'
-    else dueTextColor = 'text-primary'
-  }
-
-  function formatReminder(reminderAt: string | null): string {
-    if (!reminderAt) return 'none'
-    const date = new Date(reminderAt)
-    return date.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    })
-  }
-
-  const clampTwoLines = {
-    display: '-webkit-box',
-    WebkitBoxOrient: 'vertical' as const,
-    WebkitLineClamp: 2,
-    overflow: 'hidden'
-  }
-
+function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTaskCardProps) {
   return (
-    <Card padding="none" className={`relative overflow-hidden bg-surface-container-high border border-white/5 ${!task.due_date ? 'opacity-70' : ''}`}>
-      <div className="absolute inset-0 flex items-center justify-start px-6 text-[0.65rem] font-bold uppercase tracking-[0.15em] text-on-surface-variant">
-        <span>Swipe right to complete</span>
-      </div>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onOpen(task.id)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            onOpen(task.id)
-          }
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerEnd}
-        onPointerCancel={resetSwipe}
-        className="relative z-10 w-full touch-pan-y bg-surface-container-high p-4 text-left transition-transform duration-200 flex items-stretch justify-between gap-4"
-        style={{ transform: `translateX(${offsetX}px)` }}
-      >
-        {/* Left Column: Task Content */}
-        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-          <div className="flex flex-col gap-2">
-            <h3
-              className="font-display text-base font-medium text-on-surface leading-tight"
-              style={clampTwoLines}
-            >
-              {task.title}
-            </h3>
-
-            {task.description ? (
-              <p
-                className="text-[0.78rem] leading-5 text-on-surface-variant/85"
-                style={clampTwoLines}
-              >
-                {task.description}
-              </p>
-            ) : null}
-
-            <div className="flex items-center gap-2 font-body text-[0.72rem] text-on-surface-variant flex-wrap">
-              <span className="text-on-surface-variant/80 font-medium">
-                {task.group?.name || 'Inbox'}
-              </span>
-              {task.reminder_at && (
-                <>
-                  <span className="text-on-surface-variant/40">•</span>
-                  <span className="text-on-surface-variant/80">
-                    Reminder: {formatReminder(task.reminder_at)}
-                  </span>
-                </>
-              )}
-              {task.needs_review && (
-                <span className="inline-block px-2 py-0.5 text-[0.65rem] uppercase tracking-widest font-bold bg-warning/20 text-warning rounded-pill">
-                  Needs Review
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <span className={`${dueTextColor} block uppercase tracking-wider text-[0.65rem] font-bold`}>
-              Due: {badge ? badge.label : '--'}
-            </span>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill ${
-                task.recurrence_frequency 
-                  ? 'bg-primary/20 text-primary' 
-                  : 'bg-surface-dim text-on-surface-variant/40'
-              }`} title={task.recurrence_frequency ? `Recurring: ${task.recurrence_frequency}` : 'No recurrence'}>
-                {task.recurrence_frequency ? task.recurrence_frequency : 'ONE-OFF'}
-              </span>
-              
-              <div 
-                className="flex items-center gap-1 bg-surface-dim px-2 py-0.5 rounded-pill"
-                title={`${task.subtask_count} subtasks`}
-              >
-                <span className="font-body text-[0.65rem] text-on-surface-variant uppercase tracking-widest">
-                  {task.subtask_count > 0 ? `${task.subtask_count} SUBTASKS` : '0 SUBTASKS'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Actions */}
-        <div className="flex flex-col items-end justify-end gap-4 shrink-0 px-2">
-          <div 
-            className="flex items-center gap-3 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onComplete(task.id)
-              }}
-              disabled={isBusy}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-primary hover:bg-surface-container-highest hover:-translate-y-0.5 transition-all duration-200 active:scale-90 active:translate-y-0 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
-              aria-label={`Complete ${task.title}`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </Card>
+    <OpenTaskCard
+      task={task}
+      onOpen={onOpen}
+      onComplete={(currentTask) => onComplete(currentTask.id)}
+      onDelete={onDelete}
+      isBusy={isBusy}
+      enableSwipe
+    />
   )
 }
 
@@ -272,6 +87,7 @@ export function TasksRoute() {
   const [undoState, setUndoState] = useState<UndoState>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
+  const [pendingDeleteTask, setPendingDeleteTask] = useState<TaskSummary | null>(null)
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -357,14 +173,32 @@ export function TasksRoute() {
     }
   })
 
+  const deleteTaskMutation = useMutation({
+    mutationFn: async ({ task, scope }: { task: TaskSummary; scope: TaskDeleteScope }) => {
+      const csrfToken = requireCsrf(sessionQuery.data)
+      return deleteTask(task.id, csrfToken, scope)
+    },
+    onSuccess: (_, variables) => {
+      setPendingDeleteTask(null)
+      setUndoState({ kind: 'delete', taskId: variables.task.id, title: variables.task.title })
+      setActionError(null)
+      void refreshTaskData()
+    },
+    onError: (error) => {
+      setActionError(buildFriendlyMessage(error, 'Task could not be deleted.'))
+      setPendingDeleteTask(null)
+    }
+  })
+
   const isBusy =
-    completeMutation.isPending || undoMutation.isPending
+    completeMutation.isPending || undoMutation.isPending || deleteTaskMutation.isPending
 
   const bucketSections = [
     { key: 'overdue', label: 'Overdue' },
     { key: 'due_soon', label: 'Due Soon' },
     { key: 'no_date', label: 'No Date' }
   ] as const
+  const openTaskItems = normalizeOpenTaskItems(tasksQuery.data)
 
 
   return (
@@ -430,6 +264,9 @@ export function TasksRoute() {
             onTaskComplete={(task) => {
               completeMutation.mutate(task)
             }}
+            onTaskDelete={(task) => {
+              setPendingDeleteTask(task)
+            }}
             isBusy={isBusy}
           />
         ) : (
@@ -440,7 +277,7 @@ export function TasksRoute() {
               </div>
             ) : null}
 
-            {tasksQuery.data && (Array.isArray(tasksQuery.data) ? tasksQuery.data : tasksQuery.data.items).length === 0 ? (
+            {tasksQuery.data && openTaskItems.length === 0 ? (
               <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
                 <p className="font-display text-2xl text-on-surface">No open tasks here</p>
                 <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
@@ -451,9 +288,7 @@ export function TasksRoute() {
 
             <div className="space-y-4">
               {bucketSections.map((section) => {
-                const rawData = tasksQuery.data;
-                const itemsList = Array.isArray(rawData) ? rawData : (rawData?.items ?? [])
-                const items = itemsList.filter((task) => task.due_bucket === section.key)
+                const items = openTaskItems.filter((task) => task.due_bucket === section.key)
                 if (items.length === 0) {
                   return null
                 }
@@ -480,12 +315,13 @@ export function TasksRoute() {
                             })
                           }
                           onComplete={(taskId) => {
-                            const rawData = tasksQuery.data;
-                            const itemsList = Array.isArray(rawData) ? rawData : (rawData?.items ?? [])
-                            const current = itemsList.find((item) => item.id === taskId)
+                            const current = openTaskItems.find((item) => item.id === taskId)
                             if (current) {
                               completeMutation.mutate(current)
                             }
+                          }}
+                          onDelete={(task) => {
+                            setPendingDeleteTask(task)
                           }}
                         />
                       ))}
@@ -558,12 +394,32 @@ export function TasksRoute() {
         groups={groupsQuery.data ?? []}
         isOpen={isAddTaskModalOpen}
         onClose={() => setIsAddTaskModalOpen(false)}
-        onSave={async (_taskId, _updates) => {
+        onSave={async () => {
           // Refresh task data after creation
           await refreshTaskData()
         }}
         csrfToken={sessionQuery.data?.csrf_token ?? ''}
         defaultGroupId={resolvedGroupId ?? undefined}
+      />
+
+      <TaskDeleteDialog
+        isOpen={pendingDeleteTask !== null}
+        taskTitle={pendingDeleteTask?.title ?? ''}
+        isRecurring={Boolean(pendingDeleteTask?.series_id || pendingDeleteTask?.recurrence_frequency)}
+        isDeleting={deleteTaskMutation.isPending}
+        onDeleteOccurrence={() => {
+          if (!pendingDeleteTask) {
+            return
+          }
+          deleteTaskMutation.mutate({ task: pendingDeleteTask, scope: 'occurrence' })
+        }}
+        onDeleteSeries={() => {
+          if (!pendingDeleteTask) {
+            return
+          }
+          deleteTaskMutation.mutate({ task: pendingDeleteTask, scope: 'series' })
+        }}
+        onClose={() => setPendingDeleteTask(null)}
       />
     </SessionGuard>
   )
