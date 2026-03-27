@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from datetime import date
 
 from app.prompts.extraction_prompts import ExtractionPromptManager

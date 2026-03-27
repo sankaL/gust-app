@@ -60,15 +60,15 @@ AuthServiceDep = Annotated[SupabaseAuthService, Depends(get_auth_service)]
 class UserSummary(BaseModel):
     id: str
     email: str
-    display_name: Optional[str]
+    display_name: str | None
 
 
 class SessionStatusResponse(BaseModel):
     signed_in: bool
-    user: Optional[UserSummary] = None
-    timezone: Optional[str] = None
-    inbox_group_id: Optional[str] = None
-    csrf_token: Optional[str] = None
+    user: UserSummary | None = None
+    timezone: str | None = None
+    inbox_group_id: str | None = None
+    csrf_token: str | None = None
 
 
 class TimezoneUpdateRequest(BaseModel):

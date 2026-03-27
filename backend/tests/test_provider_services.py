@@ -1,7 +1,7 @@
 import asyncio
-from dataclasses import dataclass
-from datetime import date, datetime
 import logging
+from dataclasses import dataclass
+from datetime import date
 from typing import Optional
 from unittest.mock import patch
 
@@ -13,8 +13,8 @@ from app.core.settings import Settings
 from app.prompts.extraction_prompts import ExtractionPromptManager
 from app.services.extraction import (
     ExtractionRequest,
-    ExtractorMalformedResponseError,
     ExtractionServiceError,
+    ExtractorMalformedResponseError,
     LangChainExtractionService,
 )
 from app.services.extraction_models import (
@@ -498,7 +498,7 @@ def test_extraction_service_passes_system_prompt_as_runtime_input(
 
 
 def test_extractor_payload_allows_invalid_recurrence_for_candidate_filtering() -> None:
-    """Payload validation should allow capture service to reject malformed candidates individually."""
+    """Payload validation should reject malformed candidates individually."""
     payload = ExtractorPayload.model_validate(
         {
             "tasks": [

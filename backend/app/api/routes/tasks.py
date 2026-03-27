@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: UP045
 from datetime import date, datetime
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
@@ -11,7 +11,13 @@ from app.core.dependencies import get_current_session_context, get_task_service,
 from app.core.errors import InvalidTaskError
 from app.db.repositories import SessionContext, SubtaskRecord, TaskRecord
 from app.services.task_rules import RecurrenceInput, due_bucket_for_date
-from app.services.task_service import TaskCreateInput, TaskDetail, TaskListItem, TaskService, TaskUpdateInput
+from app.services.task_service import (
+    TaskCreateInput,
+    TaskDetail,
+    TaskListItem,
+    TaskService,
+    TaskUpdateInput,
+)
 
 router = APIRouter()
 
@@ -28,55 +34,55 @@ class GroupSummaryResponse(BaseModel):
 
 class RecurrenceResponse(BaseModel):
     frequency: str
-    weekday: Optional[int] = None
-    day_of_month: Optional[int] = None
+    weekday: int | None = None
+    day_of_month: int | None = None
 
 
 class SubtaskResponse(BaseModel):
     id: str
     title: str
     is_completed: bool
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
 
 
 class TaskSummaryResponse(BaseModel):
     id: str
     title: str
-    description: Optional[str] = None
-    series_id: Optional[str] = None
-    recurrence_frequency: Optional[str] = None
+    description: str | None = None
+    series_id: str | None = None
+    recurrence_frequency: str | None = None
     status: str
     needs_review: bool
-    due_date: Optional[date]
-    reminder_at: Optional[datetime]
+    due_date: date | None
+    reminder_at: datetime | None
     due_bucket: str
     group: GroupSummaryResponse
-    completed_at: Optional[datetime]
-    deleted_at: Optional[datetime]
+    completed_at: datetime | None
+    deleted_at: datetime | None
     subtask_count: int = 0
 
 
 class TaskDetailResponse(TaskSummaryResponse):
-    recurrence: Optional[RecurrenceResponse]
+    recurrence: RecurrenceResponse | None
     subtasks: list[SubtaskResponse]
 
 
 class UpdateTaskRequest(BaseModel):
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     group_id: str
-    due_date: Optional[date] = None
-    reminder_at: Optional[datetime] = None
-    recurrence: Optional[RecurrenceResponse] = None
+    due_date: date | None = None
+    reminder_at: datetime | None = None
+    recurrence: RecurrenceResponse | None = None
 
 
 class CreateTaskRequest(BaseModel):
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     group_id: str
-    due_date: Optional[date] = None
-    reminder_at: Optional[datetime] = None
-    recurrence: Optional[RecurrenceResponse] = None
+    due_date: date | None = None
+    reminder_at: datetime | None = None
+    recurrence: RecurrenceResponse | None = None
 
 
 class CreateSubtaskRequest(BaseModel):
@@ -84,24 +90,24 @@ class CreateSubtaskRequest(BaseModel):
 
 
 class UpdateSubtaskRequest(BaseModel):
-    title: Optional[str] = None
-    is_completed: Optional[bool] = None
+    title: str | None = None
+    is_completed: bool | None = None
 
 
 class PaginatedTaskListResponse(BaseModel):
     items: list[TaskSummaryResponse]
     has_more: bool
-    next_cursor: Optional[str]
+    next_cursor: str | None
 
 
 @router.get("", response_model=PaginatedTaskListResponse)
 def list_tasks_route(
     session_context: OptionalSessionContextDep,
     task_service: TaskServiceDep,
-    group_id: Optional[str] = Query(None),
+    group_id: str | None = Query(None),
     status_value: str = Query("open", alias="status"),
     limit: int = Query(50, ge=1, le=100),
-    cursor: Optional[str] = Query(None),
+    cursor: str | None = Query(None),
 ) -> PaginatedTaskListResponse:
     validated_status = _validate_status(status_value)
     result = task_service.list_tasks(
@@ -347,7 +353,7 @@ def _build_task_detail(detail: TaskDetail, user_timezone: str) -> TaskDetailResp
     )
 
 
-def _build_recurrence_input(value: Optional[RecurrenceResponse]) -> Optional[RecurrenceInput]:
+def _build_recurrence_input(value: RecurrenceResponse | None) -> RecurrenceInput | None:
     if value is None:
         return None
     return RecurrenceInput(
@@ -357,7 +363,7 @@ def _build_recurrence_input(value: Optional[RecurrenceResponse]) -> Optional[Rec
     )
 
 
-def _build_recurrence_response(task: TaskRecord) -> Optional[RecurrenceResponse]:
+def _build_recurrence_response(task: TaskRecord) -> RecurrenceResponse | None:
     if task.recurrence_frequency is None:
         return None
     return RecurrenceResponse(

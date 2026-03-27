@@ -4,7 +4,6 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
 
 import sqlalchemy as sa
 from fastapi import FastAPI
@@ -57,7 +56,7 @@ def _seed_group(
     *,
     user_id: str,
     name: str,
-    description: Optional[str] = None,
+    description: str | None = None,
 ) -> str:
     group_id = str(uuid.uuid4())
     with connection_scope(client.app.state.settings.database_url) as connection:
@@ -80,18 +79,18 @@ def _seed_task(
     user_id: str,
     group_id: str,
     title: str,
-    description: Optional[str] = None,
+    description: str | None = None,
     status: str = "open",
     needs_review: bool = False,
-    due_date_value: Optional[date] = None,
-    reminder_at_value: Optional[datetime] = None,
-    reminder_offset_minutes: Optional[int] = None,
-    series_id: Optional[str] = None,
-    recurrence_frequency: Optional[str] = None,
-    recurrence_interval: Optional[int] = None,
-    recurrence_weekday: Optional[int] = None,
-    recurrence_day_of_month: Optional[int] = None,
-    deleted_at_value: Optional[datetime] = None,
+    due_date_value: date | None = None,
+    reminder_at_value: datetime | None = None,
+    reminder_offset_minutes: int | None = None,
+    series_id: str | None = None,
+    recurrence_frequency: str | None = None,
+    recurrence_interval: int | None = None,
+    recurrence_weekday: int | None = None,
+    recurrence_day_of_month: int | None = None,
+    deleted_at_value: datetime | None = None,
 ) -> str:
     task_id = str(uuid.uuid4())
     completed_at = datetime.now(timezone.utc) if status == "completed" else None
@@ -393,10 +392,7 @@ def test_update_task_keeps_digest_only_reminder_state_and_series_id(
         reminder_rows = connection.execute(sa.select(reminders)).fetchall()
 
     assert str(task_row.group_id) == second_group_id
-    assert (
-        task_row.description
-        == "Keep the task route contract aligned with the new API shape."
-    )
+    assert task_row.description == "Keep the task route contract aligned with the new API shape."
     assert task_row.needs_review is False
     assert task_row.series_id is not None
     assert task_row.recurrence_frequency == "weekly"
@@ -555,9 +551,9 @@ def test_complete_task_creates_next_daily_occurrence_with_reset_subtasks(
     group_id = _seed_group(client, user_id=USER_ID, name="Recurring")
     series_id = str(uuid.uuid4())
     today = datetime.now(timezone.utc).date()
-    reminder_at_value = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc) + timedelta(
-        hours=9
-    )
+    reminder_at_value = datetime.combine(
+        today, datetime.min.time(), tzinfo=timezone.utc
+    ) + timedelta(hours=9)
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -610,9 +606,7 @@ def test_complete_task_creates_next_daily_occurrence_with_reset_subtasks(
     assert next_row.due_date == today + timedelta(days=1)
     assert next_row.series_id == series_id
     assert next_row.needs_review is False
-    assert next_row.reminder_at == (reminder_at_value + timedelta(days=1)).replace(
-        tzinfo=None
-    )
+    assert next_row.reminder_at == (reminder_at_value + timedelta(days=1)).replace(tzinfo=None)
     assert len(next_subtask_rows) == 1
     assert next_subtask_rows[0].title == "Review blockers"
     assert next_subtask_rows[0].is_completed is False
@@ -664,9 +658,9 @@ def test_delete_task_occurrence_creates_next_occurrence_from_due_date(
     series_id = str(uuid.uuid4())
     today = datetime.now(timezone.utc).date()
     recurrence_weekday = (today.weekday() + 1) % 7
-    reminder_at_value = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc) + timedelta(
-        hours=23
-    )
+    reminder_at_value = datetime.combine(
+        today, datetime.min.time(), tzinfo=timezone.utc
+    ) + timedelta(hours=23)
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -797,7 +791,9 @@ def test_delete_task_series_soft_deletes_open_occurrences_only(
     first_reminder = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=2)
     second_reminder = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=3)
     _seed_reminder(client, user_id=USER_ID, task_id=open_task_id, scheduled_for=first_reminder)
-    _seed_reminder(client, user_id=USER_ID, task_id=second_open_task_id, scheduled_for=second_reminder)
+    _seed_reminder(
+        client, user_id=USER_ID, task_id=second_open_task_id, scheduled_for=second_reminder
+    )
 
     response = client.request(
         "DELETE",
@@ -809,8 +805,12 @@ def test_delete_task_series_soft_deletes_open_occurrences_only(
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         open_row = connection.execute(sa.select(tasks).where(tasks.c.id == open_task_id)).one()
-        second_open_row = connection.execute(sa.select(tasks).where(tasks.c.id == second_open_task_id)).one()
-        completed_row = connection.execute(sa.select(tasks).where(tasks.c.id == completed_task_id)).one()
+        second_open_row = connection.execute(
+            sa.select(tasks).where(tasks.c.id == second_open_task_id)
+        ).one()
+        completed_row = connection.execute(
+            sa.select(tasks).where(tasks.c.id == completed_task_id)
+        ).one()
         open_reminder = connection.execute(
             sa.select(reminders).where(reminders.c.task_id == open_task_id)
         ).one()
@@ -957,8 +957,7 @@ def test_complete_task_clears_past_derived_inherited_reminder(
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         next_row = connection.execute(
-            sa.select(tasks)
-            .where(
+            sa.select(tasks).where(
                 tasks.c.series_id == series_id,
                 tasks.c.status == "open",
                 tasks.c.deleted_at.is_(None),
@@ -980,9 +979,9 @@ def test_reopen_recurring_task_reuses_generated_occurrence_as_undo_target(
     group_id = _seed_group(client, user_id=USER_ID, name="Undo Series")
     series_id = str(uuid.uuid4())
     today = datetime.now(timezone.utc).date()
-    reminder_at_value = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc) + timedelta(
-        hours=9
-    )
+    reminder_at_value = datetime.combine(
+        today, datetime.min.time(), tzinfo=timezone.utc
+    ) + timedelta(hours=9)
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -1013,11 +1012,7 @@ def test_reopen_recurring_task_reuses_generated_occurrence_as_undo_target(
         generated_reminder = connection.execute(
             sa.select(reminders).where(reminders.c.task_id == generated_task.id)
         ).fetchall()
-        open_rows = [
-            row
-            for row in task_rows
-            if row.status == "open" and row.deleted_at is None
-        ]
+        open_rows = [row for row in task_rows if row.status == "open" and row.deleted_at is None]
 
     assert len(open_rows) == 1
     assert str(open_rows[0].id) == task_id
@@ -1060,11 +1055,7 @@ def test_reopen_recurring_task_keeps_series_and_generates_single_next_on_recompl
             .where(tasks.c.series_id == series_id)
             .order_by(tasks.c.created_at.asc(), tasks.c.id.asc())
         ).fetchall()
-        open_rows = [
-            row
-            for row in task_rows
-            if row.status == "open" and row.deleted_at is None
-        ]
+        open_rows = [row for row in task_rows if row.status == "open" and row.deleted_at is None]
         deleted_rows = [row for row in task_rows if row.deleted_at is not None]
 
     assert len(task_rows) == 3
@@ -1081,9 +1072,9 @@ def test_restore_deleted_recurring_task_reuses_generated_occurrence_as_undo_targ
     group_id = _seed_group(client, user_id=USER_ID, name="Restore Series")
     series_id = str(uuid.uuid4())
     today = datetime.now(timezone.utc).date()
-    reminder_at_value = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc) + timedelta(
-        hours=9
-    )
+    reminder_at_value = datetime.combine(
+        today, datetime.min.time(), tzinfo=timezone.utc
+    ) + timedelta(hours=9)
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -1118,11 +1109,7 @@ def test_restore_deleted_recurring_task_reuses_generated_occurrence_as_undo_targ
         generated_reminder = connection.execute(
             sa.select(reminders).where(reminders.c.task_id == generated_task.id)
         ).fetchall()
-        open_rows = [
-            row
-            for row in task_rows
-            if row.status == "open" and row.deleted_at is None
-        ]
+        open_rows = [row for row in task_rows if row.status == "open" and row.deleted_at is None]
 
     assert len(open_rows) == 1
     assert str(open_rows[0].id) == task_id
@@ -1165,7 +1152,7 @@ def test_reopen_recurring_task_returns_single_non_recurring_instance_when_no_ope
     assert task_row.recurrence_frequency is None
 
 
-def test_restore_deleted_recurring_task_returns_single_non_recurring_instance_when_no_open_occurrence_exists(
+def test_restore_deleted_recurring_task_returns_single_instance(
     app: FastAPI,
     client: TestClient,
 ) -> None:

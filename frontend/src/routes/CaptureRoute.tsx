@@ -89,6 +89,21 @@ export function CaptureRoute() {
     return reviewCaptureId
   }
 
+  const refreshTaskQueries = async (captureId?: string | null) => {
+    const invalidations = [
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] }),
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    ]
+
+    if (captureId) {
+      invalidations.unshift(
+        queryClient.invalidateQueries({ queryKey: ['extracted-tasks', captureId] })
+      )
+    }
+
+    await Promise.all(invalidations)
+  }
+
   // Handler functions for StagingTable
   const handleApproveTask = async (taskId: string) => {
     const captureId = resolveTaskCaptureId(taskId)
@@ -100,11 +115,7 @@ export function CaptureRoute() {
     try {
       setSubmitError(null)
       await approveExtractedTask(captureId, taskId, sessionQuery.data.csrf_token)
-      // Refresh both queries
-      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', captureId] })
-      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
-      // Also invalidate tasks query to ensure TasksRoute and AllTasksView stay in sync
-      await queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      await refreshTaskQueries(captureId)
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to approve task.'))
     }
@@ -120,11 +131,7 @@ export function CaptureRoute() {
     try {
       setSubmitError(null)
       await discardExtractedTask(captureId, taskId, sessionQuery.data.csrf_token)
-      // Refresh both queries
-      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', captureId] })
-      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
-      // Also invalidate tasks query to ensure TasksRoute and AllTasksView stay in sync
-      await queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      await refreshTaskQueries(captureId)
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to discard task.'))
     }
@@ -135,11 +142,7 @@ export function CaptureRoute() {
     try {
       setSubmitError(null)
       await approveAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
-      // Refresh both queries
-      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
-      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
-      // Also invalidate tasks query to ensure TasksRoute and AllTasksView stay in sync
-      await queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      await refreshTaskQueries(reviewCaptureId)
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to approve all tasks.'))
     }
@@ -150,11 +153,7 @@ export function CaptureRoute() {
     try {
       setSubmitError(null)
       await discardAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
-      // Refresh both queries
-      queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
-      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
-      // Also invalidate tasks query to ensure TasksRoute and AllTasksView stay in sync
-      await queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      await refreshTaskQueries(reviewCaptureId)
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to discard all tasks.'))
     }
@@ -176,14 +175,7 @@ export function CaptureRoute() {
     // Note: _taskId and _updates are unused because we invalidate by reviewCaptureId for consistency
     // with handleApproveAll/handleDiscardAll. Using editModalTask.capture_id would cause issues
     // when editing a task from a different capture than the one currently being reviewed.
-    if (reviewCaptureId) {
-      await queryClient.invalidateQueries({ queryKey: ['extracted-tasks', reviewCaptureId] })
-    }
-    // Always invalidate pending tasks as edited tasks may appear there
-    await queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
-
-    // Also invalidate tasks query to ensure TasksRoute stays in sync
-    await queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    await refreshTaskQueries(reviewCaptureId)
   }
 
   // Groups query for the edit modal
@@ -214,7 +206,7 @@ export function CaptureRoute() {
         })
       )
       // Refresh the pending list
-      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+      await refreshTaskQueries(null)
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to approve all tasks.'))
     }
@@ -241,7 +233,7 @@ export function CaptureRoute() {
         })
       )
       // Refresh the pending list
-      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+      await refreshTaskQueries(null)
     } catch (error) {
       setSubmitError(buildFriendlyMessage(error, 'Failed to discard all tasks.'))
     }
@@ -642,18 +634,20 @@ export function CaptureRoute() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={async () => {
-                if (!reviewCaptureId || !sessionQuery.data?.csrf_token) {
-                  return
-                }
-                try {
-                  setSubmitError(null)
-                  await completeCapture(reviewCaptureId, sessionQuery.data.csrf_token)
-                  setShowStaging(false)
-                  setReviewCaptureId(null)
-                } catch (error) {
-                  setSubmitError(buildFriendlyMessage(error, 'Failed to complete capture.'))
-                }
+              onClick={() => {
+                void (async () => {
+                  if (!reviewCaptureId || !sessionQuery.data?.csrf_token) {
+                    return
+                  }
+                  try {
+                    setSubmitError(null)
+                    await completeCapture(reviewCaptureId, sessionQuery.data.csrf_token)
+                    setShowStaging(false)
+                    setReviewCaptureId(null)
+                  } catch (error) {
+                    setSubmitError(buildFriendlyMessage(error, 'Failed to complete capture.'))
+                  }
+                })()
               }}
               className="rounded-pill border border-outline px-3 py-1.5 text-sm text-on-surface-variant"
             >

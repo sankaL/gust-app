@@ -23,10 +23,7 @@ def test_check_required_revision_accepts_matching_revision(tmp_path: Path) -> No
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
         connection.execute(
-            text(
-                "INSERT INTO alembic_version (version_num) "
-                "VALUES ('0009_task_descriptions')"
-            )
+            text("INSERT INTO alembic_version (version_num) VALUES ('0009_task_descriptions')")
         )
 
     check_required_revision(database_url, "0009_task_descriptions")
@@ -40,10 +37,7 @@ def test_check_required_revision_accepts_newer_revision_than_required(tmp_path: 
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
         connection.execute(
-            text(
-                "INSERT INTO alembic_version (version_num) "
-                "VALUES ('0009_task_descriptions')"
-            )
+            text("INSERT INTO alembic_version (version_num) VALUES ('0009_task_descriptions')")
         )
 
     check_required_revision(database_url, "0007_add_tasks_pagination_index")
@@ -76,17 +70,16 @@ def test_schema_metadata_contains_required_tables_and_phase4_capture_retention_c
     assert "description" in tasks.c
     assert "description" in metadata.tables["extracted_tasks"].c
     capture_fk = next(
-        foreign_key for foreign_key in foreign_keys if foreign_key["constrained_columns"] == ["capture_id"]
+        foreign_key
+        for foreign_key in foreign_keys
+        if foreign_key["constrained_columns"] == ["capture_id"]
     )
     assert capture_fk["options"].get("ondelete") == "SET NULL"
 
 
 def test_phase1_migration_creates_captures_before_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
     migration_path = (
-        Path(__file__).resolve().parents[1]
-        / "alembic"
-        / "versions"
-        / "0002_phase1_core_backend.py"
+        Path(__file__).resolve().parents[1] / "alembic" / "versions" / "0002_phase1_core_backend.py"
     )
     spec = importlib.util.spec_from_file_location("phase1_core_backend_migration", migration_path)
     assert spec is not None
@@ -115,7 +108,9 @@ def test_phase4_migration_targets_capture_fk_change() -> None:
         / "versions"
         / "0004_phase4_reminders_retention.py"
     )
-    spec = importlib.util.spec_from_file_location("phase4_reminders_retention_migration", migration_path)
+    spec = importlib.util.spec_from_file_location(
+        "phase4_reminders_retention_migration", migration_path
+    )
     assert spec is not None
     assert spec.loader is not None
 
@@ -128,10 +123,7 @@ def test_phase4_migration_targets_capture_fk_change() -> None:
 
 def test_phase8_migration_adds_digest_dispatch_table_and_cancels_legacy_reminders() -> None:
     migration_path = (
-        Path(__file__).resolve().parents[1]
-        / "alembic"
-        / "versions"
-        / "0008_digest_dispatches.py"
+        Path(__file__).resolve().parents[1] / "alembic" / "versions" / "0008_digest_dispatches.py"
     )
     spec = importlib.util.spec_from_file_location("digest_dispatches_migration", migration_path)
     assert spec is not None
@@ -145,9 +137,7 @@ def test_phase8_migration_adds_digest_dispatch_table_and_cancels_legacy_reminder
     executed_sql: list[str] = []
 
     module.op.create_table = lambda name, *args, **kwargs: created_tables.append(name)
-    module.op.create_index = (
-        lambda name, *args, **kwargs: created_indexes.append(name)
-    )
+    module.op.create_index = lambda name, *args, **kwargs: created_indexes.append(name)
     module.op.execute = lambda statement: executed_sql.append(statement)
 
     module.upgrade()
@@ -166,10 +156,7 @@ def test_phase8_migration_adds_digest_dispatch_table_and_cancels_legacy_reminder
 
 def test_phase9_migration_adds_task_description_columns() -> None:
     migration_path = (
-        Path(__file__).resolve().parents[1]
-        / "alembic"
-        / "versions"
-        / "0009_task_descriptions.py"
+        Path(__file__).resolve().parents[1] / "alembic" / "versions" / "0009_task_descriptions.py"
     )
     spec = importlib.util.spec_from_file_location("task_descriptions_migration", migration_path)
     assert spec is not None
@@ -181,8 +168,12 @@ def test_phase9_migration_adds_task_description_columns() -> None:
     added_columns: list[tuple[str, str]] = []
     dropped_columns: list[tuple[str, str]] = []
 
-    module.op.add_column = lambda table_name, column: added_columns.append((table_name, column.name))
-    module.op.drop_column = lambda table_name, column_name: dropped_columns.append((table_name, column_name))
+    module.op.add_column = lambda table_name, column: added_columns.append(
+        (table_name, column.name)
+    )
+    module.op.drop_column = lambda table_name, column_name: dropped_columns.append(
+        (table_name, column_name)
+    )
 
     module.upgrade()
     module.downgrade()

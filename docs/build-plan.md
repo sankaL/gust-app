@@ -96,6 +96,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-14 | Redesign Login Page Buttons | DONE | 2026-03-26 | Completely overhauled the login screen buttons to use the 3D tactile materials and physics established on the capture page, mapping Google Auth to the mic button and Local Dev to the fallback input. | Design |
 | ADH-15 | Provision production Railway, Supabase, Resend, and digest cron infrastructure | IN PROGRESS | 2026-03-27 | Fresh Supabase project created and linked, `gustapp.ca` and `api.gustapp.ca` are live on Railway, daily/weekly cron services are deployed, hosted Supabase Google auth is configured, `hotfix-1` has been fast-forwarded into `main`, and a production backend deploy reran Alembic through `0009_task_descriptions`. Remaining blocker: `auth.gustapp.ca` still requires the Supabase Custom Domain add-on. | Tech, Runbook, AGENTS |
 | ADH-16 | Add optional top-level task descriptions across extraction, persistence, and task cards | DONE | 2026-03-27 | Added nullable task/extracted-task descriptions, description-aware extraction and edit flows, and card layout updates for staged and saved tasks. | PRD, Schema, Runbook |
+| ADH-17 | Restore backend/frontend CI lint checks after Ruff/ESLint drift | DONE | 2026-03-27 | Reformatted backend Python sources, fixed extraction prompt lint drift, and corrected frontend promise-handling and test harness issues so CI lint passes again. | AGENTS |
 
 ## Bug Fixes
 

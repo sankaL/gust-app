@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+
 # ruff: noqa: UP045
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from pydantic import BaseModel
@@ -42,7 +43,7 @@ class CaptureReviewResponse(BaseModel):
 class SkippedCaptureItemResponse(BaseModel):
     code: str
     message: str
-    title: Optional[str] = None
+    title: str | None = None
 
 
 class SubmitCaptureResponse(BaseModel):
@@ -59,14 +60,14 @@ class ExtractedTaskResponse(BaseModel):
     id: str
     capture_id: str
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     group_id: str
-    group_name: Optional[str]
-    due_date: Optional[str]
-    reminder_at: Optional[str]
-    recurrence_frequency: Optional[str]
-    recurrence_weekday: Optional[int]
-    recurrence_day_of_month: Optional[int]
+    group_name: str | None
+    due_date: str | None
+    reminder_at: str | None
+    recurrence_frequency: str | None
+    recurrence_weekday: int | None
+    recurrence_day_of_month: int | None
     top_confidence: float
     needs_review: bool
     status: str
@@ -80,14 +81,14 @@ class ReExtractRequest(BaseModel):
 
 
 class UpdateExtractedTaskRequest(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    group_id: Optional[str] = None
-    due_date: Optional[date] = None
-    reminder_at: Optional[datetime] = None  # ISO datetime string (with timezone) or null
-    recurrence_frequency: Optional[Literal["daily", "weekly", "monthly"]] = None
-    recurrence_weekday: Optional[int] = None  # 0-6 for weekly
-    recurrence_day_of_month: Optional[int] = None  # 1-31 for monthly
+    title: str | None = None
+    description: str | None = None
+    group_id: str | None = None
+    due_date: date | None = None
+    reminder_at: datetime | None = None  # ISO datetime string (with timezone) or null
+    recurrence_frequency: Literal["daily", "weekly", "monthly"] | None = None
+    recurrence_weekday: int | None = None  # 0-6 for weekly
+    recurrence_day_of_month: int | None = None  # 1-31 for monthly
 
 
 @router.post("/voice", response_model=CaptureReviewResponse, status_code=status.HTTP_201_CREATED)
@@ -193,7 +194,9 @@ async def list_extracted_tasks(
     return [_build_extracted_task_response(task) for task in extracted_tasks]
 
 
-@router.post("/{capture_id}/extracted-tasks/{task_id}/approve", response_model=ExtractedTaskResponse)
+@router.post(
+    "/{capture_id}/extracted-tasks/{task_id}/approve", response_model=ExtractedTaskResponse
+)
 async def approve_extracted_task(
     capture_id: str,
     task_id: str,
@@ -247,7 +250,9 @@ async def update_extracted_task(
     return _build_extracted_task_response(updated_task)
 
 
-@router.post("/{capture_id}/extracted-tasks/approve-all", response_model=list[ExtractedTaskResponse])
+@router.post(
+    "/{capture_id}/extracted-tasks/approve-all", response_model=list[ExtractedTaskResponse]
+)
 async def approve_all_extracted_tasks(
     capture_id: str,
     session_context: RequiredSessionContextDep,

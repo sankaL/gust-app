@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import sqlalchemy as sa
 from fastapi import FastAPI
@@ -42,8 +42,8 @@ class FakeAuthService:
 
 @dataclass
 class FakeTranscriptionService:
-    result: Optional[TranscriptionResult] = None
-    error: Optional[Exception] = None
+    result: TranscriptionResult | None = None
+    error: Exception | None = None
     call_count: int = 0
 
     async def transcribe(
@@ -73,7 +73,7 @@ class FakeExtractionService:
         self,
         *,
         request,
-        schema: Optional[dict[str, object]] = None,
+        schema: dict[str, object] | None = None,
     ) -> dict[str, object]:
         self.call_count += 1
         self.requests.append(request)
@@ -118,7 +118,7 @@ def _seed_group(
     *,
     user_id: str,
     name: str,
-    description: Optional[str] = None,
+    description: str | None = None,
 ) -> str:
     group_id = str(uuid.uuid4())
     with connection_scope(client.app.state.settings.database_url) as connection:
@@ -141,7 +141,7 @@ def _seed_open_task(
     user_id: str,
     group_id: str,
     title: str,
-    description: Optional[str] = None,
+    description: str | None = None,
 ) -> None:
     with connection_scope(client.app.state.settings.database_url) as connection:
         connection.execute(
@@ -186,7 +186,7 @@ def _seed_extracted_task(
     user_id: str,
     capture_id: str,
     group_id: str,
-    description: Optional[str] = None,
+    description: str | None = None,
     status: str = "pending",
 ) -> str:
     extracted_task_id = str(uuid.uuid4())
@@ -782,7 +782,9 @@ def test_submit_capture_creates_fallback_review_task_when_guarded_intent_still_m
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         task_rows = connection.execute(
-            sa.select(tasks).where(tasks.c.capture_id == capture_id).order_by(tasks.c.created_at.asc())
+            sa.select(tasks)
+            .where(tasks.c.capture_id == capture_id)
+            .order_by(tasks.c.created_at.asc())
         ).fetchall()
         inbox_group = ensure_inbox_group(connection, user_id=user_id)
 
@@ -790,8 +792,7 @@ def test_submit_capture_creates_fallback_review_task_when_guarded_intent_still_m
     assert fallback_task.group_id == inbox_group.id
     assert fallback_task.needs_review is True
     assert fallback_task.title == (
-        "Call my dentist to probably tomorrow around 9 a.m "
-        "to fix my metal thing in my mouth"
+        "Call my dentist to probably tomorrow around 9 a.m to fix my metal thing in my mouth"
     )
 
 
@@ -920,7 +921,15 @@ def test_re_extract_replaces_existing_staged_tasks_for_capture(
         app,
         FakeExtractionService(
             responses=[
-                {"tasks": [{"title": "New extracted task", "group_name": "Inbox", "top_confidence": 0.92}]}
+                {
+                    "tasks": [
+                        {
+                            "title": "New extracted task",
+                            "group_name": "Inbox",
+                            "top_confidence": 0.92,
+                        }
+                    ]
+                }
             ]
         ),
     )

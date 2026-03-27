@@ -89,9 +89,7 @@ class MistralTranscriptionService:
                     "Configured Mistral transcription model is invalid."
                 )
             if response.status_code in {401, 403}:
-                raise InvalidConfigurationError(
-                    "Configured Mistral credentials are invalid."
-                )
+                raise InvalidConfigurationError("Configured Mistral credentials are invalid.")
             raise provider_error
 
         try:

@@ -614,7 +614,7 @@ describe('app shell', () => {
 
     const installEvent = new Event('beforeinstallprompt') as BeforeInstallPromptEvent
     Object.assign(installEvent, { prompt, userChoice })
-    await act(async () => {
+    act(() => {
       window.dispatchEvent(installEvent)
     })
 
@@ -632,13 +632,13 @@ describe('app shell', () => {
       prompt: vi.fn().mockResolvedValue(undefined),
       userChoice: Promise.resolve({ outcome: 'accepted' as const, platform: 'web' })
     })
-    await act(async () => {
+    act(() => {
       window.dispatchEvent(installEvent)
     })
 
     expect(await screen.findByRole('button', { name: 'Install Gust app' })).toBeInTheDocument()
 
-    await act(async () => {
+    act(() => {
       window.dispatchEvent(new Event('appinstalled'))
     })
 

@@ -144,7 +144,7 @@ export function AppShell() {
       setIsAccountMenuOpen(false)
       setMenuError(null)
       queryClient.clear()
-      navigate('/login', { replace: true })
+      void navigate('/login', { replace: true })
     },
     onError: (error) => {
       setMenuError(buildFriendlyMessage(error, 'Logout failed. Refresh and try again.'))
@@ -200,12 +200,12 @@ export function AppShell() {
 
   function openCompletedTasks() {
     setIsAccountMenuOpen(false)
-    navigate('/tasks/completed?group=all')
+    void navigate('/tasks/completed?group=all')
   }
 
   function openDesktopMode() {
     setIsAccountMenuOpen(false)
-    navigate('/desktop')
+    void navigate('/desktop')
   }
 
   return (
@@ -223,7 +223,9 @@ export function AppShell() {
                   type="button"
                   variant="primary"
                   size="sm"
-                  onClick={handleInstallClick}
+                  onClick={() => {
+                    void handleInstallClick()
+                  }}
                   aria-label={installPrompt ? 'Install Gust app' : 'Show iPhone install instructions'}
                 >
                   {installPrompt ? 'Install' : 'Add to Home'}
@@ -325,7 +327,9 @@ export function AppShell() {
                   type="button"
                   variant="primary"
                   size="sm"
-                  onClick={() => updateServiceWorker(true)}
+                  onClick={() => {
+                    void updateServiceWorker(true)
+                  }}
                 >
                   Update
                 </Button>

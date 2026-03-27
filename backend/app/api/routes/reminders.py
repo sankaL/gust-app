@@ -25,7 +25,7 @@ class RunRemindersResponse(BaseModel):
 async def run_due_reminders(
     _job_secret: InternalJobSecretDep,
     reminder_worker_service: ReminderWorkerServiceDep,
-    mode: DigestMode = Query(...),
+    mode: Annotated[DigestMode, Query(...)],
 ) -> RunRemindersResponse:
     summary = await reminder_worker_service.run_due_work(mode=mode)
     return RunRemindersResponse(**summary.to_dict())

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: UP045
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import httpx
@@ -18,7 +18,7 @@ from app.core.settings import Settings
 class AuthenticatedIdentity:
     user_id: str
     email: str
-    display_name: Optional[str]
+    display_name: str | None
 
 
 @dataclass
@@ -30,7 +30,7 @@ class AuthenticatedSession:
 class SupabaseAuthService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._jwks_client: Optional[PyJWKClient] = None
+        self._jwks_client: PyJWKClient | None = None
 
     def ensure_configured(self) -> None:
         if not self.settings.supabase_url or not self.settings.supabase_anon_key:
@@ -126,7 +126,7 @@ class SupabaseAuthService:
         *,
         email: str,
         password: str,
-        display_name: Optional[str] = None,
+        display_name: str | None = None,
     ) -> AuthenticatedSession:
         payload: dict[str, Any] = {
             "email": email,
@@ -225,7 +225,7 @@ class SupabaseAuthService:
         url: str,
         payload: dict[str, Any],
         *,
-        query_params: Optional[dict[str, str]] = None,
+        query_params: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         self.ensure_configured()
         headers = {"apikey": self.settings.supabase_anon_key or ""}

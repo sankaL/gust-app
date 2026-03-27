@@ -7,12 +7,12 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnableLambda
+from langchain_openai import ChatOpenAI
 
 from app.core.errors import ConfigurationError
 from app.core.settings import Settings
@@ -56,9 +56,9 @@ class LangChainExtractionService:
     def __init__(
         self,
         settings: Settings,
-        prompt_manager: Optional[ExtractionPromptManager] = None,
-        retry_manager: Optional[ExtractionRetryManager] = None,
-        model_registry: Optional[ExtractionModelRegistry] = None,
+        prompt_manager: ExtractionPromptManager | None = None,
+        retry_manager: ExtractionRetryManager | None = None,
+        model_registry: ExtractionModelRegistry | None = None,
     ) -> None:
         self.settings = settings
         self.prompt_manager = prompt_manager or ExtractionPromptManager()
@@ -219,7 +219,7 @@ class LangChainExtractionService:
             import re
 
             # ── 1. Normalise input to a plain string ──────────────────────────────
-            if hasattr(input_, 'content'):
+            if hasattr(input_, "content"):
                 content = input_.content
                 if isinstance(content, list):
                     text = ""
@@ -244,20 +244,20 @@ class LangChainExtractionService:
             # The prompt instructs the model to label its final JSON with "PASS 2 OUTPUT:"
             # Be flexible with variations: "PASS TWO", "Pass 2 Output:", etc.
             pass2_patterns = [
-                r'PASS\s*2\s*OUTPUT\s*:(.*)',  # PASS 2 OUTPUT:
-                r'PASS\s*TWO\s*OUTPUT\s*:(.*)',  # PASS TWO OUTPUT:
-                r'PASS\s*2\s*OUTPUT\s*\n+(.*)',  # PASS 2 OUTPUT with newlines
-                r'```json\s*\n(.*?)\n```',  # JSON in code block without PASS marker
-                r'```\s*\n(.*?)\n```',  # Any code block
+                r"PASS\s*2\s*OUTPUT\s*:(.*)",  # PASS 2 OUTPUT:
+                r"PASS\s*TWO\s*OUTPUT\s*:(.*)",  # PASS TWO OUTPUT:
+                r"PASS\s*2\s*OUTPUT\s*\n+(.*)",  # PASS 2 OUTPUT with newlines
+                r"```json\s*\n(.*?)\n```",  # JSON in code block without PASS marker
+                r"```\s*\n(.*?)\n```",  # Any code block
             ]
-            
+
             fragment = text  # Default to full text
             for pattern in pass2_patterns:
                 pass2_match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
                 if pass2_match:
                     candidate = pass2_match.group(1).strip()
                     # Verify this candidate actually looks like JSON (starts with {)
-                    if candidate.strip().startswith('{'):
+                    if candidate.strip().startswith("{"):
                         fragment = candidate
                         break
 
@@ -267,13 +267,13 @@ class LangChainExtractionService:
             # ── 4. Greedy match: outermost { … } in the fragment ──────────────────
             # re.findall with a greedy pattern returns one match spanning
             # the first '{' to the last '}', which is exactly the tasks object.
-            json_match = re.search(r'\{[\s\S]*\}', fragment)
+            json_match = re.search(r"\{[\s\S]*\}", fragment)
             if json_match:
                 return json.loads(json_match.group(0))
 
             # ── 5. Last resort: parse fragment directly ───────────────────────────
             return json.loads(fragment)
-        
+
         chain = prompt | llm | RunnableLambda(extract_json_from_text)
 
         # Execute chain
@@ -287,6 +287,7 @@ class LangChainExtractionService:
         except Exception as exc:
             # Capture detailed error information for debugging
             import traceback
+
             error_details = {
                 "event": "extraction_chain_error",
                 "model": model_config.model_id,
@@ -296,7 +297,7 @@ class LangChainExtractionService:
                 "error_module": type(exc).__module__,
                 "traceback": traceback.format_exc(),
             }
-            
+
             # Add specific details for common error types
             if hasattr(exc, "response"):
                 error_details["response_status"] = getattr(exc.response, "status_code", None)
@@ -305,7 +306,7 @@ class LangChainExtractionService:
                 error_details["status_code"] = exc.status_code
             if hasattr(exc, "body"):
                 error_details["body"] = str(exc.body)
-            
+
             logger.warning("extraction_chain_error", extra=error_details)
             raise ExtractorMalformedResponseError(
                 f"Extraction provider request failed: {type(exc).__name__}: {str(exc)}"
@@ -372,7 +373,7 @@ class LangChainExtractionService:
                 "result_preview": str(result)[:500] if result else None,
             },
         )
-        
+
         if isinstance(result, dict):
             return result
 

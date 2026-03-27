@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Literal, Optional
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
@@ -26,9 +26,9 @@ from app.db.repositories import (
     bulk_reassign_tasks,
     cancel_reminder,
     complete_task_if_open,
+    create_subtask,
     create_subtasks,
     create_task,
-    create_subtask,
     get_group,
     get_open_task_in_series,
     get_subtask,
@@ -43,9 +43,9 @@ from app.services.task_rules import (
     RecurrenceInput,
     compute_reminder_at_from_offset,
     due_bucket_for_date,
-    normalize_task_description,
-    next_due_date_for_deleted_occurrence,
     next_due_date_for_completed_task,
+    next_due_date_for_deleted_occurrence,
+    normalize_task_description,
     normalize_task_fields,
 )
 
@@ -62,7 +62,7 @@ class TaskListItem:
 class PaginatedTaskList:
     items: list[TaskListItem]
     has_more: bool
-    next_cursor: Optional[str]
+    next_cursor: str | None
 
 
 @dataclass
@@ -75,22 +75,22 @@ class TaskDetail:
 @dataclass
 class TaskUpdateInput:
     title: str
-    description: Optional[str]
+    description: str | None
     description_provided: bool
     group_id: str
-    due_date: Optional[date]
-    reminder_at: Optional[datetime]
-    recurrence: Optional[RecurrenceInput]
+    due_date: date | None
+    reminder_at: datetime | None
+    recurrence: RecurrenceInput | None
 
 
 @dataclass
 class TaskCreateInput:
     title: str
-    description: Optional[str]
+    description: str | None
     group_id: str
-    due_date: Optional[date]
-    reminder_at: Optional[datetime]
-    recurrence: Optional[RecurrenceInput]
+    due_date: date | None
+    reminder_at: datetime | None
+    recurrence: RecurrenceInput | None
 
 
 class TaskService:
@@ -102,14 +102,14 @@ class TaskService:
         *,
         user_id: str,
         user_timezone: str,
-        group_id: Optional[str] = None,
+        group_id: str | None = None,
         status: str = "open",
         limit: int = 50,
-        cursor: Optional[str] = None,
+        cursor: str | None = None,
     ) -> PaginatedTaskList:
         with connection_scope(self.settings.database_url) as connection:
             # Validate group exists if group_id is provided (skip validation for 'all')
-            if group_id is not None and group_id != 'all':
+            if group_id is not None and group_id != "all":
                 group = get_group(connection, user_id=user_id, group_id=group_id)
                 if group is None:
                     raise GroupNotFoundError()
@@ -232,9 +232,7 @@ class TaskService:
                 "title": normalized.title,
                 "group_id": payload.group_id,
                 "needs_review": (
-                    False
-                    if payload.group_id != existing.group_id
-                    else existing.needs_review
+                    False if payload.group_id != existing.group_id else existing.needs_review
                 ),
                 "due_date": normalized.due_date,
                 "reminder_at": normalized.reminder_at,
@@ -281,7 +279,7 @@ class TaskService:
                         "task_completion_conflict",
                         "Recurring tasks can only be completed on or after their due date.",
                     )
-            series_id_to_assign: Optional[str] = None
+            series_id_to_assign: str | None = None
             if task.recurrence_frequency is not None and task.series_id is None:
                 series_id_to_assign = str(uuid.uuid4())
             completed_at = datetime.now(timezone.utc)
@@ -381,7 +379,9 @@ class TaskService:
                 if task.series_id is None or task.recurrence_frequency is None:
                     raise InvalidTaskError("Series delete is only supported for recurring tasks.")
                 if task.status != "open":
-                    raise InvalidTaskError("Series delete is only supported for open recurring tasks.")
+                    raise InvalidTaskError(
+                        "Series delete is only supported for open recurring tasks."
+                    )
                 open_tasks = list_open_tasks_in_series(
                     connection,
                     user_id=user_id,
@@ -398,7 +398,7 @@ class TaskService:
                 updated = get_task(connection, user_id=user_id, task_id=task_id)
                 assert updated is not None
             else:
-                series_id_to_assign: Optional[str] = None
+                series_id_to_assign: str | None = None
                 if task.recurrence_frequency is not None and task.series_id is None:
                     series_id_to_assign = str(uuid.uuid4())
                 updated = update_task(
@@ -495,8 +495,8 @@ class TaskService:
         user_id: str,
         task_id: str,
         subtask_id: str,
-        title: Optional[str],
-        is_completed: Optional[bool],
+        title: str | None,
+        is_completed: bool | None,
     ) -> SubtaskRecord:
         if title is None and is_completed is None:
             raise InvalidSubtaskError("At least one subtask field must be provided.")
@@ -576,11 +576,11 @@ class TaskService:
         self,
         *,
         title: str,
-        due_date: Optional[date],
-        reminder_at: Optional[datetime],
-        recurrence: Optional[RecurrenceInput],
+        due_date: date | None,
+        reminder_at: datetime | None,
+        recurrence: RecurrenceInput | None,
         user_timezone: str,
-        current_series_id: Optional[str],
+        current_series_id: str | None,
     ):
         try:
             return normalize_task_fields(
@@ -616,10 +616,7 @@ class TaskService:
         task: TaskRecord,
         completed_at: datetime,
     ) -> None:
-        if (
-            task.series_id is None
-            or task.recurrence_frequency is None
-        ):
+        if task.series_id is None or task.recurrence_frequency is None:
             return
 
         existing_open = get_open_task_in_series(
@@ -691,11 +688,7 @@ class TaskService:
         task: TaskRecord,
         deleted_at: datetime,
     ) -> None:
-        if (
-            task.status != "open"
-            or task.series_id is None
-            or task.recurrence_frequency is None
-        ):
+        if task.status != "open" or task.series_id is None or task.recurrence_frequency is None:
             return
 
         occurrence_due_date = task.due_date
@@ -769,11 +762,7 @@ class TaskService:
         user_timezone: str,
         task: TaskRecord,
     ) -> Literal["keep_recurrence", "detach_instance"]:
-        if (
-            task.series_id is None
-            or task.recurrence_frequency is None
-            or task.completed_at is None
-        ):
+        if task.series_id is None or task.recurrence_frequency is None or task.completed_at is None:
             return "keep_recurrence"
 
         existing_open = get_open_task_in_series(

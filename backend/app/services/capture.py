@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional, Protocol
+from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -14,8 +14,8 @@ from app.core.errors import (
     CaptureStateConflictError,
     ConfigurationError,
     ExtractionFailedError,
-    InvalidConfigurationError,
     InvalidCaptureError,
+    InvalidConfigurationError,
     TranscriptionFailedError,
 )
 from app.core.settings import Settings
@@ -25,9 +25,9 @@ from app.db.repositories import (
     GroupContextRecord,
     GroupRecord,
     create_capture,
-    delete_extracted_tasks_by_capture,
     create_subtasks,
     create_task,
+    delete_extracted_tasks_by_capture,
     ensure_inbox_group,
     get_capture,
     get_user,
@@ -47,7 +47,6 @@ from app.services.extraction_guardrails import (
     find_missing_guarded_intents,
 )
 from app.services.extraction_models import (
-    ExtractionRecurrence,
     ExtractedTaskCandidate,
     ExtractorPayload,
 )
@@ -60,6 +59,7 @@ from app.services.task_rules import (
 from app.services.transcription import (
     MistralTranscriptionService,
     MockTranscriptionService,
+    TranscriptionResult,
     TranscriptionServiceError,
 )
 
@@ -95,7 +95,7 @@ class ReviewCaptureResult:
 class SkippedTaskItem:
     code: str
     message: str
-    title: Optional[str]
+    title: str | None
 
 
 @dataclass
@@ -112,22 +112,22 @@ class SubmitCaptureResult:
 @dataclass
 class PreparedTask:
     title: str
-    description: Optional[str]
+    description: str | None
     group_id: str
     needs_review: bool
-    due_date: Optional[date]
-    reminder_at: Optional[datetime]
-    reminder_offset_minutes: Optional[int]
-    series_id: Optional[str]
-    recurrence_frequency: Optional[str]
-    recurrence_interval: Optional[int]
-    recurrence_weekday: Optional[int]
-    recurrence_day_of_month: Optional[int]
+    due_date: date | None
+    reminder_at: datetime | None
+    reminder_offset_minutes: int | None
+    series_id: str | None
+    recurrence_frequency: str | None
+    recurrence_interval: int | None
+    recurrence_weekday: int | None
+    recurrence_day_of_month: int | None
     subtasks: list[str]
 
 
 class CandidateValidationError(Exception):
-    def __init__(self, code: str, message: str, title: Optional[str]) -> None:
+    def __init__(self, code: str, message: str, title: str | None) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
@@ -299,7 +299,10 @@ class CaptureService:
         )
 
         try:
-            extractor_payload, extraction_attempt_count = await self._extract_payload_with_guardrails(
+            (
+                extractor_payload,
+                extraction_attempt_count,
+            ) = await self._extract_payload_with_guardrails(
                 transcript_text=normalized_transcript,
                 extraction_request=extraction_request,
                 inbox_group=inbox_group,
@@ -436,8 +439,8 @@ class CaptureService:
         user_id: str,
         input_type: str,
         status: str,
-        source_text: Optional[str] = None,
-        transcript_text: Optional[str] = None,
+        source_text: str | None = None,
+        transcript_text: str | None = None,
     ) -> CaptureRecord:
         expires_at = datetime.now(timezone.utc) + timedelta(
             days=self.settings.capture_retention_days
@@ -460,8 +463,8 @@ class CaptureService:
         user_id: str,
         status: str,
         error_code: str,
-        extraction_attempt_count: Optional[int] = None,
-        transcript_edited_text: Optional[str] = None,
+        extraction_attempt_count: int | None = None,
+        transcript_edited_text: str | None = None,
     ) -> None:
         with connection_scope(self.settings.database_url) as connection:
             update_capture(
@@ -587,7 +590,7 @@ class CaptureService:
         inbox_group: GroupRecord,
         groups_by_id: dict[str, GroupContextRecord],
         groups_by_name: dict[str, GroupContextRecord],
-    ) -> Optional[GroupContextRecord]:
+    ) -> GroupContextRecord | None:
         if candidate.group_id:
             return groups_by_id.get(candidate.group_id)
 
@@ -690,7 +693,9 @@ class CaptureService:
             groups=extraction_request.groups,
             missing_guarded_clauses=[intent.raw_text for intent in missing_guarded_intents],
         )
-        repaired_payload, repair_attempt_count = await self._extract_validated_payload(repair_request)
+        repaired_payload, repair_attempt_count = await self._extract_validated_payload(
+            repair_request
+        )
         total_attempt_count += repair_attempt_count
 
         missing_after_repair = find_missing_guarded_intents(
@@ -737,14 +742,18 @@ class CaptureService:
                 total_attempt_count += current_attempt_count
                 return validated_payload, total_attempt_count
             except (ExtractorMalformedResponseError, ValidationError) as exc:
-                total_attempt_count += current_attempt_count or self._resolve_service_attempt_count()
+                total_attempt_count += (
+                    current_attempt_count or self._resolve_service_attempt_count()
+                )
                 last_exception = exc
                 self._record_extraction_attempt_count(total_attempt_count)
                 if outer_attempt == 0:
                     continue
                 raise
             except Exception:
-                total_attempt_count += current_attempt_count or self._resolve_service_attempt_count()
+                total_attempt_count += (
+                    current_attempt_count or self._resolve_service_attempt_count()
+                )
                 self._record_extraction_attempt_count(total_attempt_count)
                 raise
 

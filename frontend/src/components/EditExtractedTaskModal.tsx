@@ -74,6 +74,10 @@ export function EditExtractedTaskModal({
 
   // Reset form when task changes or when opening
   useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
     if (isCreateMode) {
       setTitle(defaultTitle)
       setDescription(defaultDescription)
@@ -94,7 +98,17 @@ export function EditExtractedTaskModal({
       setRecurrenceDayOfMonth(task.recurrence_day_of_month)
     }
     setError(null)
-  }, [isCreateMode, task])
+  }, [defaultReminderEnabled, isCreateMode, isOpen, task])
+
+  useEffect(() => {
+    if (!isOpen || !isCreateMode || groupId !== '') {
+      return
+    }
+
+    if (defaultGroupIdFinal) {
+      setGroupId(defaultGroupIdFinal)
+    }
+  }, [defaultGroupIdFinal, groupId, isCreateMode, isOpen])
 
   if (!isOpen) return null
 

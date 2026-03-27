@@ -23,7 +23,8 @@ if (typeof globalThis.Request === 'function') {
   class RequestCompat extends NativeRequest {
     constructor(input: RequestInfo | URL, init?: RequestInit) {
       if (init && 'signal' in init) {
-        const { signal: _signal, ...rest } = init
+        const { signal, ...rest } = init
+        void signal
         super(input, rest)
         return
       }

@@ -5,7 +5,6 @@ import base64
 import hashlib
 import secrets
 from dataclasses import dataclass
-from typing import Optional
 
 from fastapi import Response
 
@@ -137,7 +136,7 @@ def clear_oauth_code_verifier_cookie(response: Response, settings: Settings) -> 
 def ensure_csrf_cookie(
     response: Response,
     settings: Settings,
-    existing_token: Optional[str],
+    existing_token: str | None,
 ) -> str:
     token = existing_token or generate_csrf_token()
     if token != existing_token:

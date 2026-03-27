@@ -18,10 +18,27 @@ class JsonExtraFormatter(logging.Formatter):
         for key, value in record.__dict__.items():
             # Skip standard LogRecord attributes and private attributes
             if key.startswith("_") or key in (
-                "name", "msg", "args", "levelname", "levelno", "pathname",
-                "filename", "module", "exc_info", "exc_text", "stack_info",
-                "lineno", "funcName", "created", "msecs", "relativeCreated",
-                "thread", "threadName", "processName", "process", "message"
+                "name",
+                "msg",
+                "args",
+                "levelname",
+                "levelno",
+                "pathname",
+                "filename",
+                "module",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "lineno",
+                "funcName",
+                "created",
+                "msecs",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "processName",
+                "process",
+                "message",
             ):
                 continue
             # Include the extra field if it's not None
@@ -45,5 +62,12 @@ def configure_logging(level: str) -> None:
     root_logger.setLevel(level.upper())
 
     # Suppress LangChain debug/info logging to prevent transcript content leakage
-    for logger_name in ("langchain", "langchain_core", "langchain_openai", "openai", "httpx", "httpcore"):
+    for logger_name in (
+        "langchain",
+        "langchain_core",
+        "langchain_openai",
+        "openai",
+        "httpx",
+        "httpcore",
+    ):
         logging.getLogger(logger_name).setLevel(logging.WARNING)

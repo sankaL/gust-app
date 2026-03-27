@@ -3,7 +3,6 @@ from __future__ import annotations
 # ruff: noqa: UP045
 import sqlite3
 from dataclasses import dataclass
-from typing import Optional
 
 import sqlalchemy as sa
 
@@ -24,8 +23,8 @@ from app.services.task_service import TaskService
 
 @dataclass
 class GroupUpdateInput:
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
 
 
 class GroupService:
@@ -42,7 +41,7 @@ class GroupService:
         *,
         user_id: str,
         name: str,
-        description: Optional[str],
+        description: str | None,
     ) -> GroupRecord:
         normalized_name = name.strip()
         if not normalized_name:

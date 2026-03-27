@@ -30,14 +30,16 @@ def test_internal_reminder_route_requires_shared_secret(client: TestClient) -> N
 
 def test_internal_reminder_route_returns_summary_when_authorized(client: TestClient) -> None:
     client.app.state.settings.internal_job_shared_secret = "phase4-secret"
-    client.app.dependency_overrides[get_reminder_worker_service] = lambda: FakeReminderWorkerService(
-        summary=ReminderRunSummary(
-            mode="daily",
-            users_processed=3,
-            sent=2,
-            skipped_empty=1,
-            failed=0,
-            captures_deleted=5,
+    client.app.dependency_overrides[get_reminder_worker_service] = (
+        lambda: FakeReminderWorkerService(
+            summary=ReminderRunSummary(
+                mode="daily",
+                users_processed=3,
+                sent=2,
+                skipped_empty=1,
+                failed=0,
+                captures_deleted=5,
+            )
         )
     )
 

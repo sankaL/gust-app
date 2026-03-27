@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 # ruff: noqa: UP045
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import Depends, Request, Response
 
@@ -31,7 +31,11 @@ from app.services.auth import (
 from app.services.capture import CaptureService
 from app.services.extraction import LangChainExtractionService
 from app.services.group_service import GroupService
-from app.services.reminders import INTERNAL_JOB_SECRET_HEADER, ReminderWorkerService, ResendReminderService
+from app.services.reminders import (
+    INTERNAL_JOB_SECRET_HEADER,
+    ReminderWorkerService,
+    ResendReminderService,
+)
 from app.services.staging import StagingService
 from app.services.task_service import TaskService
 from app.services.transcription import MistralTranscriptionService, MockTranscriptionService
@@ -43,7 +47,9 @@ def get_auth_service(settings: SettingsDep) -> SupabaseAuthService:
     return SupabaseAuthService(settings)
 
 
-def get_transcription_service(settings: SettingsDep) -> MistralTranscriptionService | MockTranscriptionService:
+def get_transcription_service(
+    settings: SettingsDep,
+) -> MistralTranscriptionService | MockTranscriptionService:
     """Return the appropriate transcription service based on environment.
 
     In dev mode (GUST_DEV_MODE=true), returns a MockTranscriptionService
@@ -119,7 +125,7 @@ async def get_optional_session_context(
     response: Response,
     settings: SettingsDep,
     auth_service: Annotated[SupabaseAuthService, Depends(get_auth_service)],
-) -> Optional[SessionContext]:
+) -> SessionContext | None:
     access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
 
@@ -161,7 +167,7 @@ async def get_optional_session_context(
 
 
 async def get_current_session_context(
-    session_context: Annotated[Optional[SessionContext], Depends(get_optional_session_context)],
+    session_context: Annotated[SessionContext | None, Depends(get_optional_session_context)],
 ) -> SessionContext:
     if session_context is None:
         raise AuthRequiredError()

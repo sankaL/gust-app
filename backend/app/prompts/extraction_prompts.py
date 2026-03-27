@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+# ruff: noqa: E501
 import re
 from datetime import date
-
 
 # Prompt injection patterns to neutralize
 # These patterns attempt to override or ignore the system prompt
@@ -45,8 +45,15 @@ def sanitize_transcript_for_extraction(transcript: str) -> str:
     # Prevent delimiter escaping by replacing bare delimiter markers
     # The transcript delimiters in the prompt are ---BEGIN TRANSCRIPT--- and ---END TRANSCRIPT---
     # If user text contains these exactly, normalize them
-    sanitized = re.sub(r"---BEGIN\s*TRANSCRIPT---", "[transcript start]", sanitized, flags=re.IGNORECASE)
-    sanitized = re.sub(r"---END\s*TRANSCRIPT---", "[transcript end]", sanitized, re.IGNORECASE)
+    sanitized = re.sub(
+        r"---BEGIN\s*TRANSCRIPT---", "[transcript start]", sanitized, flags=re.IGNORECASE
+    )
+    sanitized = re.sub(
+        r"---END\s*TRANSCRIPT---",
+        "[transcript end]",
+        sanitized,
+        flags=re.IGNORECASE,
+    )
 
     # Trim whitespace but preserve internal structure
     sanitized = sanitized.strip()
@@ -346,7 +353,9 @@ JSON SCHEMA:
         repair_section = ""
         if missing_guarded_clauses:
             # Sanitize guarded clauses as they are also user-derived data
-            sanitized_clauses = [sanitize_transcript_for_extraction(clause) for clause in missing_guarded_clauses]
+            sanitized_clauses = [
+                sanitize_transcript_for_extraction(clause) for clause in missing_guarded_clauses
+            ]
             missing_items = "\n".join(f"- {clause}" for clause in sanitized_clauses)
             repair_section = f"""
 

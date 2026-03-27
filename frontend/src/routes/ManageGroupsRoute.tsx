@@ -278,8 +278,9 @@ export function ManageGroupsRoute() {
                         onClick={() => {
                           if (isEditing) {
                             setDrafts((current) => {
-                              const { [group.id]: _, ...rest } = current
-                              return rest
+                              const nextDrafts = { ...current }
+                              delete nextDrafts[group.id]
+                              return nextDrafts
                             })
                           } else {
                             setDrafts({
@@ -346,8 +347,9 @@ export function ManageGroupsRoute() {
                           type="button"
                           onClick={() => {
                             setDrafts((current) => {
-                              const { [group.id]: _, ...rest } = current
-                              return rest
+                              const nextDrafts = { ...current }
+                              delete nextDrafts[group.id]
+                              return nextDrafts
                             })
                           }}
                           className="rounded-pill border border-outline/30 px-4 py-2 text-sm text-on-surface-variant"

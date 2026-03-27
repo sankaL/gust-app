@@ -238,7 +238,9 @@ def test_weekly_digest_sends_completed_and_due_uncompleted_sections(client) -> N
     week_start = now_eastern.date() - timedelta(days=now_eastern.date().weekday())
     week_end = week_start + timedelta(days=6)
 
-    completed_local = datetime.combine(week_start + timedelta(days=1), time(12, 0), tzinfo=DIGEST_TIMEZONE)
+    completed_local = datetime.combine(
+        week_start + timedelta(days=1), time(12, 0), tzinfo=DIGEST_TIMEZONE
+    )
     _seed_completed_task(
         client,
         title="Completed item",
@@ -319,7 +321,9 @@ def test_digest_retries_failed_period_on_next_run(client) -> None:
     assert dispatch_rows[0].status == "sent"
 
 
-def test_reminder_worker_still_cleans_up_expired_captures_when_provider_unconfigured(client) -> None:
+def test_reminder_worker_still_cleans_up_expired_captures_when_provider_unconfigured(
+    client,
+) -> None:
     _seed_user_and_inbox(client)
     now = datetime.now(timezone.utc).replace(microsecond=0)
 

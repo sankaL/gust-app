@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 # ruff: noqa: UP045
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
@@ -20,20 +20,20 @@ RequiredSessionContextDep = Annotated[SessionContext, Depends(require_csrf)]
 class GroupResponse(BaseModel):
     id: str
     name: str
-    description: Optional[str]
+    description: str | None
     is_system: bool
-    system_key: Optional[str]
+    system_key: str | None
     open_task_count: int
 
 
 class CreateGroupRequest(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class UpdateGroupRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
 
 
 class DeleteGroupRequest(BaseModel):

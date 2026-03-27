@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from pydantic import ValidationError
 
@@ -25,7 +25,7 @@ class RetryConfig:
 class ExtractionRetryManager:
     """Manages retry logic for extraction with validation and backoff."""
 
-    def __init__(self, config: Optional[RetryConfig] = None) -> None:
+    def __init__(self, config: RetryConfig | None = None) -> None:
         self.config = config or RetryConfig()
         self.last_attempt_count = 0
 
@@ -51,7 +51,7 @@ class ExtractionRetryManager:
             ExtractionRetryError: When max retries exceeded.
             ValidationError: When validation fails after all retries.
         """
-        last_exception: Optional[Exception] = None
+        last_exception: Exception | None = None
         self.last_attempt_count = 0
 
         for attempt in range(1, self.config.max_retries + 1):
@@ -94,6 +94,7 @@ class ExtractionRetryManager:
                 self.last_attempt_count = attempt
                 # Capture detailed error information
                 import traceback
+
                 error_details = {
                     "event": "extraction_attempt_failed",
                     "attempt": attempt,
@@ -103,7 +104,7 @@ class ExtractionRetryManager:
                     "error_module": type(exc).__module__,
                     "traceback": traceback.format_exc(),
                 }
-                
+
                 # Add specific details for common error types
                 if hasattr(exc, "response"):
                     error_details["response_status"] = getattr(exc.response, "status_code", None)
@@ -112,7 +113,7 @@ class ExtractionRetryManager:
                     error_details["status_code"] = exc.status_code
                 if hasattr(exc, "body"):
                     error_details["body"] = str(exc.body)
-                
+
                 logger.warning("extraction_attempt_failed", extra=error_details)
 
             # Calculate delay with exponential backoff
@@ -130,6 +131,7 @@ class ExtractionRetryManager:
 
         # All retries exhausted
         import traceback
+
         error_details = {
             "event": "extraction_retry_exhausted",
             "max_retries": self.config.max_retries,
@@ -137,20 +139,22 @@ class ExtractionRetryManager:
             "last_error_type": type(last_exception).__name__ if last_exception else None,
             "last_error_module": type(last_exception).__module__ if last_exception else None,
         }
-        
+
         # Add traceback if available
         if last_exception:
             error_details["traceback"] = traceback.format_exc()
-            
+
             # Add specific details for common error types
             if hasattr(last_exception, "response"):
-                error_details["response_status"] = getattr(last_exception.response, "status_code", None)
+                error_details["response_status"] = getattr(
+                    last_exception.response, "status_code", None
+                )
                 error_details["response_text"] = getattr(last_exception.response, "text", None)
             if hasattr(last_exception, "status_code"):
                 error_details["status_code"] = last_exception.status_code
             if hasattr(last_exception, "body"):
                 error_details["body"] = str(last_exception.body)
-        
+
         logger.error("extraction_retry_exhausted", extra=error_details)
 
         raise ExtractionRetryError(
@@ -177,7 +181,7 @@ class ExtractionRetryError(Exception):
     def __init__(
         self,
         message: str,
-        last_exception: Optional[Exception] = None,
+        last_exception: Exception | None = None,
     ) -> None:
         super().__init__(message)
         self.last_exception = last_exception

@@ -6,7 +6,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Literal, Optional
+from typing import Literal
 
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
@@ -29,7 +29,7 @@ CURRENT_TIMESTAMP = sa.text("CURRENT_TIMESTAMP")
 class UserRecord:
     id: str
     email: str
-    display_name: Optional[str]
+    display_name: str | None
     timezone: str
 
 
@@ -38,9 +38,9 @@ class GroupRecord:
     id: str
     user_id: str
     name: str
-    description: Optional[str]
+    description: str | None
     is_system: bool
-    system_key: Optional[str]
+    system_key: str | None
 
 
 @dataclass
@@ -59,15 +59,15 @@ class CaptureRecord:
     user_id: str
     input_type: str
     status: str
-    source_text: Optional[str]
-    transcript_text: Optional[str]
-    transcript_edited_text: Optional[str]
-    transcription_provider: Optional[str]
-    transcription_latency_ms: Optional[int]
+    source_text: str | None
+    transcript_text: str | None
+    transcript_edited_text: str | None
+    transcription_provider: str | None
+    transcription_latency_ms: int | None
     extraction_attempt_count: int
     tasks_created_count: int
     tasks_skipped_count: int
-    error_code: Optional[str]
+    error_code: str | None
     expires_at: datetime
 
 
@@ -76,21 +76,21 @@ class TaskRecord:
     id: str
     user_id: str
     group_id: str
-    capture_id: Optional[str]
-    series_id: Optional[str]
+    capture_id: str | None
+    series_id: str | None
     title: str
-    description: Optional[str]
+    description: str | None
     status: str
     needs_review: bool
-    due_date: Optional[date]
-    reminder_at: Optional[datetime]
-    reminder_offset_minutes: Optional[int]
-    recurrence_frequency: Optional[str]
-    recurrence_interval: Optional[int]
-    recurrence_weekday: Optional[int]
-    recurrence_day_of_month: Optional[int]
-    completed_at: Optional[datetime]
-    deleted_at: Optional[datetime]
+    due_date: date | None
+    reminder_at: datetime | None
+    reminder_offset_minutes: int | None
+    recurrence_frequency: str | None
+    recurrence_interval: int | None
+    recurrence_weekday: int | None
+    recurrence_day_of_month: int | None
+    completed_at: datetime | None
+    deleted_at: datetime | None
     created_at: datetime
     updated_at: datetime
     subtask_count: int = 0
@@ -103,7 +103,7 @@ class SubtaskRecord:
     user_id: str
     title: str
     is_completed: bool
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -116,14 +116,14 @@ class ReminderRecord:
     scheduled_for: datetime
     status: str
     idempotency_key: str
-    claim_token: Optional[str]
-    claimed_at: Optional[datetime]
-    claim_expires_at: Optional[datetime]
+    claim_token: str | None
+    claimed_at: datetime | None
+    claim_expires_at: datetime | None
     send_attempt_count: int
-    last_error_code: Optional[str]
-    provider_message_id: Optional[str]
-    sent_at: Optional[datetime]
-    cancelled_at: Optional[datetime]
+    last_error_code: str | None
+    provider_message_id: str | None
+    sent_at: datetime | None
+    cancelled_at: datetime | None
 
 
 @dataclass
@@ -135,21 +135,21 @@ class DigestDispatchRecord:
     period_end_date: date
     status: str
     idempotency_key: str
-    provider_message_id: Optional[str]
-    last_error_code: Optional[str]
-    attempted_at: Optional[datetime]
+    provider_message_id: str | None
+    last_error_code: str | None
+    attempted_at: datetime | None
 
 
 @dataclass
 class DigestTaskRecord:
     id: str
     title: str
-    due_date: Optional[date]
-    completed_at: Optional[datetime]
+    due_date: date | None
+    completed_at: datetime | None
     group_name: str
-    recurrence_frequency: Optional[str]
-    recurrence_weekday: Optional[int]
-    recurrence_day_of_month: Optional[int]
+    recurrence_frequency: str | None
+    recurrence_weekday: int | None
+    recurrence_day_of_month: int | None
 
 
 @dataclass
@@ -158,14 +158,14 @@ class ExtractedTaskRecord:
     user_id: str
     capture_id: str
     title: str
-    description: Optional[str]
+    description: str | None
     group_id: str
-    group_name: Optional[str]
-    due_date: Optional[date]
-    reminder_at: Optional[datetime]
-    recurrence_frequency: Optional[str]
-    recurrence_weekday: Optional[int]
-    recurrence_day_of_month: Optional[int]
+    group_name: str | None
+    due_date: date | None
+    reminder_at: datetime | None
+    recurrence_frequency: str | None
+    recurrence_weekday: int | None
+    recurrence_day_of_month: int | None
     top_confidence: float
     needs_review: bool
     status: str
@@ -253,7 +253,9 @@ def _row_to_task(row: sa.Row) -> TaskRecord:
         deleted_at=row.deleted_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
-        subtask_count=int(row.subtask_count) if hasattr(row, 'subtask_count') and row.subtask_count is not None else 0,
+        subtask_count=int(row.subtask_count)
+        if hasattr(row, "subtask_count") and row.subtask_count is not None
+        else 0,
     )
 
 
@@ -350,7 +352,7 @@ def upsert_user(
     *,
     user_id: str,
     email: str,
-    display_name: Optional[str],
+    display_name: str | None,
     timezone: str,
 ) -> UserRecord:
     dialect_name = connection.dialect.name
@@ -389,7 +391,7 @@ def upsert_user(
     return _row_to_user(row)
 
 
-def get_user(connection: Connection, user_id: str) -> Optional[UserRecord]:
+def get_user(connection: Connection, user_id: str) -> UserRecord | None:
     row = connection.execute(sa.select(users).where(users.c.id == user_id)).first()
     if row is None:
         return None
@@ -398,7 +400,9 @@ def get_user(connection: Connection, user_id: str) -> Optional[UserRecord]:
 
 def list_users(connection: Connection) -> list[UserRecord]:
     rows = connection.execute(
-        sa.select(users).where(users.c.email.is_not(None)).order_by(users.c.created_at.asc(), users.c.id.asc())
+        sa.select(users)
+        .where(users.c.email.is_not(None))
+        .order_by(users.c.created_at.asc(), users.c.id.asc())
     ).fetchall()
     return [_row_to_user(row) for row in rows]
 
@@ -457,7 +461,12 @@ def list_open_tasks_overdue_before_date(
             tasks.c.due_date.is_not(None),
             tasks.c.due_date < due_date,
         )
-        .order_by(tasks.c.due_date.asc(), sa.func.lower(groups.c.name), tasks.c.created_at.asc(), tasks.c.id.asc())
+        .order_by(
+            tasks.c.due_date.asc(),
+            sa.func.lower(groups.c.name),
+            tasks.c.created_at.asc(),
+            tasks.c.id.asc(),
+        )
     ).fetchall()
     return [_row_to_digest_task(row) for row in rows]
 
@@ -521,7 +530,12 @@ def list_open_tasks_due_between_dates(
             tasks.c.due_date >= due_date_start,
             tasks.c.due_date <= due_date_end,
         )
-        .order_by(tasks.c.due_date.asc(), sa.func.lower(groups.c.name), tasks.c.created_at.asc(), tasks.c.id.asc())
+        .order_by(
+            tasks.c.due_date.asc(),
+            sa.func.lower(groups.c.name),
+            tasks.c.created_at.asc(),
+            tasks.c.id.asc(),
+        )
     ).fetchall()
     return [_row_to_digest_task(row) for row in rows]
 
@@ -531,7 +545,7 @@ def update_user_timezone(
     *,
     user_id: str,
     timezone: str,
-) -> Optional[UserRecord]:
+) -> UserRecord | None:
     connection.execute(
         users.update()
         .where(users.c.id == user_id)
@@ -564,7 +578,7 @@ def ensure_inbox_group(connection: Connection, *, user_id: str) -> GroupRecord:
     return _row_to_group(existing)
 
 
-def get_session_context(connection: Connection, user_id: str) -> Optional[SessionContext]:
+def get_session_context(connection: Connection, user_id: str) -> SessionContext | None:
     user = get_user(connection, user_id)
     if user is None:
         return None
@@ -573,7 +587,7 @@ def get_session_context(connection: Connection, user_id: str) -> Optional[Sessio
     return SessionContext(user=user, inbox_group_id=inbox_group.id)
 
 
-def get_group(connection: Connection, *, user_id: str, group_id: str) -> Optional[GroupRecord]:
+def get_group(connection: Connection, *, user_id: str, group_id: str) -> GroupRecord | None:
     row = connection.execute(
         sa.select(groups).where(groups.c.id == group_id, groups.c.user_id == user_id)
     ).first()
@@ -614,7 +628,7 @@ def create_group(
     *,
     user_id: str,
     name: str,
-    description: Optional[str],
+    description: str | None,
 ) -> GroupRecord:
     group_id = str(uuid.uuid4())
     connection.execute(
@@ -637,7 +651,7 @@ def update_group(
     user_id: str,
     group_id: str,
     values: dict[str, object],
-) -> Optional[GroupRecord]:
+) -> GroupRecord | None:
     update_values = {**values, "updated_at": CURRENT_TIMESTAMP}
     connection.execute(
         groups.update()
@@ -658,12 +672,12 @@ def create_capture(
     input_type: str,
     status: str,
     expires_at: datetime,
-    source_text: Optional[str] = None,
-    transcript_text: Optional[str] = None,
-    transcript_edited_text: Optional[str] = None,
-    transcription_provider: Optional[str] = None,
-    transcription_latency_ms: Optional[int] = None,
-    error_code: Optional[str] = None,
+    source_text: str | None = None,
+    transcript_text: str | None = None,
+    transcript_edited_text: str | None = None,
+    transcription_provider: str | None = None,
+    transcription_latency_ms: int | None = None,
+    error_code: str | None = None,
 ) -> CaptureRecord:
     capture_id = str(uuid.uuid4())
     connection.execute(
@@ -690,7 +704,7 @@ def get_capture(
     *,
     user_id: str,
     capture_id: str,
-) -> Optional[CaptureRecord]:
+) -> CaptureRecord | None:
     row = connection.execute(
         sa.select(captures).where(captures.c.id == capture_id, captures.c.user_id == user_id)
     ).first()
@@ -704,17 +718,17 @@ def update_capture(
     *,
     user_id: str,
     capture_id: str,
-    status: Optional[str] = None,
-    source_text: Optional[str] = None,
-    transcript_text: Optional[str] = None,
-    transcript_edited_text: Optional[str] = None,
-    transcription_provider: Optional[str] = None,
-    transcription_latency_ms: Optional[int] = None,
-    extraction_attempt_count: Optional[int] = None,
-    tasks_created_count: Optional[int] = None,
-    tasks_skipped_count: Optional[int] = None,
-    error_code: Optional[str] = None,
-) -> Optional[CaptureRecord]:
+    status: str | None = None,
+    source_text: str | None = None,
+    transcript_text: str | None = None,
+    transcript_edited_text: str | None = None,
+    transcription_provider: str | None = None,
+    transcription_latency_ms: int | None = None,
+    extraction_attempt_count: int | None = None,
+    tasks_created_count: int | None = None,
+    tasks_skipped_count: int | None = None,
+    error_code: str | None = None,
+) -> CaptureRecord | None:
     values: dict[str, object] = {"updated_at": CURRENT_TIMESTAMP, "error_code": error_code}
     if status is not None:
         values["status"] = status
@@ -782,7 +796,7 @@ def list_groups_with_recent_tasks(
     return result
 
 
-def get_task(connection: Connection, *, user_id: str, task_id: str) -> Optional[TaskRecord]:
+def get_task(connection: Connection, *, user_id: str, task_id: str) -> TaskRecord | None:
     row = connection.execute(
         sa.select(tasks).where(tasks.c.id == task_id, tasks.c.user_id == user_id)
     ).first()
@@ -795,15 +809,15 @@ def list_tasks(
     connection: Connection,
     *,
     user_id: str,
-    group_id: Optional[str] = None,
+    group_id: str | None = None,
     status: str = "open",
     include_deleted: bool = False,
     limit: int = 50,
-    cursor: Optional[str] = None,
-) -> tuple[list[TaskRecord], bool, Optional[str]]:
+    cursor: str | None = None,
+) -> tuple[list[TaskRecord], bool, str | None]:
     """Returns (tasks, has_more, next_cursor)."""
     conditions = [tasks.c.user_id == user_id, tasks.c.status == status]
-    if group_id is not None and group_id != 'all':
+    if group_id is not None and group_id != "all":
         conditions.append(tasks.c.group_id == group_id)
     if not include_deleted:
         conditions.append(tasks.c.deleted_at.is_(None))
@@ -814,25 +828,20 @@ def list_tasks(
         .where(subtasks.c.task_id == tasks.c.id)
         .correlate(tasks)
         .scalar_subquery()
-        .label('subtask_count')
+        .label("subtask_count")
     )
 
     # Apply cursor-based pagination if provided
     if cursor:
         try:
-            cursor_data = json.loads(base64.b64decode(cursor).decode('utf-8'))
-            cursor_created_at = datetime.fromisoformat(cursor_data['created_at'])
-            cursor_id = cursor_data['id']
+            cursor_data = json.loads(base64.b64decode(cursor).decode("utf-8"))
+            cursor_created_at = datetime.fromisoformat(cursor_data["created_at"])
+            cursor_id = cursor_data["id"]
             # Cursor condition: (created_at, id) < (cursor_created_at, cursor_id)
             # i.e., items that come after the cursor in our DESC order
-            cursor_condition = (
-                sa.or_(
-                    tasks.c.created_at < cursor_created_at,
-                    sa.and_(
-                        tasks.c.created_at == cursor_created_at,
-                        tasks.c.id < cursor_id
-                    )
-                )
+            cursor_condition = sa.or_(
+                tasks.c.created_at < cursor_created_at,
+                sa.and_(tasks.c.created_at == cursor_created_at, tasks.c.id < cursor_id),
             )
             conditions.append(cursor_condition)
         except (json.JSONDecodeError, KeyError, ValueError):
@@ -855,11 +864,8 @@ def list_tasks(
     next_cursor = None
     if has_more and rows:
         last_row = rows[-1]
-        cursor_data = {
-            'created_at': last_row.created_at.isoformat(),
-            'id': str(last_row.id)
-        }
-        next_cursor = base64.b64encode(json.dumps(cursor_data).encode('utf-8')).decode('utf-8')
+        cursor_data = {"created_at": last_row.created_at.isoformat(), "id": str(last_row.id)}
+        next_cursor = base64.b64encode(json.dumps(cursor_data).encode("utf-8")).decode("utf-8")
 
     return [_row_to_task(row) for row in rows], has_more, next_cursor
 
@@ -869,8 +875,8 @@ def get_open_task_in_series(
     *,
     user_id: str,
     series_id: str,
-    exclude_task_id: Optional[str] = None,
-) -> Optional[TaskRecord]:
+    exclude_task_id: str | None = None,
+) -> TaskRecord | None:
     conditions = [
         tasks.c.user_id == user_id,
         tasks.c.series_id == series_id,
@@ -892,7 +898,7 @@ def list_open_tasks_in_series(
     *,
     user_id: str,
     series_id: str,
-    exclude_task_id: Optional[str] = None,
+    exclude_task_id: str | None = None,
 ) -> list[TaskRecord]:
     conditions = [
         tasks.c.user_id == user_id,
@@ -904,9 +910,7 @@ def list_open_tasks_in_series(
         conditions.append(tasks.c.id != exclude_task_id)
 
     rows = connection.execute(
-        sa.select(tasks)
-        .where(*conditions)
-        .order_by(tasks.c.created_at.desc(), tasks.c.id.desc())
+        sa.select(tasks).where(*conditions).order_by(tasks.c.created_at.desc(), tasks.c.id.desc())
     ).fetchall()
     return [_row_to_task(row) for row in rows]
 
@@ -916,18 +920,18 @@ def create_task(
     *,
     user_id: str,
     group_id: str,
-    capture_id: Optional[str],
+    capture_id: str | None,
     title: str,
     needs_review: bool,
-    description: Optional[str] = None,
-    due_date: Optional[date] = None,
-    reminder_at: Optional[datetime] = None,
-    reminder_offset_minutes: Optional[int] = None,
-    recurrence_frequency: Optional[str] = None,
-    recurrence_interval: Optional[int] = None,
-    recurrence_weekday: Optional[int] = None,
-    recurrence_day_of_month: Optional[int] = None,
-    series_id: Optional[str] = None,
+    description: str | None = None,
+    due_date: date | None = None,
+    reminder_at: datetime | None = None,
+    reminder_offset_minutes: int | None = None,
+    recurrence_frequency: str | None = None,
+    recurrence_interval: int | None = None,
+    recurrence_weekday: int | None = None,
+    recurrence_day_of_month: int | None = None,
+    series_id: str | None = None,
 ) -> TaskRecord:
     task_id = str(uuid.uuid4())
     connection.execute(
@@ -960,7 +964,7 @@ def update_task(
     user_id: str,
     task_id: str,
     values: dict[str, object],
-) -> Optional[TaskRecord]:
+) -> TaskRecord | None:
     update_values = {**values, "updated_at": CURRENT_TIMESTAMP}
     connection.execute(
         tasks.update()
@@ -976,8 +980,8 @@ def complete_task_if_open(
     user_id: str,
     task_id: str,
     completed_at: datetime,
-    series_id: Optional[str] = None,
-) -> Optional[TaskRecord]:
+    series_id: str | None = None,
+) -> TaskRecord | None:
     update_values: dict[str, object] = {
         "status": "completed",
         "completed_at": completed_at,
@@ -1036,7 +1040,7 @@ def get_subtask(
     user_id: str,
     task_id: str,
     subtask_id: str,
-) -> Optional[SubtaskRecord]:
+) -> SubtaskRecord | None:
     row = connection.execute(
         sa.select(subtasks).where(
             subtasks.c.id == subtask_id,
@@ -1087,7 +1091,7 @@ def update_subtask(
     task_id: str,
     subtask_id: str,
     values: dict[str, object],
-) -> Optional[SubtaskRecord]:
+) -> SubtaskRecord | None:
     update_values = {**values, "updated_at": CURRENT_TIMESTAMP}
     connection.execute(
         subtasks.update()
@@ -1122,7 +1126,7 @@ def get_reminder_by_task_id(
     *,
     user_id: str,
     task_id: str,
-) -> Optional[ReminderRecord]:
+) -> ReminderRecord | None:
     row = connection.execute(
         sa.select(reminders).where(reminders.c.user_id == user_id, reminders.c.task_id == task_id)
     ).first()
@@ -1131,7 +1135,7 @@ def get_reminder_by_task_id(
     return _row_to_reminder(row)
 
 
-def get_reminder_by_id(connection: Connection, *, reminder_id: str) -> Optional[ReminderRecord]:
+def get_reminder_by_id(connection: Connection, *, reminder_id: str) -> ReminderRecord | None:
     row = connection.execute(sa.select(reminders).where(reminders.c.id == reminder_id)).first()
     if row is None:
         return None
@@ -1145,7 +1149,7 @@ def get_digest_dispatch(
     digest_type: Literal["daily", "weekly"],
     period_start_date: date,
     period_end_date: date,
-) -> Optional[DigestDispatchRecord]:
+) -> DigestDispatchRecord | None:
     row = connection.execute(
         sa.select(digest_dispatches).where(
             digest_dispatches.c.user_id == user_id,
@@ -1169,8 +1173,8 @@ def upsert_digest_dispatch(
     status: Literal["sent", "failed", "skipped_empty"],
     idempotency_key: str,
     attempted_at: datetime,
-    provider_message_id: Optional[str] = None,
-    last_error_code: Optional[str] = None,
+    provider_message_id: str | None = None,
+    last_error_code: str | None = None,
 ) -> DigestDispatchRecord:
     digest_dispatch_id = str(uuid.uuid4())
     values = {
@@ -1352,7 +1356,7 @@ def cancel_claimed_reminder(
     *,
     reminder_id: str,
     claim_token: str,
-) -> Optional[ReminderRecord]:
+) -> ReminderRecord | None:
     connection.execute(
         reminders.update()
         .where(
@@ -1380,7 +1384,7 @@ def mark_reminder_sent(
     claim_token: str,
     provider_message_id: str,
     sent_at: datetime,
-) -> Optional[ReminderRecord]:
+) -> ReminderRecord | None:
     connection.execute(
         reminders.update()
         .where(
@@ -1409,7 +1413,7 @@ def requeue_claimed_reminder(
     reminder_id: str,
     claim_token: str,
     error_code: str,
-) -> Optional[ReminderRecord]:
+) -> ReminderRecord | None:
     connection.execute(
         reminders.update()
         .where(
@@ -1436,7 +1440,7 @@ def fail_claimed_reminder(
     reminder_id: str,
     claim_token: str,
     error_code: str,
-) -> Optional[ReminderRecord]:
+) -> ReminderRecord | None:
     connection.execute(
         reminders.update()
         .where(
@@ -1522,17 +1526,17 @@ def create_extracted_task(
     user_id: str,
     capture_id: str,
     title: str,
-    description: Optional[str],
+    description: str | None,
     group_id: str,
-    group_name: Optional[str],
-    due_date: Optional[date],
-    reminder_at: Optional[datetime],
-    recurrence_frequency: Optional[str],
-    recurrence_weekday: Optional[int],
-    recurrence_day_of_month: Optional[int],
+    group_name: str | None,
+    due_date: date | None,
+    reminder_at: datetime | None,
+    recurrence_frequency: str | None,
+    recurrence_weekday: int | None,
+    recurrence_day_of_month: int | None,
     top_confidence: float,
     needs_review: bool,
-    subtask_titles: Optional[list[str]] = None,
+    subtask_titles: list[str] | None = None,
 ) -> ExtractedTaskRecord:
     extracted_task_id = str(uuid.uuid4())
     connection.execute(
@@ -1566,7 +1570,7 @@ def get_extracted_task(
     *,
     user_id: str,
     extracted_task_id: str,
-) -> Optional[ExtractedTaskRecord]:
+) -> ExtractedTaskRecord | None:
     row = connection.execute(
         sa.select(extracted_tasks).where(
             extracted_tasks.c.id == extracted_task_id,
@@ -1582,8 +1586,8 @@ def list_extracted_tasks(
     connection: Connection,
     *,
     user_id: str,
-    capture_id: Optional[str] = None,
-    status: Optional[str] = None,
+    capture_id: str | None = None,
+    status: str | None = None,
 ) -> list[ExtractedTaskRecord]:
     conditions = [extracted_tasks.c.user_id == user_id]
     if capture_id is not None:
@@ -1605,7 +1609,7 @@ def update_extracted_task_status(
     user_id: str,
     extracted_task_id: str,
     status: str,
-) -> Optional[ExtractedTaskRecord]:
+) -> ExtractedTaskRecord | None:
     connection.execute(
         extracted_tasks.update()
         .where(
@@ -1614,9 +1618,7 @@ def update_extracted_task_status(
         )
         .values(status=status, updated_at=CURRENT_TIMESTAMP)
     )
-    return get_extracted_task(
-        connection, user_id=user_id, extracted_task_id=extracted_task_id
-    )
+    return get_extracted_task(connection, user_id=user_id, extracted_task_id=extracted_task_id)
 
 
 def update_extracted_task_due_date(
@@ -1624,8 +1626,8 @@ def update_extracted_task_due_date(
     *,
     user_id: str,
     extracted_task_id: str,
-    due_date: Optional[date],
-) -> Optional[ExtractedTaskRecord]:
+    due_date: date | None,
+) -> ExtractedTaskRecord | None:
     """Update the due_date of an extracted task.
 
     Args:
@@ -1645,9 +1647,7 @@ def update_extracted_task_due_date(
         )
         .values(due_date=due_date, updated_at=CURRENT_TIMESTAMP)
     )
-    return get_extracted_task(
-        connection, user_id=user_id, extracted_task_id=extracted_task_id
-    )
+    return get_extracted_task(connection, user_id=user_id, extracted_task_id=extracted_task_id)
 
 
 def update_extracted_task(
@@ -1656,7 +1656,7 @@ def update_extracted_task(
     user_id: str,
     extracted_task_id: str,
     values: dict[str, object],
-) -> Optional[ExtractedTaskRecord]:
+) -> ExtractedTaskRecord | None:
     """Update an extracted task with a partial set of fields.
 
     The caller is responsible for validating that `values` only contains supported fields and
@@ -1694,7 +1694,7 @@ def delete_extracted_tasks_by_capture(
     *,
     user_id: str,
     capture_id: str,
-    status: Optional[str] = None,
+    status: str | None = None,
 ) -> int:
     """Delete extracted tasks for a capture.
 
@@ -1716,11 +1716,9 @@ def delete_extracted_tasks_by_capture(
         conditions.append(extracted_tasks.c.status == status)
     else:
         # Default: only delete pending tasks (safety measure for re-extraction)
-        conditions.append(extracted_tasks.c.status == 'pending')
+        conditions.append(extracted_tasks.c.status == "pending")
 
-    result = connection.execute(
-        extracted_tasks.delete().where(*conditions)
-    )
+    result = connection.execute(extracted_tasks.delete().where(*conditions))
     return int(result.rowcount or 0)
 
 
@@ -1747,7 +1745,7 @@ def delete_expired_extracted_tasks(
         sa.select(extracted_tasks.c.id)
         .where(
             extracted_tasks.c.created_at <= cutoff,
-            extracted_tasks.c.status.in_(['approved', 'discarded'])
+            extracted_tasks.c.status.in_(["approved", "discarded"]),
         )
         .order_by(extracted_tasks.c.created_at.asc(), extracted_tasks.c.id.asc())
         .limit(limit)
@@ -1767,7 +1765,7 @@ def cancel_reminder(
     *,
     user_id: str,
     task_id: str,
-) -> Optional[ReminderRecord]:
+) -> ReminderRecord | None:
     existing = get_reminder_by_task_id(connection, user_id=user_id, task_id=task_id)
     if existing is None:
         return None

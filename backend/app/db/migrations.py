@@ -2,12 +2,11 @@ from collections import deque
 from pathlib import Path
 from typing import Optional
 
-from alembic.config import Config
-from alembic.script import ScriptDirectory
-
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from app.db.engine import connection_scope
 
 

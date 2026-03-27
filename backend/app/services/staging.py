@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Optional
 
 from app.core.errors import (
     ExtractedTaskNotFoundError,
@@ -24,8 +23,8 @@ from app.db.repositories import (
     create_subtasks,
     create_task,
     delete_extracted_tasks_by_capture,
-    get_group,
     get_extracted_task,
+    get_group,
     list_extracted_tasks,
     update_extracted_task,
     update_extracted_task_due_date,
@@ -311,7 +310,7 @@ class StagingService:
         user_id: str,
         capture_id: str,
         extracted_task_id: str,
-        due_date: Optional[date],
+        due_date: date | None,
     ) -> ExtractedTaskRecord:
         """Update the due date of an extracted task.
 
@@ -435,10 +434,10 @@ class StagingService:
             if values.get("due_date", object()) is None and "reminder_at" not in values:
                 values["reminder_at"] = None
 
-            resulting_due_date: Optional[date] = (
+            resulting_due_date: date | None = (
                 values["due_date"] if "due_date" in values else extracted_task.due_date
             )
-            resulting_reminder_at: Optional[datetime] = (
+            resulting_reminder_at: datetime | None = (
                 values["reminder_at"] if "reminder_at" in values else extracted_task.reminder_at
             )
             if resulting_due_date is None and resulting_reminder_at is not None:
@@ -624,8 +623,8 @@ class StagingService:
         self,
         *,
         user_id: str,
-        capture_id: Optional[str] = None,
-        status: Optional[str] = None,
+        capture_id: str | None = None,
+        status: str | None = None,
     ) -> list[ExtractedTaskRecord]:
         """List extracted tasks for a user.
 
@@ -650,7 +649,7 @@ class StagingService:
         *,
         user_id: str,
         extracted_task_id: str,
-    ) -> Optional[ExtractedTaskRecord]:
+    ) -> ExtractedTaskRecord | None:
         """Get a single extracted task by ID.
 
         Args:
@@ -694,13 +693,12 @@ class StagingService:
         """
         # Delete existing extracted tasks for this capture
         with connection_scope(self.settings.database_url) as connection:
-            delete_extracted_tasks_by_capture(
-                connection, user_id=user_id, capture_id=capture_id
-            )
+            delete_extracted_tasks_by_capture(connection, user_id=user_id, capture_id=capture_id)
 
         # Run extraction
-        from app.services.extraction import ExtractionRequest
         from zoneinfo import ZoneInfo
+
+        from app.services.extraction import ExtractionRequest
 
         extraction_request = ExtractionRequest(
             transcript_text=transcript_text,
@@ -729,7 +727,7 @@ class StagingService:
         inbox_group: GroupRecord,
         groups_by_id: dict[str, GroupContextRecord],
         groups_by_name: dict[str, GroupContextRecord],
-    ) -> Optional[GroupContextRecord]:
+    ) -> GroupContextRecord | None:
         """Resolve the best group for a candidate.
 
         Args:

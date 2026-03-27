@@ -23,7 +23,9 @@ ACTION_VERBS = (
     "pickup",
     "renew",
 )
-ACTION_VERB_PATTERN = "|".join(sorted((re.escape(verb) for verb in ACTION_VERBS), key=len, reverse=True))
+ACTION_VERB_PATTERN = "|".join(
+    sorted((re.escape(verb) for verb in ACTION_VERBS), key=len, reverse=True)
+)
 INTENT_CUE_PATTERN = re.compile(
     r"\b(?:i need to|need to|i should|should|i gotta|gotta|i have to|have to|"
     r"i want to|want to|remind me to|i'm going to|im going to|going to)\b",
@@ -78,7 +80,9 @@ CONTINUATION_PATTERN = re.compile(
     r"^(?:um|uh|around|at|tomorrow|today|tonight|this|for|to|about)\b",
     re.IGNORECASE,
 )
-LEADING_NOISE_PATTERN = re.compile(r"^(?:and|also|and also|oh and|so|um|uh|yeah)\b[\s,]*", re.IGNORECASE)
+LEADING_NOISE_PATTERN = re.compile(
+    r"^(?:and|also|and also|oh and|so|um|uh|yeah)\b[\s,]*", re.IGNORECASE
+)
 STOPWORDS = {
     "a",
     "about",
@@ -204,7 +208,9 @@ def _is_guarded_candidate(fragment: str) -> bool:
         return False
 
     normalized = _normalize_fragment(fragment)
-    return bool(INTENT_CUE_PATTERN.search(lowered) or SENTENCE_START_ACTION_PATTERN.match(normalized))
+    return bool(
+        INTENT_CUE_PATTERN.search(lowered) or SENTENCE_START_ACTION_PATTERN.match(normalized)
+    )
 
 
 def _build_intent(fragment: str) -> GuardedIntent | None:
@@ -212,9 +218,15 @@ def _build_intent(fragment: str) -> GuardedIntent | None:
         return None
 
     normalized_text = _canonicalize(fragment)
-    action_keywords = frozenset(match.group(1).replace(" ", "") for match in ACTION_PATTERN.finditer(normalized_text))
-    domain_keywords = frozenset(token for token in _tokenize(normalized_text) if token in DOMAIN_KEYWORDS)
-    significant_tokens = frozenset(token for token in _tokenize(normalized_text) if token not in STOPWORDS)
+    action_keywords = frozenset(
+        match.group(1).replace(" ", "") for match in ACTION_PATTERN.finditer(normalized_text)
+    )
+    domain_keywords = frozenset(
+        token for token in _tokenize(normalized_text) if token in DOMAIN_KEYWORDS
+    )
+    significant_tokens = frozenset(
+        token for token in _tokenize(normalized_text) if token not in STOPWORDS
+    )
 
     if not action_keywords or not domain_keywords:
         return None
@@ -230,7 +242,9 @@ def _build_intent(fragment: str) -> GuardedIntent | None:
 
 def _task_matches_intent(*, intent: GuardedIntent, task_title: str) -> bool:
     normalized_task = _canonicalize(task_title)
-    task_actions = {match.group(1).replace(" ", "") for match in ACTION_PATTERN.finditer(normalized_task)}
+    task_actions = {
+        match.group(1).replace(" ", "") for match in ACTION_PATTERN.finditer(normalized_task)
+    }
     task_tokens = set(_tokenize(normalized_task))
     significant_overlap = intent.significant_tokens & task_tokens
 

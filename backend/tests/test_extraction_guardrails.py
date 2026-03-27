@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from app.services.extraction_guardrails import (
+    GuardedIntent,
     build_fallback_title,
     detect_guarded_intents,
     find_missing_guarded_intents,
-    GuardedIntent,
 )
 from app.services.extraction_models import ExtractedTaskCandidate, ExtractionSubtask
-
 
 TRANSCRIPT = (
     "So I need to create a resume for AI product manager and start applying to some jobs "

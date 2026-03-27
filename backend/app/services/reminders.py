@@ -428,10 +428,7 @@ class ReminderWorkerService:
     ) -> str:
         lines = [
             "Gust weekly summary",
-            (
-                "Week (Eastern): "
-                f"{period.start_date.isoformat()} to {period.end_date.isoformat()}"
-            ),
+            (f"Week (Eastern): {period.start_date.isoformat()} to {period.end_date.isoformat()}"),
             f"User: {user.email}",
             "",
             "Completed this week:",
@@ -509,10 +506,7 @@ class ReminderWorkerService:
             ]
             if include_completed_at and task.completed_at is not None:
                 completed_local = task.completed_at.astimezone(DIGEST_TIMEZONE)
-                detail_parts.append(
-                    "completed: "
-                    f"{completed_local.strftime('%Y-%m-%d %H:%M %Z')}"
-                )
+                detail_parts.append(f"completed: {completed_local.strftime('%Y-%m-%d %H:%M %Z')}")
             lines.append(f"- {task.title} ({'; '.join(detail_parts)})")
         return lines
 
@@ -534,10 +528,7 @@ class ReminderWorkerService:
             ]
             if include_completed_at and task.completed_at is not None:
                 completed_local = task.completed_at.astimezone(DIGEST_TIMEZONE)
-                detail_parts.append(
-                    "completed: "
-                    f"{completed_local.strftime('%Y-%m-%d %H:%M %Z')}"
-                )
+                detail_parts.append(f"completed: {completed_local.strftime('%Y-%m-%d %H:%M %Z')}")
             escaped_title = html.escape(task.title)
             items.append(f"<li><strong>{escaped_title}</strong> ({'; '.join(detail_parts)})</li>")
         return f"<ul>{''.join(items)}</ul>"

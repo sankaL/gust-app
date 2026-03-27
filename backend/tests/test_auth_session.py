@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # ruff: noqa: UP045
 from dataclasses import dataclass
-from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -79,7 +78,7 @@ class FakeAuthService:
         *,
         email: str,
         password: str,
-        display_name: Optional[str] = None,
+        display_name: str | None = None,
     ) -> AuthenticatedSession:
         assert email == "local-dev@gust.local"
         assert password == "gust-local-dev-password"
