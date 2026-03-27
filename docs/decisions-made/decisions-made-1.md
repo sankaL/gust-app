@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-26 23:54:10 EDT
+
+- Standardized the live production web origins on `https://gustapp.ca` for the frontend and `https://api.gustapp.ca` for the backend after the user attached those Railway custom domains, and dropped the temporary Railway-generated domains from the hosted Supabase auth redirect config.
+- Kept Supabase Auth on the provider subdomain `https://tjsmovitybbzgvqtiujr.supabase.co` because the current project plan does not support the `auth.gustapp.ca` custom-domain add-on.
+- Configured hosted Google auth through Supabase using the production Google OAuth client and kept the backend callback on `https://api.gustapp.ca/auth/session/callback`, with secure cookies scoped to `.gustapp.ca`.
+
 ## 2026-03-26 22:39:24 EDT
 
 - Kept the production backend on Railway service-generated hostname `https://backend-production-496e.up.railway.app` and pointed the cron callers there until `api.gustapp.ca` can be attached, instead of blocking backend/cron bring-up on custom-domain setup.

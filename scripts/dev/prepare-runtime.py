@@ -181,6 +181,20 @@ def render_supabase_config(
     if google_updates != 1:
         raise RuntimeError("Could not set auth.external.google.enabled in Supabase config.")
 
+    skip_nonce_pattern = re.compile(
+        r"(^\[auth\.external\.google\]\s*$.*?^\s*skip_nonce_check\s*=\s*)(?:true|false)\s*$",
+        re.MULTILINE | re.DOTALL,
+    )
+    rendered, nonce_updates = skip_nonce_pattern.subn(
+        lambda match: f"{match.group(1)}{'true' if google_enabled else 'false'}",
+        rendered,
+        count=1,
+    )
+    if nonce_updates != 1:
+        raise RuntimeError(
+            "Could not set auth.external.google.skip_nonce_check in Supabase config."
+        )
+
     return rendered
 
 
