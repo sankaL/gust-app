@@ -2,8 +2,6 @@ FROM curlimages/curl:8.12.1
 
 WORKDIR /app
 
-COPY run.sh ./run.sh
-
-RUN chmod +x ./run.sh
+COPY --chmod=755 run.sh ./run.sh
 
 CMD ["./run.sh"]
