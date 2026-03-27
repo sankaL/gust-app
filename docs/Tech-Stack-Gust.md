@@ -38,6 +38,17 @@ The frontend talks only to the backend API. It does not call the database, trans
 | Email | Resend | Simple transactional email API with idempotency support |
 | Hosting | Railway | Simple deployment for the API, frontend, and scheduled jobs |
 
+Production topology:
+
+- frontend served from `https://gustapp.ca`
+- backend served from `https://api.gustapp.ca`
+- Supabase Auth and project APIs served from `https://auth.gustapp.ca` after custom-domain activation
+- Railway deployment config lives alongside each deployable unit:
+  - `frontend/railway.json`
+  - `backend/railway.json`
+  - `deploy/digest-daily-cron/railway.json`
+  - `deploy/digest-weekly-cron/railway.json`
+
 ## Principles
 
 - Prefer direct, simple integrations over abstraction-heavy frameworks.
@@ -272,6 +283,7 @@ Committed cron split:
 - `digest-weekly-cron` calls `POST /internal/reminders/run?mode=weekly`
 - both jobs use the same shared-secret header as other internal jobs
 - no separate cron microservice codebase is required; this is deployment configuration only
+- each cron service is deployed from a dedicated Railway service directory with its own `cronSchedule`
 
 ### Digest Delivery
 

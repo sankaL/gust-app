@@ -159,8 +159,8 @@ def render_supabase_config(
         "port = 54329": f"port = {ports['GUST_SUPABASE_POOLER_PORT']}",
         "port = 54323": f"port = {ports['GUST_SUPABASE_STUDIO_PORT']}",
         "port = 54324": f"port = {ports['GUST_SUPABASE_MAIL_PORT']}",
-        'site_url = "http://localhost:3000"': f'site_url = "{frontend_url}"',
-        'additional_redirect_urls = ["http://localhost:3000"]': (
+        'site_url = "https://gustapp.ca"': f'site_url = "{frontend_url}"',
+        'additional_redirect_urls = ["https://gustapp.ca", "https://api.gustapp.ca/auth/session/callback"]': (
             f'additional_redirect_urls = ["{frontend_url}", "{backend_callback_url}"]'
         ),
     }

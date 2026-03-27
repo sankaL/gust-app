@@ -153,6 +153,26 @@ Why this order:
 - the backend must not start against an unknown or older schema
 - the frontend must not assume routes or contracts not yet available in the backend
 
+## Production Service Mapping
+
+Current production deployment contract:
+
+- frontend Railway service deploys from `frontend/` using `frontend/railway.json`
+- backend Railway service deploys from `backend/` using `backend/railway.json`
+- daily digest Railway cron deploys from `deploy/digest-daily-cron/`
+- weekly digest Railway cron deploys from `deploy/digest-weekly-cron/`
+- public domains are:
+  - `https://gustapp.ca`
+  - `https://api.gustapp.ca`
+  - `https://auth.gustapp.ca`
+
+Production database ownership rules:
+
+- hosted Supabase project provisioning and config are managed through the Supabase CLI
+- application schema changes are applied through Alembic only
+- do not use `supabase db push` for the application schema
+- backend deploys are expected to run `alembic upgrade head` before startup and then pass the startup revision check
+
 ## Post-Deploy Verification
 
 Minimum verification after applying schema-affecting changes:
