@@ -6,6 +6,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { AppProviders } from '../providers'
 import { AppShell } from '../components/AppShell'
 import { CaptureRoute } from '../routes/CaptureRoute'
+import { LoginRoute } from '../routes/LoginRoute'
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
@@ -30,6 +31,10 @@ function requestUrl(input: RequestInfo | URL) {
 function renderCaptureRoute() {
   const router = createMemoryRouter(
     [
+      {
+        path: '/login',
+        element: <LoginRoute />
+      },
       {
         path: '/',
         element: <AppShell />,
@@ -79,7 +84,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
-  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -87,43 +91,57 @@ describe('capture route', () => {
   it('offers local test-account sign-in in local dev mode', async () => {
     vi.stubEnv('VITE_GUST_DEV_MODE', 'true')
 
-    const fetchMock: FetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          signed_in: false,
-          user: null,
-          timezone: null,
-          inbox_group_id: null,
-          csrf_token: null
-        })
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          signed_in: true,
-          user: {
-            id: 'user-1',
-            email: 'local-dev@gust.local',
-            display_name: 'Local Dev User'
-          },
-          timezone: 'UTC',
-          inbox_group_id: 'inbox-1',
-          csrf_token: 'csrf-token'
-        })
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          signed_in: true,
-          user: {
-            id: 'user-1',
-            email: 'local-dev@gust.local',
-            display_name: 'Local Dev User'
-          },
-          timezone: 'UTC',
-          inbox_group_id: 'inbox-1',
-          csrf_token: 'csrf-token'
-        })
-      )
+    let signedIn = false
+    const fetchMock: FetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? 'GET'
+
+      if (url.includes('/auth/session/dev-login') && method === 'POST') {
+        signedIn = true
+        return Promise.resolve(
+          jsonResponse({
+            signed_in: true,
+            user: {
+              id: 'user-1',
+              email: 'local-dev@gust.local',
+              display_name: 'Local Dev User'
+            },
+            timezone: 'UTC',
+            inbox_group_id: 'inbox-1',
+            csrf_token: 'csrf-token'
+          })
+        )
+      }
+
+      if (url.includes('/auth/session')) {
+        if (!signedIn) {
+          return Promise.resolve(
+            jsonResponse({
+              signed_in: false,
+              user: null,
+              timezone: null,
+              inbox_group_id: null,
+              csrf_token: null
+            })
+          )
+        }
+        return Promise.resolve(
+          jsonResponse({
+            signed_in: true,
+            user: {
+              id: 'user-1',
+              email: 'local-dev@gust.local',
+              display_name: 'Local Dev User'
+            },
+            timezone: 'UTC',
+            inbox_group_id: 'inbox-1',
+            csrf_token: 'csrf-token'
+          })
+        )
+      }
+
+      return Promise.resolve(jsonResponse({}))
+    })
     vi.stubGlobal('fetch', fetchMock)
 
     renderCaptureRoute()
@@ -185,7 +203,6 @@ describe('capture route', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     renderCaptureRoute()
-    const user = userEvent.setup()
 
     // Verify the capture UI is rendered
     expect(await screen.findByText('Write it')).toBeInTheDocument()

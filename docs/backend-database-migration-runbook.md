@@ -1,7 +1,7 @@
 # Gust Backend and Database Migration Runbook
 
 **Version:** 1.2  
-**Last Updated:** 2026-03-22
+**Last Updated:** 2026-03-27
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
 
@@ -31,9 +31,10 @@ Guardrails:
 
 - Local development must not connect to hosted production Supabase Auth or the production database.
 - Dev mode changes infrastructure targets only. It must not bypass auth or validation behavior in application code.
-- Local auth testing must use the backend-mediated local Supabase test-account flow, which still issues the normal backend cookie session instead of bypassing authentication.
+- Local auth testing in dev mode should use Google OAuth through the local Supabase provider config; the backend-mediated local test-account flow is an optional fallback and must still issue the same backend cookie session.
 - The local backend must target the current required application revision and local Supabase Auth endpoints before it serves traffic.
 - The local runtime env must carry the active local Supabase anon key before the backend starts, or local sign-in flows will fail.
+- When local Google OAuth is enabled, the local runtime env must also carry valid Google client credentials before `supabase start`.
 - The startup entrypoint must print the chosen local URLs when it falls back to non-default ports.
 
 ## Environment Contract

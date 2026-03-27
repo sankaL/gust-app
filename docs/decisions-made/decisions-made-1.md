@@ -1,5 +1,12 @@
 # Decisions Made
 
+## 2026-03-27 09:40:00 EDT
+
+- Switched frontend auth entry to a dedicated `/login` route and made the main app shell hard-redirect signed-out users there instead of rendering inline session-required states on protected pages.
+- Added an authenticated top-right account avatar menu with `Completed Tasks` (all-groups view), `Desktop Mode` placeholder routing, and `Logout`.
+- Chose logout-time TanStack Query cache clearing as the client-side isolation boundary so account switches never reuse prior-user cached groups/tasks.
+- Enabled local Supabase Google OAuth wiring through Makefile-managed runtime env propagation, while keeping the backend-mediated local test-account sign-in as a dev fallback.
+
 ## 2026-03-26 19:59:56 EDT
 
 - Finalized PWA install UX around a persistent app-shell header CTA when install is available, with iPhone-specific fallback instructions when the browser does not expose `beforeinstallprompt`.

@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRegisterSW } from 'virtual:pwa-register/react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
+import { ApiError, getSessionStatus, logoutSession } from '../lib/api'
 import { getAppConfig } from '../lib/config'
 import { Button } from './Button'
 import { Card } from './Card'
@@ -17,23 +19,55 @@ function isIosDevice() {
 }
 
 function isStandaloneDisplayMode() {
-  const displayModeStandalone =
+  const displayModeStandalone = Boolean(
     typeof window.matchMedia === 'function'
-      ? window.matchMedia('(display-mode: standalone)').matches
+      ? window.matchMedia('(display-mode: standalone)')?.matches
       : false
-
-  return (
-    displayModeStandalone || window.navigator.standalone === true
   )
+
+  return displayModeStandalone || window.navigator.standalone === true
+}
+
+function buildFriendlyMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    return error.message
+  }
+  return fallback
+}
+
+function buildAvatarLabel(displayName: string | null, email: string) {
+  const source = (displayName?.trim() || email.split('@')[0] || 'G').replace(/\s+/g, ' ')
+  const parts = source.split(' ').filter(Boolean)
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+  }
+  return source.slice(0, 2).toUpperCase()
+}
+
+function buildLoginPath(pathname: string, search: string) {
+  const nextPath = `${pathname}${search}`
+  return `/login?next=${encodeURIComponent(nextPath)}`
 }
 
 export function AppShell() {
   const config = getAppConfig()
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const sessionQuery = useQuery({
+    queryKey: ['session-status'],
+    queryFn: getSessionStatus
+  })
+
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isStandalone, setIsStandalone] = useState(false)
   const [showIosInstallHelp, setShowIosInstallHelp] = useState(false)
   const [needRefresh, setNeedRefresh] = useState(false)
   const [offlineReady, setOfflineReady] = useState(false)
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
+  const [menuError, setMenuError] = useState<string | null>(null)
+  const accountMenuRef = useRef<HTMLDivElement | null>(null)
 
   const { updateServiceWorker } = useRegisterSW({
     onNeedRefresh() {
@@ -73,7 +107,80 @@ export function AppShell() {
     }
   }, [updateStandalone])
 
+  useEffect(() => {
+    if (!isAccountMenuOpen) {
+      return
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false)
+      }
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsAccountMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [isAccountMenuOpen])
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const csrfToken = sessionQuery.data?.csrf_token
+      if (!csrfToken) {
+        throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
+      }
+      return logoutSession(csrfToken)
+    },
+    onSuccess: () => {
+      setIsAccountMenuOpen(false)
+      setMenuError(null)
+      queryClient.clear()
+      navigate('/login', { replace: true })
+    },
+    onError: (error) => {
+      setMenuError(buildFriendlyMessage(error, 'Logout failed. Refresh and try again.'))
+    }
+  })
+
   const shouldShowInstallButton = !isStandalone && (installPrompt !== null || isIosDevice())
+
+  const accountInitials = useMemo(() => {
+    if (!sessionQuery.data?.user) {
+      return 'G'
+    }
+    return buildAvatarLabel(sessionQuery.data.user.display_name, sessionQuery.data.user.email)
+  }, [sessionQuery.data?.user])
+
+  if (sessionQuery.isLoading) {
+    return (
+      <div className="min-h-screen bg-surface text-on-surface">
+        <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
+          <section className="w-full space-y-3" aria-busy="true">
+            <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
+              Session check
+            </p>
+            <h1 className="font-display text-3xl text-on-surface">Loading workspace</h1>
+            <p className="font-body text-sm leading-6 text-on-surface-variant">
+              Verifying your account before loading Gust.
+            </p>
+          </section>
+        </div>
+      </div>
+    )
+  }
+
+  if (sessionQuery.isError || !sessionQuery.data?.signed_in) {
+    return <Navigate to={buildLoginPath(location.pathname, location.search)} replace />
+  }
 
   async function handleInstallClick() {
     if (installPrompt) {
@@ -89,6 +196,16 @@ export function AppShell() {
     if (isIosDevice()) {
       setShowIosInstallHelp((current) => !current)
     }
+  }
+
+  function openCompletedTasks() {
+    setIsAccountMenuOpen(false)
+    navigate('/tasks/completed?group=all')
+  }
+
+  function openDesktopMode() {
+    setIsAccountMenuOpen(false)
+    navigate('/desktop')
   }
 
   return (
@@ -115,6 +232,66 @@ export function AppShell() {
               <div className="rounded-pill bg-surface-container-high px-2 py-1 text-right shadow-ambient">
                 <p className="font-body text-xs font-medium">{config.environmentLabel}</p>
               </div>
+              <div className="relative" ref={accountMenuRef}>
+                <button
+                  type="button"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-outline/40 bg-surface-container-high font-body text-xs font-semibold uppercase tracking-[0.08em] text-on-surface transition hover:bg-surface-container-highest"
+                  aria-haspopup="menu"
+                  aria-expanded={isAccountMenuOpen}
+                  aria-label="Open account menu"
+                  onClick={() => {
+                    setMenuError(null)
+                    setIsAccountMenuOpen((current) => !current)
+                  }}
+                >
+                  {accountInitials}
+                </button>
+                {isAccountMenuOpen ? (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-12 z-50 w-64 rounded-card bg-surface-container-highest shadow-[0_4px_24px_rgba(0,0,0,0.6)] border border-white/10 p-3"
+                  >
+                    <div className="space-y-1 px-1 pb-2">
+                      <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
+                        Signed in
+                      </p>
+                      <p className="truncate font-body text-sm text-on-surface">
+                        {sessionQuery.data.user?.email}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={openCompletedTasks}
+                        className="w-full rounded-soft px-3 py-2 text-left font-body text-sm text-on-surface transition hover:bg-surface-container-high"
+                      >
+                        Completed Tasks
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={openDesktopMode}
+                        className="w-full rounded-soft px-3 py-2 text-left font-body text-sm text-on-surface transition hover:bg-surface-container-high"
+                      >
+                        Desktop Mode
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => logoutMutation.mutate()}
+                        disabled={logoutMutation.isPending}
+                        className="w-full rounded-soft px-3 py-2 text-left font-body text-sm text-tertiary transition hover:bg-surface-container-high disabled:opacity-60"
+                      >
+                        {logoutMutation.isPending ? 'Logging out...' : 'Logout'}
+                      </button>
+                    </div>
+                    {menuError ? (
+                      <p className="px-1 pt-2 font-body text-xs text-tertiary">{menuError}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -125,7 +302,9 @@ export function AppShell() {
                   Install on iPhone
                 </p>
                 <p className="font-body text-sm leading-6 text-on-surface">
-                  Open Safari&apos;s Share menu, then choose <span className="font-semibold text-primary">Add to Home Screen</span> to install Gust.
+                  Open Safari&apos;s Share menu, then choose{' '}
+                  <span className="font-semibold text-primary">Add to Home Screen</span> to install
+                  Gust.
                 </p>
               </div>
             </Card>
@@ -142,7 +321,12 @@ export function AppShell() {
                     A newer build is available. Reload to update the app shell.
                   </p>
                 </div>
-                <Button type="button" variant="primary" size="sm" onClick={() => updateServiceWorker(true)}>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => updateServiceWorker(true)}
+                >
                   Update
                 </Button>
               </div>

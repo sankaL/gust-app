@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import shutil
 import socket
+import re
 from pathlib import Path
 
 
@@ -54,6 +55,9 @@ LOCAL_ENV_DEFAULTS = {
     "REMINDER_BATCH_SIZE": "50",
     "REMINDER_CLAIM_TIMEOUT_SECONDS": "600",
     "REMINDER_REQUEST_TIMEOUT_SECONDS": "10",
+    "SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED": "false",
+    "SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID": "",
+    "SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET": "",
     "VITE_GUST_DEV_MODE": "true",
 }
 
@@ -86,6 +90,9 @@ RUNTIME_KEYS = (
     "REMINDER_BATCH_SIZE",
     "REMINDER_CLAIM_TIMEOUT_SECONDS",
     "REMINDER_REQUEST_TIMEOUT_SECONDS",
+    "SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED",
+    "SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID",
+    "SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET",
     "VITE_GUST_DEV_MODE",
     "VITE_API_BASE_URL",
 )
@@ -132,8 +139,18 @@ def choose_port(default_port: int, reserved: set[int]) -> int:
         return candidate
 
 
-def render_supabase_config(config_template: str, ports: dict[str, int]) -> str:
+def render_supabase_config(
+    config_template: str,
+    ports: dict[str, int],
+    runtime_values: dict[str, str | int],
+) -> str:
     frontend_url = f"http://localhost:{ports['GUST_FRONTEND_PORT']}"
+    backend_callback_url = (
+        f"http://localhost:{ports['GUST_BACKEND_PORT']}/auth/session/callback"
+    )
+    google_enabled = str(
+        runtime_values.get("SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED", "false")
+    ).lower() in {"1", "true", "yes", "on"}
 
     replacements = {
         "port = 54321": f"port = {ports['GUST_SUPABASE_API_PORT']}",
@@ -144,13 +161,25 @@ def render_supabase_config(config_template: str, ports: dict[str, int]) -> str:
         "port = 54324": f"port = {ports['GUST_SUPABASE_MAIL_PORT']}",
         'site_url = "http://localhost:3000"': f'site_url = "{frontend_url}"',
         'additional_redirect_urls = ["http://localhost:3000"]': (
-            f'additional_redirect_urls = ["{frontend_url}"]'
+            f'additional_redirect_urls = ["{frontend_url}", "{backend_callback_url}"]'
         ),
     }
 
     rendered = config_template
     for needle, replacement in replacements.items():
         rendered = rendered.replace(needle, replacement)
+
+    google_section_pattern = re.compile(
+        r"(^\[auth\.external\.google\]\s*$.*?^\s*enabled\s*=\s*)(?:true|false)\s*$",
+        re.MULTILINE | re.DOTALL,
+    )
+    rendered, google_updates = google_section_pattern.subn(
+        lambda match: f"{match.group(1)}{'true' if google_enabled else 'false'}",
+        rendered,
+        count=1,
+    )
+    if google_updates != 1:
+        raise RuntimeError("Could not set auth.external.google.enabled in Supabase config.")
 
     return rendered
 
@@ -220,7 +249,7 @@ def main() -> None:
     shutil.copy2(SUPABASE_TEMPLATE_DIR / "seed.sql", SUPABASE_RUNTIME_DIR / "seed.sql")
 
     config_template = (SUPABASE_TEMPLATE_DIR / "config.toml").read_text(encoding="utf-8")
-    rendered_config = render_supabase_config(config_template, ports)
+    rendered_config = render_supabase_config(config_template, ports, runtime_values)
     (SUPABASE_RUNTIME_DIR / "config.toml").write_text(rendered_config, encoding="utf-8")
 
 

@@ -89,6 +89,8 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-07 | Enhance task extraction system prompt with multi-task and subtask decomposition guidance | DONE | 2026-03-24 | Added step-by-step extraction strategy, task boundary rules, signal word handling, comprehensive examples including test case, and self-verification checklist to extraction_prompts.py. Added test_extraction_comprehensive.py with regression coverage. | extraction-improvement-plan.md |
 | ADH-08 | Implement recurring delete scope and per-group completed tasks page | DONE | 2026-03-25 | Added recurring delete scope (`occurrence` / `series`) with backend lifecycle handling, new completed-tasks route with reopen actions, and regression coverage for recurring delete/restore behavior. | PRD, Tech |
 | ADH-09 | Refine Mic Button UI | DONE | 2026-03-26 | Updated the capture page mic button to reduce outer glow and introduce a 3D tactile material feel. | Design |
+| ADH-10 | Implement login route, account avatar menu, and local-dev Google OAuth wiring | DONE | 2026-03-27 | Added protected-shell redirect to `/login`, account menu (`Completed Tasks`, `Desktop Mode`, `Logout`), all-groups completed route support, logout cache clearing for per-user isolation, and Makefile/runtime/Supabase config support for local Google OAuth with dev fallback test-account sign-in. | PRD, Tech, Runbook, AGENTS |
+| ADH-11 | Refine Avatar Dropdown UI | DONE | 2026-03-26 | Updated the avatar dropdown menu to use a glass frosted effect matching the group dropdown. | Design |
 
 ## Bug Fixes
 

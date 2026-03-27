@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useCallback, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Card } from './Card'
 import { listAllTasks, type TaskSummary } from '../lib/api'
 
@@ -211,7 +211,6 @@ function useAllTasksPage(cursor: string | null) {
 
 export function AllTasksView({ onTaskOpen, onTaskComplete, isBusy }: AllTasksViewProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null)
-  const queryClient = useQueryClient()
 
   const {
     cursor,

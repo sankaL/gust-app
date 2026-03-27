@@ -1,7 +1,7 @@
 # PRD: Gust
 
 **Version:** 2.0  
-**Last Updated:** 2026-03-22  
+**Last Updated:** 2026-03-27  
 **Domain:** gustapp.ca
 
 ## Product Summary
@@ -93,6 +93,8 @@ Group management is reached from the Tasks area and is not a primary navigation 
 ### 4. Authentication
 
 Users sign in with Google. All application data is scoped per user.
+Authentication uses a dedicated `/login` screen and redirects signed-out access away from protected task/capture routes.
+The authenticated shell includes a top-right account avatar menu with entries for `Completed Tasks`, `Desktop Mode` (placeholder), and `Logout`.
 
 ### 5. Email Reminders
 
@@ -200,6 +202,7 @@ Completed tasks are available on a dedicated Tasks-adjacent route.
 Required behavior:
 
 - Completed list is filtered per selected group.
+- Account menu entry opens an all-groups completed view (`group=all`) without changing per-group explicit routing.
 - Soft-deleted tasks do not appear in the completed list.
 - Completed items are sorted newest-first by `completed_at`.
 - The completed list suppresses obvious duplicate historical rows for the same logical occurrence.
@@ -324,7 +327,7 @@ Task states in v1:
 Completing a task removes it from the default task list immediately and is recoverable through undo-backed reopen behavior.
 Deleting a task removes it from active use immediately through soft delete and is recoverable through undo-backed restore behavior.
 Completed tasks are hidden from the default task list in Phase 3.
-Completed tasks remain available in the per-group Completed Tasks page.
+Completed tasks remain available in per-group and all-groups Completed Tasks views.
 
 ### Required Task Fields
 

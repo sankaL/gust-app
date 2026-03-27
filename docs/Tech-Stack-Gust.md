@@ -1,7 +1,7 @@
 # Tech Stack: Gust
 
 **Version:** 2.0  
-**Last Updated:** 2026-03-23  
+**Last Updated:** 2026-03-27  
 **Domain:** gustapp.ca
 
 ## Purpose
@@ -56,10 +56,12 @@ The frontend is a React SPA written in TypeScript.
 Responsibilities:
 
 - Authentication entry and session-aware routing
+- Protected app-shell redirect to `/login` when signed out
 - Voice capture via browser APIs
 - Transcript review and submission
 - Task list rendering and editing
 - Per-group completed-task browsing and reopen actions
+- Account-menu all-groups completed-task entry (`/tasks/completed?group=all`)
 - Completed-task rendering with legacy duplicate suppression for known historical recurrence regressions
 - Group management
 - PWA install experience
@@ -133,6 +135,7 @@ Committed model:
 - unsafe HTTP methods require CSRF protection
 
 The frontend learns whether the user is signed in by calling the backend session endpoint, not by reading tokens from browser storage.
+Logout must clear client-side query caches before the next account signs in so stale user data is not reused.
 
 ### Backend Auth Handling
 
@@ -382,7 +385,7 @@ Required automated coverage:
 Required end-to-end coverage:
 
 - Google sign-in happy path in a test environment
-- local dev sign-in through the backend-mediated local Supabase test account flow
+- local dev Google sign-in through local Supabase OAuth config, with optional backend-mediated local test-account fallback
 - voice capture with mocked transcription response
 - text capture fallback
 - reminder job flow with mocked Resend provider
