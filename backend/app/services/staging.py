@@ -13,7 +13,7 @@ from app.core.errors import (
     InvalidTaskError,
 )
 from app.core.settings import Settings
-from app.db.engine import connection_scope
+from app.db.engine import user_connection_scope
 from app.db.repositories import (
     ExtractedTaskRecord,
     GroupContextRecord,
@@ -83,7 +83,7 @@ class StagingService:
 
         extracted_tasks: list[ExtractedTaskRecord] = []
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             for candidate in extracted_payload.tasks:
                 try:
                     # Resolve group
@@ -201,7 +201,7 @@ class StagingService:
             ExtractedTaskNotFoundError: If extracted task cannot be resolved for this user/capture.
             ExtractedTaskStateConflictError: If extracted task has already been processed.
         """
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             extracted_task = get_extracted_task(
                 connection, user_id=user_id, extracted_task_id=extracted_task_id
             )
@@ -276,7 +276,7 @@ class StagingService:
             ExtractedTaskNotFoundError: If extracted task cannot be resolved for this user/capture.
             ExtractedTaskStateConflictError: If extracted task has already been processed.
         """
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             extracted_task = get_extracted_task(
                 connection, user_id=user_id, extracted_task_id=extracted_task_id
             )
@@ -326,7 +326,7 @@ class StagingService:
         Raises:
             ExtractedTaskNotFoundError: If extracted task cannot be found.
         """
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             extracted_task = get_extracted_task(
                 connection, user_id=user_id, extracted_task_id=extracted_task_id
             )
@@ -396,7 +396,7 @@ class StagingService:
         if unknown_fields:
             raise InvalidTaskError("Extracted task update contains unsupported fields.")
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             extracted_task = get_extracted_task(
                 connection, user_id=user_id, extracted_task_id=extracted_task_id
             )
@@ -539,7 +539,7 @@ class StagingService:
         Returns:
             List of ApproveResult with created tasks.
         """
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             pending_tasks = list_extracted_tasks(
                 connection, user_id=user_id, capture_id=capture_id, status="pending"
             )
@@ -594,7 +594,7 @@ class StagingService:
         Returns:
             Number of tasks discarded.
         """
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             pending_tasks = list_extracted_tasks(
                 connection, user_id=user_id, capture_id=capture_id, status="pending"
             )
@@ -636,7 +636,7 @@ class StagingService:
         Returns:
             List of extracted tasks.
         """
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             return list_extracted_tasks(
                 connection,
                 user_id=user_id,
@@ -659,7 +659,7 @@ class StagingService:
         Returns:
             Extracted task record or None if not found.
         """
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             return get_extracted_task(
                 connection,
                 user_id=user_id,
@@ -692,7 +692,7 @@ class StagingService:
             StagingResult with new extracted tasks.
         """
         # Delete existing extracted tasks for this capture
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             delete_extracted_tasks_by_capture(connection, user_id=user_id, capture_id=capture_id)
 
         # Run extraction

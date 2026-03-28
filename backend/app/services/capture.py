@@ -19,7 +19,7 @@ from app.core.errors import (
     TranscriptionFailedError,
 )
 from app.core.settings import Settings
-from app.db.engine import connection_scope
+from app.db.engine import user_connection_scope
 from app.db.repositories import (
     CaptureRecord,
     GroupContextRecord,
@@ -183,7 +183,7 @@ class CaptureService:
             )
             raise self._map_transcription_error(exc) from exc
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             updated = update_capture(
                 connection,
                 user_id=user_id,
@@ -279,7 +279,7 @@ class CaptureService:
         if not normalized_transcript:
             raise InvalidCaptureError("Transcript cannot be empty.")
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
             if capture is None:
                 raise CaptureNotFoundError()
@@ -364,7 +364,7 @@ class CaptureService:
 
         created_count = 0
         flagged_count = 0
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             current_capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
             if current_capture is None:
                 raise CaptureNotFoundError()
@@ -445,7 +445,7 @@ class CaptureService:
         expires_at = datetime.now(timezone.utc) + timedelta(
             days=self.settings.capture_retention_days
         )
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             return create_capture(
                 connection,
                 user_id=user_id,
@@ -466,7 +466,7 @@ class CaptureService:
         extraction_attempt_count: int | None = None,
         transcript_edited_text: str | None = None,
     ) -> None:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             update_capture(
                 connection,
                 user_id=user_id,
@@ -806,7 +806,7 @@ class CaptureService:
         if not normalized_transcript:
             return
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             user = get_user(connection, user_id)
             if user is None:
                 raise CaptureNotFoundError("Authenticated user could not be resolved.")
@@ -895,7 +895,7 @@ class CaptureService:
         if not normalized_transcript:
             raise InvalidCaptureError("Transcript cannot be empty.")
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
             if capture is None:
                 raise CaptureNotFoundError()
@@ -960,7 +960,7 @@ class CaptureService:
             CaptureNotFoundError: If capture not found.
             CaptureStateConflictError: If capture is not in a valid state for completion.
         """
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
             if capture is None:
                 raise CaptureNotFoundError()

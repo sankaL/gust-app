@@ -1,7 +1,7 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.4  
-**Last Updated:** 2026-03-27
+**Version:** 1.5  
+**Last Updated:** 2026-03-28
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
 
@@ -11,6 +11,7 @@ This runbook governs schema bootstrap, migration rollout, rollback safety, and v
 - Fail closed if the application migration level is behind the required revision.
 - Prefer additive and reversible migrations.
 - Do not rely on implicit Supabase RLS behavior for backend correctness.
+- Keep the backend runtime role free of `BYPASSRLS` if table policies are expected to protect direct Postgres access.
 - Never perform destructive same-step rollback assumptions without an explicit backup and recovery plan.
 
 ## Local Bootstrap Order
@@ -148,18 +149,34 @@ Deployment implication:
 
 - environments must apply `0009_task_descriptions` before running the backend that reads or writes task descriptions, because startup revision checks now require that revision by default
 
+## Phase 10 Revision (Postgres RLS Enforcement)
+
+Phase 10 introduces `0010_enable_postgres_rls` as the required application revision.
+
+That revision establishes:
+
+- Postgres row-level security enabled and forced on all user-owned application tables
+- one actor policy per protected table keyed off `app.current_user_id` or `app.internal_job`
+- the migration floor required by backend transactions that now set explicit Postgres actor context
+
+Deployment implication:
+
+- environments must apply `0010_enable_postgres_rls` before running the backend that sets transaction-scoped DB actor context
+- the normal backend runtime role must not have `BYPASSRLS`, or the policies will not provide protection
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
 
 1. Confirm the target revision and review migration risk.
-2. Take or verify the availability of a recoverable database backup.
-3. Apply database migrations.
-4. Verify migration success and required invariants.
-5. Deploy backend services that depend on the new schema.
-6. Verify backend health and startup migration-level checks.
-7. Deploy frontend changes that depend on the backend behavior.
-8. Verify the user-visible flow and background job behavior.
+2. Confirm the production runtime role does not have `BYPASSRLS`.
+3. Take or verify the availability of a recoverable database backup.
+4. Apply database migrations.
+5. Verify migration success and required invariants.
+6. Deploy backend services that depend on the new schema.
+7. Verify backend health and startup migration-level checks.
+8. Deploy frontend changes that depend on the backend behavior.
+9. Verify the user-visible flow and background job behavior.
 
 Why this order:
 
@@ -185,14 +202,19 @@ Production database ownership rules:
 - application schema changes are applied through Alembic only
 - do not use `supabase db push` for the application schema
 - backend deploys are expected to run `alembic upgrade head` before startup and then pass the startup revision check
+- run `python scripts/prod/check-postgres-rls.py --database-url "$DATABASE_URL"` against the production runtime connection string before and after rollout
+- if the runtime role reports `rolbypassrls=true`, switch the app to a non-bypass runtime role and reserve the privileged/admin connection for migrations only
 
 ## Post-Deploy Verification
 
 Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
-- The required revision configured for the backend matches `0009_task_descriptions` or the current deployed head.
+- The required revision configured for the backend matches `0010_enable_postgres_rls` or the current deployed head.
 - Backend startup revision check passes.
+- `scripts/prod/check-postgres-rls.py` passes against the runtime `DATABASE_URL`.
+- The current Postgres runtime role reports `rolbypassrls = false`.
+- `users`, `groups`, `captures`, `tasks`, `subtasks`, `reminders`, `extracted_tasks`, and `digest_dispatches` all report both `row_security = true` and `force_row_security = true`.
 - `users.timezone` exists and accepts valid IANA timezone data.
 - Each sampled user has exactly one Inbox group with `system_key = 'inbox'`.
 - No task row has a null `group_id`.
@@ -220,6 +242,13 @@ For digest-related releases, also verify:
 - digest summary response returns mode-specific counters (`users_processed`, `sent`, `skipped_empty`, `failed`, `captures_deleted`)
 - digest dispatch rows store provider message IDs for `sent` rows and `skipped_empty` status for empty periods
 - expired captures are deleted in bounded batches and task rows survive with `capture_id = null`
+
+For RLS-related releases, also verify:
+
+- authenticated session routes still bootstrap and refresh the local user row and Inbox group
+- authenticated task/group/capture/staging routes still succeed for the signed-in user
+- digest/cleanup jobs still succeed through the internal-job context path
+- a direct runtime-role query without actor context does not return user-owned rows from protected tables
 
 ## Railway Cron DST Maintenance
 

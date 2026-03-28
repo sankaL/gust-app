@@ -21,7 +21,7 @@ from app.core.security import (
     set_session_cookies,
 )
 from app.core.settings import Settings, get_settings
-from app.db.engine import connection_scope
+from app.db.engine import user_connection_scope
 from app.db.repositories import SessionContext, get_session_context
 from app.services.auth import (
     ExpiredSignatureError,
@@ -162,7 +162,7 @@ async def get_optional_session_context(
     else:
         return None
 
-    with connection_scope(settings.database_url) as connection:
+    with user_connection_scope(settings.database_url, user_id=identity.user_id) as connection:
         return get_session_context(connection, identity.user_id)
 
 

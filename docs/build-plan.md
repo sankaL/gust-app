@@ -103,6 +103,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-21 | Add repo-owned Railway production deploy automation fallback | DONE | 2026-03-27 | Added `scripts/prod/deploy-railway-prod.sh` for manual Railway CLI deploys and `.github/workflows/railway-prod-deploy.yml` to rerun the same path automatically after `CI` succeeds on `main`, including frontend `--no-gitignore` handling and live endpoint verification. | Runbook, Tech, AGENTS |
 | ADH-22 | Fix README presentation and brand markup | DONE | 2026-03-27 | Centered the hero logo, replaced the drifting feature/how-it-works layouts with stable table/list markup, corrected brand badge colors, rebuilt the color swatches with inline chips, and replaced the remote footer separator with a plain markdown rule. | AGENTS |
 | ADH-23 | Fix README AI services and orchestration labels | DONE | 2026-03-28 | Updated the tech stack section to show Mistral AI for voice capture/transcription, LangChain for orchestration, and OpenAI GPT-5.4 mini for extraction. | AGENTS |
+| ADH-24 | Add Postgres row-level security enforcement and backend actor-scoped DB context | DONE | 2026-03-28 | Added Postgres-only Alembic RLS policies, transaction-scoped `app.current_user_id` / `app.internal_job` context, production RLS verification script, and schema/runbook/architecture updates. | Schema, Runbook, Tech, AGENTS |
 
 ## Bug Fixes
 

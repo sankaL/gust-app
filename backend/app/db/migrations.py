@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 from collections import deque
 from pathlib import Path
-from typing import Optional
 
-from alembic.config import Config
-from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from app.db.engine import connection_scope
 
 
@@ -14,7 +15,7 @@ class MigrationVersionError(RuntimeError):
     """Raised when the database revision does not satisfy the application contract."""
 
 
-def get_current_revision(connection: Connection) -> Optional[str]:
+def get_current_revision(connection: Connection) -> str | None:
     inspector = inspect(connection)
     if "alembic_version" not in inspector.get_table_names():
         return None
