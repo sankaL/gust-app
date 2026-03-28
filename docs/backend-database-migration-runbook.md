@@ -288,6 +288,25 @@ Before merge or deploy:
 - startup revision check tests pass
 - documentation updates are present for any schema or rollout contract change
 
+## Railway Deploy Automation Fallback
+
+If Railway-native repo auto-deploy is not linked for the production services, use the repo-owned fallback automation:
+
+- manual operator path: `scripts/prod/deploy-railway-prod.sh`
+- GitHub Actions path: `.github/workflows/railway-prod-deploy.yml`
+
+Fallback contract:
+
+- the workflow runs only after the `CI` workflow completes successfully on `main`
+- the Railway CLI token must be present in the repository secret `RAILWAY_API_TOKEN`
+- the deploy script uploads the four production services from their checked-in source directories:
+  - `backend/`
+  - `frontend/`
+  - `deploy/digest-daily-cron/`
+  - `deploy/digest-weekly-cron/`
+- the frontend Railway deploy must bypass gitignore filtering during CLI upload so tracked `frontend/src/lib/*.ts` files are not omitted from the build context
+- the script polls Railway deployment status for each service and verifies the live frontend and backend URLs after rollout
+
 ## Operational Ownership
 
 - Schema contract owner: backend/application engineering
