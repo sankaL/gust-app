@@ -95,9 +95,11 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?style=flat-square&logo=postgresql&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=flat-square&logo=supabase&logoColor=black)
 
-### AI & Services
+### AI, Orchestration & Services
 
-![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-fd81a8?style=flat-square&logo=openai&logoColor=white)
+![Mistral AI](https://img.shields.io/badge/Mistral%20AI-Voice%20Capture%20%26%20Transcription-fd81a8?style=flat-square)
+![LangChain](https://img.shields.io/badge/LangChain-Orchestration-ba9eff?style=flat-square)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--5.4%20mini-0d0d12?style=flat-square&logo=openai&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Railway](https://img.shields.io/badge/Railway-Deployment-fd81a8?style=flat-square&logo=railway&logoColor=white)
 

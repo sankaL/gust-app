@@ -102,6 +102,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-20 | Refresh task detail navigation and action ergonomics | DONE | 2026-03-27 | Reworked the task detail screen into a read-first summary with sticky bottom actions, made save/delete return to the originating task list filter, preserved `group=all` detail returns, and added frontend regression coverage for read/edit mode transitions and return navigation. | PRD, Design, AGENTS |
 | ADH-21 | Add repo-owned Railway production deploy automation fallback | DONE | 2026-03-27 | Added `scripts/prod/deploy-railway-prod.sh` for manual Railway CLI deploys and `.github/workflows/railway-prod-deploy.yml` to rerun the same path automatically after `CI` succeeds on `main`, including frontend `--no-gitignore` handling and live endpoint verification. | Runbook, Tech, AGENTS |
 | ADH-22 | Fix README presentation and brand markup | DONE | 2026-03-27 | Centered the hero logo, replaced the drifting feature/how-it-works layouts with stable table/list markup, corrected brand badge colors, rebuilt the color swatches with inline chips, and replaced the remote footer separator with a plain markdown rule. | AGENTS |
+| ADH-23 | Fix README AI services and orchestration labels | DONE | 2026-03-28 | Updated the tech stack section to show Mistral AI for voice capture/transcription, LangChain for orchestration, and OpenAI GPT-5.4 mini for extraction. | AGENTS |
 
 ## Bug Fixes
 
