@@ -9,7 +9,12 @@ import httpx
 import jwt
 from jwt import ExpiredSignatureError, InvalidTokenError, PyJWKClient
 
-from app.core.errors import ConfigurationError, UpstreamAuthError
+from app.core.errors import (
+    AUTH_EMAIL_NOT_ALLOWED_MESSAGE,
+    AuthEmailNotAllowedError,
+    ConfigurationError,
+    UpstreamAuthError,
+)
 from app.core.security import TokenBundle
 from app.core.settings import Settings
 
@@ -237,6 +242,9 @@ class SupabaseAuthService:
                 headers=headers,
             )
         if response.status_code >= 400:
+            error_message = self._extract_error_message(response)
+            if self._is_email_not_allowed_error(response.status_code, error_message):
+                raise AuthEmailNotAllowedError()
             raise UpstreamAuthError("Authentication provider token exchange failed.")
         return response.json()
 
@@ -262,6 +270,28 @@ class SupabaseAuthService:
                 display_name=metadata.get("full_name") or metadata.get("name"),
             ),
         )
+
+    @staticmethod
+    def _extract_error_message(response: httpx.Response) -> str | None:
+        try:
+            payload = response.json()
+        except ValueError:
+            return None
+
+        if isinstance(payload, dict):
+            for key in ("msg", "message", "error_description", "error"):
+                value = payload.get(key)
+                if isinstance(value, str):
+                    return value
+
+        return None
+
+    @staticmethod
+    def _is_email_not_allowed_error(status_code: int, error_message: str | None) -> bool:
+        if status_code != 403 or not error_message:
+            return False
+
+        return AUTH_EMAIL_NOT_ALLOWED_MESSAGE.lower() in error_message.strip().lower()
 
 
 __all__ = [

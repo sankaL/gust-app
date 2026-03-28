@@ -1,6 +1,6 @@
 # Gust Database Schema
 
-**Version:** 1.5
+**Version:** 1.6
 **Last Updated:** 2026-03-28
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
@@ -26,6 +26,18 @@ The schema is designed to support:
 - Active digest delivery state is normalized into a dedicated `digest_dispatches` table.
 - Legacy per-task reminder rows are preserved for compatibility but are no longer the active email-send source.
 - Group names must be unique per user.
+
+## Auth Allowlist
+
+Hosted and local Supabase Auth deployments must gate user creation through a database-backed email allowlist.
+
+Contract:
+
+- `public.allowed_users` is the source of truth for which emails may create or refresh a Gust auth session.
+- email matching is exact after `lower(trim(email))` normalization
+- Supabase `before_user_created` must call `public.before_user_created_allowlist(event jsonb)` before inserting into `auth.users`
+- the backend must also consult `public.allowed_users` before bootstrapping or restoring a Gust session so removing an email takes effect on the next sign-in or refresh
+- `public.allowed_users` is an auth-admin table, not a user-owned application table, and should not be exposed through the normal app API
 
 ## Postgres Row-Level Security
 
@@ -113,6 +125,21 @@ Constraints and invariants:
 - `timezone` must store an IANA timezone identifier, validated by the backend.
 - `email` should be unique if persisted for lookup, but `id` remains the only trusted identity key.
 - A user row must exist before any group, task, capture, or reminder rows are created.
+
+### `allowed_users`
+
+Supabase-auth allowlist table for private-access gating.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `email` | `text` | No | Primary key. Stored normalized as lowercase trimmed email. |
+| `created_at` | `timestamptz` | No | Default `now()`. |
+
+Constraints and invariants:
+
+- `email` is the exact allowlist key after normalization.
+- New rows must be safe to add or remove without backend/frontend code changes.
+- Reads are limited to Supabase auth-hook execution and backend auth/session enforcement.
 
 ### `groups`
 

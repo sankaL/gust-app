@@ -1,6 +1,6 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.5  
+**Version:** 1.6  
 **Last Updated:** 2026-03-28
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
@@ -200,11 +200,19 @@ Production database ownership rules:
 
 - hosted Supabase project provisioning and config are managed through the Supabase CLI
 - application schema changes are applied through Alembic only
+- Supabase Auth hook assets such as `public.allowed_users` and `public.before_user_created_allowlist(jsonb)` are versioned under `supabase/` and applied through the Supabase project workflow, not Alembic
+- the backend runtime role must retain `SELECT` on `public.allowed_users`, because callback and session-refresh auth checks read that table directly
 - do not use `supabase db push` for the application schema
 - backend deploys are expected to run `alembic upgrade head` before startup and then pass the startup revision check
 - run `python scripts/prod/check-postgres-rls.py --database-url "$DATABASE_URL"` against the production runtime connection string before and after rollout
 - if the runtime role reports `rolbypassrls=true`, switch the app to a non-bypass runtime role and reserve the privileged/admin connection for migrations only
 - once the runtime role is a least-privilege non-bypass role, do not rely on that runtime `DATABASE_URL` for future DDL-bearing migrations; run hosted Alembic with a privileged migration/admin connection before the backend deploy or provide a separate migration-only connection path
+
+Allowlist administration:
+
+- add an email with `insert into public.allowed_users (email) values ('new@example.com');`
+- remove an email with `delete from public.allowed_users where email = 'old@example.com';`
+- the allowlist trigger normalizes `email` to lowercase trimmed text before storage
 
 ## Post-Deploy Verification
 
@@ -229,6 +237,12 @@ Minimum verification after applying schema-affecting changes:
 - Legacy reminder rows in `pending` or `claimed` were cancelled during migration.
 - Capture retention fields exist and new rows receive an `expires_at` value.
 - `tasks.capture_id` supports capture cleanup without orphaning tasks.
+- `public.allowed_users` exists and contains the intended private-access email set.
+- the backend runtime role can `SELECT` from `public.allowed_users`.
+- the Supabase `before_user_created` hook is enabled and points to `public.before_user_created_allowlist`.
+- an allowlisted Google email can complete signup/sign-in.
+- a non-allowlisted Google email is rejected before `auth.users` insertion.
+- a previously-created but now-removed email cannot restore a backend session and is redirected or returned as `auth_email_not_allowed`.
 
 For capture/extraction releases, also verify:
 

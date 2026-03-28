@@ -344,6 +344,64 @@ describe('app shell', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('shows the allowlist error on the login route', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        jsonResponse({
+          signed_in: false,
+          user: null,
+          timezone: null,
+          inbox_group_id: null,
+          csrf_token: null
+        })
+      )
+    )
+
+    renderWithRoute(['/login?auth_error=email_not_allowed'])
+
+    expect(await screen.findByText('This email is not allowed to access Gust.')).toBeInTheDocument()
+  })
+
+  it('redirects blocked users to login with an allowlist error', async () => {
+    let authChecks = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = requestUrl(input)
+        if (url.includes('/auth/session')) {
+          authChecks += 1
+          if (authChecks === 1) {
+            return jsonResponse(
+              {
+                error: {
+                  code: 'auth_email_not_allowed',
+                  message: 'This email is not allowed to access Gust.'
+                }
+              },
+              { status: 403 }
+            )
+          }
+
+          return jsonResponse({
+            signed_in: false,
+            user: null,
+            timezone: null,
+            inbox_group_id: null,
+            csrf_token: null
+          })
+        }
+
+        return jsonResponse({})
+      })
+    )
+
+    renderWithRoute(['/tasks'])
+
+    expect(await screen.findByText('This email is not allowed to access Gust.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+  })
+
   it('opens the account menu and navigates to desktop mode placeholder', async () => {
     renderWithRoute(['/'])
 

@@ -3,7 +3,7 @@ import { Navigate, useSearchParams } from 'react-router-dom'
 
 import { PortraitOrientationGuard } from '../components/PortraitOrientationGuard'
 import { SessionRequiredCard } from '../components/SessionRequiredCard'
-import { getSessionStatus } from '../lib/api'
+import { ApiError, getSessionStatus } from '../lib/api'
 
 function resolveNextPath(nextPath: string | null): string {
   if (!nextPath) {
@@ -30,10 +30,19 @@ export function LoginRoute() {
   const [searchParams] = useSearchParams()
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
-    queryFn: getSessionStatus
+    queryFn: getSessionStatus,
+    retry: false,
   })
 
   const nextPath = resolveNextPath(searchParams.get('next'))
+  const authError = searchParams.get('auth_error')
+  const authErrorMessage =
+    authError === 'email_not_allowed' ? 'This email is not allowed to access Gust.' : null
+  const sessionErrorMessage =
+    sessionQuery.error instanceof ApiError && sessionQuery.error.code === 'auth_email_not_allowed'
+      ? sessionQuery.error.message
+      : null
+  const errorMessage = authErrorMessage ?? sessionErrorMessage
 
   if (sessionQuery.isLoading) {
     return (
@@ -73,7 +82,7 @@ export function LoginRoute() {
             </p>
           </div>
 
-          <SessionRequiredCard />
+          <SessionRequiredCard errorMessage={errorMessage} />
         </section>
       </div>
     </main>

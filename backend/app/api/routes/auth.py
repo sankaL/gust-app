@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: UP045
 from typing import Annotated, Optional
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -13,6 +14,7 @@ from app.core.dependencies import (
     require_csrf,
 )
 from app.core.errors import (
+    AuthEmailNotAllowedError,
     AuthRequiredError,
     CsrfValidationError,
     InvalidTimezoneError,
@@ -37,6 +39,7 @@ from app.db.repositories import (
     ensure_inbox_group,
     get_session_context,
     get_user,
+    is_email_allowed,
     update_user_timezone,
     upsert_user,
 )
@@ -121,11 +124,27 @@ async def auth_callback(
     if not code_verifier:
         raise CsrfValidationError("OAuth PKCE verifier was missing or expired.")
 
-    session = await auth_service.exchange_code_for_session(code=code, code_verifier=code_verifier)
+    try:
+        session = await auth_service.exchange_code_for_session(
+            code=code,
+            code_verifier=code_verifier,
+        )
+    except AuthEmailNotAllowedError:
+        return _build_blocked_auth_redirect_response(
+            settings=settings,
+            response_url=_build_login_redirect_url(settings, auth_error="email_not_allowed"),
+        )
+
     with user_connection_scope(
         settings.database_url,
         user_id=session.identity.user_id,
     ) as connection:
+        if not is_email_allowed(connection, email=session.identity.email):
+            await _best_effort_revoke_refresh_token(auth_service, session.tokens.refresh_token)
+            return _build_blocked_auth_redirect_response(
+                settings=settings,
+                response_url=_build_login_redirect_url(settings, auth_error="email_not_allowed"),
+            )
         _bootstrap_user_session(connection, session)
         session_context = get_session_context(connection, session.identity.user_id)
 
@@ -166,6 +185,9 @@ async def local_dev_login(
         settings.database_url,
         user_id=session.identity.user_id,
     ) as connection:
+        if not is_email_allowed(connection, email=session.identity.email):
+            await _best_effort_revoke_refresh_token(auth_service, session.tokens.refresh_token)
+            raise AuthEmailNotAllowedError()
         _bootstrap_user_session(connection, session)
         session_context = get_session_context(connection, session.identity.user_id)
 
@@ -258,6 +280,41 @@ def _bootstrap_user_session(connection, session: AuthenticatedSession) -> None:
         timezone=existing_user.timezone if existing_user is not None else "UTC",
     )
     ensure_inbox_group(connection, user_id=session.identity.user_id)
+
+
+def _build_login_redirect_url(settings: Settings, *, auth_error: str | None = None) -> str:
+    frontend_app_url = (settings.frontend_app_url or "").rstrip("/")
+    base_url = f"{frontend_app_url}/login" if frontend_app_url else "/login"
+
+    if auth_error is None:
+        return base_url
+
+    return f"{base_url}?{urlencode({'auth_error': auth_error})}"
+
+
+def _build_blocked_auth_redirect_response(
+    *,
+    settings: Settings,
+    response_url: str,
+) -> RedirectResponse:
+    response = RedirectResponse(url=response_url, status_code=302)
+    clear_oauth_code_verifier_cookie(response, settings)
+    clear_session_cookies(response, settings)
+    clear_csrf_cookie(response, settings)
+    return response
+
+
+async def _best_effort_revoke_refresh_token(
+    auth_service: SupabaseAuthService,
+    refresh_token: str | None,
+) -> None:
+    if not refresh_token:
+        return
+
+    try:
+        await auth_service.revoke_refresh_token(refresh_token=refresh_token)
+    except Exception:
+        return
 
 
 def _validate_timezone(timezone: str) -> None:

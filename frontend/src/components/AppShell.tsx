@@ -45,9 +45,13 @@ function buildAvatarLabel(displayName: string | null, email: string) {
   return source.slice(0, 2).toUpperCase()
 }
 
-function buildLoginPath(pathname: string, search: string) {
+function buildLoginPath(pathname: string, search: string, authError?: string) {
   const nextPath = `${pathname}${search}`
-  return `/login?next=${encodeURIComponent(nextPath)}`
+  const params = new URLSearchParams({ next: nextPath })
+  if (authError) {
+    params.set('auth_error', authError)
+  }
+  return `/login?${params.toString()}`
 }
 
 export function AppShell() {
@@ -58,7 +62,8 @@ export function AppShell() {
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
-    queryFn: getSessionStatus
+    queryFn: getSessionStatus,
+    retry: false,
   })
 
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
@@ -178,7 +183,15 @@ export function AppShell() {
     )
   }
 
-  if (sessionQuery.isError || !sessionQuery.data?.signed_in) {
+  if (sessionQuery.isError) {
+    const authError =
+      sessionQuery.error instanceof ApiError && sessionQuery.error.code === 'auth_email_not_allowed'
+        ? 'email_not_allowed'
+        : undefined
+    return <Navigate to={buildLoginPath(location.pathname, location.search, authError)} replace />
+  }
+
+  if (!sessionQuery.data?.signed_in) {
     return <Navigate to={buildLoginPath(location.pathname, location.search)} replace />
   }
 

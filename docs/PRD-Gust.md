@@ -92,7 +92,7 @@ Group management is reached from the Tasks area and is not a primary navigation 
 
 ### 4. Authentication
 
-Users sign in with Google. All application data is scoped per user.
+Users sign in with Google. During private access, only explicitly allowlisted email addresses may create or restore a Gust session. All application data is scoped per user.
 Authentication uses a dedicated `/login` screen and redirects signed-out access away from protected task/capture routes.
 The authenticated shell includes a top-right account avatar menu with entries for `Completed Tasks`, `Desktop Mode` (placeholder), and `Logout`.
 

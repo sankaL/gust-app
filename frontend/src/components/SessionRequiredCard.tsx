@@ -16,7 +16,11 @@ function buildFriendlyMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-export function SessionRequiredCard() {
+type SessionRequiredCardProps = {
+  errorMessage?: string | null
+}
+
+export function SessionRequiredCard({ errorMessage = null }: SessionRequiredCardProps = {}) {
   const queryClient = useQueryClient()
   const { devMode } = getAppConfig()
 
@@ -30,6 +34,11 @@ export function SessionRequiredCard() {
 
   return (
     <div className="space-y-4 mt-8">
+      {errorMessage ? (
+        <div className="rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] px-4 py-3 text-center shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
+          <p className="font-body text-sm leading-6 text-red-100">{errorMessage}</p>
+        </div>
+      ) : null}
       <div>
         <a
           href={getAuthStartUrl()}

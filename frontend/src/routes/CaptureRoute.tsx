@@ -128,7 +128,8 @@ export function CaptureRoute() {
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
-    queryFn: getSessionStatus
+    queryFn: getSessionStatus,
+    retry: false,
   })
 
   // Query for all pending tasks (user-scoped, not capture-scoped)

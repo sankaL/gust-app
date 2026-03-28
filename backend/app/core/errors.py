@@ -7,9 +7,15 @@ from fastapi import HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.core.security import (
+    clear_csrf_cookie,
+    clear_oauth_code_verifier_cookie,
+    clear_session_cookies,
+)
 from app.db.migrations import MigrationVersionError
 
 logger = logging.getLogger("gust.api")
+AUTH_EMAIL_NOT_ALLOWED_MESSAGE = "This email is not allowed to access Gust."
 
 
 @dataclass
@@ -24,6 +30,15 @@ class AuthRequiredError(ApiError):
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
             code="auth_required",
+            message=message,
+        )
+
+
+class AuthEmailNotAllowedError(ApiError):
+    def __init__(self, message: str = AUTH_EMAIL_NOT_ALLOWED_MESSAGE) -> None:
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="auth_email_not_allowed",
             message=message,
         )
 
@@ -320,12 +335,19 @@ async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
             "error_code": exc.code,
         },
     )
-    return build_error_response(
+    response = build_error_response(
         request,
         status_code=exc.status_code,
         code=exc.code,
         message=exc.message,
     )
+    if isinstance(exc, AuthEmailNotAllowedError):
+        settings = getattr(request.app.state, "settings", None)
+        if settings is not None:
+            clear_session_cookies(response, settings)
+            clear_csrf_cookie(response, settings)
+            clear_oauth_code_verifier_cookie(response, settings)
+    return response
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
