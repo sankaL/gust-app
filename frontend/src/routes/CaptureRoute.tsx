@@ -22,6 +22,7 @@ import { SessionRequiredCard } from '../components/SessionRequiredCard'
 import { StagingTable } from '../components/StagingTable'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { ExtractingLoader } from '../components/ExtractingLoader'
+import { useNotifications } from '../components/Notifications'
 
 type RecordedAudio = {
   blob: Blob
@@ -42,6 +43,7 @@ export function CaptureRoute() {
   const recordedChunksRef = useRef<BlobPart[]>([])
   const retryAudioRef = useRef<RecordedAudio | null>(null)
   const queryClient = useQueryClient()
+  const { notifyError, notifySuccess } = useNotifications()
 
   const [isRecording, setIsRecording] = useState(false)
   const [isRecorderLoading, setIsRecorderLoading] = useState(false)
@@ -50,7 +52,7 @@ export function CaptureRoute() {
   const [reviewCaptureId, setReviewCaptureId] = useState<string | null>(null)
   const [permissionError, setPermissionError] = useState<string | null>(null)
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [textCaptureError, setTextCaptureError] = useState<string | null>(null)
   const [summary, setSummary] = useState<SubmitCaptureResponse | null>(null)
   const [showStaging, setShowStaging] = useState(false)
 
@@ -108,55 +110,47 @@ export function CaptureRoute() {
   const handleApproveTask = async (taskId: string) => {
     const captureId = resolveTaskCaptureId(taskId)
     if (!captureId) {
-      setSubmitError('Task context is unavailable. Refresh and try again.')
+      notifyError('Task context is unavailable. Refresh and try again.')
       return
     }
     if (!sessionQuery.data?.csrf_token) return
     try {
-      setSubmitError(null)
       await approveExtractedTask(captureId, taskId, sessionQuery.data.csrf_token)
       await refreshTaskQueries(captureId)
+      notifySuccess('Task approved.')
     } catch (error) {
-      setSubmitError(buildFriendlyMessage(error, 'Failed to approve task.'))
+      notifyError(buildFriendlyMessage(error, 'Failed to approve task.'))
     }
   }
 
   const handleDiscardTask = async (taskId: string) => {
     const captureId = resolveTaskCaptureId(taskId)
     if (!captureId) {
-      setSubmitError('Task context is unavailable. Refresh and try again.')
+      notifyError('Task context is unavailable. Refresh and try again.')
       return
     }
     if (!sessionQuery.data?.csrf_token) return
     try {
-      setSubmitError(null)
       await discardExtractedTask(captureId, taskId, sessionQuery.data.csrf_token)
       await refreshTaskQueries(captureId)
+      notifySuccess('Task discarded.')
     } catch (error) {
-      setSubmitError(buildFriendlyMessage(error, 'Failed to discard task.'))
+      notifyError(buildFriendlyMessage(error, 'Failed to discard task.'))
     }
   }
 
   const handleApproveAll = async () => {
     if (!reviewCaptureId || !sessionQuery.data?.csrf_token) return
-    try {
-      setSubmitError(null)
-      await approveAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
-      await refreshTaskQueries(reviewCaptureId)
-    } catch (error) {
-      setSubmitError(buildFriendlyMessage(error, 'Failed to approve all tasks.'))
-    }
+    await approveAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
+    await refreshTaskQueries(reviewCaptureId)
+    notifySuccess('Approved all extracted tasks.')
   }
 
   const handleDiscardAll = async () => {
     if (!reviewCaptureId || !sessionQuery.data?.csrf_token) return
-    try {
-      setSubmitError(null)
-      await discardAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
-      await refreshTaskQueries(reviewCaptureId)
-    } catch (error) {
-      setSubmitError(buildFriendlyMessage(error, 'Failed to discard all tasks.'))
-    }
+    await discardAllExtractedTasks(reviewCaptureId, sessionQuery.data.csrf_token)
+    await refreshTaskQueries(reviewCaptureId)
+    notifySuccess('Discarded all extracted tasks.')
   }
 
   // Modal state for editing extracted tasks
@@ -190,26 +184,18 @@ export function CaptureRoute() {
     const tasks = visiblePendingTasks
     const csrfToken = sessionQuery.data?.csrf_token
     if (tasks.length === 0 || !csrfToken) return
-    try {
-      setSubmitError(null)
-      // Group tasks by capture_id and batch per-capture
-      const tasksByCapture = tasks.reduce((acc, task) => {
-        if (!acc[task.capture_id]) acc[task.capture_id] = []
-        acc[task.capture_id].push(task)
-        return acc
-      }, {} as Record<string, typeof tasks>)
-      // Process each capture's tasks in parallel batches
-      await Promise.all(
-        Object.entries(tasksByCapture).map(async ([captureId]) => {
-          // Use batch approve endpoint for each capture
-          await approveAllExtractedTasks(captureId, csrfToken)
-        })
-      )
-      // Refresh the pending list
-      await refreshTaskQueries(null)
-    } catch (error) {
-      setSubmitError(buildFriendlyMessage(error, 'Failed to approve all tasks.'))
-    }
+    const tasksByCapture = tasks.reduce((acc, task) => {
+      if (!acc[task.capture_id]) acc[task.capture_id] = []
+      acc[task.capture_id].push(task)
+      return acc
+    }, {} as Record<string, typeof tasks>)
+    await Promise.all(
+      Object.entries(tasksByCapture).map(async ([captureId]) => {
+        await approveAllExtractedTasks(captureId, csrfToken)
+      })
+    )
+    await refreshTaskQueries(null)
+    notifySuccess('Approved all older pending tasks.')
   }
 
   // Batch discard all pending tasks across all captures
@@ -217,26 +203,18 @@ export function CaptureRoute() {
     const tasks = visiblePendingTasks
     const csrfToken = sessionQuery.data?.csrf_token
     if (tasks.length === 0 || !csrfToken) return
-    try {
-      setSubmitError(null)
-      // Group tasks by capture_id and batch per-capture
-      const tasksByCapture = tasks.reduce((acc, task) => {
-        if (!acc[task.capture_id]) acc[task.capture_id] = []
-        acc[task.capture_id].push(task)
-        return acc
-      }, {} as Record<string, typeof tasks>)
-      // Process each capture's tasks in parallel batches
-      await Promise.all(
-        Object.entries(tasksByCapture).map(async ([captureId]) => {
-          // Use batch discard endpoint for each capture
-          await discardAllExtractedTasks(captureId, csrfToken)
-        })
-      )
-      // Refresh the pending list
-      await refreshTaskQueries(null)
-    } catch (error) {
-      setSubmitError(buildFriendlyMessage(error, 'Failed to discard all tasks.'))
-    }
+    const tasksByCapture = tasks.reduce((acc, task) => {
+      if (!acc[task.capture_id]) acc[task.capture_id] = []
+      acc[task.capture_id].push(task)
+      return acc
+    }, {} as Record<string, typeof tasks>)
+    await Promise.all(
+      Object.entries(tasksByCapture).map(async ([captureId]) => {
+        await discardAllExtractedTasks(captureId, csrfToken)
+      })
+    )
+    await refreshTaskQueries(null)
+    notifySuccess('Discarded all older pending tasks.')
   }
 
   const isLoadingTasks = extractedTasksQuery.isLoading || extractedTasksQuery.isFetching
@@ -253,13 +231,13 @@ export function CaptureRoute() {
     },
     onSuccess: (payload) => {
       setSummary(null)
-      setSubmitError(null)
+      setTextCaptureError(null)
       setTranscriptionError(null)
       setReviewCaptureId(payload.capture_id)
       setShowStaging(true)
     },
     onError: (error) => {
-      setSubmitError(buildFriendlyMessage(error, 'Text capture could not be prepared.'))
+      setTextCaptureError(buildFriendlyMessage(error, 'Text capture could not be prepared.'))
     }
   })
 
@@ -275,7 +253,7 @@ export function CaptureRoute() {
     onSuccess: (payload) => {
       setSummary(null)
       setTranscriptionError(null)
-      setSubmitError(null)
+      setTextCaptureError(null)
       setReviewCaptureId(payload.capture_id)
       setShowStaging(true)
     },
@@ -300,6 +278,7 @@ export function CaptureRoute() {
   async function startRecording() {
     setPermissionError(null)
     setTranscriptionError(null)
+    setTextCaptureError(null)
     clearReviewState()
     setSummary(null)
     retryAudioRef.current = null
@@ -367,13 +346,13 @@ export function CaptureRoute() {
 
   function clearReviewState() {
     setReviewCaptureId(null)
-    setSubmitError(null)
   }
 
   function resetSummary() {
     setSummary(null)
     setTranscriptionError(null)
     setPermissionError(null)
+    setTextCaptureError(null)
   }
 
   function retryVoiceCapture() {
@@ -465,13 +444,13 @@ export function CaptureRoute() {
 
             <div className="space-y-2">
               {permissionError ? (
-                <p className="rounded-card bg-tertiary/10 px-3 py-2 font-body text-sm text-on-surface">
+                <p className="rounded-card border border-warning/35 bg-[rgba(72,38,10,0.92)] px-3 py-2 font-body text-sm text-orange-100 shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
                   {permissionError}
                 </p>
               ) : null}
               {transcriptionError ? (
-                <div className="space-y-2 rounded-card bg-tertiary/10 px-3 py-3">
-                  <p className="font-body text-sm text-on-surface">{transcriptionError}</p>
+                <div className="space-y-2 rounded-card border border-error/35 bg-[rgba(74,18,24,0.94)] px-3 py-3 shadow-[0_14px_30px_rgba(0,0,0,0.4)]">
+                  <p className="font-body text-sm text-red-100">{transcriptionError}</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     <button
                       type="button"
@@ -540,9 +519,9 @@ export function CaptureRoute() {
               placeholder="Type or paste here..."
               className="w-full resize-none rounded-card bg-black/40 px-4 py-3 font-body text-sm text-white placeholder:text-white/40 outline-none transition focus:ring-2 focus:ring-white/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"
             />
-            {textCaptureMutation.isError && submitError ? (
-              <p className="rounded-card bg-red-500/10 px-3 py-2 font-body text-sm text-red-200 shadow-sm border border-red-500/20">
-                {submitError}
+            {textCaptureMutation.isError && textCaptureError ? (
+              <p className="rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] px-3 py-2 font-body text-sm text-red-100 shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
+                {textCaptureError}
               </p>
             ) : null}
             <div className="flex justify-end">
@@ -564,7 +543,7 @@ export function CaptureRoute() {
       ) : null}
 
       {summary ? (
-        <div className="space-y-3 rounded-card bg-surface-container p-4">
+        <div className="space-y-3 rounded-card border border-white/10 bg-[rgba(22,22,22,0.94)] p-4 shadow-[0_20px_40px_rgba(0,0,0,0.35)] backdrop-blur-sm">
           <div className="space-y-1">
             <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
               Result Summary
@@ -579,7 +558,7 @@ export function CaptureRoute() {
             <SummaryMetric label="Skipped" value={summary.tasks_skipped_count} />
           </div>
           {summary.skipped_items.length > 0 ? (
-            <div className="space-y-1 rounded-card bg-surface-dim p-3">
+            <div className="space-y-1 rounded-card border border-white/5 bg-surface-dim p-3">
               <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
                 Skipped Items
               </p>
@@ -625,12 +604,6 @@ export function CaptureRoute() {
             emptyMessage="No newly captured tasks to review"
           />
 
-          {submitError ? (
-            <p className="rounded-card bg-tertiary/10 px-3 py-2 font-body text-sm text-on-surface">
-              {submitError}
-            </p>
-          ) : null}
-
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -640,12 +613,12 @@ export function CaptureRoute() {
                     return
                   }
                   try {
-                    setSubmitError(null)
                     await completeCapture(reviewCaptureId, sessionQuery.data.csrf_token)
                     setShowStaging(false)
                     setReviewCaptureId(null)
+                    notifySuccess('Capture review completed.')
                   } catch (error) {
-                    setSubmitError(buildFriendlyMessage(error, 'Failed to complete capture.'))
+                    notifyError(buildFriendlyMessage(error, 'Failed to complete capture.'))
                   }
                 })()
               }}

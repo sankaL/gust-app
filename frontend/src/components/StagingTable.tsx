@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ExtractedTask } from '../lib/api'
 import { ExtractedTaskCard } from './ExtractedTaskCard'
 import { Button } from './Button'
+import { useNotifications } from './Notifications'
 interface StagingTableProps {
   tasks: ExtractedTask[]
   onApprove: (taskId: string) => Promise<void>
@@ -29,15 +30,14 @@ export function StagingTable({
 }: StagingTableProps) {
   const [isApprovingAll, setIsApprovingAll] = useState(false)
   const [isDiscardingAll, setIsDiscardingAll] = useState(false)
-  const [bulkActionError, setBulkActionError] = useState<string | null>(null)
+  const { notifyError } = useNotifications()
 
   const handleApproveAll = async () => {
     setIsApprovingAll(true)
-    setBulkActionError(null)
     try {
       await onApproveAll()
     } catch (error) {
-      setBulkActionError(
+      notifyError(
         error instanceof Error ? error.message : 'Approve all could not be completed.'
       )
     } finally {
@@ -47,11 +47,10 @@ export function StagingTable({
 
   const handleDiscardAll = async () => {
     setIsDiscardingAll(true)
-    setBulkActionError(null)
     try {
       await onDiscardAll()
     } catch (error) {
-      setBulkActionError(
+      notifyError(
         error instanceof Error ? error.message : 'Discard all could not be completed.'
       )
     } finally {
@@ -119,12 +118,6 @@ export function StagingTable({
             </Button>
           </div>
         </div>
-
-        {bulkActionError && (
-          <p className="rounded-card border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
-            {bulkActionError}
-          </p>
-        )}
       </div>
 
       {/* Task List */}

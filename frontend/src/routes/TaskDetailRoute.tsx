@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
+import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
 import { SelectDropdown } from '../components/SelectDropdown'
 import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
@@ -102,11 +103,10 @@ export function TaskDetailRoute() {
   const [draft, setDraft] = useState<DraftState | null>(null)
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({})
-  const [feedback, setFeedback] = useState<string | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<{ scope: TaskDeleteScope } | null>(null)
-  const [showUndoToast, setShowUndoToast] = useState(false)
-  const [deletedTaskTitle, setDeletedTaskTitle] = useState<string | null>(null)
+  const { dismissNotification, notifyError, notifySuccess, showNotification, updateNotification } =
+    useNotifications()
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -178,12 +178,12 @@ export function TaskDetailRoute() {
       )
     },
     onSuccess: (task) => {
-      setFeedback('Task saved.')
+      notifySuccess('Task saved.')
       setDraft(buildDraftState(task))
       void refreshTaskData()
     },
     onError: (error) => {
-      setFeedback(buildFriendlyMessage(error, 'Task changes could not be saved.'))
+      notifyError(buildFriendlyMessage(error, 'Task changes could not be saved.'))
     }
   })
 
@@ -197,11 +197,11 @@ export function TaskDetailRoute() {
     },
     onSuccess: () => {
       setNewSubtaskTitle('')
-      setFeedback('Subtask added.')
+      notifySuccess('Subtask added.')
       void refreshTaskData()
     },
     onError: (error) => {
-      setFeedback(buildFriendlyMessage(error, 'Subtask could not be added.'))
+      notifyError(buildFriendlyMessage(error, 'Subtask could not be added.'))
     }
   })
 
@@ -214,11 +214,11 @@ export function TaskDetailRoute() {
       return updateSubtask(taskId, payload.subtaskId, payload, csrfToken)
     },
     onSuccess: () => {
-      setFeedback('Subtask updated.')
+      notifySuccess('Subtask updated.')
       void refreshTaskData()
     },
     onError: (error) => {
-      setFeedback(buildFriendlyMessage(error, 'Subtask could not be updated.'))
+      notifyError(buildFriendlyMessage(error, 'Subtask could not be updated.'))
     }
   })
 
@@ -231,11 +231,11 @@ export function TaskDetailRoute() {
       return deleteSubtask(taskId, subtaskId, csrfToken)
     },
     onSuccess: () => {
-      setFeedback('Subtask deleted.')
+      notifySuccess('Subtask deleted.')
       void refreshTaskData()
     },
     onError: (error) => {
-      setFeedback(buildFriendlyMessage(error, 'Subtask could not be deleted.'))
+      notifyError(buildFriendlyMessage(error, 'Subtask could not be deleted.'))
     }
   })
 
@@ -249,37 +249,48 @@ export function TaskDetailRoute() {
     },
     onSuccess: () => {
       setPendingDelete(null)
-      setDeletedTaskTitle(taskQuery.data?.title ?? null)
-      setShowUndoToast(true)
-      // Navigate after a delay to allow undo
-      setTimeout(() => {
-        setShowUndoToast(false)
-        void refreshTaskData()
-        void navigate(`/tasks${backSearch}`)
-      }, 5000)
-    },
-    onError: (error) => {
-      setFeedback(buildFriendlyMessage(error, 'Task could not be deleted.'))
-      setPendingDelete(null)
-    }
-  })
-
-  const restoreTaskMutation = useMutation({
-    mutationFn: async () => {
-      if (!taskId) {
-        throw new Error('Task detail is not ready.')
-      }
+      const taskTitle = taskQuery.data?.title ?? 'task'
+      const deletedTaskId = taskId as string
       const csrfToken = requireCsrf()
-      return restoreTask(taskId, csrfToken)
-    },
-    onSuccess: () => {
-      setShowUndoToast(false)
-      setDeletedTaskTitle(null)
-      setFeedback('Task restored.')
+      const notificationId = showNotification({
+        type: 'warning',
+        message: `Deleted ${taskTitle}`,
+        actionLabel: 'Undo',
+        onAction: async () => {
+          updateNotification(notificationId, {
+            type: 'loading',
+            message: `Restoring ${taskTitle}...`,
+            actionLabel: undefined,
+            onAction: undefined,
+            dismissible: false,
+            durationMs: null,
+          })
+
+          try {
+            await restoreTask(deletedTaskId, csrfToken)
+            dismissNotification(notificationId)
+            notifySuccess(`Restored ${taskTitle}.`)
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+              queryClient.invalidateQueries({ queryKey: ['groups'] }),
+              queryClient.invalidateQueries({ queryKey: ['task-detail', deletedTaskId] }),
+            ])
+          } catch (error) {
+            updateNotification(notificationId, {
+              type: 'error',
+              message: buildFriendlyMessage(error, 'Task could not be restored.'),
+              dismissible: true,
+              durationMs: 3000,
+            })
+          }
+        },
+      })
       void refreshTaskData()
+      void navigate(`/tasks${backSearch}`)
     },
     onError: (error) => {
-      setFeedback(buildFriendlyMessage(error, 'Task could not be restored.'))
+      notifyError(buildFriendlyMessage(error, 'Task could not be deleted.'))
+      setPendingDelete(null)
     }
   })
 
@@ -295,8 +306,7 @@ export function TaskDetailRoute() {
     createSubtaskMutation.isPending ||
     updateSubtaskMutation.isPending ||
     deleteSubtaskMutation.isPending ||
-    deleteTaskMutation.isPending ||
-    restoreTaskMutation.isPending
+    deleteTaskMutation.isPending
 
   const backSearch = searchParams.get('group') ? `?group=${searchParams.get('group')}` : ''
 
@@ -327,12 +337,6 @@ export function TaskDetailRoute() {
             Close
           </button>
         </div>
-
-        {feedback ? (
-          <p className="rounded-card border border-primary/20 bg-primary/10 px-4 py-3 font-body text-sm text-on-surface">
-            {feedback}
-          </p>
-        ) : null}
 
         {taskQuery.isLoading || !draft || !taskQuery.data ? (
           <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
@@ -676,22 +680,6 @@ export function TaskDetailRoute() {
           </div>
         )}
       </section>
-
-      {showUndoToast ? (
-        <div className="fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-soft p-4 shadow-ambient bg-surface-container-highest border-t-2 border-error/50">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-on-surface">Deleted "{deletedTaskTitle}"</span>
-            <button
-              type="button"
-              onClick={() => restoreTaskMutation.mutate()}
-              disabled={restoreTaskMutation.isPending}
-              className="rounded-pill bg-tertiary px-4 py-1.5 text-sm font-medium text-surface hover:bg-tertiary/80 disabled:opacity-50"
-            >
-              {restoreTaskMutation.isPending ? 'Restoring...' : 'Undo'}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </SessionGuard>
   )
 }

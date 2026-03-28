@@ -98,6 +98,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-16 | Add optional top-level task descriptions across extraction, persistence, and task cards | DONE | 2026-03-27 | Added nullable task/extracted-task descriptions, description-aware extraction and edit flows, and card layout updates for staged and saved tasks. | PRD, Schema, Runbook |
 | ADH-17 | Restore backend/frontend CI lint checks after Ruff/ESLint drift | DONE | 2026-03-27 | Reformatted backend Python sources, fixed extraction prompt lint drift, and corrected frontend promise-handling and test harness issues so CI lint passes again. | AGENTS |
 | ADH-18 | Create a reusable Gust production deployment skill | DONE | 2026-03-27 | Added the auto-discovered `gust-deploy` skill with GitHub merge checks, Railway verification, safe Supabase migration guardrails, Resend and digest-cron validation, and final deployment reporting guidance. | AGENTS, Runbook, Tech |
+| ADH-19 | Centralize transient frontend notifications into a shared stacked bottom message system | DONE | 2026-03-27 | Added a shared notification provider + viewport, moved transient task/group/capture/account feedback and undo flows into the bottom stack, upgraded inline validation/error surfaces for visibility, and added regression coverage for stacking, dismissal timing, and route-persistent notices. | Design, Tech, AGENTS |
 
 ## Bug Fixes
 

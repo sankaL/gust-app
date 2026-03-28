@@ -6,6 +6,7 @@ import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react
 import { ApiError, getSessionStatus, logoutSession } from '../lib/api'
 import { Button } from './Button'
 import { Card } from './Card'
+import { useNotifications } from './Notifications'
 import { PortraitOrientationGuard } from './PortraitOrientationGuard'
 
 const navigation = [
@@ -53,6 +54,7 @@ export function AppShell() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
+  const { notifyError } = useNotifications()
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -65,7 +67,6 @@ export function AppShell() {
   const [needRefresh, setNeedRefresh] = useState(false)
   const [offlineReady, setOfflineReady] = useState(false)
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
-  const [menuError, setMenuError] = useState<string | null>(null)
   const accountMenuRef = useRef<HTMLDivElement | null>(null)
 
   const { updateServiceWorker } = useRegisterSW({
@@ -141,12 +142,11 @@ export function AppShell() {
     },
     onSuccess: () => {
       setIsAccountMenuOpen(false)
-      setMenuError(null)
       queryClient.clear()
       void navigate('/login', { replace: true })
     },
     onError: (error) => {
-      setMenuError(buildFriendlyMessage(error, 'Logout failed. Refresh and try again.'))
+      notifyError(buildFriendlyMessage(error, 'Logout failed. Refresh and try again.'))
     }
   })
 
@@ -240,7 +240,6 @@ export function AppShell() {
                   aria-expanded={isAccountMenuOpen}
                   aria-label="Open account menu"
                   onClick={() => {
-                    setMenuError(null)
                     setIsAccountMenuOpen((current) => !current)
                   }}
                 >
@@ -286,9 +285,6 @@ export function AppShell() {
                         {logoutMutation.isPending ? 'Logging out...' : 'Logout'}
                       </button>
                     </div>
-                    {menuError ? (
-                      <p className="px-3 py-2 font-body text-xs text-tertiary">{menuError}</p>
-                    ) : null}
                   </div>
                 ) : null}
               </div>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { SessionGuard } from '../components/SessionGuard'
+import { useNotifications } from '../components/Notifications'
 import { SelectDropdown } from '../components/SelectDropdown'
 import {
   ApiError,
@@ -28,8 +29,8 @@ export function ManageGroupsRoute() {
   const [newGroupDescription, setNewGroupDescription] = useState('')
   const [drafts, setDrafts] = useState<Record<string, { name: string; description: string }>>({})
   const [deleteTargets, setDeleteTargets] = useState<Record<string, string>>({})
-  const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [showAddGroupModal, setShowAddGroupModal] = useState(false)
+  const { notifyError, notifySuccess } = useNotifications()
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -72,11 +73,11 @@ export function ManageGroupsRoute() {
     onSuccess: () => {
       setNewGroupName('')
       setNewGroupDescription('')
-      setFeedback({ message: 'Group created.', type: 'success' })
+      notifySuccess('Group created.')
       void refreshGroups()
     },
     onError: (error) => {
-      setFeedback({ message: buildFriendlyMessage(error, 'Group could not be created.'), type: 'error' })
+      notifyError(buildFriendlyMessage(error, 'Group could not be created.'))
     }
   })
 
@@ -94,11 +95,11 @@ export function ManageGroupsRoute() {
       )
     },
     onSuccess: () => {
-      setFeedback({ message: 'Group updated.', type: 'success' })
+      notifySuccess('Group updated.')
       void refreshGroups()
     },
     onError: (error) => {
-      setFeedback({ message: buildFriendlyMessage(error, 'Group could not be updated.'), type: 'error' })
+      notifyError(buildFriendlyMessage(error, 'Group could not be updated.'))
     }
   })
 
@@ -116,11 +117,11 @@ export function ManageGroupsRoute() {
       return deleteGroup(groupId, destinationGroupId, csrfToken)
     },
     onSuccess: () => {
-      setFeedback({ message: 'Group deleted.', type: 'success' })
+      notifySuccess('Group deleted.')
       void refreshGroups()
     },
     onError: (error) => {
-      setFeedback({ message: buildFriendlyMessage(error, 'Group could not be deleted.'), type: 'error' })
+      notifyError(buildFriendlyMessage(error, 'Group could not be deleted.'))
     }
   })
 
@@ -145,23 +146,6 @@ export function ManageGroupsRoute() {
             &larr; Back to Tasks
           </Link>
         </div>
-
-        {feedback ? (
-          <div className={`flex items-start gap-3 rounded-card border p-4 shadow-ambient ${
-            feedback.type === 'success'
-              ? 'bg-primary/10 border-primary/20 text-primary'
-              : 'bg-error/10 border-error/20 text-error'
-          }`}>
-            <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              {feedback.type === 'success' ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              )}
-            </svg>
-            <p className="font-body text-sm font-medium leading-relaxed">{feedback.message}</p>
-          </div>
-        ) : null}
 
         <button
           type="button"

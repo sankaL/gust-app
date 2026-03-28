@@ -98,7 +98,7 @@ export function EditExtractedTaskModal({
       setRecurrenceDayOfMonth(task.recurrence_day_of_month)
     }
     setError(null)
-  }, [defaultReminderEnabled, isCreateMode, isOpen, task])
+  }, [defaultGroupIdFinal, defaultReminderEnabled, isCreateMode, isOpen, task])
 
   useEffect(() => {
     if (!isOpen || !isCreateMode || groupId !== '') {
@@ -282,7 +282,7 @@ export function EditExtractedTaskModal({
         {/* Content */}
         <div className="p-4 space-y-4">
           {error && (
-            <div className="p-3 bg-error/10 border border-error/30 rounded-lg text-error text-sm">
+            <div className="rounded-lg border border-error/35 bg-[rgba(80,18,18,0.92)] p-3 text-sm text-red-100 shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
               {error}
             </div>
           )}

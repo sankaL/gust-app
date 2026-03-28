@@ -156,11 +156,11 @@ export function AllTasksView({ onTaskOpen, onTaskComplete, onTaskDelete, isBusy 
 
   if (isError) {
     return (
-      <div className="flex items-start gap-3 rounded-card bg-error/10 border border-error/20 p-4 shadow-ambient">
+      <div className="flex items-start gap-3 rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.4)]">
         <svg className="w-5 h-5 shrink-0 mt-0.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
-        <p className="font-body text-sm font-medium text-error leading-relaxed">
+        <p className="font-body text-sm font-medium text-red-100 leading-relaxed">
           Error loading tasks: {error instanceof Error ? error.message : 'Unknown error'}
         </p>
       </div>

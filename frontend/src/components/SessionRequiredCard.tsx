@@ -79,12 +79,14 @@ export function SessionRequiredCard() {
             </div>
           </button>
           {localDevSignInMutation.isError ? (
-            <p className="mt-4 font-body text-sm leading-6 text-tertiary text-center">
-              {buildFriendlyMessage(
-                localDevSignInMutation.error,
-                'Local test sign-in failed. Check the local Supabase and backend services.'
-              )}
-            </p>
+            <div className="mt-4 rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] px-4 py-3 text-center shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
+              <p className="font-body text-sm leading-6 text-red-100">
+                {buildFriendlyMessage(
+                  localDevSignInMutation.error,
+                  'Local test sign-in failed. Check the local Supabase and backend services.'
+                )}
+              </p>
+            </div>
           ) : null}
         </div>
       ) : null}

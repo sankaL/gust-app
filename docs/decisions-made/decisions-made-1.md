@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-27 20:05:00 EDT
+
+- Standardized transient user-action feedback on a shared bottom-stacked notification system mounted above routing so notices survive navigation and always render above floating controls like the Tasks FAB.
+- Moved undo for task completion and deletion into actionable notifications instead of keeping route-local bottom bars, preserving the product’s visible undo path while allowing multiple pending actions to stack.
+- Kept longer-lived workflow panels such as capture summaries and PWA update/install cards inline, but upgraded remaining inline error/validation surfaces to use filled high-contrast containers instead of faint outline-first treatments.
+
 ## 2026-03-26 23:54:10 EDT
 
 - Standardized the live production web origins on `https://gustapp.ca` for the frontend and `https://api.gustapp.ca` for the backend after the user attached those Railway custom domains, and dropped the temporary Railway-generated domains from the hosted Supabase auth redirect config.

@@ -17,6 +17,7 @@ import {
 } from '../lib/api'
 import { AllTasksView } from '../components/AllTasksView'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
+import { useNotifications } from '../components/Notifications'
 import { OpenTaskCard } from '../components/OpenTaskCard'
 import { SessionGuard } from '../components/SessionGuard'
 import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
@@ -84,10 +85,10 @@ export function TasksRoute() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [undoState, setUndoState] = useState<UndoState>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
   const [pendingDeleteTask, setPendingDeleteTask] = useState<TaskSummary | null>(null)
+  const { dismissNotification, notifyError, notifySuccess, showNotification, updateNotification } =
+    useNotifications()
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -146,30 +147,43 @@ export function TasksRoute() {
       return completeTask(task.id, csrfToken)
     },
     onSuccess: (task) => {
-      setUndoState({ kind: 'complete', taskId: task.id, title: task.title })
-      setActionError(null)
-      void refreshTaskData()
-    },
-    onError: (error) => {
-      setActionError(buildFriendlyMessage(error, 'Task could not be completed.'))
-    }
-  })
+      const undo: Exclude<UndoState, null> = { kind: 'complete', taskId: task.id, title: task.title }
+      const notificationId = showNotification({
+        type: 'success',
+        message: `Completed ${task.title}`,
+        actionLabel: 'Undo',
+        onAction: async () => {
+          updateNotification(notificationId, {
+            type: 'loading',
+            message: `Undoing ${task.title}...`,
+            actionLabel: undefined,
+            onAction: undefined,
+            dismissible: false,
+            durationMs: null,
+          })
 
-  const undoMutation = useMutation({
-    mutationFn: async (undo: Exclude<UndoState, null>) => {
-      const csrfToken = requireCsrf(sessionQuery.data)
-      if (undo.kind === 'complete') {
-        return reopenTask(undo.taskId, csrfToken)
-      }
-      return restoreTask(undo.taskId, csrfToken)
-    },
-    onSuccess: () => {
-      setUndoState(null)
-      setActionError(null)
+          try {
+            const csrfToken = requireCsrf(sessionQuery.data)
+            if (undo.kind === 'complete') {
+              await reopenTask(undo.taskId, csrfToken)
+            }
+            dismissNotification(notificationId)
+            notifySuccess(`Moved ${task.title} back to To-do.`)
+            await refreshTaskData()
+          } catch (error) {
+            updateNotification(notificationId, {
+              type: 'error',
+              message: buildFriendlyMessage(error, 'Undo failed.'),
+              dismissible: true,
+              durationMs: 3000,
+            })
+          }
+        },
+      })
       void refreshTaskData()
     },
     onError: (error) => {
-      setActionError(buildFriendlyMessage(error, 'Undo failed.'))
+      notifyError(buildFriendlyMessage(error, 'Task could not be completed.'))
     }
   })
 
@@ -180,18 +194,52 @@ export function TasksRoute() {
     },
     onSuccess: (_, variables) => {
       setPendingDeleteTask(null)
-      setUndoState({ kind: 'delete', taskId: variables.task.id, title: variables.task.title })
-      setActionError(null)
+      const undo: Exclude<UndoState, null> = {
+        kind: 'delete',
+        taskId: variables.task.id,
+        title: variables.task.title,
+      }
+      const notificationId = showNotification({
+        type: 'warning',
+        message: `Deleted ${variables.task.title}`,
+        actionLabel: 'Undo',
+        onAction: async () => {
+          updateNotification(notificationId, {
+            type: 'loading',
+            message: `Restoring ${variables.task.title}...`,
+            actionLabel: undefined,
+            onAction: undefined,
+            dismissible: false,
+            durationMs: null,
+          })
+
+          try {
+            const csrfToken = requireCsrf(sessionQuery.data)
+            if (undo.kind === 'delete') {
+              await restoreTask(undo.taskId, csrfToken)
+            }
+            dismissNotification(notificationId)
+            notifySuccess(`Restored ${variables.task.title}.`)
+            await refreshTaskData()
+          } catch (error) {
+            updateNotification(notificationId, {
+              type: 'error',
+              message: buildFriendlyMessage(error, 'Undo failed.'),
+              dismissible: true,
+              durationMs: 3000,
+            })
+          }
+        },
+      })
       void refreshTaskData()
     },
     onError: (error) => {
-      setActionError(buildFriendlyMessage(error, 'Task could not be deleted.'))
+      notifyError(buildFriendlyMessage(error, 'Task could not be deleted.'))
       setPendingDeleteTask(null)
     }
   })
 
-  const isBusy =
-    completeMutation.isPending || undoMutation.isPending || deleteTaskMutation.isPending
+  const isBusy = completeMutation.isPending || deleteTaskMutation.isPending
 
   const bucketSections = [
     { key: 'overdue', label: 'Overdue' },
@@ -211,8 +259,6 @@ export function TasksRoute() {
       description="Review, sort, and correct extracted tasks without leaving the protected backend session."
     >
       <section className="space-y-4">
-
-
         {groupsQuery.data?.length ? (
           <div className="flex flex-wrap gap-2">
             <button
@@ -242,15 +288,6 @@ export function TasksRoute() {
                 {group.name} · {group.open_task_count}
               </button>
             ))}
-          </div>
-        ) : null}
-
-        {actionError ? (
-          <div className="flex items-start gap-3 rounded-card bg-error/10 border border-error/20 p-4 shadow-ambient">
-            <svg className="w-5 h-5 shrink-0 mt-0.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <p className="font-body text-sm font-medium text-error leading-relaxed">{actionError}</p>
           </div>
         ) : null}
 
@@ -332,37 +369,6 @@ export function TasksRoute() {
             </div>
           </>
         )}
-
-        {undoState ? (
-          <div className={`fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-md rounded-t-soft p-4 shadow-ambient ${
-            undoState.kind === 'complete'
-              ? 'bg-primary/10 border-t-2 border-primary'
-              : 'bg-surface-container-highest border-t-2 border-error/50'
-          }`}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-body text-sm font-medium text-on-surface">
-                  {undoState.kind === 'complete' ? 'Completed' : 'Deleted'} {undoState.title}
-                </p>
-                <p className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
-                  Undo is available while this message is visible
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => undoMutation.mutate(undoState)}
-                disabled={undoMutation.isPending}
-                className={`rounded-pill px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-50 ${
-                  undoState.kind === 'complete'
-                    ? 'bg-primary hover:bg-primary-dim'
-                    : 'bg-tertiary hover:bg-tertiary/80'
-                }`}
-              >
-                Undo
-              </button>
-            </div>
-          </div>
-        ) : null}
         <div className="mt-8 mb-20 flex justify-center pb-8">
           <Link
             to={{

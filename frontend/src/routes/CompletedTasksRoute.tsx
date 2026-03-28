@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 
@@ -12,6 +12,7 @@ import {
   type SessionStatus,
   type TaskSummary
 } from '../lib/api'
+import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
@@ -73,7 +74,7 @@ function dedupeCompletedTasks(tasks: TaskSummary[]) {
 export function CompletedTasksRoute() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [actionError, setActionError] = useState<string | null>(null)
+  const { notifyError, notifySuccess } = useNotifications()
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -130,12 +131,12 @@ export function CompletedTasksRoute() {
       const csrfToken = requireCsrf(sessionQuery.data)
       return reopenTask(task.id, csrfToken)
     },
-    onSuccess: () => {
-      setActionError(null)
+    onSuccess: (task) => {
+      notifySuccess(`Moved ${task.title} back to To-do.`)
       void refreshTaskData()
     },
     onError: (error) => {
-      setActionError(buildFriendlyMessage(error, 'Task could not be moved back to To-do.'))
+      notifyError(buildFriendlyMessage(error, 'Task could not be moved back to To-do.'))
     }
   })
 
@@ -159,16 +160,6 @@ export function CompletedTasksRoute() {
       }
     >
       <section className="space-y-4">
-
-        {actionError ? (
-          <div className="flex items-start gap-3 rounded-card bg-error/10 border border-error/20 p-4 shadow-ambient">
-            <svg className="w-5 h-5 shrink-0 mt-0.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <p className="font-body text-sm font-medium text-error leading-relaxed">{actionError}</p>
-          </div>
-        ) : null}
-
         {completedTasksQuery.isLoading ? (
           <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
             Loading completed tasks.
