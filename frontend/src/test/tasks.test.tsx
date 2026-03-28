@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppShell } from '../components/AppShell'
+import { NotificationsProvider } from '../components/Notifications'
 import { CompletedTasksRoute } from '../routes/CompletedTasksRoute'
 import { AppProviders } from '../providers'
 import { ManageGroupsRoute } from '../routes/ManageGroupsRoute'
@@ -65,6 +67,47 @@ function renderTaskRoute(initialEntries: string[]) {
       <AppProviders>
         <RouterProvider router={router} />
       </AppProviders>
+    )
+  }
+}
+
+function renderTaskRouteWithClient(initialEntries: string[], client: QueryClient) {
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/',
+        element: <AppShell />,
+        children: [
+          {
+            path: 'tasks',
+            element: <TasksRoute />
+          },
+          {
+            path: 'tasks/completed',
+            element: <CompletedTasksRoute />
+          },
+          {
+            path: 'tasks/groups',
+            element: <ManageGroupsRoute />
+          },
+          {
+            path: 'tasks/:taskId',
+            element: <TaskDetailRoute />
+          }
+        ]
+      }
+    ],
+    { initialEntries }
+  )
+
+  return {
+    router,
+    ...render(
+      <QueryClientProvider client={client}>
+        <NotificationsProvider>
+          <RouterProvider router={router} />
+        </NotificationsProvider>
+      </QueryClientProvider>
     )
   }
 }
@@ -559,6 +602,78 @@ describe('tasks flow', () => {
     expect(screen.getByText('Bring capture and tasks back into visual alignment.')).toBeInTheDocument()
     expect(screen.getByText(/Reminder:/i)).toBeInTheDocument()
     expect(screen.getAllByText(/^Personal$/)).toHaveLength(2)
+  })
+
+  it('loads the all-tasks view when a legacy paginated cache entry exists for the old key', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?status=open')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                id: 'task-1',
+                title: 'Stabilize all tasks cache',
+                description: null,
+                status: 'open',
+                needs_review: false,
+                due_date: null,
+                reminder_at: null,
+                due_bucket: 'no_date',
+                group: { id: 'personal-1', name: 'Personal', is_system: false },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              }
+            ],
+            has_more: false,
+            next_cursor: null
+          })
+        )
+      }
+
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false }
+      }
+    })
+
+    client.setQueryData(['tasks', 'all', 'open'], {
+      items: [
+        {
+          id: 'legacy-task',
+          title: 'Legacy paginated task',
+          description: null,
+          status: 'open',
+          needs_review: false,
+          due_date: null,
+          reminder_at: null,
+          due_bucket: 'no_date',
+          group: { id: 'personal-1', name: 'Personal', is_system: false },
+          completed_at: null,
+          deleted_at: null,
+          subtask_count: 0
+        }
+      ],
+      has_more: false,
+      next_cursor: null
+    })
+
+    renderTaskRouteWithClient(['/tasks?group=all'], client)
+
+    expect(await screen.findByText('Stabilize all tasks cache')).toBeInTheDocument()
   })
 
   it('clears reminder and recurrence when saving a task with no due date and returns to the filtered task list', async () => {
