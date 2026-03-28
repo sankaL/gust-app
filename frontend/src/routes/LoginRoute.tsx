@@ -5,6 +5,9 @@ import { PortraitOrientationGuard } from '../components/PortraitOrientationGuard
 import { SessionRequiredCard } from '../components/SessionRequiredCard'
 import { ApiError, getSessionStatus } from '../lib/api'
 
+const EMAIL_NOT_ALLOWED_MESSAGE =
+  'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
+
 function resolveNextPath(nextPath: string | null): string {
   if (!nextPath) {
     return '/'
@@ -36,11 +39,10 @@ export function LoginRoute() {
 
   const nextPath = resolveNextPath(searchParams.get('next'))
   const authError = searchParams.get('auth_error')
-  const authErrorMessage =
-    authError === 'email_not_allowed' ? 'This email is not allowed to access Gust.' : null
+  const authErrorMessage = authError === 'email_not_allowed' ? EMAIL_NOT_ALLOWED_MESSAGE : null
   const sessionErrorMessage =
     sessionQuery.error instanceof ApiError && sessionQuery.error.code === 'auth_email_not_allowed'
-      ? sessionQuery.error.message
+      ? EMAIL_NOT_ALLOWED_MESSAGE
       : null
   const errorMessage = authErrorMessage ?? sessionErrorMessage
 
