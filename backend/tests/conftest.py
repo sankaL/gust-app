@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.core.app import create_app
 from app.core.settings import get_settings
 from app.db.engine import build_engine
-from app.db.schema import metadata
+from app.db.schema import allowed_users, metadata
 
 
 @pytest.fixture(autouse=True)
@@ -30,6 +30,15 @@ def app(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Generator:
 
     engine = build_engine(f"sqlite+pysqlite:///{database_path}")
     metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            allowed_users.insert(),
+            [
+                {"email": "user@example.com"},
+                {"email": "other@example.com"},
+                {"email": "local-dev@gust.local"},
+            ],
+        )
     engine.dispose()
 
     test_app = create_app()

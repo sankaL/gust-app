@@ -136,7 +136,12 @@ def _override_auth_service(app: FastAPI, service: FakeAuthService) -> None:
 
 def _allow_email(client: TestClient, email: str) -> None:
     with connection_scope(client.app.state.settings.database_url) as connection:
-        connection.execute(allowed_users.insert().values(email=email.strip().lower()))
+        normalized_email = email.strip().lower()
+        exists = connection.execute(
+            allowed_users.select().where(allowed_users.c.email == normalized_email)
+        ).first()
+        if exists is None:
+            connection.execute(allowed_users.insert().values(email=normalized_email))
 
 
 def test_get_session_returns_signed_out_without_cookies(client: TestClient) -> None:
