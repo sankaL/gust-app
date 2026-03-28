@@ -360,7 +360,11 @@ describe('app shell', () => {
 
     renderWithRoute(['/login?auth_error=email_not_allowed'])
 
-    expect(await screen.findByText('This email is not allowed to access Gust.')).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
+      )
+    ).toBeInTheDocument()
   })
 
   it('redirects blocked users to login with an allowlist error', async () => {
@@ -398,7 +402,11 @@ describe('app shell', () => {
 
     renderWithRoute(['/tasks'])
 
-    expect(await screen.findByText('This email is not allowed to access Gust.')).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
+      )
+    ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
   })
 

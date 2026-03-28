@@ -35,7 +35,7 @@ export function SessionRequiredCard({ errorMessage = null }: SessionRequiredCard
   return (
     <div className="space-y-4 mt-8">
       {errorMessage ? (
-        <div className="rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] px-4 py-3 text-center shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
+        <div className="rounded-card bg-[radial-gradient(circle_at_top,_rgba(138,41,55,0.95)_0%,_rgba(57,16,24,0.98)_72%,_rgba(29,9,14,1)_100%)] px-4 py-3 text-center shadow-[0_7px_0_#22090f,_0_18px_34px_rgba(0,0,0,0.5),_inset_0_1px_0_rgba(255,208,214,0.14),_inset_0_-10px_18px_rgba(0,0,0,0.22)]">
           <p className="font-body text-sm leading-6 text-red-100">{errorMessage}</p>
         </div>
       ) : null}
@@ -88,7 +88,7 @@ export function SessionRequiredCard({ errorMessage = null }: SessionRequiredCard
             </div>
           </button>
           {localDevSignInMutation.isError ? (
-            <div className="mt-4 rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] px-4 py-3 text-center shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
+            <div className="mt-4 rounded-card bg-[radial-gradient(circle_at_top,_rgba(138,41,55,0.95)_0%,_rgba(57,16,24,0.98)_72%,_rgba(29,9,14,1)_100%)] px-4 py-3 text-center shadow-[0_7px_0_#22090f,_0_18px_34px_rgba(0,0,0,0.5),_inset_0_1px_0_rgba(255,208,214,0.14),_inset_0_-10px_18px_rgba(0,0,0,0.22)]">
               <p className="font-body text-sm leading-6 text-red-100">
                 {buildFriendlyMessage(
                   localDevSignInMutation.error,
