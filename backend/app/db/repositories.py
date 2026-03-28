@@ -793,37 +793,71 @@ def list_groups_with_recent_tasks(
     user_id: str,
     limit_per_group: int = 5,
 ) -> list[GroupContextRecord]:
+    ranked_recent_tasks = (
+        sa.select(
+            tasks.c.group_id.label("group_id"),
+            tasks.c.title.label("recent_task_title"),
+            sa.func.row_number()
+            .over(
+                partition_by=tasks.c.group_id,
+                order_by=(tasks.c.created_at.desc(), tasks.c.id.desc()),
+            )
+            .label("recent_rank"),
+        )
+        .where(
+            tasks.c.user_id == user_id,
+            tasks.c.status == "open",
+            tasks.c.deleted_at.is_(None),
+        )
+        .subquery()
+    )
+
     rows = connection.execute(
-        sa.select(groups)
+        sa.select(
+            groups.c.id,
+            groups.c.user_id,
+            groups.c.name,
+            groups.c.description,
+            groups.c.is_system,
+            groups.c.system_key,
+            ranked_recent_tasks.c.recent_task_title,
+            ranked_recent_tasks.c.recent_rank,
+        )
+        .outerjoin(
+            ranked_recent_tasks,
+            sa.and_(
+                ranked_recent_tasks.c.group_id == groups.c.id,
+                ranked_recent_tasks.c.recent_rank <= limit_per_group,
+            ),
+        )
         .where(groups.c.user_id == user_id)
-        .order_by(groups.c.is_system.desc(), sa.func.lower(groups.c.name))
+        .order_by(
+            groups.c.is_system.desc(),
+            sa.func.lower(groups.c.name),
+            ranked_recent_tasks.c.recent_rank.asc(),
+        )
     ).fetchall()
 
-    result: list[GroupContextRecord] = []
+    grouped: dict[str, GroupContextRecord] = {}
+    ordered_group_ids: list[str] = []
     for row in rows:
-        recent_task_rows = connection.execute(
-            sa.select(tasks.c.title)
-            .where(
-                tasks.c.user_id == user_id,
-                tasks.c.group_id == row.id,
-                tasks.c.status == "open",
-                tasks.c.deleted_at.is_(None),
-            )
-            .order_by(tasks.c.created_at.desc())
-            .limit(limit_per_group)
-        ).fetchall()
-        result.append(
-            GroupContextRecord(
-                id=str(row.id),
+        group_id = str(row.id)
+        if group_id not in grouped:
+            grouped[group_id] = GroupContextRecord(
+                id=group_id,
                 user_id=str(row.user_id),
                 name=row.name,
                 description=row.description,
                 is_system=bool(row.is_system),
                 system_key=row.system_key,
-                recent_task_titles=[task_row.title for task_row in recent_task_rows],
+                recent_task_titles=[],
             )
-        )
-    return result
+            ordered_group_ids.append(group_id)
+
+        if row.recent_task_title is not None:
+            grouped[group_id].recent_task_titles.append(row.recent_task_title)
+
+    return [grouped[group_id] for group_id in ordered_group_ids]
 
 
 def get_task(connection: Connection, *, user_id: str, task_id: str) -> TaskRecord | None:

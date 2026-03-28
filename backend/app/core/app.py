@@ -16,6 +16,7 @@ from app.core.errors import (
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.settings import get_settings
+from app.db.engine import dispose_all_engines
 from app.db.migrations import MigrationVersionError, check_required_revision
 
 
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     if settings.run_startup_checks:
         check_required_revision(settings.database_url, settings.required_alembic_revision)
     yield
+    dispose_all_engines()
 
 
 def create_app() -> FastAPI:

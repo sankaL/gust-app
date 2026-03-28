@@ -1333,3 +1333,17 @@ def test_subtask_crud_and_user_scoping(app: FastAPI, client: TestClient) -> None
         subtask_rows = connection.execute(sa.select(subtasks)).fetchall()
 
     assert subtask_rows == []
+
+
+def test_task_list_emits_server_timing_headers(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+    inbox_group_id = client.get("/auth/session").json()["inbox_group_id"]
+    _seed_task(client, user_id=USER_ID, group_id=inbox_group_id, title="Timed task")
+
+    response = client.get(f"/tasks?group_id={inbox_group_id}", headers=headers)
+
+    assert response.status_code == 200
+    server_timing = response.headers.get("Server-Timing")
+    assert server_timing is not None
+    assert "db.tasks.list" in server_timing
+    assert "request.total" in server_timing

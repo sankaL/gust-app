@@ -13,6 +13,7 @@ from app.core.errors import (
     InvalidTaskError,
 )
 from app.core.settings import Settings
+from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
 from app.db.repositories import (
     ExtractedTaskRecord,
@@ -201,49 +202,24 @@ class StagingService:
             ExtractedTaskNotFoundError: If extracted task cannot be resolved for this user/capture.
             ExtractedTaskStateConflictError: If extracted task has already been processed.
         """
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            extracted_task = get_extracted_task(
-                connection, user_id=user_id, extracted_task_id=extracted_task_id
-            )
-            if extracted_task is None:
-                raise ExtractedTaskNotFoundError()
-            if extracted_task.capture_id != capture_id:
-                raise ExtractedTaskNotFoundError()
-            if extracted_task.status != "pending":
-                raise ExtractedTaskStateConflictError()
+        with timed_stage("db.staging.approve"):
+            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                extracted_task = get_extracted_task(
+                    connection, user_id=user_id, extracted_task_id=extracted_task_id
+                )
+                if extracted_task is None:
+                    raise ExtractedTaskNotFoundError()
+                if extracted_task.capture_id != capture_id:
+                    raise ExtractedTaskNotFoundError()
+                if extracted_task.status != "pending":
+                    raise ExtractedTaskStateConflictError()
 
-            # Create final task
-            task = create_task(
-                connection,
-                user_id=user_id,
-                group_id=extracted_task.group_id,
-                capture_id=capture_id,
-                title=extracted_task.title,
-                needs_review=extracted_task.needs_review,
-                description=extracted_task.description,
-                due_date=extracted_task.due_date,
-                reminder_at=extracted_task.reminder_at,
-                recurrence_frequency=extracted_task.recurrence_frequency,
-                recurrence_weekday=extracted_task.recurrence_weekday,
-                recurrence_day_of_month=extracted_task.recurrence_day_of_month,
-            )
-
-            # Create subtasks if any were staged
-            if extracted_task.subtask_titles:
-                create_subtasks(
+                task = self._approve_pending_task_in_connection(
                     connection,
                     user_id=user_id,
-                    task_id=task.id,
-                    titles=extracted_task.subtask_titles,
+                    capture_id=capture_id,
+                    extracted_task=extracted_task,
                 )
-
-            # Update extracted task status
-            update_extracted_task_status(
-                connection,
-                user_id=user_id,
-                extracted_task_id=extracted_task_id,
-                status="approved",
-            )
 
         logger.info(
             "staging_task_approved",
@@ -276,23 +252,24 @@ class StagingService:
             ExtractedTaskNotFoundError: If extracted task cannot be resolved for this user/capture.
             ExtractedTaskStateConflictError: If extracted task has already been processed.
         """
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            extracted_task = get_extracted_task(
-                connection, user_id=user_id, extracted_task_id=extracted_task_id
-            )
-            if extracted_task is None:
-                raise ExtractedTaskNotFoundError()
-            if extracted_task.capture_id != capture_id:
-                raise ExtractedTaskNotFoundError()
-            if extracted_task.status != "pending":
-                raise ExtractedTaskStateConflictError()
+        with timed_stage("db.staging.discard"):
+            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                extracted_task = get_extracted_task(
+                    connection, user_id=user_id, extracted_task_id=extracted_task_id
+                )
+                if extracted_task is None:
+                    raise ExtractedTaskNotFoundError()
+                if extracted_task.capture_id != capture_id:
+                    raise ExtractedTaskNotFoundError()
+                if extracted_task.status != "pending":
+                    raise ExtractedTaskStateConflictError()
 
-            update_extracted_task_status(
-                connection,
-                user_id=user_id,
-                extracted_task_id=extracted_task_id,
-                status="discarded",
-            )
+                update_extracted_task_status(
+                    connection,
+                    user_id=user_id,
+                    extracted_task_id=extracted_task_id,
+                    status="discarded",
+                )
 
         logger.info(
             "staging_task_discarded",
@@ -539,32 +516,33 @@ class StagingService:
         Returns:
             List of ApproveResult with created tasks.
         """
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            pending_tasks = list_extracted_tasks(
-                connection, user_id=user_id, capture_id=capture_id, status="pending"
-            )
+        with timed_stage("db.staging.approve_all"):
+            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                pending_tasks = list_extracted_tasks(
+                    connection, user_id=user_id, capture_id=capture_id, status="pending"
+                )
 
-        results: list[ApproveResult] = []
-        for extracted_task in pending_tasks:
-            try:
-                result = await self.approve_task(
-                    user_id=user_id,
-                    capture_id=capture_id,
-                    extracted_task_id=extracted_task.id,
-                )
-                results.append(result)
-            except Exception as exc:
-                logger.warning(
-                    "staging_approve_all_task_failed",
-                    extra={
-                        "event": "staging_approve_all_task_failed",
-                        "user_id": user_id,
-                        "capture_id": capture_id,
-                        "extracted_task_id": extracted_task.id,
-                        "error": str(exc),
-                    },
-                )
-                continue
+            results: list[ApproveResult] = []
+            for extracted_task in pending_tasks:
+                try:
+                    result = await self.approve_task(
+                        user_id=user_id,
+                        capture_id=capture_id,
+                        extracted_task_id=extracted_task.id,
+                    )
+                    results.append(result)
+                except Exception as exc:
+                    logger.warning(
+                        "staging_approve_all_task_failed",
+                        extra={
+                            "event": "staging_approve_all_task_failed",
+                            "user_id": user_id,
+                            "capture_id": capture_id,
+                            "extracted_task_id": extracted_task.id,
+                            "error": str(exc),
+                        },
+                    )
+                    continue
 
         logger.info(
             "staging_approve_all_completed",
@@ -594,18 +572,19 @@ class StagingService:
         Returns:
             Number of tasks discarded.
         """
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            pending_tasks = list_extracted_tasks(
-                connection, user_id=user_id, capture_id=capture_id, status="pending"
-            )
-
-            for extracted_task in pending_tasks:
-                update_extracted_task_status(
-                    connection,
-                    user_id=user_id,
-                    extracted_task_id=extracted_task.id,
-                    status="discarded",
+        with timed_stage("db.staging.discard_all"):
+            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                pending_tasks = list_extracted_tasks(
+                    connection, user_id=user_id, capture_id=capture_id, status="pending"
                 )
+
+                for extracted_task in pending_tasks:
+                    update_extracted_task_status(
+                        connection,
+                        user_id=user_id,
+                        extracted_task_id=extracted_task.id,
+                        status="discarded",
+                    )
 
         logger.info(
             "staging_discard_all_completed",
@@ -636,13 +615,14 @@ class StagingService:
         Returns:
             List of extracted tasks.
         """
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            return list_extracted_tasks(
-                connection,
-                user_id=user_id,
-                capture_id=capture_id,
-                status=status,
-            )
+        with timed_stage("db.staging.list"):
+            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                return list_extracted_tasks(
+                    connection,
+                    user_id=user_id,
+                    capture_id=capture_id,
+                    status=status,
+                )
 
     async def get_extracted_task(
         self,
@@ -665,6 +645,51 @@ class StagingService:
                 user_id=user_id,
                 extracted_task_id=extracted_task_id,
             )
+
+    def _approve_pending_task_in_connection(
+        self,
+        connection,
+        *,
+        user_id: str,
+        capture_id: str,
+        extracted_task: ExtractedTaskRecord,
+    ) -> TaskRecord:
+        if extracted_task.capture_id != capture_id:
+            raise ExtractedTaskNotFoundError()
+        if extracted_task.status != "pending":
+            raise ExtractedTaskStateConflictError()
+
+        task = create_task(
+            connection,
+            user_id=user_id,
+            group_id=extracted_task.group_id,
+            capture_id=capture_id,
+            title=extracted_task.title,
+            needs_review=extracted_task.needs_review,
+            description=extracted_task.description,
+            due_date=extracted_task.due_date,
+            reminder_at=extracted_task.reminder_at,
+            recurrence_frequency=extracted_task.recurrence_frequency,
+            recurrence_weekday=extracted_task.recurrence_weekday,
+            recurrence_day_of_month=extracted_task.recurrence_day_of_month,
+        )
+
+        if extracted_task.subtask_titles:
+            create_subtasks(
+                connection,
+                user_id=user_id,
+                task_id=task.id,
+                titles=extracted_task.subtask_titles,
+            )
+
+        update_extracted_task_status(
+            connection,
+            user_id=user_id,
+            extracted_task_id=extracted_task.id,
+            status="approved",
+        )
+
+        return task
 
     async def re_extract(
         self,
