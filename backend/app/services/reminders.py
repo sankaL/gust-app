@@ -21,6 +21,7 @@ from app.db.repositories import (
     list_open_tasks_due_between_dates,
     list_open_tasks_due_on_date,
     list_open_tasks_overdue_before_date,
+    list_open_tasks_without_due_date,
     list_users,
     upsert_digest_dispatch,
 )
@@ -29,6 +30,8 @@ logger = logging.getLogger("gust.api")
 
 INTERNAL_JOB_SECRET_HEADER = "X-Internal-Job-Secret"
 DIGEST_TIMEZONE = ZoneInfo("America/New_York")
+UNDATED_DIGEST_TASK_LIMIT = 5
+DIGEST_LOGO_PATH = "/icons/icon-192.png"
 
 DigestMode = Literal["daily", "weekly"]
 DigestDispatchStatus = Literal["sent", "failed", "skipped_empty"]
@@ -226,8 +229,13 @@ class ReminderWorkerService:
                     user_id=user.id,
                     due_date=period.start_date,
                 )
+                undated_open = list_open_tasks_without_due_date(
+                    connection,
+                    user_id=user.id,
+                    limit=UNDATED_DIGEST_TASK_LIMIT,
+                )
 
-            if not due_today and not overdue:
+            if not due_today and not overdue and not undated_open:
                 self._upsert_dispatch(
                     user=user,
                     mode=mode,
@@ -246,12 +254,14 @@ class ReminderWorkerService:
                 period=period,
                 due_today=due_today,
                 overdue=overdue,
+                undated_open=undated_open,
             )
             html_body = self._build_daily_html_body(
                 user=user,
                 period=period,
                 due_today=due_today,
                 overdue=overdue,
+                undated_open=undated_open,
             )
         else:
             assert period.completed_start_utc is not None
@@ -270,8 +280,13 @@ class ReminderWorkerService:
                     due_date_start=period.start_date,
                     due_date_end=period.end_date,
                 )
+                undated_open = list_open_tasks_without_due_date(
+                    connection,
+                    user_id=user.id,
+                    limit=UNDATED_DIGEST_TASK_LIMIT,
+                )
 
-            if not completed and not due_uncompleted:
+            if not completed and not due_uncompleted and not undated_open:
                 self._upsert_dispatch(
                     user=user,
                     mode=mode,
@@ -293,12 +308,14 @@ class ReminderWorkerService:
                 period=period,
                 completed=completed,
                 due_uncompleted=due_uncompleted,
+                undated_open=undated_open,
             )
             html_body = self._build_weekly_html_body(
                 user=user,
                 period=period,
                 completed=completed,
                 due_uncompleted=due_uncompleted,
+                undated_open=undated_open,
             )
 
         try:
@@ -402,6 +419,7 @@ class ReminderWorkerService:
         period: DigestPeriod,
         due_today: list[DigestTaskRecord],
         overdue: list[DigestTaskRecord],
+        undated_open: list[DigestTaskRecord],
     ) -> str:
         lines = [
             "Gust daily brief",
@@ -414,8 +432,15 @@ class ReminderWorkerService:
         lines.append("")
         lines.append("Overdue (still open):")
         lines.extend(self._format_task_lines(overdue, include_completed_at=False))
-        if self.settings.frontend_app_url:
-            lines.extend(["", f"Open Gust: {self.settings.frontend_app_url.rstrip('/')}/tasks"])
+        lines.append("")
+        lines.append("Pending without a due date:")
+        lines.extend(self._format_task_title_only_lines(undated_open))
+        tasks_url = self._frontend_tasks_url()
+        home_url = self._frontend_home_url()
+        if tasks_url:
+            lines.extend(["", f"Open Gust: {tasks_url}"])
+        if home_url:
+            lines.append(f"On the web: {home_url}")
         return "\n".join(lines)
 
     def _build_weekly_text_body(
@@ -425,6 +450,7 @@ class ReminderWorkerService:
         period: DigestPeriod,
         completed: list[DigestTaskRecord],
         due_uncompleted: list[DigestTaskRecord],
+        undated_open: list[DigestTaskRecord],
     ) -> str:
         lines = [
             "Gust weekly summary",
@@ -437,8 +463,15 @@ class ReminderWorkerService:
         lines.append("")
         lines.append("Due this week and not completed:")
         lines.extend(self._format_task_lines(due_uncompleted, include_completed_at=False))
-        if self.settings.frontend_app_url:
-            lines.extend(["", f"Open Gust: {self.settings.frontend_app_url.rstrip('/')}/tasks"])
+        lines.append("")
+        lines.append("Pending without a due date:")
+        lines.extend(self._format_task_title_only_lines(undated_open))
+        tasks_url = self._frontend_tasks_url()
+        home_url = self._frontend_home_url()
+        if tasks_url:
+            lines.extend(["", f"Open Gust: {tasks_url}"])
+        if home_url:
+            lines.append(f"On the web: {home_url}")
         return "\n".join(lines)
 
     def _build_daily_html_body(
@@ -448,20 +481,29 @@ class ReminderWorkerService:
         period: DigestPeriod,
         due_today: list[DigestTaskRecord],
         overdue: list[DigestTaskRecord],
+        undated_open: list[DigestTaskRecord],
     ) -> str:
-        body = [
-            "<p>Gust daily brief</p>",
-            f"<p><strong>Date (Eastern):</strong> {period.start_date.isoformat()}</p>",
-            f"<p><strong>User:</strong> {html.escape(user.email)}</p>",
-            "<h3>Due today</h3>",
-            self._format_task_html_list(due_today, include_completed_at=False),
-            "<h3>Overdue (still open)</h3>",
-            self._format_task_html_list(overdue, include_completed_at=False),
+        sections = [
+            self._build_html_section(
+                title="Due today",
+                body=self._format_task_html_list(due_today, include_completed_at=False),
+            ),
+            self._build_html_section(
+                title="Overdue (still open)",
+                body=self._format_task_html_list(overdue, include_completed_at=False),
+            ),
+            self._build_html_section(
+                title="Pending without a due date",
+                body=self._format_task_title_only_html_list(undated_open),
+                subtle=True,
+            ),
         ]
-        if self.settings.frontend_app_url:
-            tasks_url = f"{self.settings.frontend_app_url.rstrip('/')}/tasks"
-            body.append(f'<p><a href="{tasks_url}">Open Gust</a></p>')
-        return "".join(body)
+        return self._build_html_email(
+            heading="Gust daily brief",
+            subheading=f"Date (Eastern): {period.start_date.isoformat()}",
+            user=user,
+            sections=sections,
+        )
 
     def _build_weekly_html_body(
         self,
@@ -470,23 +512,129 @@ class ReminderWorkerService:
         period: DigestPeriod,
         completed: list[DigestTaskRecord],
         due_uncompleted: list[DigestTaskRecord],
+        undated_open: list[DigestTaskRecord],
     ) -> str:
-        body = [
-            "<p>Gust weekly summary</p>",
-            (
-                "<p><strong>Week (Eastern):</strong> "
-                f"{period.start_date.isoformat()} to {period.end_date.isoformat()}</p>"
+        sections = [
+            self._build_html_section(
+                title="Completed this week",
+                body=self._format_task_html_list(completed, include_completed_at=True),
             ),
-            f"<p><strong>User:</strong> {html.escape(user.email)}</p>",
-            "<h3>Completed this week</h3>",
-            self._format_task_html_list(completed, include_completed_at=True),
-            "<h3>Due this week and not completed</h3>",
-            self._format_task_html_list(due_uncompleted, include_completed_at=False),
+            self._build_html_section(
+                title="Due this week and not completed",
+                body=self._format_task_html_list(due_uncompleted, include_completed_at=False),
+            ),
+            self._build_html_section(
+                title="Pending without a due date",
+                body=self._format_task_title_only_html_list(undated_open),
+                subtle=True,
+            ),
         ]
-        if self.settings.frontend_app_url:
-            tasks_url = f"{self.settings.frontend_app_url.rstrip('/')}/tasks"
-            body.append(f'<p><a href="{tasks_url}">Open Gust</a></p>')
-        return "".join(body)
+        return self._build_html_email(
+            heading="Gust weekly summary",
+            subheading=(
+                "Week (Eastern): "
+                f"{period.start_date.isoformat()} to {period.end_date.isoformat()}"
+            ),
+            user=user,
+            sections=sections,
+        )
+
+    def _build_html_email(
+        self,
+        *,
+        heading: str,
+        subheading: str,
+        user: UserRecord,
+        sections: list[str],
+    ) -> str:
+        home_url = self._frontend_home_url()
+        tasks_url = self._frontend_tasks_url()
+        logo_url = self._frontend_logo_url()
+
+        brand_open = (
+            f'<a href="{html.escape(home_url)}" '
+            'style="text-decoration:none;color:#f5f5f5;">'
+            if home_url
+            else '<span style="color:#f5f5f5;">'
+        )
+        brand_close = "</a>" if home_url else "</span>"
+        logo_html = ""
+        if logo_url:
+            logo_html = (
+                f'<img src="{html.escape(logo_url)}" alt="Gust" width="40" height="40" '
+                'style="display:block;width:40px;height:40px;border:0;outline:none;'
+                'text-decoration:none;border-radius:12px;" />'
+            )
+
+        cta_html = ""
+        if tasks_url:
+            cta_html = (
+                '<tr><td style="padding:0 24px 24px 24px;">'
+                f'<a href="{html.escape(tasks_url)}" '
+                'style="display:inline-block;background:#ba9eff;color:#140f26;'
+                'text-decoration:none;font-weight:700;font-size:14px;line-height:14px;'
+                'padding:14px 18px;border-radius:999px;">Open Gust</a>'
+                "</td></tr>"
+            )
+
+        footer_html = ""
+        if home_url:
+            escaped_home = html.escape(home_url)
+            footer_html = (
+                '<tr><td style="padding:0 24px 24px 24px;color:#a8a1bc;'
+                'font-size:12px;line-height:18px;">'
+                f'Gust on the web: <a href="{escaped_home}" '
+                'style="color:#d5c8ff;text-decoration:none;">'
+                f"{escaped_home}</a>"
+                "</td></tr>"
+            )
+
+        return "".join(
+            [
+                "<!doctype html>",
+                '<html><body style="margin:0;padding:0;background:#111111;">',
+                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ',
+                'style="background:#111111;margin:0;padding:24px 12px;font-family:Arial,Helvetica,',
+                'sans-serif;">',
+                '<tr><td align="center">',
+                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ',
+                'style="max-width:600px;background:#17171b;border-radius:24px;">',
+                '<tr><td style="padding:24px 24px 8px 24px;">',
+                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>',
+                f'<td style="vertical-align:middle;width:56px;">{brand_open}{logo_html}'
+                f"{brand_close}</td>",
+                '<td style="vertical-align:middle;">',
+                f'{brand_open}<div style="font-size:22px;line-height:28px;font-weight:700;">',
+                f"{html.escape(heading)}</div>",
+                '<div style="font-size:13px;line-height:20px;color:#c9c1de;margin-top:4px;">',
+                f"{html.escape(subheading)}</div>{brand_close}",
+                "</td></tr></table></td></tr>",
+                '<tr><td style="padding:0 24px 12px 24px;color:#a8a1bc;',
+                'font-size:13px;line-height:20px;">',
+                f"User: {html.escape(user.email)}",
+                "</td></tr>",
+                '<tr><td style="padding:0 24px 24px 24px;">',
+                "".join(sections),
+                "</td></tr>",
+                cta_html,
+                footer_html,
+                "</table></td></tr></table></body></html>",
+            ]
+        )
+
+    def _build_html_section(self, *, title: str, body: str, subtle: bool = False) -> str:
+        background = "#141418" if subtle else "#1f1f25"
+        heading_color = "#c9c1de" if subtle else "#ffffff"
+        heading_size = "14px" if subtle else "16px"
+        return (
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'style="background:{background};border-radius:16px;margin:0 0 14px 0;">'
+            "<tr><td style=\"padding:14px 16px;\">"
+            f'<div style="font-size:{heading_size};line-height:20px;font-weight:700;'
+            f'color:{heading_color};margin-bottom:8px;">{html.escape(title)}</div>'
+            f"{body}"
+            "</td></tr></table>"
+        )
 
     def _format_task_lines(
         self,
@@ -510,6 +658,11 @@ class ReminderWorkerService:
             lines.append(f"- {task.title} ({'; '.join(detail_parts)})")
         return lines
 
+    def _format_task_title_only_lines(self, tasks: list[DigestTaskRecord]) -> list[str]:
+        if not tasks:
+            return ["- None"]
+        return [f"- {task.title}" for task in tasks]
+
     def _format_task_html_list(
         self,
         tasks: list[DigestTaskRecord],
@@ -517,7 +670,7 @@ class ReminderWorkerService:
         include_completed_at: bool,
     ) -> str:
         if not tasks:
-            return "<p>None</p>"
+            return '<p style="margin:0;color:#a8a1bc;font-size:14px;line-height:20px;">None</p>'
 
         items: list[str] = []
         for task in tasks:
@@ -530,8 +683,41 @@ class ReminderWorkerService:
                 completed_local = task.completed_at.astimezone(DIGEST_TIMEZONE)
                 detail_parts.append(f"completed: {completed_local.strftime('%Y-%m-%d %H:%M %Z')}")
             escaped_title = html.escape(task.title)
-            items.append(f"<li><strong>{escaped_title}</strong> ({'; '.join(detail_parts)})</li>")
-        return f"<ul>{''.join(items)}</ul>"
+            items.append(
+                "<li style=\"margin:0 0 8px 18px;color:#f5f5f5;font-size:14px;line-height:20px;\">"
+                f"<strong>{escaped_title}</strong> "
+                f'<span style="color:#c9c1de;">({"; ".join(detail_parts)})</span>'
+                "</li>"
+            )
+        return f'<ul style="margin:0;padding:0;">{"".join(items)}</ul>'
+
+    def _format_task_title_only_html_list(self, tasks: list[DigestTaskRecord]) -> str:
+        if not tasks:
+            return '<p style="margin:0;color:#8e88a2;font-size:13px;line-height:18px;">None</p>'
+
+        items = [
+            "<li style=\"margin:0 0 6px 18px;color:#d8d3e8;font-size:13px;line-height:18px;\">"
+            f"{html.escape(task.title)}</li>"
+            for task in tasks
+        ]
+        return f'<ul style="margin:0;padding:0;">{"".join(items)}</ul>'
+
+    def _frontend_home_url(self) -> str | None:
+        if not self.settings.frontend_app_url:
+            return None
+        return self.settings.frontend_app_url.rstrip("/")
+
+    def _frontend_tasks_url(self) -> str | None:
+        home_url = self._frontend_home_url()
+        if not home_url:
+            return None
+        return f"{home_url}/tasks"
+
+    def _frontend_logo_url(self) -> str | None:
+        home_url = self._frontend_home_url()
+        if not home_url:
+            return None
+        return f"{home_url}{DIGEST_LOGO_PATH}"
 
     def _format_recurrence(self, task: DigestTaskRecord) -> str:
         if task.recurrence_frequency is None:

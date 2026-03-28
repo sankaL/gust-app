@@ -540,6 +540,36 @@ def list_open_tasks_due_between_dates(
     return [_row_to_digest_task(row) for row in rows]
 
 
+def list_open_tasks_without_due_date(
+    connection: Connection,
+    *,
+    user_id: str,
+    limit: int,
+) -> list[DigestTaskRecord]:
+    rows = connection.execute(
+        sa.select(
+            tasks.c.id,
+            tasks.c.title,
+            tasks.c.due_date,
+            tasks.c.completed_at,
+            groups.c.name.label("group_name"),
+            tasks.c.recurrence_frequency,
+            tasks.c.recurrence_weekday,
+            tasks.c.recurrence_day_of_month,
+        )
+        .select_from(tasks.join(groups, groups.c.id == tasks.c.group_id))
+        .where(
+            tasks.c.user_id == user_id,
+            tasks.c.status == "open",
+            tasks.c.deleted_at.is_(None),
+            tasks.c.due_date.is_(None),
+        )
+        .order_by(tasks.c.created_at.desc(), tasks.c.id.asc())
+        .limit(limit)
+    ).fetchall()
+    return [_row_to_digest_task(row) for row in rows]
+
+
 def update_user_timezone(
     connection: Connection,
     *,

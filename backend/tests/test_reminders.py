@@ -16,7 +16,7 @@ from app.db.repositories import (
     ensure_inbox_group,
     upsert_user,
 )
-from app.db.schema import captures, digest_dispatches
+from app.db.schema import captures, digest_dispatches, tasks
 from app.services.reminders import (
     DIGEST_TIMEZONE,
     DigestMode,
@@ -108,14 +108,15 @@ def _seed_open_task(
     client,
     *,
     title: str,
-    due_date: date,
+    due_date: date | None,
     recurrence_frequency: str | None = None,
     recurrence_weekday: int | None = None,
     recurrence_day_of_month: int | None = None,
+    created_at: datetime | None = None,
 ) -> None:
     _, inbox_id = _seed_user_and_inbox(client)
     with connection_scope(client.app.state.settings.database_url) as connection:
-        create_task(
+        task = create_task(
             connection,
             user_id=USER_ID,
             group_id=inbox_id,
@@ -129,6 +130,12 @@ def _seed_open_task(
             recurrence_weekday=recurrence_weekday,
             recurrence_day_of_month=recurrence_day_of_month,
         )
+        if created_at is not None:
+            connection.execute(
+                tasks.update()
+                .where(tasks.c.id == task.id)
+                .values(created_at=created_at, updated_at=created_at)
+            )
 
 
 def _seed_completed_task(
@@ -210,6 +217,29 @@ def test_daily_digest_sends_and_tracks_dispatch(client) -> None:
     assert dispatch_rows[0].provider_message_id == "provider-msg-123"
 
 
+def test_daily_digest_sends_when_only_undated_tasks_are_open(client) -> None:
+    client.app.state.settings.frontend_app_url = "https://gustapp.ca"
+    _seed_open_task(client, title="Inbox cleanup", due_date=None)
+
+    delivery = FakeReminderDeliveryService(mode="success")
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=delivery,
+    )
+
+    summary = asyncio.run(worker.run_due_work(mode="daily"))
+
+    assert summary.sent == 1
+    assert summary.skipped_empty == 0
+    assert len(delivery.requests) == 1
+    request = delivery.requests[0]
+    assert "Pending without a due date" in request["text_body"]
+    assert "Inbox cleanup" in request["text_body"]
+    assert "https://gustapp.ca/icons/icon-192.png" in request["html_body"]
+    assert "https://gustapp.ca/tasks" in request["html_body"]
+    assert "Gust on the web" in request["html_body"]
+
+
 def test_daily_digest_skips_empty_and_tracks_status(client) -> None:
     today_eastern = datetime.now(DIGEST_TIMEZONE).date()
     _seed_open_task(client, title="Future task", due_date=today_eastern + timedelta(days=2))
@@ -231,6 +261,42 @@ def test_daily_digest_skips_empty_and_tracks_status(client) -> None:
     assert delivery.requests == []
     assert len(dispatch_rows) == 1
     assert dispatch_rows[0].status == "skipped_empty"
+
+
+def test_daily_digest_includes_undated_section_without_metadata_and_limits_to_five(client) -> None:
+    client.app.state.settings.frontend_app_url = "https://gustapp.ca"
+    today_eastern = datetime.now(DIGEST_TIMEZONE).date()
+    _seed_open_task(client, title="Pay rent", due_date=today_eastern)
+
+    base_created_at = datetime(2026, 3, 27, 12, 0, tzinfo=timezone.utc)
+    for index in range(6):
+        _seed_open_task(
+            client,
+            title=f"No date {index + 1}",
+            due_date=None,
+            created_at=base_created_at + timedelta(minutes=index),
+        )
+
+    delivery = FakeReminderDeliveryService(mode="success")
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=delivery,
+    )
+
+    summary = asyncio.run(worker.run_due_work(mode="daily"))
+
+    assert summary.sent == 1
+    request = delivery.requests[0]
+    assert "Due today" in request["text_body"]
+    assert "Pending without a due date" in request["text_body"]
+    assert "No date 6" in request["text_body"]
+    assert "No date 2" in request["text_body"]
+    assert "No date 1" not in request["text_body"]
+    undated_section = request["text_body"].split("Pending without a due date:\n", 1)[1]
+    assert "group:" not in undated_section
+    assert "due:" not in undated_section
+    assert "recurrence:" not in undated_section
+    assert request["html_body"].count("<li") >= 6
 
 
 def test_weekly_digest_sends_completed_and_due_uncompleted_sections(client) -> None:
@@ -277,6 +343,61 @@ def test_weekly_digest_sends_completed_and_due_uncompleted_sections(client) -> N
     assert "monthly (day" in text_body
     assert len(dispatch_rows) == 1
     assert dispatch_rows[0].status == "sent"
+
+
+def test_weekly_digest_sends_when_only_undated_tasks_are_open(client) -> None:
+    _seed_open_task(client, title="Read backlog", due_date=None)
+
+    delivery = FakeReminderDeliveryService(mode="success")
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=delivery,
+    )
+
+    summary = asyncio.run(worker.run_due_work(mode="weekly"))
+
+    assert summary.sent == 1
+    assert summary.skipped_empty == 0
+    assert len(delivery.requests) == 1
+    assert "Pending without a due date" in delivery.requests[0]["text_body"]
+    assert "Read backlog" in delivery.requests[0]["text_body"]
+
+
+def test_weekly_digest_includes_undated_section_alongside_primary_sections(client) -> None:
+    now_eastern = datetime.now(DIGEST_TIMEZONE)
+    week_start = now_eastern.date() - timedelta(days=now_eastern.date().weekday())
+    week_end = week_start + timedelta(days=6)
+
+    completed_local = datetime.combine(
+        week_start + timedelta(days=2), time(9, 0), tzinfo=DIGEST_TIMEZONE
+    )
+    _seed_completed_task(
+        client,
+        title="Finish review",
+        due_date=week_start + timedelta(days=2),
+        completed_at_utc=completed_local.astimezone(timezone.utc),
+    )
+    _seed_open_task(client, title="Plan sprint", due_date=week_end)
+    _seed_open_task(client, title="Unscheduled follow-up", due_date=None)
+
+    delivery = FakeReminderDeliveryService(mode="success")
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=delivery,
+    )
+
+    summary = asyncio.run(worker.run_due_work(mode="weekly"))
+
+    assert summary.sent == 1
+    text_body = delivery.requests[0]["text_body"]
+    assert "Completed this week" in text_body
+    assert "Due this week and not completed" in text_body
+    assert "Pending without a due date" in text_body
+    undated_section = text_body.split("Pending without a due date:\n", 1)[1]
+    assert "Unscheduled follow-up" in undated_section
+    assert "group:" not in undated_section
+    assert "due:" not in undated_section
+    assert "recurrence:" not in undated_section
 
 
 def test_digest_dispatch_idempotency_skips_already_sent_period(client) -> None:

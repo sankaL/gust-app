@@ -100,8 +100,8 @@ The authenticated shell includes a top-right account avatar menu with entries fo
 
 Users receive exactly two digest email types from this workflow:
 
-- Daily brief per user at 8:30 AM Eastern with open tasks due today and overdue open tasks
-- Weekly summary per user on Sunday at 9:00 AM Eastern with tasks completed this week and due-this-week tasks still open
+- Daily brief per user at 8:30 AM Eastern with open tasks due today, overdue open tasks, and a small pending list for open tasks without due dates
+- Weekly summary per user on Sunday at 9:00 AM Eastern with tasks completed this week, due-this-week tasks still open, and a small pending list for open tasks without due dates
 
 No other reminder or digest email type is sent from this flow.
 
@@ -377,11 +377,13 @@ Subtasks:
 - Daily digest period basis is fixed Eastern (`America/New_York`) and includes:
   - open tasks due on the current Eastern date
   - open tasks overdue before the current Eastern date
+  - up to 5 open tasks without due dates in a compact secondary section
 - Weekly digest period basis is fixed Eastern (`America/New_York`) and includes:
   - completed tasks with `completed_at` in the Monday-Sunday Eastern window
   - open tasks with `due_date` in that Monday-Sunday Eastern window
+  - up to 5 open tasks without due dates in a compact secondary section
 - Digest sending is idempotent per `user + digest_type + period`.
-- Empty digests are not sent and must be tracked as skipped.
+- Empty digests are not sent and must be tracked as skipped; a digest with undated open tasks is not considered empty.
 - Retryable delivery failures may retry without duplicate-send; terminal provider failures must not duplicate-send.
 - No per-task reminder emails are sent in v1 from this workflow.
 - No push notifications in v1.

@@ -293,12 +293,14 @@ Required behavior:
 
 - run one explicit mode per invocation: `daily` or `weekly`
 - compute period windows in fixed Eastern timezone (`America/New_York`)
+- include a compact secondary section with up to 5 open tasks that have no `due_date`
 - send at most one digest email per user per digest type and period
 - use deterministic idempotency keys per `user + digest_type + period`
 - send through Resend
 - record dispatch outcome as `sent`, `failed`, or `skipped_empty`
-- skip sending when the digest is empty
+- skip sending only when there are no dated, completed, or undated-open items to report
 - retry transient send failures without duplicate-send
+- keep the digest template branded but minimal, including the Gust logo and a link back to the web app
 
 Per-item reminder rows remain in the schema for compatibility but are no longer the active send path.
 
