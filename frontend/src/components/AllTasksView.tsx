@@ -12,6 +12,7 @@ interface AllTasksViewProps {
 }
 
 const PAGE_SIZE = 50
+const ALL_TASKS_INFINITE_QUERY_KEY = ['tasks', 'all', 'open', 'infinite'] as const
 
 function TaskCard({
   task,
@@ -49,7 +50,7 @@ export function AllTasksView({
 }: AllTasksViewProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const allTasksQuery = useInfiniteQuery({
-    queryKey: ['tasks', 'all', 'open'],
+    queryKey: ALL_TASKS_INFINITE_QUERY_KEY,
     queryFn: ({ pageParam }) => listAllTasks('open', pageParam ?? null, PAGE_SIZE),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor,
