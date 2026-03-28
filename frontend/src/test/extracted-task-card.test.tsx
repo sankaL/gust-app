@@ -40,6 +40,12 @@ describe('extracted task card', () => {
       throw new Error('Expected compact metadata row')
     }
 
+    expect(metadataRow).toHaveClass('flex-nowrap')
+    expect(metadataRow).toHaveClass('overflow-hidden')
+    expect(metadataRow).toHaveClass('text-[0.62rem]')
+    expect(screen.getByText('Inbox')).toHaveClass('max-w-[44%]')
+    expect(screen.getByText('Inbox')).toHaveClass('shrink')
+    expect(screen.getByText('Inbox')).toHaveClass('truncate')
     expect(within(metadataRow).getByText(/^Due:/)).toBeInTheDocument()
     expect(within(metadataRow).getByText('WEEKLY')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()

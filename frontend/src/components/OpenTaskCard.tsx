@@ -199,24 +199,32 @@ export function OpenTaskCard({
               ) : null}
 
               {isExpanded ? (
-                <div className="flex flex-wrap items-center gap-2 text-[0.72rem] text-on-surface-variant">
-                  <span className="font-medium text-on-surface-variant/85">{subtaskLabel}</span>
-                  <span className="text-on-surface-variant/40">•</span>
-                  <span className="text-on-surface-variant/85">Reminder: {formatReminder(task.reminder_at)}</span>
+                <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden text-[0.66rem] leading-4 text-on-surface-variant sm:text-[0.68rem]">
+                  <span className="shrink-0 font-medium text-on-surface-variant/85">{subtaskLabel}</span>
+                  <span className="shrink-0 text-on-surface-variant/40">•</span>
+                  <span className="min-w-0 truncate text-on-surface-variant/85">
+                    Reminder: {formatReminder(task.reminder_at)}
+                  </span>
                 </div>
               ) : null}
 
-              <div className={`flex min-w-0 flex-wrap items-center ${isExpanded ? 'mt-2 gap-2 text-[0.68rem]' : 'gap-1.5 text-[0.6rem]'} uppercase tracking-[0.14em]`}>
+              <div
+                className={`flex min-w-0 items-center ${
+                  isExpanded
+                    ? 'mt-2 flex-nowrap gap-1.5 overflow-hidden text-[0.62rem] tracking-[0.12em]'
+                    : 'flex-wrap gap-1.5 text-[0.6rem] tracking-[0.14em]'
+                } uppercase`}
+              >
                 {isExpanded ? (
-                  <span className="truncate font-medium text-on-surface-variant/85">
+                  <span className="min-w-0 max-w-[44%] shrink truncate font-medium text-on-surface-variant/85">
                     {task.group?.name || 'Inbox'}
                   </span>
                 ) : null}
 
-                <span className={`font-bold ${dueTone}`}>Due: {dueLabel}</span>
+                <span className={`shrink-0 font-bold ${dueTone}`}>Due: {dueLabel}</span>
 
                 <span
-                  className={`rounded-pill px-2 py-0.5 font-body tracking-[0.16em] ${recurrenceBadgeClass}`}
+                  className={`shrink-0 rounded-pill px-2 py-0.5 font-body tracking-[0.16em] ${recurrenceBadgeClass}`}
                   title={task.recurrence_frequency ? `Recurring: ${task.recurrence_frequency}` : 'No recurrence'}
                 >
                   {recurrenceLabel}
