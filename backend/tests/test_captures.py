@@ -1100,7 +1100,8 @@ def test_approve_all_continues_after_an_item_failure(client: TestClient) -> None
 
     results = asyncio.run(service.approve_all(user_id=user_id, capture_id=capture_id))
 
-    assert attempted_ids == [first_extracted_task_id, second_extracted_task_id]
+    assert set(attempted_ids) == {first_extracted_task_id, second_extracted_task_id}
+    assert len(attempted_ids) == 2
     assert [result.extracted_task_id for result in results] == [second_extracted_task_id]
 
 

@@ -309,7 +309,11 @@ describe('tasks flow', () => {
     expect(await screen.findByText('Loading open tasks.')).toBeInTheDocument()
     expect(screen.queryByText('Inbox only task')).not.toBeInTheDocument()
 
-    resolvePersonalTasks?.(
+    if (!resolvePersonalTasks) {
+      throw new Error('Expected personal task request to be pending.')
+    }
+    const releasePersonalTasks = resolvePersonalTasks as (value: Response) => void
+    releasePersonalTasks(
       jsonResponse({
         items: [
           {
@@ -1013,7 +1017,11 @@ describe('tasks flow', () => {
     expect(screen.queryByText('Task summary')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save and return' })).not.toBeInTheDocument()
 
-    resolveTaskDetail?.(
+    if (!resolveTaskDetail) {
+      throw new Error('Expected task detail request to be pending.')
+    }
+    const releaseTaskDetail = resolveTaskDetail as (value: Response) => void
+    releaseTaskDetail(
       jsonResponse({
         id: 'task-1',
         title: 'Weekly planning',
