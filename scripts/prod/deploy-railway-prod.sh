@@ -26,6 +26,22 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"
 }
 
+railway_auth_mode() {
+  if [[ -n "${RAILWAY_TOKEN:-}" ]]; then
+    printf 'project-token\n'
+  elif [[ -n "${RAILWAY_API_TOKEN:-}" ]]; then
+    printf 'account-or-workspace-token\n'
+  else
+    printf 'missing\n'
+  fi
+}
+
+require_railway_auth() {
+  if [[ "$(railway_auth_mode)" == "missing" ]]; then
+    fail "Missing Railway auth token. Set RAILWAY_TOKEN (preferred for CI/CD) or RAILWAY_API_TOKEN."
+  fi
+}
+
 railway_cli() {
   if command -v railway >/dev/null 2>&1; then
     railway "$@"
@@ -164,7 +180,8 @@ main() {
   fi
 
   if [[ "$DRY_RUN" != "true" ]]; then
-    railway_cli whoami >/dev/null
+    require_railway_auth
+    log "Using Railway auth mode: $(railway_auth_mode)"
   fi
 
   current_branch="$(git branch --show-current || true)"

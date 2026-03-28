@@ -38,4 +38,4 @@ jobs:
       - run: bash scripts/prod/deploy-railway-prod.sh
         env:
           CI: "true"
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN || secrets.RAILWAY_API_TOKEN }}

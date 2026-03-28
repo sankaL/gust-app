@@ -328,7 +328,7 @@ If Railway-native repo auto-deploy is not linked for the production services, us
 Fallback contract:
 
 - the workflow runs only after the `CI` workflow completes successfully on `main`
-- the Railway CLI token must be present in the repository secret `RAILWAY_API_TOKEN`
+- the GitHub Actions deploy workflow should use repository secret `RAILWAY_TOKEN` with a Railway project token scoped to the production environment; `RAILWAY_API_TOKEN` remains a legacy fallback for account/workspace-token setups
 - the deploy script uploads the four production services from their checked-in source directories:
   - `backend/`
   - `frontend/`
