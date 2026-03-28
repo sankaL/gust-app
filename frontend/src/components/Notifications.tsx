@@ -66,6 +66,251 @@ function resolveDuration(notification: NotificationInput) {
   return DEFAULT_DURATION_MS
 }
 
+type IconProps = {
+  className?: string
+}
+
+function CloseIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className={className}>
+      <path d="M4.2 4.2l7.6 7.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M11.8 4.2L4.2 11.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+// Swipe hook for touch gestures
+function useSwipeToDismiss(
+  onDismiss: () => void,
+  enabled: boolean = true
+) {
+  const [translate, setTranslate] = useState({ x: 0, y: 0 })
+  const [opacity, setOpacity] = useState(1)
+  const startPos = useRef<{ x: number; y: number } | null>(null)
+  const isDragging = useRef(false)
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!enabled) return
+    const touch = e.touches[0]
+    startPos.current = { x: touch.clientX, y: touch.clientY }
+    isDragging.current = true
+  }, [enabled])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!enabled || !isDragging.current || !startPos.current) return
+    const touch = e.touches[0]
+    const deltaX = touch.clientX - startPos.current.x
+    const deltaY = touch.clientY - startPos.current.y
+
+    // Only respond to meaningful movements (more horizontal or vertical)
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+
+    if (absX > 10 || absY > 10) {
+      // Prefer the dominant direction
+      if (absY > absX) {
+        // Vertical swipe
+        setTranslate({ x: deltaX * 0.2, y: deltaY })
+        setOpacity(Math.max(0.3, 1 - Math.abs(deltaY) / 300))
+      } else {
+        // Horizontal swipe
+        setTranslate({ x: deltaX, y: deltaY * 0.2 })
+        setOpacity(Math.max(0.3, 1 - Math.abs(deltaX) / 300))
+      }
+    }
+  }, [enabled])
+
+  const handleTouchEnd = useCallback(() => {
+    if (!enabled) return
+    const threshold = 100
+    const { x, y } = translate
+
+    // Dismiss if swiped far enough in any direction
+    if (Math.abs(x) > threshold || Math.abs(y) > threshold) {
+      onDismiss()
+    } else {
+      // Snap back
+      setTranslate({ x: 0, y: 0 })
+      setOpacity(1)
+    }
+
+    startPos.current = null
+    isDragging.current = false
+  }, [enabled, translate, onDismiss])
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!enabled) return
+    startPos.current = { x: e.clientX, y: e.clientY }
+    isDragging.current = true
+  }, [enabled])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!enabled || !isDragging.current || !startPos.current) return
+    const deltaX = e.clientX - startPos.current.x
+    const deltaY = e.clientY - startPos.current.y
+
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+
+    if (absX > 5 || absY > 5) {
+      if (absY > absX) {
+        setTranslate({ x: deltaX * 0.2, y: deltaY })
+        setOpacity(Math.max(0.3, 1 - Math.abs(deltaY) / 300))
+      } else {
+        setTranslate({ x: deltaX, y: deltaY * 0.2 })
+        setOpacity(Math.max(0.3, 1 - Math.abs(deltaX) / 300))
+      }
+    }
+  }, [enabled])
+
+  const handleMouseUp = useCallback(() => {
+    if (!enabled) return
+    const threshold = 100
+    const { x, y } = translate
+
+    if (Math.abs(x) > threshold || Math.abs(y) > threshold) {
+      onDismiss()
+    } else {
+      setTranslate({ x: 0, y: 0 })
+      setOpacity(1)
+    }
+
+    startPos.current = null
+    isDragging.current = false
+  }, [enabled, translate, onDismiss])
+
+  return {
+    translate,
+    opacity,
+    handlers: enabled ? {
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
+      onMouseDown: handleMouseDown,
+      onMouseMove: handleMouseMove,
+      onMouseUp: handleMouseUp,
+      onMouseLeave: handleMouseUp,
+    } : {},
+  }
+}
+
+// Notification colors
+const NOTIFICATION_COLORS: Record<NotificationType, string> = {
+  success: '#4F7942',
+  error: '#F54927',
+  warning: '#F58027',
+  info: '#4682B4',
+  loading: '#A684FF',
+}
+
+const notificationStyles: Record<
+  NotificationType,
+  {
+    background: string
+    actionButton: string
+  }
+> = {
+  success: {
+    background: NOTIFICATION_COLORS.success,
+    actionButton: 'bg-white text-[#4F7942] hover:bg-white/90 active:scale-95',
+  },
+  error: {
+    background: NOTIFICATION_COLORS.error,
+    actionButton: 'bg-white text-[#F54927] hover:bg-white/90 active:scale-95',
+  },
+  warning: {
+    background: NOTIFICATION_COLORS.warning,
+    actionButton: 'bg-white text-[#F58027] hover:bg-white/90 active:scale-95',
+  },
+  info: {
+    background: NOTIFICATION_COLORS.info,
+    actionButton: 'bg-white text-[#4682B4] hover:bg-white/90 active:scale-95',
+  },
+  loading: {
+    background: NOTIFICATION_COLORS.loading,
+    actionButton: 'bg-white text-[#A684FF] hover:bg-white/90 active:scale-95',
+  },
+}
+
+// Helper to check if currently dragging
+function isDragging(handlers: Record<string, unknown>): boolean {
+  return 'onMouseDown' in handlers
+}
+
+function SwipeableNotification({
+  notification,
+  onDismiss,
+}: {
+  notification: NotificationRecord
+  onDismiss: () => void
+}) {
+  const style = notificationStyles[notification.type]
+  const isLoading = notification.type === 'loading'
+
+  const { translate, opacity, handlers } = useSwipeToDismiss(
+    onDismiss,
+    !isLoading && notification.dismissible !== false
+  )
+
+  return (
+    <section
+      role={notification.type === 'error' ? 'alert' : 'status'}
+      style={{
+        transform: `translate(${translate.x}px, ${translate.y}px)`,
+        opacity,
+        transition: isDragging(handlers) ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out',
+      }}
+      className={[
+        'pointer-events-auto relative cursor-grab select-none overflow-hidden rounded-lg shadow-lg active:cursor-grabbing',
+      ].join(' ')}
+      {...handlers}
+    >
+      {/* Solid background */}
+      <div
+        className="flex items-center gap-2 px-3 py-2"
+        style={{ backgroundColor: style.background }}
+      >
+        {/* Message */}
+        <p className="min-w-0 flex-1 font-body text-xs font-medium leading-4 text-white">
+          {notification.message}
+        </p>
+
+        {/* Action button (Undo) - prominent */}
+        {notification.actionLabel && notification.onAction ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              void notification.onAction?.()
+            }}
+            className={[
+              'shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all',
+              style.actionButton,
+            ].join(' ')}
+          >
+            {notification.actionLabel}
+          </button>
+        ) : null}
+
+        {/* Dismiss button - subtle (only if no action) */}
+        {notification.dismissible !== false && !notification.actionLabel ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDismiss()
+            }}
+            className="flex h-6 w-6 shrink-0 items-center justify-center text-white/70 transition-colors hover:text-white"
+            aria-label="Dismiss notification"
+          >
+            <CloseIcon className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
 function NotificationViewport({
   notifications,
   onDismiss,
@@ -80,122 +325,18 @@ function NotificationViewport({
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] mx-auto flex w-full max-w-md flex-col-reverse gap-3 px-3 pt-4"
-      style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] mx-auto flex w-full max-w-md flex-col-reverse gap-1.5 px-2 pt-3"
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
     >
-      {notifications.map((notification) => {
-        const style = notificationStyles[notification.type]
-
-        return (
-          <section
-            key={notification.id}
-            role={notification.type === 'error' ? 'alert' : 'status'}
-            className={[
-              'pointer-events-auto relative overflow-hidden rounded-soft border p-4 shadow-[0_18px_45px_rgba(0,0,0,0.5)] backdrop-blur-xl',
-              'bg-[rgba(16,16,16,0.92)]',
-              style.container,
-            ].join(' ')}
-          >
-            <div className={['absolute inset-y-0 left-0 w-1', style.accent].join(' ')} />
-
-            <div className="flex items-start gap-3">
-              <div
-                className={[
-                  'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm',
-                  style.iconShell,
-                ].join(' ')}
-                aria-hidden="true"
-              >
-                {style.icon}
-              </div>
-
-              <div className="min-w-0 flex-1 space-y-3">
-                <p className="font-body text-sm font-medium leading-6 text-on-surface">
-                  {notification.message}
-                </p>
-
-                {notification.actionLabel || notification.dismissible !== false ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {notification.actionLabel && notification.onAction ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void notification.onAction?.()
-                        }}
-                        className={[
-                          'rounded-pill px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] transition-all active:scale-95',
-                          style.actionButton,
-                        ].join(' ')}
-                      >
-                        {notification.actionLabel}
-                      </button>
-                    ) : null}
-
-                    {notification.dismissible !== false ? (
-                      <button
-                        type="button"
-                        onClick={() => onDismiss(notification.id)}
-                        className="rounded-pill border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant transition-colors hover:bg-white/10 hover:text-on-surface"
-                      >
-                        Dismiss
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </section>
-        )
-      })}
+      {notifications.map((notification) => (
+        <SwipeableNotification
+          key={notification.id}
+          notification={notification}
+          onDismiss={() => onDismiss(notification.id)}
+        />
+      ))}
     </div>
   )
-}
-
-const notificationStyles: Record<
-  NotificationType,
-  {
-    container: string
-    accent: string
-    iconShell: string
-    actionButton: string
-    icon: string
-  }
-> = {
-  success: {
-    container: 'border-success/35',
-    accent: 'bg-success',
-    iconShell: 'border-success/30 bg-success/15 text-success',
-    actionButton: 'bg-success text-surface hover:bg-success-dim',
-    icon: '✓',
-  },
-  error: {
-    container: 'border-error/35',
-    accent: 'bg-error',
-    iconShell: 'border-error/30 bg-error/15 text-error',
-    actionButton: 'bg-error text-white hover:bg-error-dim',
-    icon: '!',
-  },
-  warning: {
-    container: 'border-warning/35',
-    accent: 'bg-warning',
-    iconShell: 'border-warning/30 bg-warning/15 text-warning',
-    actionButton: 'bg-warning text-surface hover:bg-warning-dim',
-    icon: '!',
-  },
-  info: {
-    container: 'border-secondary/35',
-    accent: 'bg-secondary',
-    iconShell: 'border-secondary/30 bg-secondary/15 text-secondary',
-    actionButton: 'bg-secondary text-surface hover:bg-secondary-dim',
-    icon: 'i',
-  },
-  loading: {
-    container: 'border-primary/35',
-    accent: 'bg-primary',
-    iconShell: 'border-primary/30 bg-primary/15 text-primary',
-    actionButton: 'bg-primary text-surface hover:bg-primary-dim',
-    icon: '…',
-  },
 }
 
 export function NotificationsProvider({ children }: PropsWithChildren) {
@@ -317,10 +458,8 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useNotifications() {
   const context = useContext(NotificationContext)
-
   if (!context) {
-    throw new Error('useNotifications must be used within a NotificationsProvider.')
+    throw new Error('useNotifications must be used within a NotificationsProvider')
   }
-
   return context
 }

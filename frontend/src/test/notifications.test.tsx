@@ -137,7 +137,7 @@ describe('notification center', () => {
     await user.click(screen.getByRole('button', { name: 'First' }))
     expect(await screen.findByText('First message')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Dismiss' }))
+    await user.click(screen.getByRole('button', { name: 'Dismiss notification' }))
     expect(screen.queryByText('First message')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Navigate' }))
