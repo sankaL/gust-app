@@ -80,15 +80,16 @@ class WakeLockSentinelMock extends EventTarget {
   onrelease: ((this: WakeLockSentinel, ev: Event) => unknown) | null = null
   type: WakeLockType = 'screen'
 
-  release = vi.fn(async () => {
+  release = vi.fn(() => {
     if (this.released) {
-      return
+      return Promise.resolve()
     }
 
     this.released = true
     const event = new Event('release')
     this.onrelease?.call(this as WakeLockSentinel, event)
     this.dispatchEvent(event)
+    return Promise.resolve()
   })
 }
 
