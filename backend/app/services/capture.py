@@ -211,8 +211,6 @@ class CaptureService:
                 status="transcription_failed",
                 error_code=failure_reason,
             )
-            if public_error is exc:
-                raise
             raise public_error from exc
 
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
@@ -693,7 +691,7 @@ class CaptureService:
             if exc.failure_reason == "provider_invalid_response":
                 return "provider_invalid_response", TranscriptionProviderInvalidResponseError()
             return "unknown", TranscriptionFailedError()
-        return "unknown_error", exc
+        return "unknown", TranscriptionFailedError()
 
     def _log_voice_transcription_failure(
         self,

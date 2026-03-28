@@ -515,14 +515,14 @@ def test_voice_capture_surfaces_unexpected_transcription_errors_as_internal_erro
         files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
     )
 
-    assert response.status_code == 500
-    assert response.json()["error"]["code"] == "internal_error"
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "transcription_failed"
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         capture_row = connection.execute(sa.select(captures)).one()
 
     assert capture_row.status == "transcription_failed"
-    assert capture_row.error_code == "unknown_error"
+    assert capture_row.error_code == "unknown"
 
 
 def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
