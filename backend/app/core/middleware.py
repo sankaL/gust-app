@@ -8,6 +8,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.timing import begin_request_timing, record_timing, reset_request_timing
+
 logger = logging.getLogger("gust.api")
 
 
@@ -17,10 +19,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request.state.request_id = request_id
 
         started_at = time.perf_counter()
-        response = await call_next(request)
+        recorder, timing_token = begin_request_timing()
+        try:
+            response = await call_next(request)
+        finally:
+            record_timing("request.total", (time.perf_counter() - started_at) * 1000)
+            reset_request_timing(timing_token)
         duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
 
         response.headers["X-Request-ID"] = request_id
+        if recorder.segments:
+            response.headers["Server-Timing"] = recorder.as_server_timing_header()
 
         logger.info(
             "request_completed",
@@ -31,6 +40,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 "path": request.url.path,
                 "status_code": response.status_code,
                 "duration_ms": duration_ms,
+                "server_timing": recorder.as_log_payload(),
             },
         )
         return response

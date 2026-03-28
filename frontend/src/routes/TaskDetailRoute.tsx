@@ -20,6 +20,14 @@ import {
   type TaskDeleteScope,
   type TaskRecurrence,
 } from '../lib/api'
+import {
+  adjustGroupOpenCount,
+  applyTaskListMutation,
+  prependTaskToMatchingLists,
+  restoreQuerySnapshots,
+  snapshotTaskQueries,
+  updateTaskDetailCache,
+} from '../lib/taskQueryCache'
 
 type DraftState = {
   title: string
@@ -161,6 +169,7 @@ export function TaskDetailRoute() {
   const [isEditMode, setIsEditMode] = useState(false)
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<{ scope: TaskDeleteScope } | null>(null)
+  const [pendingSubtaskIds, setPendingSubtaskIds] = useState<string[]>([])
   const { dismissNotification, notifyError, notifySuccess, showNotification, updateNotification } =
     useNotifications()
 
@@ -215,6 +224,26 @@ export function TaskDetailRoute() {
     ])
   }
 
+  function markSubtaskPending(subtaskId: string, isPending: boolean) {
+    setPendingSubtaskIds((current) => {
+      if (isPending) {
+        return current.includes(subtaskId) ? current : [...current, subtaskId]
+      }
+      return current.filter((candidate) => candidate !== subtaskId)
+    })
+  }
+
+  function syncTaskCaches(task: Awaited<ReturnType<typeof getTaskDetail>>) {
+    applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
+      if (currentTask.id !== task.id) {
+        return currentTask
+      }
+      return statusSegment === task.status ? { ...currentTask, ...task } : null
+    })
+    prependTaskToMatchingLists(queryClient, task, task.status)
+    updateTaskDetailCache(queryClient, task)
+  }
+
   const returnPath = buildReturnPath(searchParams)
 
   async function returnToTasks(replace = false) {
@@ -222,6 +251,39 @@ export function TaskDetailRoute() {
   }
 
   const saveTaskMutation = useMutation({
+    onMutate: async () => {
+      if (!taskId || !draft || !taskQuery.data) {
+        return {}
+      }
+
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['groups'] }),
+        queryClient.cancelQueries({ queryKey: ['task-detail', taskId] }),
+      ])
+
+      const snapshots = snapshotTaskQueries(queryClient, taskId)
+      const previousTask = taskQuery.data
+      const optimisticTask = {
+        ...previousTask,
+        title: draft.title,
+        description: draft.description || null,
+        group: groupsQuery.data?.find((group) => group.id === draft.groupId) ?? previousTask.group,
+        due_date: draft.dueDate || null,
+        reminder_at: draft.reminderAt ? new Date(draft.reminderAt).toISOString() : null,
+        recurrence: draft.recurrence,
+        recurrence_frequency: draft.recurrence?.frequency ?? null,
+        needs_review: draft.groupId !== previousTask.group.id ? false : previousTask.needs_review,
+      }
+
+      syncTaskCaches(optimisticTask)
+      if (previousTask.group.id !== optimisticTask.group.id && previousTask.status === 'open') {
+        adjustGroupOpenCount(queryClient, previousTask.group.id, -1)
+        adjustGroupOpenCount(queryClient, optimisticTask.group.id, 1)
+      }
+
+      return { snapshots }
+    },
     mutationFn: async () => {
       if (!taskId || !draft) {
         throw new Error('Task detail is not ready.')
@@ -241,17 +303,48 @@ export function TaskDetailRoute() {
         csrfToken
       )
     },
-    onSuccess: async () => {
+    onSuccess: async (task) => {
+      syncTaskCaches(task)
       notifySuccess('Task saved.')
       await refreshTaskData()
       await returnToTasks(true)
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
       notifyError(buildFriendlyMessage(error, 'Task changes could not be saved.'))
     },
   })
 
   const createSubtaskMutation = useMutation({
+    onMutate: async () => {
+      if (!taskId || !taskQuery.data || !newSubtaskTitle.trim()) {
+        return {}
+      }
+      await queryClient.cancelQueries({ queryKey: ['task-detail', taskId] })
+      const snapshots = snapshotTaskQueries(queryClient, taskId)
+      const optimisticId = `optimistic-${Date.now()}`
+      markSubtaskPending(optimisticId, true)
+      updateTaskDetailCache(queryClient, {
+        ...taskQuery.data,
+        subtasks: [
+          ...taskQuery.data.subtasks,
+          {
+            id: optimisticId,
+            title: newSubtaskTitle.trim(),
+            is_completed: false,
+            completed_at: null,
+          },
+        ],
+      })
+      applyTaskListMutation(queryClient, (currentTask) =>
+        currentTask.id === taskId
+          ? { ...currentTask, subtask_count: currentTask.subtask_count + 1 }
+          : currentTask
+      )
+      return { snapshots, optimisticId }
+    },
     mutationFn: async () => {
       if (!taskId) {
         throw new Error('Task detail is not ready.')
@@ -259,17 +352,53 @@ export function TaskDetailRoute() {
       const csrfToken = requireCsrf()
       return createSubtask(taskId, newSubtaskTitle, csrfToken)
     },
-    onSuccess: () => {
+    onSuccess: (_subtask, _variables, context) => {
+      if (context?.optimisticId) {
+        markSubtaskPending(context.optimisticId, false)
+      }
       setNewSubtaskTitle('')
       notifySuccess('Subtask added.')
       void refreshTaskData()
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
+      if (context?.optimisticId) {
+        markSubtaskPending(context.optimisticId, false)
+      }
       notifyError(buildFriendlyMessage(error, 'Subtask could not be added.'))
     },
   })
 
   const updateSubtaskMutation = useMutation({
+    onMutate: async (payload: { subtaskId: string; title?: string; is_completed?: boolean }) => {
+      if (!taskId || !taskQuery.data) {
+        return {}
+      }
+      markSubtaskPending(payload.subtaskId, true)
+      await queryClient.cancelQueries({ queryKey: ['task-detail', taskId] })
+      const snapshots = snapshotTaskQueries(queryClient, taskId)
+      updateTaskDetailCache(queryClient, {
+        ...taskQuery.data,
+        subtasks: taskQuery.data.subtasks.map((subtask) =>
+          subtask.id === payload.subtaskId
+            ? {
+                ...subtask,
+                title: payload.title ?? subtask.title,
+                is_completed: payload.is_completed ?? subtask.is_completed,
+                completed_at:
+                  payload.is_completed === undefined
+                    ? subtask.completed_at
+                    : payload.is_completed
+                      ? new Date().toISOString()
+                      : null,
+              }
+            : subtask
+        ),
+      })
+      return { snapshots }
+    },
     mutationFn: async (payload: { subtaskId: string; title?: string; is_completed?: boolean }) => {
       if (!taskId) {
         throw new Error('Task detail is not ready.')
@@ -277,16 +406,39 @@ export function TaskDetailRoute() {
       const csrfToken = requireCsrf()
       return updateSubtask(taskId, payload.subtaskId, payload, csrfToken)
     },
-    onSuccess: () => {
+    onSuccess: (_subtask, payload) => {
+      markSubtaskPending(payload.subtaskId, false)
       notifySuccess('Subtask updated.')
       void refreshTaskData()
     },
-    onError: (error) => {
+    onError: (error, payload, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
+      markSubtaskPending(payload.subtaskId, false)
       notifyError(buildFriendlyMessage(error, 'Subtask could not be updated.'))
     },
   })
 
   const deleteSubtaskMutation = useMutation({
+    onMutate: async (subtaskId: string) => {
+      if (!taskId || !taskQuery.data) {
+        return {}
+      }
+      markSubtaskPending(subtaskId, true)
+      await queryClient.cancelQueries({ queryKey: ['task-detail', taskId] })
+      const snapshots = snapshotTaskQueries(queryClient, taskId)
+      updateTaskDetailCache(queryClient, {
+        ...taskQuery.data,
+        subtasks: taskQuery.data.subtasks.filter((subtask) => subtask.id !== subtaskId),
+      })
+      applyTaskListMutation(queryClient, (currentTask) =>
+        currentTask.id === taskId
+          ? { ...currentTask, subtask_count: Math.max(0, currentTask.subtask_count - 1) }
+          : currentTask
+      )
+      return { snapshots }
+    },
     mutationFn: async (subtaskId: string) => {
       if (!taskId) {
         throw new Error('Task detail is not ready.')
@@ -294,16 +446,43 @@ export function TaskDetailRoute() {
       const csrfToken = requireCsrf()
       return deleteSubtask(taskId, subtaskId, csrfToken)
     },
-    onSuccess: () => {
+    onSuccess: (_result, subtaskId) => {
+      markSubtaskPending(subtaskId, false)
       notifySuccess('Subtask deleted.')
       void refreshTaskData()
     },
-    onError: (error) => {
+    onError: (error, subtaskId, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
+      markSubtaskPending(subtaskId, false)
       notifyError(buildFriendlyMessage(error, 'Subtask could not be deleted.'))
     },
   })
 
   const deleteTaskMutation = useMutation({
+    onMutate: async (scope: TaskDeleteScope) => {
+      if (!taskId || !taskQuery.data) {
+        return { scope }
+      }
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['groups'] }),
+        queryClient.cancelQueries({ queryKey: ['task-detail', taskId] }),
+      ])
+      const snapshots = snapshotTaskQueries(queryClient, taskId)
+      applyTaskListMutation(queryClient, (currentTask) =>
+        currentTask.id === taskId ? null : currentTask
+      )
+      if (taskQuery.data.status === 'open') {
+        adjustGroupOpenCount(queryClient, taskQuery.data.group.id, -1)
+      }
+      updateTaskDetailCache(queryClient, {
+        ...taskQuery.data,
+        deleted_at: new Date().toISOString(),
+      })
+      return { snapshots, scope }
+    },
     mutationFn: async (scope: TaskDeleteScope) => {
       if (!taskId) {
         throw new Error('Task detail is not ready.')
@@ -331,7 +510,9 @@ export function TaskDetailRoute() {
           })
 
           try {
-            await restoreTask(deletedTaskId, csrfToken)
+            const restoredTask = await restoreTask(deletedTaskId, csrfToken)
+            adjustGroupOpenCount(queryClient, restoredTask.group.id, 1)
+            syncTaskCaches(restoredTask)
             dismissNotification(notificationId)
             notifySuccess(`Restored ${taskTitle}.`)
             await Promise.all([
@@ -352,7 +533,10 @@ export function TaskDetailRoute() {
       await refreshTaskData()
       await returnToTasks(true)
     },
-    onError: (error) => {
+    onError: (error, _scope, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
       notifyError(buildFriendlyMessage(error, 'Task could not be deleted.'))
       setPendingDelete(null)
     },
@@ -661,6 +845,7 @@ export function TaskDetailRoute() {
                                 is_completed: !subtask.is_completed,
                               })
                             }
+                            disabled={pendingSubtaskIds.includes(subtask.id)}
                             className={[
                               'mt-0.5 h-5 w-5 rounded-pill border',
                               subtask.is_completed
@@ -702,6 +887,7 @@ export function TaskDetailRoute() {
                                       title: subtaskDrafts[subtask.id],
                                     })
                                   }
+                                  disabled={pendingSubtaskIds.includes(subtask.id)}
                                   className="rounded-pill bg-primary px-3 py-1.5 text-sm font-medium text-surface"
                                 >
                                   Save
@@ -709,6 +895,7 @@ export function TaskDetailRoute() {
                                 <button
                                   type="button"
                                   onClick={() => deleteSubtaskMutation.mutate(subtask.id)}
+                                  disabled={pendingSubtaskIds.includes(subtask.id)}
                                   className="rounded-pill border border-outline/30 px-3 py-1.5 text-sm text-on-surface-variant"
                                 >
                                   Delete

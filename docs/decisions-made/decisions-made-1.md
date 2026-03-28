@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-28 14:21:00 EDT
+
+- Kept Gust performance work centered on in-memory TanStack Query caching and optimistic cache reconciliation, while continuing to avoid persistent/browser-runtime caching for authenticated task payloads.
+- Made `Server-Timing` and structured request timing mandatory on the hot task/capture/session endpoints so frontend-perceived latency and backend-request latency can be compared directly in production.
+- Deferred the more complex ranked-query and all-tasks pagination edge-case work behind instrumentation, but still replaced the highest-value backend anti-patterns first: per-request engine construction and per-capture `approve_all` transaction churn.
+
 ## 2026-03-28 08:14:00 EDT
 
 - Completed the hosted RLS rollout only after switching the Railway backend runtime off the Supabase `postgres` role, because `postgres` had `BYPASSRLS` and would have silently ignored the new policies.

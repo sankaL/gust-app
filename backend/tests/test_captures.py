@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 # ruff: noqa: UP045
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Any
 
 import sqlalchemy as sa
@@ -24,6 +26,7 @@ from app.db.repositories import ensure_inbox_group, upsert_user
 from app.db.schema import captures, extracted_tasks, groups, reminders, subtasks, tasks
 from app.services.auth import AuthenticatedIdentity
 from app.services.extraction import ExtractorMalformedResponseError
+from app.services.staging import ApproveResult, StagingService
 from app.services.transcription import TranscriptionResult, TranscriptionServiceError
 
 
@@ -1057,6 +1060,49 @@ def test_approve_extracted_task_returns_not_found_for_unknown_row(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "extracted_task_not_found"
+
+
+def test_approve_all_continues_after_an_item_failure(client: TestClient) -> None:
+    user_id = "11111111-1111-1111-1111-111111111111"
+    _seed_user(client, user_id=user_id)
+    capture_id = _seed_capture(client, user_id=user_id)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        inbox_group = ensure_inbox_group(connection, user_id=user_id)
+
+    first_extracted_task_id = _seed_extracted_task(
+        client,
+        user_id=user_id,
+        capture_id=capture_id,
+        group_id=inbox_group.id,
+        status="pending",
+    )
+    second_extracted_task_id = _seed_extracted_task(
+        client,
+        user_id=user_id,
+        capture_id=capture_id,
+        group_id=inbox_group.id,
+        status="pending",
+    )
+
+    service = StagingService(settings=client.app.state.settings)
+    attempted_ids: list[str] = []
+
+    async def fake_approve_task(*, user_id: str, capture_id: str, extracted_task_id: str):
+        attempted_ids.append(extracted_task_id)
+        if extracted_task_id == first_extracted_task_id:
+            raise RuntimeError("boom")
+        return ApproveResult(
+            task=SimpleNamespace(id="task-1"),
+            extracted_task_id=extracted_task_id,
+        )
+
+    service.approve_task = fake_approve_task  # type: ignore[method-assign]
+
+    results = asyncio.run(service.approve_all(user_id=user_id, capture_id=capture_id))
+
+    assert set(attempted_ids) == {first_extracted_task_id, second_extracted_task_id}
+    assert len(attempted_ids) == 2
+    assert [result.extracted_task_id for result in results] == [second_extracted_task_id]
 
 
 def test_complete_capture_conflicts_when_pending_extracted_tasks_exist(

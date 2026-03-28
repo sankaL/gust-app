@@ -318,6 +318,70 @@ describe('capture route', () => {
     expect(await screen.findByText('Write it instead')).toBeInTheDocument()
   })
 
+  it('shows loading state for the latest capture instead of an empty review state', async () => {
+    let resolveExtractedTasks: ((value: Response) => void) | null = null
+    const fetchMock: FetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? 'GET'
+
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(
+          jsonResponse({
+            signed_in: true,
+            user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
+            timezone: 'UTC',
+            inbox_group_id: 'inbox-1',
+            csrf_token: 'csrf-token'
+          })
+        )
+      }
+
+      if (url.includes('/captures/voice') && method === 'POST') {
+        return Promise.resolve(jsonResponse({ capture_id: 'capture-1', transcript_text: 'voice note' }))
+      }
+
+      if (url.includes('/captures/pending-tasks')) {
+        return Promise.resolve(jsonResponse([]))
+      }
+
+      if (url.includes('/captures/capture-1/extracted-tasks')) {
+        return new Promise<Response>((resolve) => {
+          resolveExtractedTasks = resolve
+        })
+      }
+
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse([]))
+      }
+
+      return Promise.resolve(jsonResponse({}))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+    await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
+
+    expect(await screen.findByText('Organizing your tasks')).toBeInTheDocument()
+    expect(screen.getByText('Loading extracted tasks...')).toBeInTheDocument()
+    expect(screen.queryByText('No newly captured tasks to review')).not.toBeInTheDocument()
+
+    if (resolveExtractedTasks) {
+      const finishExtractedTasks = resolveExtractedTasks as (value: Response) => void
+      finishExtractedTasks(jsonResponse([]))
+    }
+  })
+
   it('shows extraction error in staging when extraction fails', async () => {
     stubSignedInFetch()
 

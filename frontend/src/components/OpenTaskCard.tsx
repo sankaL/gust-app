@@ -6,6 +6,7 @@ import { Card } from './Card'
 type OpenTaskCardProps = {
   task: TaskSummary
   onOpen: (taskId: string) => void
+  onPrepareOpen?: (taskId: string) => void
   onComplete: (task: TaskSummary) => void
   onDelete?: (task: TaskSummary) => void
   isBusy: boolean
@@ -70,6 +71,7 @@ function formatSubtaskLabel(subtaskCount: number | undefined) {
 export function OpenTaskCard({
   task,
   onOpen,
+  onPrepareOpen,
   onComplete,
   onDelete,
   isBusy,
@@ -141,6 +143,7 @@ export function OpenTaskCard({
       return
     }
 
+    onPrepareOpen?.(task.id)
     setIsExpanded(true)
   }
 

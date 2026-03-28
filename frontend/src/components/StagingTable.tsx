@@ -61,7 +61,26 @@ export function StagingTable({
   const pendingTasks = tasks.filter(t => t.status === 'pending')
   const needsReviewCount = pendingTasks.filter(t => t.needs_review).length
 
-
+  if (isLoading) {
+    return (
+      <div className="space-y-3 rounded-lg bg-surface-dim p-5">
+        <div className="space-y-2">
+          <div className="h-4 w-40 animate-pulse rounded-full bg-white/10" />
+          <div className="h-3 w-56 animate-pulse rounded-full bg-white/5" />
+        </div>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={index} className="rounded-card bg-surface-container-high p-4">
+            <div className="space-y-3">
+              <div className="h-4 w-3/4 animate-pulse rounded-full bg-white/10" />
+              <div className="h-3 w-full animate-pulse rounded-full bg-white/5" />
+              <div className="h-3 w-2/3 animate-pulse rounded-full bg-white/5" />
+            </div>
+          </div>
+        ))}
+        <p className="text-center text-sm text-on-surface-variant">Loading extracted tasks...</p>
+      </div>
+    )
+  }
 
   if (tasks.length === 0) {
     return (
@@ -121,24 +140,17 @@ export function StagingTable({
       </div>
 
       {/* Task List */}
-      {isLoading ? (
-        <div className="bg-surface-dim rounded-lg p-6 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-on-surface-variant text-sm mt-2">Loading extracted tasks...</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {pendingTasks.map(task => (
-            <ExtractedTaskCard
-              key={task.id}
-              task={task}
-              onApprove={onApprove}
-              onDiscard={onDiscard}
-              onClick={onTaskClick}
-            />
-          ))}
-        </div>
-      )}
+      <div className="space-y-3">
+        {pendingTasks.map(task => (
+          <ExtractedTaskCard
+            key={task.id}
+            task={task}
+            onApprove={onApprove}
+            onDiscard={onDiscard}
+            onClick={onTaskClick}
+          />
+        ))}
+      </div>
     </div>
   )
 }

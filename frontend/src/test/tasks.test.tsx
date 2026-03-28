@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -251,6 +251,92 @@ describe('tasks flow', () => {
         expect.objectContaining({ method: 'POST', credentials: 'include' })
       )
     })
+  })
+
+  it('clears the previous group task list while the next group loads', async () => {
+    let resolvePersonalTasks: ((value: Response) => void) | null = null
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?group_id=inbox-1')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                id: 'task-inbox',
+                title: 'Inbox only task',
+                description: null,
+                status: 'open',
+                needs_review: false,
+                due_date: null,
+                reminder_at: null,
+                due_bucket: 'no_date',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              }
+            ],
+            has_more: false,
+            next_cursor: null
+          })
+        )
+      }
+      if (url.includes('/tasks?group_id=personal-1')) {
+        return new Promise<Response>((resolve) => {
+          resolvePersonalTasks = resolve
+        })
+      }
+
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks?group=inbox-1'])
+    const user = userEvent.setup()
+
+    expect(await screen.findByText('Inbox only task')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Other' }))
+    await user.click(await screen.findByRole('button', { name: /Personal/ }))
+
+    expect(await screen.findByText('Loading open tasks.')).toBeInTheDocument()
+    expect(screen.queryByText('Inbox only task')).not.toBeInTheDocument()
+
+    if (!resolvePersonalTasks) {
+      throw new Error('Expected personal task request to be pending.')
+    }
+    const releasePersonalTasks = resolvePersonalTasks as (value: Response) => void
+    releasePersonalTasks(
+      jsonResponse({
+        items: [
+          {
+            id: 'task-personal',
+            title: 'Personal only task',
+            description: null,
+            status: 'open',
+            needs_review: false,
+            due_date: null,
+            reminder_at: null,
+            due_bucket: 'no_date',
+            group: { id: 'personal-1', name: 'Personal', is_system: false },
+            completed_at: null,
+            deleted_at: null,
+            subtask_count: 0
+          }
+        ],
+        has_more: false,
+        next_cursor: null
+      })
+    )
+
+    expect(await screen.findByText('Personal only task')).toBeInTheDocument()
   })
 
   it('keeps task cards collapsed by default, expands inline, and still opens detail on body click', async () => {
@@ -869,6 +955,93 @@ describe('tasks flow', () => {
     })
 
     expect(await screen.findByText(/Deleted Weekly planning/i)).toBeInTheDocument()
+  })
+
+  it('waits for the full task detail response before rendering a recurring task', async () => {
+    let resolveTaskDetail: ((value: Response) => void) | null = null
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? 'GET'
+
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?group_id=inbox-1')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                id: 'task-1',
+                title: 'Weekly planning',
+                description: null,
+                series_id: 'series-1',
+                recurrence_frequency: 'weekly',
+                status: 'open',
+                needs_review: false,
+                due_date: '2026-03-31',
+                reminder_at: null,
+                due_bucket: 'due_soon',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              }
+            ],
+            has_more: false,
+            next_cursor: null
+          })
+        )
+      }
+      if (url.endsWith('/tasks/task-1') && method === 'GET') {
+        return new Promise<Response>((resolve) => {
+          resolveTaskDetail = resolve
+        })
+      }
+
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { router } = renderTaskRoute(['/tasks?group=inbox-1'])
+
+    expect(await screen.findByText('Weekly planning')).toBeInTheDocument()
+
+    await act(async () => {
+      await router.navigate('/tasks/task-1?group=inbox-1')
+    })
+
+    expect(await screen.findByText('Loading task detail.')).toBeInTheDocument()
+    expect(screen.queryByText('Task summary')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save and return' })).not.toBeInTheDocument()
+
+    if (!resolveTaskDetail) {
+      throw new Error('Expected task detail request to be pending.')
+    }
+    const releaseTaskDetail = resolveTaskDetail as (value: Response) => void
+    releaseTaskDetail(
+      jsonResponse({
+        id: 'task-1',
+        title: 'Weekly planning',
+        description: null,
+        series_id: 'series-1',
+        recurrence_frequency: 'weekly',
+        status: 'open',
+        needs_review: false,
+        due_date: '2026-03-31',
+        reminder_at: null,
+        due_bucket: 'due_soon',
+        group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+        completed_at: null,
+        deleted_at: null,
+        recurrence: { frequency: 'weekly', weekday: 2, day_of_month: null },
+        subtasks: []
+      })
+    )
+
+    expect(await screen.findByText('Task summary')).toBeInTheDocument()
   })
 
   it('shows completed tasks route and reopens a completed task', async () => {

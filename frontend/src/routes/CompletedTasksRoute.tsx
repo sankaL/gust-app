@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 
@@ -12,6 +12,14 @@ import {
   type SessionStatus,
   type TaskSummary
 } from '../lib/api'
+import {
+  adjustGroupOpenCount,
+  applyTaskListMutation,
+  prependTaskToMatchingLists,
+  restoreQuerySnapshots,
+  snapshotTaskQueries,
+  updateTaskDetailCache,
+} from '../lib/taskQueryCache'
 import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
 
@@ -74,6 +82,7 @@ function dedupeCompletedTasks(tasks: TaskSummary[]) {
 export function CompletedTasksRoute() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([])
   const { notifyError, notifySuccess } = useNotifications()
 
   const sessionQuery = useQuery({
@@ -121,22 +130,74 @@ export function CompletedTasksRoute() {
   async function refreshTaskData() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks'] }),
-      queryClient.invalidateQueries({ queryKey: ['task-detail'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', resolvedGroupId ?? 'all', 'completed'] }),
+      queryClient.invalidateQueries({ queryKey: ['tasks', resolvedGroupId ?? 'all', 'open'] }),
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'completed'] }),
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] })
     ])
   }
 
+  function markTaskPending(taskId: string, isPending: boolean) {
+    setPendingTaskIds((current) => {
+      if (isPending) {
+        return current.includes(taskId) ? current : [...current, taskId]
+      }
+      return current.filter((candidate) => candidate !== taskId)
+    })
+  }
+
   const reopenMutation = useMutation({
+    onMutate: async (task) => {
+      markTaskPending(task.id, true)
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['groups'] }),
+        queryClient.cancelQueries({ queryKey: ['tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
+      ])
+      const snapshots = snapshotTaskQueries(queryClient, task.id)
+      const optimisticTask: TaskSummary = {
+        ...task,
+        status: 'open',
+        completed_at: null,
+      }
+
+      applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
+        if (currentTask.id !== task.id) {
+          return currentTask
+        }
+        return statusSegment === 'open' ? optimisticTask : null
+      })
+      prependTaskToMatchingLists(queryClient, optimisticTask, 'open')
+      adjustGroupOpenCount(queryClient, task.group.id, 1)
+      updateTaskDetailCache(queryClient, optimisticTask)
+
+      return { snapshots }
+    },
     mutationFn: async (task: TaskSummary) => {
       const csrfToken = requireCsrf(sessionQuery.data)
       return reopenTask(task.id, csrfToken)
     },
     onSuccess: (task) => {
+      applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
+        if (currentTask.id !== task.id) {
+          return currentTask
+        }
+        return statusSegment === 'open' ? { ...currentTask, ...task } : null
+      })
+      prependTaskToMatchingLists(queryClient, task, 'open')
+      updateTaskDetailCache(queryClient, task)
       notifySuccess(`Moved ${task.title} back to To-do.`)
       void refreshTaskData()
     },
-    onError: (error) => {
+    onError: (error, task, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
+      markTaskPending(task.id, false)
       notifyError(buildFriendlyMessage(error, 'Task could not be moved back to To-do.'))
+    },
+    onSettled: (_result, _error, task) => {
+      markTaskPending(task.id, false)
     }
   })
 
@@ -207,7 +268,7 @@ export function CompletedTasksRoute() {
                     <button
                       type="button"
                       onClick={() => reopenMutation.mutate(task)}
-                      disabled={reopenMutation.isPending}
+                      disabled={pendingTaskIds.includes(task.id)}
                       className="rounded-pill bg-surface-dim px-3 py-1.5 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
                     >
                       Restore

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from threading import Lock
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Connection, Engine
@@ -11,6 +12,8 @@ from app.core.settings import get_settings
 
 DATABASE_USER_ID_SETTING = "app.current_user_id"
 DATABASE_INTERNAL_JOB_SETTING = "app.internal_job"
+_engine_registry: dict[str, Engine] = {}
+_engine_registry_lock = Lock()
 
 
 @dataclass(frozen=True)
@@ -21,10 +24,31 @@ class DatabaseActor:
 
 def build_engine(database_url: str | None = None) -> Engine:
     url = database_url or get_settings().database_url
-    engine = create_engine(url, pool_pre_ping=True)
-    if engine.dialect.name == "sqlite":
-        event.listen(engine, "connect", _enable_sqlite_foreign_keys)
-    return engine
+    with _engine_registry_lock:
+        engine = _engine_registry.get(url)
+        if engine is None:
+            engine = create_engine(url, pool_pre_ping=True, pool_recycle=300)
+            if engine.dialect.name == "sqlite":
+                event.listen(engine, "connect", _enable_sqlite_foreign_keys)
+            _engine_registry[url] = engine
+        return engine
+
+
+def dispose_engine(database_url: str | None = None) -> None:
+    url = database_url or get_settings().database_url
+    with _engine_registry_lock:
+        engine = _engine_registry.pop(url, None)
+    if engine is None:
+        return
+    engine.dispose()
+
+
+def dispose_all_engines() -> None:
+    with _engine_registry_lock:
+        engines = list(_engine_registry.values())
+        _engine_registry.clear()
+    for engine in engines:
+        engine.dispose()
 
 
 @contextmanager
@@ -34,12 +58,9 @@ def connection_scope(
     actor: DatabaseActor | None = None,
 ) -> Iterator[Connection]:
     engine = build_engine(database_url)
-    try:
-        with engine.begin() as connection:
-            _apply_database_actor(connection, actor)
-            yield connection
-    finally:
-        engine.dispose()
+    with engine.begin() as connection:
+        _apply_database_actor(connection, actor)
+        yield connection
 
 
 def user_connection_scope(database_url: str | None = None, *, user_id: str):

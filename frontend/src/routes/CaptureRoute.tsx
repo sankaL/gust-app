@@ -289,6 +289,8 @@ export function CaptureRoute() {
 
   const isLoadingTasks = extractedTasksQuery.isLoading || extractedTasksQuery.isFetching
   const isLoadingAllPending = allPendingTasksQuery.isLoading || allPendingTasksQuery.isFetching
+  const isProcessingLatestCapture =
+    showStaging && Boolean(reviewCaptureId) && isLoadingTasks && !extractedTasksQuery.data?.length
 
   const textCaptureMutation = useMutation({
     mutationFn: async (text: string) => {
@@ -773,6 +775,19 @@ export function CaptureRoute() {
 
       {showStaging && reviewCaptureId ? (
         <div className="space-y-4 mt-4">
+          {isProcessingLatestCapture ? (
+            <div className="rounded-card border border-white/10 bg-[rgba(22,22,22,0.94)] p-4 shadow-[0_20px_40px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+              <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
+                Latest capture
+              </p>
+              <h3 className="mt-2 font-display text-xl text-on-surface">Organizing your tasks</h3>
+              <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+                The transcript is ready. Extracted tasks are still arriving, so this view will stay in a
+                loading state until the first review set is available.
+              </p>
+            </div>
+          ) : null}
+
           <StagingTable
             tasks={extractedTasksQuery.data ?? []}
             onApprove={handleApproveTask}

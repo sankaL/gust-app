@@ -6,6 +6,7 @@ import {
   ApiError,
   completeTask,
   deleteTask,
+  getTaskDetail,
   getSessionStatus,
   listGroups,
   listTasks,
@@ -16,6 +17,14 @@ import {
   type TaskSummary,
   type GroupSummary
 } from '../lib/api'
+import {
+  adjustGroupOpenCount,
+  applyTaskListMutation,
+  prependTaskToMatchingLists,
+  restoreQuerySnapshots,
+  snapshotTaskQueries,
+  updateTaskDetailCache,
+} from '../lib/taskQueryCache'
 import { AllTasksView } from '../components/AllTasksView'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { useNotifications } from '../components/Notifications'
@@ -196,6 +205,7 @@ type UndoState =
 type SwipeTaskCardProps = {
   task: TaskSummary
   onOpen: (taskId: string) => void
+  onPrepareOpen?: (taskId: string) => void
   onComplete: (taskId: string) => void
   onDelete: (task: TaskSummary) => void
   isBusy: boolean
@@ -226,11 +236,12 @@ function normalizeOpenTaskItems(data: unknown): TaskSummary[] {
   return []
 }
 
-function SwipeTaskCard({ task, onOpen, onComplete, onDelete, isBusy }: SwipeTaskCardProps) {
+function SwipeTaskCard({ task, onOpen, onPrepareOpen, onComplete, onDelete, isBusy }: SwipeTaskCardProps) {
   return (
     <OpenTaskCard
       task={task}
       onOpen={onOpen}
+      onPrepareOpen={onPrepareOpen}
       onComplete={(currentTask) => onComplete(currentTask.id)}
       onDelete={onDelete}
       isBusy={isBusy}
@@ -245,6 +256,7 @@ export function TasksRoute() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
   const [pendingDeleteTask, setPendingDeleteTask] = useState<TaskSummary | null>(null)
+  const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([])
   const { dismissNotification, notifyError, notifySuccess, showNotification, updateNotification } =
     useNotifications()
 
@@ -294,17 +306,92 @@ export function TasksRoute() {
   async function refreshTaskData() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks'] }),
-      queryClient.invalidateQueries({ queryKey: ['task-detail'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', resolvedGroupId, 'open'] }),
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] })
+    ])
+  }
+
+  function markTaskPending(taskId: string, isPending: boolean) {
+    setPendingTaskIds((current) => {
+      if (isPending) {
+        return current.includes(taskId) ? current : [...current, taskId]
+      }
+      return current.filter((candidate) => candidate !== taskId)
+    })
+  }
+
+  function prefetchTaskDetail(taskId: string) {
+    void queryClient.prefetchQuery({
+      queryKey: ['task-detail', taskId],
+      queryFn: () => getTaskDetail(taskId),
+    })
+  }
+
+  function syncTaskCaches(task: TaskSummary) {
+    applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
+      if (currentTask.id !== task.id) {
+        return currentTask
+      }
+
+      if (task.deleted_at) {
+        return null
+      }
+
+      return statusSegment === task.status ? { ...currentTask, ...task } : null
+    })
+
+    if (!task.deleted_at) {
+      prependTaskToMatchingLists(queryClient, task, task.status)
+    }
+
+    updateTaskDetailCache(queryClient, task)
+  }
+
+  async function invalidateTaskViews(taskId: string, groupId: string) {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['groups'] }),
+      queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] }),
+      queryClient.invalidateQueries({ queryKey: ['tasks', groupId, 'open'] }),
+      queryClient.invalidateQueries({ queryKey: ['tasks', groupId, 'completed'] }),
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] }),
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'completed'] }),
     ])
   }
 
   const completeMutation = useMutation({
+    onMutate: async (task) => {
+      markTaskPending(task.id, true)
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['groups'] }),
+        queryClient.cancelQueries({ queryKey: ['tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
+      ])
+
+      const snapshots = snapshotTaskQueries(queryClient, task.id)
+      const optimisticTask: TaskSummary = {
+        ...task,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      }
+
+      applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
+        if (currentTask.id !== task.id) {
+          return currentTask
+        }
+        return statusSegment === 'completed' ? optimisticTask : null
+      })
+      prependTaskToMatchingLists(queryClient, optimisticTask, 'completed')
+      adjustGroupOpenCount(queryClient, task.group.id, -1)
+      updateTaskDetailCache(queryClient, optimisticTask)
+
+      return { snapshots }
+    },
     mutationFn: async (task: TaskSummary) => {
       const csrfToken = requireCsrf(sessionQuery.data)
       return completeTask(task.id, csrfToken)
     },
     onSuccess: (task) => {
+      syncTaskCaches(task)
       const undo: Exclude<UndoState, null> = { kind: 'complete', taskId: task.id, title: task.title }
       const notificationId = showNotification({
         type: 'success',
@@ -323,11 +410,13 @@ export function TasksRoute() {
           try {
             const csrfToken = requireCsrf(sessionQuery.data)
             if (undo.kind === 'complete') {
-              await reopenTask(undo.taskId, csrfToken)
+              const reopenedTask = await reopenTask(undo.taskId, csrfToken)
+              adjustGroupOpenCount(queryClient, reopenedTask.group.id, 1)
+              syncTaskCaches(reopenedTask)
             }
             dismissNotification(notificationId)
             notifySuccess(`Moved ${task.title} back to To-do.`)
-            await refreshTaskData()
+            await invalidateTaskViews(task.id, task.group.id)
           } catch (error) {
             updateNotification(notificationId, {
               type: 'error',
@@ -338,19 +427,49 @@ export function TasksRoute() {
           }
         },
       })
-      void refreshTaskData()
+      void invalidateTaskViews(task.id, task.group.id)
     },
-    onError: (error) => {
+    onError: (error, task, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
+      markTaskPending(task.id, false)
       notifyError(buildFriendlyMessage(error, 'Task could not be completed.'))
+    },
+    onSettled: (_result, _error, task) => {
+      markTaskPending(task.id, false)
     }
   })
 
   const deleteTaskMutation = useMutation({
+    onMutate: async ({ task }) => {
+      markTaskPending(task.id, true)
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['groups'] }),
+        queryClient.cancelQueries({ queryKey: ['tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
+      ])
+
+      const snapshots = snapshotTaskQueries(queryClient, task.id)
+      applyTaskListMutation(queryClient, (currentTask) =>
+        currentTask.id === task.id ? null : currentTask
+      )
+      if (task.status === 'open') {
+        adjustGroupOpenCount(queryClient, task.group.id, -1)
+      }
+      updateTaskDetailCache(queryClient, {
+        ...task,
+        deleted_at: new Date().toISOString(),
+      })
+
+      return { snapshots }
+    },
     mutationFn: async ({ task, scope }: { task: TaskSummary; scope: TaskDeleteScope }) => {
       const csrfToken = requireCsrf(sessionQuery.data)
       return deleteTask(task.id, csrfToken, scope)
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (deletedTask, variables) => {
+      syncTaskCaches(deletedTask)
       setPendingDeleteTask(null)
       const undo: Exclude<UndoState, null> = {
         kind: 'delete',
@@ -374,11 +493,13 @@ export function TasksRoute() {
           try {
             const csrfToken = requireCsrf(sessionQuery.data)
             if (undo.kind === 'delete') {
-              await restoreTask(undo.taskId, csrfToken)
+              const restoredTask = await restoreTask(undo.taskId, csrfToken)
+              adjustGroupOpenCount(queryClient, restoredTask.group.id, 1)
+              syncTaskCaches(restoredTask)
             }
             dismissNotification(notificationId)
             notifySuccess(`Restored ${variables.task.title}.`)
-            await refreshTaskData()
+            await invalidateTaskViews(variables.task.id, variables.task.group.id)
           } catch (error) {
             updateNotification(notificationId, {
               type: 'error',
@@ -389,15 +510,20 @@ export function TasksRoute() {
           }
         },
       })
-      void refreshTaskData()
+      void invalidateTaskViews(variables.task.id, variables.task.group.id)
     },
-    onError: (error) => {
+    onError: (error, variables, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
+      markTaskPending(variables.task.id, false)
       notifyError(buildFriendlyMessage(error, 'Task could not be deleted.'))
       setPendingDeleteTask(null)
+    },
+    onSettled: (_result, _error, variables) => {
+      markTaskPending(variables.task.id, false)
     }
   })
-
-  const isBusy = completeMutation.isPending || deleteTaskMutation.isPending
 
   const bucketSections = [
     { key: 'overdue', label: 'Overdue' },
@@ -437,10 +563,11 @@ export function TasksRoute() {
             onTaskComplete={(task) => {
               completeMutation.mutate(task)
             }}
+            onTaskPrepareOpen={prefetchTaskDetail}
             onTaskDelete={(task) => {
               setPendingDeleteTask(task)
             }}
-            isBusy={isBusy}
+            busyTaskIds={pendingTaskIds}
           />
         ) : (
           <>
@@ -480,7 +607,8 @@ export function TasksRoute() {
                         <SwipeTaskCard
                           key={task.id}
                           task={task}
-                          isBusy={isBusy}
+                          isBusy={pendingTaskIds.includes(task.id)}
+                          onPrepareOpen={prefetchTaskDetail}
                           onOpen={(taskId) =>
                             void navigate({
                               pathname: `/tasks/${taskId}`,

@@ -24,6 +24,7 @@ from app.core.errors import (
     TranscriptionTimeoutError,
 )
 from app.core.settings import Settings
+from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
 from app.db.repositories import (
     CaptureRecord,
@@ -188,11 +189,12 @@ class CaptureService:
         )
 
         try:
-            transcription = await self.transcription_service.transcribe(
-                audio_bytes=audio_bytes,
-                filename=filename,
-                content_type=content_type,
-            )
+            with timed_stage("capture.transcription"):
+                transcription = await self.transcription_service.transcribe(
+                    audio_bytes=audio_bytes,
+                    filename=filename,
+                    content_type=content_type,
+                )
         except Exception as exc:
             failure_reason, public_error = self._resolve_transcription_failure(exc)
             self._log_voice_transcription_failure(
@@ -238,11 +240,12 @@ class CaptureService:
 
         # Automatically extract and store in staging
         try:
-            await self._extract_and_store_in_staging(
-                user_id=user_id,
-                capture_id=updated.id,
-                transcript_text=updated.transcript_text or "",
-            )
+            with timed_stage("capture.staging"):
+                await self._extract_and_store_in_staging(
+                    user_id=user_id,
+                    capture_id=updated.id,
+                    transcript_text=updated.transcript_text or "",
+                )
         except Exception as exc:
             logger.warning(
                 "auto_extraction_failed",
@@ -276,11 +279,12 @@ class CaptureService:
 
         # Automatically extract and store in staging
         try:
-            await self._extract_and_store_in_staging(
-                user_id=user_id,
-                capture_id=capture.id,
-                transcript_text=normalized,
-            )
+            with timed_stage("capture.staging"):
+                await self._extract_and_store_in_staging(
+                    user_id=user_id,
+                    capture_id=capture.id,
+                    transcript_text=normalized,
+                )
         except Exception as exc:
             logger.warning(
                 "auto_extraction_failed",
@@ -330,14 +334,15 @@ class CaptureService:
         )
 
         try:
-            (
-                extractor_payload,
-                extraction_attempt_count,
-            ) = await self._extract_payload_with_guardrails(
-                transcript_text=normalized_transcript,
-                extraction_request=extraction_request,
-                inbox_group=inbox_group,
-            )
+            with timed_stage("capture.extraction"):
+                (
+                    extractor_payload,
+                    extraction_attempt_count,
+                ) = await self._extract_payload_with_guardrails(
+                    transcript_text=normalized_transcript,
+                    extraction_request=extraction_request,
+                    inbox_group=inbox_group,
+                )
         except (ExtractorMalformedResponseError, ValidationError) as exc:
             extraction_attempt_count = self._resolve_extraction_attempt_count()
             self._mark_capture_failure(
@@ -395,63 +400,64 @@ class CaptureService:
 
         created_count = 0
         flagged_count = 0
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            current_capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
-            if current_capture is None:
-                raise CaptureNotFoundError()
-            if current_capture.status not in {"ready_for_review", "extraction_failed"}:
-                raise CaptureStateConflictError()
+        with timed_stage("capture.db_write"):
+            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                current_capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
+                if current_capture is None:
+                    raise CaptureNotFoundError()
+                if current_capture.status not in {"ready_for_review", "extraction_failed"}:
+                    raise CaptureStateConflictError()
 
-            submitted_capture = update_capture(
-                connection,
-                user_id=user_id,
-                capture_id=capture_id,
-                status="submitted",
-                transcript_edited_text=normalized_transcript,
-                error_code=None,
-            )
-            assert submitted_capture is not None
-
-            for prepared in prepared_tasks:
-                task = create_task(
+                submitted_capture = update_capture(
                     connection,
                     user_id=user_id,
-                    group_id=prepared.group_id,
                     capture_id=capture_id,
-                    title=prepared.title,
-                    needs_review=prepared.needs_review,
-                    description=prepared.description,
-                    due_date=prepared.due_date,
-                    reminder_at=prepared.reminder_at,
-                    reminder_offset_minutes=prepared.reminder_offset_minutes,
-                    recurrence_frequency=prepared.recurrence_frequency,
-                    recurrence_interval=prepared.recurrence_interval,
-                    recurrence_weekday=prepared.recurrence_weekday,
-                    recurrence_day_of_month=prepared.recurrence_day_of_month,
-                    series_id=prepared.series_id,
+                    status="submitted",
+                    transcript_edited_text=normalized_transcript,
+                    error_code=None,
                 )
-                if prepared.subtasks:
-                    create_subtasks(
+                assert submitted_capture is not None
+
+                for prepared in prepared_tasks:
+                    task = create_task(
                         connection,
                         user_id=user_id,
-                        task_id=task.id,
-                        titles=prepared.subtasks,
+                        group_id=prepared.group_id,
+                        capture_id=capture_id,
+                        title=prepared.title,
+                        needs_review=prepared.needs_review,
+                        description=prepared.description,
+                        due_date=prepared.due_date,
+                        reminder_at=prepared.reminder_at,
+                        reminder_offset_minutes=prepared.reminder_offset_minutes,
+                        recurrence_frequency=prepared.recurrence_frequency,
+                        recurrence_interval=prepared.recurrence_interval,
+                        recurrence_weekday=prepared.recurrence_weekday,
+                        recurrence_day_of_month=prepared.recurrence_day_of_month,
+                        series_id=prepared.series_id,
                     )
-                created_count += 1
-                if task.needs_review:
-                    flagged_count += 1
+                    if prepared.subtasks:
+                        create_subtasks(
+                            connection,
+                            user_id=user_id,
+                            task_id=task.id,
+                            titles=prepared.subtasks,
+                        )
+                    created_count += 1
+                    if task.needs_review:
+                        flagged_count += 1
 
-            final_capture = update_capture(
-                connection,
-                user_id=user_id,
-                capture_id=capture_id,
-                status="completed",
-                transcript_edited_text=normalized_transcript,
-                extraction_attempt_count=extraction_attempt_count,
-                tasks_created_count=created_count,
-                tasks_skipped_count=len(skipped_items),
-                error_code=None,
-            )
+                final_capture = update_capture(
+                    connection,
+                    user_id=user_id,
+                    capture_id=capture_id,
+                    status="completed",
+                    transcript_edited_text=normalized_transcript,
+                    extraction_attempt_count=extraction_attempt_count,
+                    tasks_created_count=created_count,
+                    tasks_skipped_count=len(skipped_items),
+                    error_code=None,
+                )
 
         assert final_capture is not None
         return SubmitCaptureResult(
@@ -906,11 +912,12 @@ class CaptureService:
         )
 
         try:
-            extractor_payload, _attempt_count = await self._extract_payload_with_guardrails(
-                transcript_text=normalized_transcript,
-                extraction_request=extraction_request,
-                inbox_group=inbox_group,
-            )
+            with timed_stage("capture.extraction"):
+                extractor_payload, _attempt_count = await self._extract_payload_with_guardrails(
+                    transcript_text=normalized_transcript,
+                    extraction_request=extraction_request,
+                    inbox_group=inbox_group,
+                )
         except (ExtractorMalformedResponseError, ValidationError) as exc:
             logger.warning(
                 "extraction_failed_for_staging",
@@ -935,14 +942,15 @@ class CaptureService:
             return
 
         # Store extracted tasks in staging
-        await self.staging_service.store_extracted_tasks(
-            user_id=user_id,
-            capture_id=capture_id,
-            extracted_payload=extractor_payload,
-            groups=groups,
-            inbox_group=inbox_group,
-            user_timezone=user.timezone,
-        )
+        with timed_stage("capture.staging"):
+            await self.staging_service.store_extracted_tasks(
+                user_id=user_id,
+                capture_id=capture_id,
+                extracted_payload=extractor_payload,
+                groups=groups,
+                inbox_group=inbox_group,
+                user_timezone=user.timezone,
+            )
 
         logger.info(
             "auto_extraction_completed",

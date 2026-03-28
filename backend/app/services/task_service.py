@@ -18,6 +18,7 @@ from app.core.errors import (
     TaskNotFoundError,
 )
 from app.core.settings import Settings
+from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
 from app.db.repositories import (
     GroupRecord,
@@ -107,25 +108,26 @@ class TaskService:
         limit: int = 50,
         cursor: str | None = None,
     ) -> PaginatedTaskList:
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            # Validate group exists if group_id is provided (skip validation for 'all')
-            if group_id is not None and group_id != "all":
-                group = get_group(connection, user_id=user_id, group_id=group_id)
-                if group is None:
-                    raise GroupNotFoundError()
+        with timed_stage("db.tasks.list"):
+            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                # Validate group exists if group_id is provided (skip validation for 'all')
+                if group_id is not None and group_id != "all":
+                    group = get_group(connection, user_id=user_id, group_id=group_id)
+                    if group is None:
+                        raise GroupNotFoundError()
 
-            group_lookup = {
-                candidate.id: candidate
-                for candidate in self._list_groups(connection, user_id=user_id)
-            }
-            task_rows, has_more, next_cursor = list_tasks(
-                connection,
-                user_id=user_id,
-                group_id=group_id,
-                status=status,
-                limit=limit,
-                cursor=cursor,
-            )
+                group_lookup = {
+                    candidate.id: candidate
+                    for candidate in self._list_groups(connection, user_id=user_id)
+                }
+                task_rows, has_more, next_cursor = list_tasks(
+                    connection,
+                    user_id=user_id,
+                    group_id=group_id,
+                    status=status,
+                    limit=limit,
+                    cursor=cursor,
+                )
 
         items = [
             TaskListItem(
@@ -143,14 +145,15 @@ class TaskService:
         return PaginatedTaskList(items=items, has_more=has_more, next_cursor=next_cursor)
 
     def get_task_detail(self, *, user_id: str, task_id: str) -> TaskDetail:
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            task = get_task(connection, user_id=user_id, task_id=task_id)
-            if task is None:
-                raise TaskNotFoundError()
-            group = get_group(connection, user_id=user_id, group_id=task.group_id)
-            if group is None:
-                raise GroupNotFoundError("Task group could not be found.")
-            task_subtasks = list_subtasks(connection, user_id=user_id, task_id=task_id)
+        with timed_stage("db.tasks.detail"):
+            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                task = get_task(connection, user_id=user_id, task_id=task_id)
+                if task is None:
+                    raise TaskNotFoundError()
+                group = get_group(connection, user_id=user_id, group_id=task.group_id)
+                if group is None:
+                    raise GroupNotFoundError("Task group could not be found.")
+                task_subtasks = list_subtasks(connection, user_id=user_id, task_id=task_id)
         return TaskDetail(task=task, group=group, subtasks=task_subtasks)
 
     def create_task(
