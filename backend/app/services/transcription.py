@@ -5,6 +5,7 @@ import logging
 import random
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Literal
 
 import httpx
 
@@ -12,6 +13,15 @@ from app.core.errors import ConfigurationError, InvalidConfigurationError
 from app.core.settings import Settings
 
 logger = logging.getLogger("gust.api")
+
+TranscriptionFailureReason = Literal[
+    "no_speech",
+    "timeout",
+    "provider_unavailable",
+    "provider_rejected",
+    "provider_invalid_response",
+    "unknown",
+]
 
 
 @dataclass
@@ -26,11 +36,13 @@ class TranscriptionServiceError(Exception):
         self,
         message: str,
         *,
+        failure_reason: TranscriptionFailureReason = "unknown",
         provider_status_code: int | None = None,
         provider_error_type: str | None = None,
         provider_error_code: str | None = None,
     ) -> None:
         super().__init__(message)
+        self.failure_reason = failure_reason
         self.provider_status_code = provider_status_code
         self.provider_error_type = provider_error_type
         self.provider_error_code = provider_error_code
@@ -67,8 +79,21 @@ class MistralTranscriptionService:
                     data=data,
                     files=files,
                 )
+        except httpx.TimeoutException as exc:
+            raise TranscriptionServiceError(
+                "Transcription provider request timed out.",
+                failure_reason="timeout",
+            ) from exc
+        except httpx.TransportError as exc:
+            raise TranscriptionServiceError(
+                "Transcription provider is unavailable.",
+                failure_reason="provider_unavailable",
+            ) from exc
         except httpx.HTTPError as exc:
-            raise TranscriptionServiceError("Transcription provider request failed.") from exc
+            raise TranscriptionServiceError(
+                "Transcription provider request failed.",
+                failure_reason="unknown",
+            ) from exc
 
         if response.status_code >= 400:
             provider_error = self._extract_provider_error(response)
@@ -76,6 +101,7 @@ class MistralTranscriptionService:
                 "transcription_provider_rejected",
                 extra={
                     "event": "transcription_provider_rejected",
+                    "failure_reason": provider_error.failure_reason,
                     "provider_status_code": response.status_code,
                     "provider_error_type": provider_error.provider_error_type,
                     "provider_error_code": provider_error.provider_error_code,
@@ -96,13 +122,20 @@ class MistralTranscriptionService:
             payload = response.json()
         except ValueError as exc:
             raise TranscriptionServiceError(
-                "Transcription provider returned invalid JSON."
+                "Transcription provider returned invalid JSON.",
+                failure_reason="provider_invalid_response",
             ) from exc
         if not isinstance(payload, dict):
-            raise TranscriptionServiceError("Transcription provider returned invalid JSON.")
+            raise TranscriptionServiceError(
+                "Transcription provider returned invalid JSON.",
+                failure_reason="provider_invalid_response",
+            )
         transcript_text = payload.get("text")
         if not transcript_text or not str(transcript_text).strip():
-            raise TranscriptionServiceError("Transcription provider returned an empty transcript.")
+            raise TranscriptionServiceError(
+                "Transcription provider returned an empty transcript.",
+                failure_reason="no_speech",
+            )
 
         latency_ms = int((perf_counter() - started_at) * 1000)
         return TranscriptionResult(
@@ -115,6 +148,10 @@ class MistralTranscriptionService:
         provider_error_type: str | None = None
         provider_error_code: str | None = None
         provider_message = "Transcription provider request failed."
+        if response.status_code == 429 or response.status_code >= 500:
+            failure_reason: TranscriptionFailureReason = "provider_unavailable"
+        else:
+            failure_reason = "provider_rejected"
         try:
             payload = response.json()
         except ValueError:
@@ -133,6 +170,7 @@ class MistralTranscriptionService:
 
         return TranscriptionServiceError(
             provider_message,
+            failure_reason=failure_reason,
             provider_status_code=response.status_code,
             provider_error_type=provider_error_type,
             provider_error_code=provider_error_code,

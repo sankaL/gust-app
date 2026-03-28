@@ -29,12 +29,79 @@ type RecordedAudio = {
   filename: string
 }
 
+type CaptureErrorState = {
+  message: string
+  requestId: string | null
+  canRetry: boolean
+}
+
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
     return error.message
   }
 
   return fallback
+}
+
+function buildVoiceCaptureError(error: unknown): CaptureErrorState {
+  if (!(error instanceof ApiError)) {
+    return {
+      message: 'Transcription failed. Please retry the same recording.',
+      requestId: null,
+      canRetry: true
+    }
+  }
+
+  const mapping: Record<string, string> = {
+    transcription_no_speech:
+      'No speech was detected. Check that your microphone is picking up audio, then retry.',
+    invalid_capture:
+      'No audio was captured. Record a short voice note and retry, or use text capture.',
+    transcription_timeout:
+      'Transcription timed out. Check your connection and retry the same recording.',
+    transcription_provider_unavailable:
+      'Transcription service is temporarily unavailable. Please retry in a moment.',
+    transcription_provider_rejected:
+      'This recording could not be transcribed. Retry with clearer audio or use text capture.',
+    transcription_provider_invalid_response:
+      'Transcription returned an invalid response. Please retry the same recording.',
+    transcription_failed: 'Transcription failed. Please retry the same recording.'
+  }
+
+  const retryableErrorCodes = new Set(Object.keys(mapping))
+  const fallbackMessage = error.message.trim() || 'Transcription failed. Please retry the same recording.'
+  const isRetryable = retryableErrorCodes.has(error.code)
+
+  return {
+    message: mapping[error.code] ?? fallbackMessage,
+    requestId: error.requestId,
+    canRetry: isRetryable
+  }
+}
+
+function classifyMicrophoneError(error: unknown): string {
+  const fallback = 'Microphone access failed. Check your device settings, then try again.'
+  if (!(error instanceof DOMException)) {
+    return fallback
+  }
+
+  switch (error.name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+    case 'PermissionDeniedError':
+      return 'Microphone permission was denied. Text capture is still available.'
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+      return 'No microphone was found. Connect a mic and try again, or use text capture.'
+    case 'NotReadableError':
+    case 'TrackStartError':
+    case 'AbortError':
+      return 'Microphone is unavailable or in use by another app. Try again, or use text capture.'
+    case 'OverconstrainedError':
+      return 'Microphone settings are unsupported on this device. Try default audio settings or text capture.'
+    default:
+      return fallback
+  }
 }
 
 export function CaptureRoute() {
@@ -54,7 +121,7 @@ export function CaptureRoute() {
   const [textDraft, setTextDraft] = useState('')
   const [reviewCaptureId, setReviewCaptureId] = useState<string | null>(null)
   const [permissionError, setPermissionError] = useState<string | null>(null)
-  const [transcriptionError, setTranscriptionError] = useState<string | null>(null)
+  const [transcriptionError, setTranscriptionError] = useState<CaptureErrorState | null>(null)
   const [textCaptureError, setTextCaptureError] = useState<string | null>(null)
   const [summary, setSummary] = useState<SubmitCaptureResponse | null>(null)
   const [showStaging, setShowStaging] = useState(false)
@@ -261,9 +328,7 @@ export function CaptureRoute() {
       setShowStaging(true)
     },
     onError: (error) => {
-      setTranscriptionError(
-        buildFriendlyMessage(error, 'Transcription failed. Please retry the same recording.')
-      )
+      setTranscriptionError(buildVoiceCaptureError(error))
     }
   })
 
@@ -406,7 +471,11 @@ export function CaptureRoute() {
         setIsRecording(false)
 
         if (blob.size === 0) {
-          setTranscriptionError('Recording was empty. Try again or use text capture.')
+          setTranscriptionError({
+            message: 'No audio was captured. Try again or use text capture.',
+            requestId: null,
+            canRetry: false
+          })
           return
         }
 
@@ -421,8 +490,8 @@ export function CaptureRoute() {
 
       recorder.start()
       setIsRecording(true)
-    } catch {
-      setPermissionError('Microphone permission was denied. Text capture is still available.')
+    } catch (error) {
+      setPermissionError(classifyMicrophoneError(error))
       setTextExpanded(true)
     } finally {
       setIsRecorderLoading(false)
@@ -536,25 +605,46 @@ export function CaptureRoute() {
 
             <div className="space-y-2">
               {permissionError ? (
-                <p className="rounded-card border border-warning/35 bg-[rgba(72,38,10,0.92)] px-3 py-2 font-body text-sm text-orange-100 shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
-                  {permissionError}
-                </p>
+                <div className="mx-auto flex max-w-xl items-start gap-3 rounded-card bg-[linear-gradient(145deg,rgba(118,58,11,0.96),rgba(78,37,8,0.94))] px-4 py-3 text-left shadow-[0_10px_22px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,214,153,0.18)]">
+                  <span className="mt-0.5 inline-flex shrink-0 items-center justify-center text-amber-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 3.5a1 1 0 0 1 .88.53l8.4 15.4A1 1 0 0 1 20.4 21H3.6a1 1 0 0 1-.88-1.47l8.4-15.4A1 1 0 0 1 12 3.5zm0 5a1 1 0 0 0-1 1v4.4a1 1 0 0 0 2 0V9.5a1 1 0 0 0-1-1zm0 8.2a1.15 1.15 0 1 0 0 2.3 1.15 1.15 0 0 0 0-2.3z" />
+                    </svg>
+                  </span>
+                  <p className="font-body text-sm leading-6 text-amber-50/95">{permissionError}</p>
+                </div>
               ) : null}
               {transcriptionError ? (
-                <div className="space-y-2 rounded-card border border-error/35 bg-[rgba(74,18,24,0.94)] px-3 py-3 shadow-[0_14px_30px_rgba(0,0,0,0.4)]">
-                  <p className="font-body text-sm text-red-100">{transcriptionError}</p>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={retryVoiceCapture}
-                      className="rounded-pill bg-primary px-3 py-1.5 text-sm font-medium text-surface"
-                    >
-                      Retry Same Recording
-                    </button>
+                <div className="space-y-3 rounded-card bg-[linear-gradient(145deg,rgba(110,22,38,0.96),rgba(66,14,24,0.94))] px-4 py-3 text-left shadow-[0_12px_26px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,148,177,0.16)]">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 inline-flex shrink-0 items-center justify-center text-red-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 2.8A9.2 9.2 0 1 0 21.2 12 9.21 9.21 0 0 0 12 2.8zm0 13.45a1.17 1.17 0 1 1 0 2.34 1.17 1.17 0 0 1 0-2.34zm1-3.12a1 1 0 1 1-2 0V7.9a1 1 0 0 1 2 0z" />
+                      </svg>
+                    </span>
+                    <div className="space-y-1">
+                      <p className="font-body text-sm leading-6 text-red-50/95">{transcriptionError.message}</p>
+                      {transcriptionError.requestId ? (
+                        <p className="font-body text-xs text-red-100/75">
+                          Support ID: {transcriptionError.requestId}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap justify-start gap-2 pl-9">
+                    {transcriptionError.canRetry && retryAudioRef.current ? (
+                      <button
+                        type="button"
+                        onClick={retryVoiceCapture}
+                        className="rounded-pill bg-red-100 px-3 py-1.5 text-sm font-semibold text-red-900 shadow-[0_2px_8px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-red-50"
+                      >
+                        Retry Same Recording
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setTranscriptionError(null)}
-                      className="rounded-pill border border-outline px-3 py-1.5 text-sm text-on-surface-variant"
+                      className="rounded-pill bg-black/25 px-3 py-1.5 text-sm text-red-100/95 transition hover:bg-black/35"
                     >
                       Dismiss
                     </button>

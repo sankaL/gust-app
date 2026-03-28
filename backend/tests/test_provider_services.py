@@ -91,7 +91,7 @@ def test_transcription_service_wraps_http_transport_failures(
         lambda timeout: FakeAsyncClient(error=httpx.ReadTimeout("timeout")),
     )
 
-    with pytest.raises(TranscriptionServiceError):
+    with pytest.raises(TranscriptionServiceError) as exc_info:
         asyncio.run(
             service.transcribe(
                 audio_bytes=b"voice-bytes",
@@ -99,6 +99,7 @@ def test_transcription_service_wraps_http_transport_failures(
                 content_type="audio/webm",
             )
         )
+    assert exc_info.value.failure_reason == "timeout"
 
 
 def test_transcription_service_wraps_invalid_json_responses(
@@ -113,7 +114,7 @@ def test_transcription_service_wraps_invalid_json_responses(
         ),
     )
 
-    with pytest.raises(TranscriptionServiceError):
+    with pytest.raises(TranscriptionServiceError) as exc_info:
         asyncio.run(
             service.transcribe(
                 audio_bytes=b"voice-bytes",
@@ -121,6 +122,30 @@ def test_transcription_service_wraps_invalid_json_responses(
                 content_type="audio/webm",
             )
         )
+    assert exc_info.value.failure_reason == "provider_invalid_response"
+
+
+def test_transcription_service_classifies_empty_transcript_as_no_speech(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = MistralTranscriptionService(build_settings())
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda timeout: FakeAsyncClient(
+            response=FakeJsonResponse(status_code=200, json_value={"text": "   "})
+        ),
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        asyncio.run(
+            service.transcribe(
+                audio_bytes=b"voice-bytes",
+                filename="capture.webm",
+                content_type="audio/webm",
+            )
+        )
+    assert exc_info.value.failure_reason == "no_speech"
 
 
 def test_transcription_service_uses_expected_default_model(

@@ -100,6 +100,7 @@ function stubSignedInFetch(overrides?: {
   onExtractedTasks?: () => unknown
   onPendingTasks?: () => unknown
   onGroups?: () => unknown
+  csrfToken?: string | null
 }) {
   const fetchMock: FetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestUrl(input)
@@ -112,7 +113,7 @@ function stubSignedInFetch(overrides?: {
           user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
           timezone: 'UTC',
           inbox_group_id: 'inbox-1',
-          csrf_token: 'csrf-token'
+          csrf_token: overrides && 'csrfToken' in overrides ? overrides.csrfToken : 'csrf-token'
         })
       )
     }
@@ -133,6 +134,65 @@ function stubSignedInFetch(overrides?: {
 
     if (url.includes('/groups')) {
       return Promise.resolve(jsonResponse(overrides?.onGroups?.() ?? []))
+    }
+
+    return Promise.resolve(jsonResponse({}))
+  })
+
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function stubSignedInFetchWithVoiceError(options: {
+  code: string
+  message: string
+  status?: number
+  requestId?: string
+}) {
+  const fetchMock: FetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = requestUrl(input)
+    const method = init?.method ?? 'GET'
+
+    if (url.includes('/auth/session')) {
+      return Promise.resolve(
+        jsonResponse({
+          signed_in: true,
+          user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
+          timezone: 'UTC',
+          inbox_group_id: 'inbox-1',
+          csrf_token: 'csrf-token'
+        })
+      )
+    }
+
+    if (url.includes('/captures/voice') && method === 'POST') {
+      return Promise.resolve(
+        jsonResponse(
+          {
+            error: {
+              code: options.code,
+              message: options.message
+            },
+            request_id: options.requestId ?? null
+          },
+          {
+            status: options.status ?? 502,
+            headers: options.requestId ? { 'X-Request-ID': options.requestId } : undefined
+          }
+        )
+      )
+    }
+
+    if (url.includes('/captures/pending-tasks')) {
+      return Promise.resolve(jsonResponse([]))
+    }
+
+    if (url.includes('/extracted-tasks')) {
+      return Promise.resolve(jsonResponse([]))
+    }
+
+    if (url.includes('/groups')) {
+      return Promise.resolve(jsonResponse([]))
     }
 
     return Promise.resolve(jsonResponse({}))
@@ -232,7 +292,9 @@ describe('capture route', () => {
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
-        getUserMedia: vi.fn().mockRejectedValue(new Error('denied'))
+        getUserMedia: vi
+          .fn()
+          .mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
       }
     })
 
@@ -266,21 +328,147 @@ describe('capture route', () => {
   })
 
   it('handles voice transcription error gracefully', async () => {
-    stubSignedInFetch()
+    stubSignedInFetchWithVoiceError({
+      code: 'transcription_timeout',
+      message: 'provider timed out',
+      requestId: 'req-timeout-1'
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
 
     renderCaptureRoute()
+    const user = userEvent.setup()
 
-    // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+    await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
+
+    expect(
+      await screen.findByText(
+        'Transcription timed out. Check your connection and retry the same recording.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText('Support ID: req-timeout-1')).toBeInTheDocument()
+  })
+
+  it('shows non-transcription API errors without a retry prompt', async () => {
+    const fetchMock = stubSignedInFetch({ csrfToken: null })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+    await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
+
+    expect(await screen.findByText('Your session is missing a CSRF token.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry Same Recording' })).not.toBeInTheDocument()
+    const fetchCalls = fetchMock.mock.calls as Array<[RequestInfo | URL, RequestInit | undefined]>
+    expect(
+      fetchCalls.some(([input, init]) => {
+        const method = init?.method ?? 'GET'
+        return requestUrl(input).includes('/captures/voice') && method === 'POST'
+      })
+    ).toBe(false)
   })
 
   it('shows error when retrying transcription fails', async () => {
-    stubSignedInFetch()
+    stubSignedInFetchWithVoiceError({
+      code: 'transcription_no_speech',
+      message: 'no speech found',
+      status: 422
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
 
     renderCaptureRoute()
+    const user = userEvent.setup()
 
-    // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+    await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
+
+    expect(
+      await screen.findByText(
+        'No speech was detected. Check that your microphone is picking up audio, then retry.'
+      )
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Retry Same Recording' }))
+    expect(
+      await screen.findByText(
+        'No speech was detected. Check that your microphone is picking up audio, then retry.'
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('surfaces no-microphone errors with actionable guidance', async () => {
+    stubSignedInFetch()
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi
+          .fn()
+          .mockRejectedValue(new DOMException('missing mic', 'NotFoundError'))
+      }
+    })
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+
+    expect(
+      await screen.findByText('No microphone was found. Connect a mic and try again, or use text capture.')
+    ).toBeInTheDocument()
+  })
+
+  it('shows explicit error when the recording blob is empty', async () => {
+    class EmptyMediaRecorderMock extends MediaRecorderMock {
+      stop() {
+        this.state = 'inactive'
+        this.ondataavailable?.({ data: new Blob([], { type: this.mimeType }) })
+        this.onstop?.()
+      }
+    }
+
+    stubSignedInFetch()
+    vi.stubGlobal('MediaRecorder', EmptyMediaRecorderMock)
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+    await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
+
+    expect(
+      await screen.findByText('No audio was captured. Try again or use text capture.')
+    ).toBeInTheDocument()
   })
 
   it('requests a screen wake lock while recording when supported', async () => {

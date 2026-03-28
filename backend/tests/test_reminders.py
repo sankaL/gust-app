@@ -209,9 +209,19 @@ def test_daily_digest_sends_and_tracks_dispatch(client) -> None:
         captures_deleted=0,
     )
     assert len(delivery.requests) == 1
-    assert "Due today" in delivery.requests[0]["text_body"]
-    assert "Overdue" in delivery.requests[0]["text_body"]
-    assert "weekly (Sunday)" in delivery.requests[0]["text_body"]
+    request = delivery.requests[0]
+    assert "Gust Daily Brief" in request["text_body"]
+    assert "Due today" in request["text_body"]
+    assert "Overdue" in request["text_body"]
+    assert "weekly (Sunday)" in request["text_body"]
+    assert 'data-section="due-today"' in request["html_body"]
+    assert 'data-section="overdue-open"' in request["html_body"]
+    assert 'data-group-card="true"' in request["html_body"]
+    assert 'data-task-row="true"' in request["html_body"]
+    assert 'data-lucide="calendar"' in request["html_body"]
+    assert 'data-lucide="triangle-alert"' in request["html_body"]
+    assert 'data-user-row="true"' in request["html_body"]
+    assert "img.icons8.com" not in request["html_body"]
     assert len(dispatch_rows) == 1
     assert dispatch_rows[0].status == "sent"
     assert dispatch_rows[0].provider_message_id == "provider-msg-123"
@@ -238,6 +248,9 @@ def test_daily_digest_sends_when_only_undated_tasks_are_open(client) -> None:
     assert "https://gustapp.ca/icons/icon-192.png" in request["html_body"]
     assert "https://gustapp.ca/tasks" in request["html_body"]
     assert "Gust on the web" in request["html_body"]
+    assert 'data-flat-pending-list="true"' in request["html_body"]
+    assert 'data-lucide="inbox"' in request["html_body"]
+    assert 'font-size:12px;line-height:17px;' in request["html_body"]
 
 
 def test_daily_digest_skips_empty_and_tracks_status(client) -> None:
@@ -296,7 +309,8 @@ def test_daily_digest_includes_undated_section_without_metadata_and_limits_to_fi
     assert "group:" not in undated_section
     assert "due:" not in undated_section
     assert "recurrence:" not in undated_section
-    assert request["html_body"].count("<li") >= 6
+    assert 'data-flat-pending-list="true"' in request["html_body"]
+    assert request["html_body"].count('data-task-row="true"') >= 1
 
 
 def test_weekly_digest_sends_completed_and_due_uncompleted_sections(client) -> None:
@@ -336,11 +350,21 @@ def test_weekly_digest_sends_completed_and_due_uncompleted_sections(client) -> N
     assert summary.skipped_empty == 0
     assert summary.failed == 0
     assert len(delivery.requests) == 1
-    text_body = delivery.requests[0]["text_body"]
+    request = delivery.requests[0]
+    text_body = request["text_body"]
+    html_body = request["html_body"]
+    assert "Gust Weekly Summary" in text_body
     assert "Completed this week" in text_body
     assert "Due this week and not completed" in text_body
     assert "completed:" in text_body
     assert "monthly (day" in text_body
+    assert 'data-section="completed-weekly"' in html_body
+    assert 'data-section="due-uncompleted-weekly"' in html_body
+    assert 'data-group-card="true"' in html_body
+    assert 'data-task-row="true"' in html_body
+    assert 'data-lucide="circle-check"' in html_body
+    assert 'data-lucide="calendar"' in html_body
+    assert "img.icons8.com" not in html_body
     assert len(dispatch_rows) == 1
     assert dispatch_rows[0].status == "sent"
 

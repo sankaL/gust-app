@@ -112,16 +112,16 @@ export function ExtractedTaskCard({
           </div>
         ) : null}
 
-        <div className="flex items-end justify-between gap-3 flex-wrap">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[0.68rem] uppercase tracking-[0.14em]">
-            <span className="truncate font-medium text-on-surface-variant/85">
+        <div className="flex items-end justify-between gap-3">
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden text-[0.62rem] uppercase tracking-[0.12em] sm:text-[0.64rem]">
+            <span className="min-w-0 max-w-[44%] shrink truncate font-medium text-on-surface-variant/85">
               {task.group_name || 'Inbox'}
             </span>
-            <span className={`${getDueDateColor(task.due_date)} font-bold`}>
+            <span className={`shrink-0 ${getDueDateColor(task.due_date)} font-bold`}>
               Due: {task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString() : '--'}
             </span>
             <span
-              className={`rounded-pill px-2 py-0.5 font-body tracking-[0.16em] ${
+              className={`shrink-0 rounded-pill px-2 py-0.5 font-body tracking-[0.16em] ${
                 task.recurrence_frequency && task.recurrence_frequency !== 'none'
                   ? 'bg-[radial-gradient(circle_at_top,_#a855f7_8%,_#7e22ce_55%,_#581c87_100%)] text-white shadow-[0_3px_10px_rgba(126,34,206,0.28),_inset_0_1px_1px_rgba(255,255,255,0.14)]'
                   : 'bg-surface-dim text-on-surface-variant/75 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]'

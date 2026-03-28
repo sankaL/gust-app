@@ -138,6 +138,72 @@ class TranscriptionFailedError(ApiError):
         )
 
 
+class TranscriptionNoSpeechError(ApiError):
+    def __init__(
+        self,
+        message: str = (
+            "No speech was detected. Check your microphone and try again, "
+            "or use text capture."
+        ),
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="transcription_no_speech",
+            message=message,
+        )
+
+
+class TranscriptionTimeoutError(ApiError):
+    def __init__(
+        self,
+        message: str = "Transcription timed out. Check your network and retry.",
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="transcription_timeout",
+            message=message,
+        )
+
+
+class TranscriptionProviderUnavailableError(ApiError):
+    def __init__(
+        self,
+        message: str = "Transcription service is temporarily unavailable. Please retry.",
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="transcription_provider_unavailable",
+            message=message,
+        )
+
+
+class TranscriptionProviderRejectedError(ApiError):
+    def __init__(
+        self,
+        message: str = (
+            "The recording could not be transcribed. Retry with clearer audio "
+            "or use text capture."
+        ),
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="transcription_provider_rejected",
+            message=message,
+        )
+
+
+class TranscriptionProviderInvalidResponseError(ApiError):
+    def __init__(
+        self,
+        message: str = "Transcription service returned an invalid response. Please retry.",
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="transcription_provider_invalid_response",
+            message=message,
+        )
+
+
 class ExtractionFailedError(ApiError):
     def __init__(
         self,

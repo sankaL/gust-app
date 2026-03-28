@@ -32,6 +32,12 @@ INTERNAL_JOB_SECRET_HEADER = "X-Internal-Job-Secret"
 DIGEST_TIMEZONE = ZoneInfo("America/New_York")
 UNDATED_DIGEST_TASK_LIMIT = 5
 DIGEST_LOGO_PATH = "/icons/icon-192.png"
+COLOR_RED = "#F54927"
+COLOR_ORANGE = "#F5B027"
+COLOR_YELLOW = "#FDC745"
+COLOR_GREEN = "#4F7942"
+COLOR_BLUE = "#4682B4"
+COLOR_PURPLE = "#A684FF"
 
 DigestMode = Literal["daily", "weekly"]
 DigestDispatchStatus = Literal["sent", "failed", "skipped_empty"]
@@ -422,7 +428,7 @@ class ReminderWorkerService:
         undated_open: list[DigestTaskRecord],
     ) -> str:
         lines = [
-            "Gust daily brief",
+            "Gust Daily Brief",
             f"Date (Eastern): {period.start_date.isoformat()}",
             f"User: {user.email}",
             "",
@@ -453,7 +459,7 @@ class ReminderWorkerService:
         undated_open: list[DigestTaskRecord],
     ) -> str:
         lines = [
-            "Gust weekly summary",
+            "Gust Weekly Summary",
             (f"Week (Eastern): {period.start_date.isoformat()} to {period.end_date.isoformat()}"),
             f"User: {user.email}",
             "",
@@ -485,21 +491,29 @@ class ReminderWorkerService:
     ) -> str:
         sections = [
             self._build_html_section(
+                section_id="due-today",
                 title="Due today",
                 body=self._format_task_html_list(due_today, include_completed_at=False),
+                icon=self._icon_calendar(color=COLOR_BLUE),
+                accent_color="#EAF3FA",
             ),
             self._build_html_section(
+                section_id="overdue-open",
                 title="Overdue (still open)",
                 body=self._format_task_html_list(overdue, include_completed_at=False),
+                icon=self._icon_alert_triangle(color=COLOR_RED),
+                accent_color="#FFECE8",
             ),
             self._build_html_section(
+                section_id="pending-undated",
                 title="Pending without a due date",
                 body=self._format_task_title_only_html_list(undated_open),
-                subtle=True,
+                icon=self._icon_inbox(color=COLOR_ORANGE),
+                accent_color="#FFF7E7",
             ),
         ]
         return self._build_html_email(
-            heading="Gust daily brief",
+            heading="Gust Daily Brief",
             subheading=f"Date (Eastern): {period.start_date.isoformat()}",
             user=user,
             sections=sections,
@@ -516,21 +530,29 @@ class ReminderWorkerService:
     ) -> str:
         sections = [
             self._build_html_section(
+                section_id="completed-weekly",
                 title="Completed this week",
                 body=self._format_task_html_list(completed, include_completed_at=True),
+                icon=self._icon_check_circle(color=COLOR_GREEN),
+                accent_color="#ECF4E9",
             ),
             self._build_html_section(
+                section_id="due-uncompleted-weekly",
                 title="Due this week and not completed",
                 body=self._format_task_html_list(due_uncompleted, include_completed_at=False),
+                icon=self._icon_calendar(color=COLOR_BLUE),
+                accent_color="#EAF3FA",
             ),
             self._build_html_section(
+                section_id="pending-undated-weekly",
                 title="Pending without a due date",
                 body=self._format_task_title_only_html_list(undated_open),
-                subtle=True,
+                icon=self._icon_inbox(color=COLOR_ORANGE),
+                accent_color="#FFF7E7",
             ),
         ]
         return self._build_html_email(
-            heading="Gust weekly summary",
+            heading="Gust Weekly Summary",
             subheading=(
                 "Week (Eastern): "
                 f"{period.start_date.isoformat()} to {period.end_date.isoformat()}"
@@ -550,12 +572,21 @@ class ReminderWorkerService:
         home_url = self._frontend_home_url()
         tasks_url = self._frontend_tasks_url()
         logo_url = self._frontend_logo_url()
+        user_icon = self._icon_user(color="#FFFFFF")
+        body_left_indent_px = 0
+        subheading_html = html.escape(subheading)
+        if ": " in subheading:
+            label, detail = subheading.split(": ", 1)
+            subheading_html = (
+                f"{html.escape(label)}: "
+                f'<span style="color:{COLOR_PURPLE};font-weight:700;">{html.escape(detail)}</span>'
+            )
 
         brand_open = (
             f'<a href="{html.escape(home_url)}" '
-            'style="text-decoration:none;color:#f5f5f5;">'
+            'style="text-decoration:none;color:#111827;">'
             if home_url
-            else '<span style="color:#f5f5f5;">'
+            else '<span style="color:#111827;">'
         )
         brand_close = "</a>" if home_url else "</span>"
         logo_html = ""
@@ -569,11 +600,13 @@ class ReminderWorkerService:
         cta_html = ""
         if tasks_url:
             cta_html = (
-                '<tr><td style="padding:0 24px 24px 24px;">'
+                f'<tr><td style="padding:0 0 20px {body_left_indent_px}px;">'
                 f'<a href="{html.escape(tasks_url)}" '
-                'style="display:inline-block;background:#ba9eff;color:#140f26;'
-                'text-decoration:none;font-weight:700;font-size:14px;line-height:14px;'
-                'padding:14px 18px;border-radius:999px;">Open Gust</a>'
+                'style="display:inline-block;background:#A684FF;'
+                'background-image:radial-gradient(circle at top, rgba(186,158,255,0.92), '
+                'rgba(132,85,239,0.82));color:#ffffff;text-decoration:none;font-weight:700;'
+                'font-size:14px;line-height:14px;padding:12px 16px;border-radius:12px;">'
+                "Open Gust</a>"
                 "</td></tr>"
             )
 
@@ -581,10 +614,10 @@ class ReminderWorkerService:
         if home_url:
             escaped_home = html.escape(home_url)
             footer_html = (
-                '<tr><td style="padding:0 24px 24px 24px;color:#a8a1bc;'
+                f'<tr><td style="padding:0 0 20px {body_left_indent_px}px;color:#6b7280;'
                 'font-size:12px;line-height:18px;">'
                 f'Gust on the web: <a href="{escaped_home}" '
-                'style="color:#d5c8ff;text-decoration:none;">'
+                f'style="color:{COLOR_PURPLE};text-decoration:none;">'
                 f"{escaped_home}</a>"
                 "</td></tr>"
             )
@@ -592,28 +625,29 @@ class ReminderWorkerService:
         return "".join(
             [
                 "<!doctype html>",
-                '<html><body style="margin:0;padding:0;background:#111111;">',
+                '<html><body style="margin:0;padding:0;background:#ffffff;">',
                 '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ',
-                'style="background:#111111;margin:0;padding:24px 12px;font-family:Arial,Helvetica,',
+                'style="background:#ffffff;margin:0;padding:20px 16px;font-family:Arial,Helvetica,',
                 'sans-serif;">',
-                '<tr><td align="center">',
-                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ',
-                'style="max-width:600px;background:#17171b;border-radius:24px;">',
-                '<tr><td style="padding:24px 24px 8px 24px;">',
-                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>',
-                f'<td style="vertical-align:middle;width:56px;">{brand_open}{logo_html}'
-                f"{brand_close}</td>",
-                '<td style="vertical-align:middle;">',
+                "<tr><td>",
+                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">',
+                '<tr><td style="padding:0 0 4px 0;">',
+                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+                '<td style="width:52px;vertical-align:middle;padding-right:10px;">',
+                f'{brand_open}{logo_html}{brand_close}',
+                "</td><td style=\"vertical-align:middle;\">",
                 f'{brand_open}<div style="font-size:22px;line-height:28px;font-weight:700;">',
                 f"{html.escape(heading)}</div>",
-                '<div style="font-size:13px;line-height:20px;color:#c9c1de;margin-top:4px;">',
-                f"{html.escape(subheading)}</div>{brand_close}",
+                '<div style="font-size:13px;line-height:20px;color:#4b5563;margin-top:4px;">',
+                f"{subheading_html}</div>{brand_close}",
                 "</td></tr></table></td></tr>",
-                '<tr><td style="padding:0 24px 12px 24px;color:#a8a1bc;',
-                'font-size:13px;line-height:20px;">',
-                f"User: {html.escape(user.email)}",
-                "</td></tr>",
-                '<tr><td style="padding:0 24px 24px 24px;">',
+                f'<tr><td style="padding:0 0 12px {body_left_indent_px}px;">',
+                '<table role="presentation" cellpadding="0" cellspacing="0" '
+                'style="background:#111111;border-radius:10px;" data-user-row="true"><tr><td '
+                'style="padding:8px 10px;color:#ffffff;font-size:13px;line-height:18px;">',
+                f"{user_icon} <strong>User:</strong> {html.escape(user.email)}",
+                "</td></tr></table></td></tr>",
+                f'<tr><td style="padding:0 0 0 {body_left_indent_px}px;">',
                 "".join(sections),
                 "</td></tr>",
                 cta_html,
@@ -622,16 +656,25 @@ class ReminderWorkerService:
             ]
         )
 
-    def _build_html_section(self, *, title: str, body: str, subtle: bool = False) -> str:
-        background = "#141418" if subtle else "#1f1f25"
-        heading_color = "#c9c1de" if subtle else "#ffffff"
-        heading_size = "14px" if subtle else "16px"
+    def _build_html_section(
+        self,
+        *,
+        section_id: str,
+        title: str,
+        body: str,
+        icon: str,
+        accent_color: str,
+    ) -> str:
         return (
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-            f'style="background:{background};border-radius:16px;margin:0 0 14px 0;">'
-            "<tr><td style=\"padding:14px 16px;\">"
-            f'<div style="font-size:{heading_size};line-height:20px;font-weight:700;'
-            f'color:{heading_color};margin-bottom:8px;">{html.escape(title)}</div>'
+            f'style="background:#ffffff;border-radius:14px;margin:0 0 12px 0;" '
+            f'data-section="{html.escape(section_id)}">'
+            "<tr><td style=\"padding:10px 0;\">"
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+            f'<td style="background:{html.escape(accent_color)};border-radius:10px;'
+            'font-size:15px;line-height:20px;font-weight:700;color:#1f2937;padding:8px 10px;">'
+            f'{icon} {html.escape(title)}</td></tr></table>'
+            '<div style="height:8px;line-height:8px;">&nbsp;</div>'
             f"{body}"
             "</td></tr></table>"
         )
@@ -670,37 +713,161 @@ class ReminderWorkerService:
         include_completed_at: bool,
     ) -> str:
         if not tasks:
-            return '<p style="margin:0;color:#a8a1bc;font-size:14px;line-height:20px;">None</p>'
+            return '<p style="margin:0;color:#6b7280;font-size:13px;line-height:18px;">None</p>'
 
-        items: list[str] = []
+        grouped_tasks: dict[str, list[DigestTaskRecord]] = {}
         for task in tasks:
-            detail_parts = [
-                f"group: {html.escape(task.group_name)}",
-                f"due: {task.due_date.isoformat() if task.due_date else 'none'}",
-                f"recurrence: {html.escape(self._format_recurrence(task))}",
-            ]
-            if include_completed_at and task.completed_at is not None:
-                completed_local = task.completed_at.astimezone(DIGEST_TIMEZONE)
-                detail_parts.append(f"completed: {completed_local.strftime('%Y-%m-%d %H:%M %Z')}")
-            escaped_title = html.escape(task.title)
-            items.append(
-                "<li style=\"margin:0 0 8px 18px;color:#f5f5f5;font-size:14px;line-height:20px;\">"
-                f"<strong>{escaped_title}</strong> "
-                f'<span style="color:#c9c1de;">({"; ".join(detail_parts)})</span>'
-                "</li>"
+            group_label = self._task_group_label(task)
+            grouped_tasks.setdefault(group_label, []).append(task)
+
+        cards: list[str] = []
+        for group_label in sorted(grouped_tasks, key=str.casefold):
+            task_rows = "".join(
+                self._build_group_task_row(task, include_completed_at=include_completed_at)
+                for task in sorted(grouped_tasks[group_label], key=self._task_sort_key)
             )
-        return f'<ul style="margin:0;padding:0;">{"".join(items)}</ul>'
+            cards.append(
+                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+                'style="background:#f8fafc;border-radius:12px;'
+                'margin:0 0 10px 0;" data-group-card="true"><tr><td style="padding:10px 10px;">'
+                f'<div style="font-size:12px;line-height:16px;font-weight:700;'
+                f'letter-spacing:0.02em;text-transform:uppercase;color:{COLOR_PURPLE};'
+                'margin-bottom:8px;">'
+                f"{html.escape(group_label)}</div>"
+                f"{task_rows}"
+                "</td></tr></table>"
+            )
+        return "".join(cards)
 
     def _format_task_title_only_html_list(self, tasks: list[DigestTaskRecord]) -> str:
         if not tasks:
-            return '<p style="margin:0;color:#8e88a2;font-size:13px;line-height:18px;">None</p>'
+            return '<p style="margin:0;color:#6b7280;font-size:12px;line-height:17px;">None</p>'
 
         items = [
-            "<li style=\"margin:0 0 6px 18px;color:#d8d3e8;font-size:13px;line-height:18px;\">"
+            "<li style=\"margin:0 0 4px 16px;color:#4b5563;font-size:12px;line-height:17px;\">"
             f"{html.escape(task.title)}</li>"
             for task in tasks
         ]
-        return f'<ul style="margin:0;padding:0;">{"".join(items)}</ul>'
+        return (
+            '<ul style="margin:0;padding:0;" data-flat-pending-list="true">'
+            f'{"".join(items)}</ul>'
+        )
+
+    def _build_group_task_row(self, task: DigestTaskRecord, *, include_completed_at: bool) -> str:
+        recurrence = self._format_recurrence(task)
+        chips = [
+            self._build_metadata_chip(
+                label=f"Due: {task.due_date.isoformat() if task.due_date else 'none'}",
+                background="#EAF3FA",
+                color=COLOR_BLUE,
+            ),
+            self._build_metadata_chip(
+                label=f"Group: {self._task_group_label(task)}",
+                background="#F2EDFF",
+                color=COLOR_PURPLE,
+            ),
+            self._build_metadata_chip(
+                label=f"Recurrence: {recurrence}",
+                background="#FFF7E7",
+                color=COLOR_ORANGE,
+            ),
+        ]
+        if include_completed_at and task.completed_at is not None:
+            completed_local = task.completed_at.astimezone(DIGEST_TIMEZONE)
+            chips.append(
+                self._build_metadata_chip(
+                    label=f"Completed: {completed_local.strftime('%Y-%m-%d %H:%M %Z')}",
+                    background="#ECF4E9",
+                    color=COLOR_GREEN,
+                )
+            )
+
+        return (
+            '<div data-task-row="true" style="padding:8px 0;border-top:1px solid #e5e7eb;">'
+            f'<div style="font-size:14px;line-height:19px;font-weight:700;color:#111827;">'
+            f"{html.escape(task.title)}</div>"
+            '<div style="margin-top:4px;">'
+            f"{''.join(chips)}"
+            "</div></div>"
+        )
+
+    def _build_metadata_chip(self, *, label: str, background: str, color: str) -> str:
+        return (
+            f'<span style="display:inline-block;background:{background};color:{color};'
+            'border-radius:999px;padding:2px 8px;margin:0 6px 6px 0;font-size:11px;'
+            f'line-height:15px;font-weight:600;">{html.escape(label)}</span>'
+        )
+
+    def _task_sort_key(self, task: DigestTaskRecord) -> tuple[date, str]:
+        due_sort = task.due_date if task.due_date is not None else date.max
+        return (due_sort, task.title.casefold())
+
+    def _task_group_label(self, task: DigestTaskRecord) -> str:
+        group_name = task.group_name.strip() if task.group_name else ""
+        return group_name if group_name else "Other"
+
+    def _icon_calendar(self, *, color: str) -> str:
+        return self._icon_svg(name="calendar", color=color, data_lucide="calendar")
+
+    def _icon_alert_triangle(self, *, color: str) -> str:
+        return self._icon_svg(
+            name="triangle-alert",
+            color=color,
+            data_lucide="triangle-alert",
+        )
+
+    def _icon_inbox(self, *, color: str) -> str:
+        return self._icon_svg(name="inbox", color=color, data_lucide="inbox")
+
+    def _icon_user(self, *, color: str) -> str:
+        return self._icon_svg(name="user", color=color, data_lucide="user")
+
+    def _icon_check_circle(self, *, color: str) -> str:
+        return self._icon_svg(
+            name="circle-check",
+            color=color,
+            data_lucide="circle-check",
+        )
+
+    def _icon_svg(self, *, name: str, color: str, data_lucide: str) -> str:
+        color_hex = color if color.startswith("#") else f"#{color}"
+        stroke_color = html.escape(color_hex)
+        glyph_by_name = {
+            "calendar": (
+                '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>'
+                '<line x1="16" y1="2" x2="16" y2="6"></line>'
+                '<line x1="8" y1="2" x2="8" y2="6"></line>'
+                '<line x1="3" y1="10" x2="21" y2="10"></line>'
+            ),
+            "triangle-alert": (
+                '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 '
+                '3.86a2 2 0 0 0-3.42 0Z"></path>'
+                '<line x1="12" y1="9" x2="12" y2="13"></line>'
+                '<line x1="12" y1="17" x2="12.01" y2="17"></line>'
+            ),
+            "inbox": (
+                '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>'
+                '<path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89'
+                'A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>'
+            ),
+            "user": (
+                '<path d="M20 21a8 8 0 0 0-16 0"></path>'
+                '<circle cx="12" cy="7" r="4"></circle>'
+            ),
+            "circle-check": (
+                '<circle cx="12" cy="12" r="10"></circle>'
+                '<path d="m9 12 2 2 4-4"></path>'
+            ),
+        }
+        glyph = glyph_by_name.get(name, '<circle cx="12" cy="12" r="9"></circle>')
+        return (
+            f'<span data-lucide="{html.escape(data_lucide)}" '
+            'style="display:inline-block;vertical-align:-2px;margin-right:6px;line-height:0;">'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" '
+            f'fill="none" stroke="{stroke_color}" stroke-width="2" stroke-linecap="round" '
+            f'stroke-linejoin="round" aria-hidden="true">{glyph}</svg>'
+            "</span>"
+        )
 
     def _frontend_home_url(self) -> str | None:
         if not self.settings.frontend_app_url:
