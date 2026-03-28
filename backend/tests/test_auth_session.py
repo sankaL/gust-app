@@ -144,6 +144,13 @@ def _allow_email(client: TestClient, email: str) -> None:
             connection.execute(allowed_users.insert().values(email=normalized_email))
 
 
+def _disallow_email(client: TestClient, email: str) -> None:
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            allowed_users.delete().where(allowed_users.c.email == email.strip().lower())
+        )
+
+
 def test_get_session_returns_signed_out_without_cookies(client: TestClient) -> None:
     response = client.get("/auth/session", headers={"Origin": "http://frontend.test"})
 
@@ -416,6 +423,7 @@ def test_refresh_token_restores_session_when_access_cookie_has_expired(
 
 def test_callback_redirects_blocked_email_to_login(app: FastAPI, client: TestClient) -> None:
     _override_auth_service(app, FakeAuthService())
+    _disallow_email(client, "user@example.com")
     client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
 
     response = client.get("/auth/session/callback?code=valid-code")
@@ -434,6 +442,7 @@ def test_session_refresh_rejects_existing_user_when_email_is_not_allowlisted(
     client: TestClient,
 ) -> None:
     _override_auth_service(app, FakeAuthService())
+    _disallow_email(client, "user@example.com")
     client.cookies.set(ACCESS_TOKEN_COOKIE, "expired-token")
     client.cookies.set(REFRESH_TOKEN_COOKIE, "refresh-token")
 
