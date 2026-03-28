@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-28 07:24:15 EDT
+
+- Enabled and forced Postgres row-level security on all user-owned Gust tables, but kept explicit backend `user_id` filters as the primary correctness path instead of shifting authorization entirely into policies.
+- Standardized backend transaction actor context on `app.current_user_id` for authenticated API work and `app.internal_job = true` for digest/cleanup jobs so direct Postgres access remains compatible with RLS.
+- Added an explicit production verification rule that the runtime `DATABASE_URL` role must not have `BYPASSRLS`; privileged/admin database access is reserved for migrations and other intentionally trusted maintenance work.
+
 ## 2026-03-27 20:05:00 EDT
 
 - Standardized transient user-action feedback on a shared bottom-stacked notification system mounted above routing so notices survive navigation and always render above floating controls like the Tasks FAB.

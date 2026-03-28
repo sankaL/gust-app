@@ -1,7 +1,7 @@
 # Tech Stack: Gust
 
-**Version:** 2.0  
-**Last Updated:** 2026-03-27  
+**Version:** 2.1  
+**Last Updated:** 2026-03-28  
 **Domain:** gustapp.ca
 
 ## Purpose
@@ -195,9 +195,12 @@ Correctness rules:
 - every query is parameterized
 - every task/group/capture query is explicitly scoped by `user_id`
 - backend authorization must not rely on implicit RLS behavior
-- if RLS is enabled on tables, treat it as defense in depth, not as the only guard
+- Postgres runtime connections for authenticated API work set `app.current_user_id` per transaction
+- Postgres runtime connections for digest/cleanup work set `app.internal_job = true` per transaction
+- RLS is enabled on user-owned tables as defense in depth, not as the only guard
+- the runtime application role must not have `BYPASSRLS`
 
-This is deliberate because Supabase service access can bypass RLS, and relying on undocumented request-context magic would make the system brittle.
+This is deliberate because Supabase service access can bypass RLS, and relying on undocumented request-context magic would make the system brittle. The backend remains responsible for explicit user scoping, while Postgres policies deny access when the transaction actor context does not match.
 
 ### ORM Strategy
 

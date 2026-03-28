@@ -1,7 +1,7 @@
 # Gust Database Schema
 
-**Version:** 1.4
-**Last Updated:** 2026-03-27
+**Version:** 1.5
+**Last Updated:** 2026-03-28
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
 
@@ -13,6 +13,7 @@ The schema is designed to support:
 - idempotent digest delivery
 - bounded capture retention
 - backend-owned correctness independent of implicit RLS behavior
+- Postgres RLS as defense in depth on user-owned tables
 
 ## Global Rules
 
@@ -25,6 +26,29 @@ The schema is designed to support:
 - Active digest delivery state is normalized into a dedicated `digest_dispatches` table.
 - Legacy per-task reminder rows are preserved for compatibility but are no longer the active email-send source.
 - Group names must be unique per user.
+
+## Postgres Row-Level Security
+
+Hosted and local Postgres deployments must enable and force row-level security on:
+
+- `users`
+- `groups`
+- `captures`
+- `tasks`
+- `subtasks`
+- `reminders`
+- `extracted_tasks`
+- `digest_dispatches`
+
+Policy contract:
+
+- authenticated request transactions set `app.current_user_id` to the authenticated Supabase user UUID
+- internal digest/cleanup job transactions set `app.internal_job = true`
+- `users` rows are readable/writable only when `users.id = app.current_user_id`
+- all other user-owned rows are readable/writable only when `user_id = app.current_user_id`
+- internal jobs may bypass per-user matching only through the explicit `app.internal_job = true` policy path
+
+Application correctness must still keep explicit `user_id` filters in backend queries. RLS is defense in depth, not the only authorization boundary.
 
 ## Enumerations
 

@@ -8,7 +8,7 @@ import sqlalchemy as sa
 
 from app.core.errors import ConflictError, GroupNotFoundError, InvalidGroupError
 from app.core.settings import Settings
-from app.db.engine import connection_scope
+from app.db.engine import user_connection_scope
 from app.db.repositories import (
     GroupRecord,
     GroupSummaryRecord,
@@ -33,7 +33,7 @@ class GroupService:
         self.task_service = task_service
 
     def list_groups(self, *, user_id: str) -> list[GroupSummaryRecord]:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             return list_groups_with_counts(connection, user_id=user_id)
 
     def create_group(
@@ -51,7 +51,7 @@ class GroupService:
         if normalized_description == "":
             normalized_description = None
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             try:
                 return create_group(
                     connection,
@@ -69,7 +69,7 @@ class GroupService:
         group_id: str,
         payload: GroupUpdateInput,
     ) -> GroupRecord:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             existing = get_group(connection, user_id=user_id, group_id=group_id)
             if existing is None:
                 raise GroupNotFoundError()
@@ -111,7 +111,7 @@ class GroupService:
         if destination_group_id == group_id:
             raise InvalidGroupError("Destination group must be different from the deleted group.")
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             source = get_group(connection, user_id=user_id, group_id=group_id)
             if source is None:
                 raise GroupNotFoundError()

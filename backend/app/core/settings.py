@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     )
     database_url: str = Field(validation_alias=AliasChoices("DATABASE_URL"))
     required_alembic_revision: str = Field(
-        default="0009_task_descriptions",
+        default="0010_enable_postgres_rls",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(

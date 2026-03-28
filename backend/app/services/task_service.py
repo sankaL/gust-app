@@ -18,7 +18,7 @@ from app.core.errors import (
     TaskNotFoundError,
 )
 from app.core.settings import Settings
-from app.db.engine import connection_scope
+from app.db.engine import user_connection_scope
 from app.db.repositories import (
     GroupRecord,
     SubtaskRecord,
@@ -107,7 +107,7 @@ class TaskService:
         limit: int = 50,
         cursor: str | None = None,
     ) -> PaginatedTaskList:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             # Validate group exists if group_id is provided (skip validation for 'all')
             if group_id is not None and group_id != "all":
                 group = get_group(connection, user_id=user_id, group_id=group_id)
@@ -143,7 +143,7 @@ class TaskService:
         return PaginatedTaskList(items=items, has_more=has_more, next_cursor=next_cursor)
 
     def get_task_detail(self, *, user_id: str, task_id: str) -> TaskDetail:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()
@@ -160,7 +160,7 @@ class TaskService:
         user_timezone: str,
         payload: TaskCreateInput,
     ) -> TaskDetail:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             destination_group = get_group(connection, user_id=user_id, group_id=payload.group_id)
             if destination_group is None:
                 raise GroupNotFoundError("Destination group could not be found.")
@@ -211,7 +211,7 @@ class TaskService:
         task_id: str,
         payload: TaskUpdateInput,
     ) -> TaskDetail:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             existing = get_task(connection, user_id=user_id, task_id=task_id)
             if existing is None:
                 raise TaskNotFoundError()
@@ -263,7 +263,7 @@ class TaskService:
         return TaskDetail(task=updated, group=group, subtasks=task_subtasks)
 
     def complete_task(self, *, user_id: str, user_timezone: str, task_id: str) -> TaskDetail:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None or task.deleted_at is not None:
                 raise TaskNotFoundError()
@@ -309,7 +309,7 @@ class TaskService:
         return TaskDetail(task=updated, group=group, subtasks=task_subtasks)
 
     def reopen_task(self, *, user_id: str, user_timezone: str, task_id: str) -> TaskDetail:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None or task.deleted_at is not None:
                 raise TaskNotFoundError()
@@ -359,7 +359,7 @@ class TaskService:
         task_id: str,
         scope: str = "occurrence",
     ) -> TaskDetail:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()
@@ -432,7 +432,7 @@ class TaskService:
         user_timezone: str,
         task_id: str,
     ) -> TaskDetail:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()
@@ -478,7 +478,7 @@ class TaskService:
         if not normalized_title:
             raise InvalidSubtaskError("Subtask title cannot be blank.")
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()
@@ -501,7 +501,7 @@ class TaskService:
         if title is None and is_completed is None:
             raise InvalidSubtaskError("At least one subtask field must be provided.")
 
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()
@@ -536,7 +536,7 @@ class TaskService:
             return updated
 
     def delete_subtask(self, *, user_id: str, task_id: str, subtask_id: str) -> None:
-        with connection_scope(self.settings.database_url) as connection:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
             if task is None:
                 raise TaskNotFoundError()

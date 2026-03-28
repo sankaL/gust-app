@@ -31,7 +31,7 @@ from app.core.security import (
     set_session_cookies,
 )
 from app.core.settings import Settings, get_settings
-from app.db.engine import connection_scope
+from app.db.engine import user_connection_scope
 from app.db.repositories import (
     SessionContext,
     ensure_inbox_group,
@@ -122,7 +122,10 @@ async def auth_callback(
         raise CsrfValidationError("OAuth PKCE verifier was missing or expired.")
 
     session = await auth_service.exchange_code_for_session(code=code, code_verifier=code_verifier)
-    with connection_scope(settings.database_url) as connection:
+    with user_connection_scope(
+        settings.database_url,
+        user_id=session.identity.user_id,
+    ) as connection:
         _bootstrap_user_session(connection, session)
         session_context = get_session_context(connection, session.identity.user_id)
 
@@ -159,7 +162,10 @@ async def local_dev_login(
             password=LOCAL_DEV_AUTH_PASSWORD,
         )
 
-    with connection_scope(settings.database_url) as connection:
+    with user_connection_scope(
+        settings.database_url,
+        user_id=session.identity.user_id,
+    ) as connection:
         _bootstrap_user_session(connection, session)
         session_context = get_session_context(connection, session.identity.user_id)
 
@@ -202,7 +208,10 @@ async def update_timezone(
     settings: SettingsDep,
 ) -> SessionStatusResponse:
     _validate_timezone(payload.timezone)
-    with connection_scope(settings.database_url) as connection:
+    with user_connection_scope(
+        settings.database_url,
+        user_id=session_context.user.id,
+    ) as connection:
         user = update_user_timezone(
             connection,
             user_id=session_context.user.id,

@@ -11,7 +11,7 @@ import httpx
 
 from app.core.errors import ConfigurationError
 from app.core.settings import Settings
-from app.db.engine import connection_scope
+from app.db.engine import internal_job_connection_scope
 from app.db.repositories import (
     DigestTaskRecord,
     UserRecord,
@@ -164,7 +164,7 @@ class ReminderWorkerService:
         now_utc = datetime.now(timezone.utc)
         summary = ReminderRunSummary(mode=mode)
 
-        with connection_scope(self.settings.database_url) as connection:
+        with internal_job_connection_scope(self.settings.database_url) as connection:
             summary.captures_deleted = delete_expired_captures(
                 connection,
                 now=now_utc,
@@ -206,7 +206,7 @@ class ReminderWorkerService:
             f"start:{period.start_date.isoformat()}:end:{period.end_date.isoformat()}"
         )
 
-        with connection_scope(self.settings.database_url) as connection:
+        with internal_job_connection_scope(self.settings.database_url) as connection:
             existing = get_digest_dispatch(
                 connection,
                 user_id=user.id,
@@ -218,7 +218,7 @@ class ReminderWorkerService:
             return "already_processed"
 
         if mode == "daily":
-            with connection_scope(self.settings.database_url) as connection:
+            with internal_job_connection_scope(self.settings.database_url) as connection:
                 due_today = list_open_tasks_due_on_date(
                     connection,
                     user_id=user.id,
@@ -267,7 +267,7 @@ class ReminderWorkerService:
             assert period.completed_start_utc is not None
             assert period.completed_end_utc is not None
 
-            with connection_scope(self.settings.database_url) as connection:
+            with internal_job_connection_scope(self.settings.database_url) as connection:
                 completed = list_completed_tasks_between(
                     connection,
                     user_id=user.id,
@@ -380,7 +380,7 @@ class ReminderWorkerService:
         provider_message_id: str | None,
         last_error_code: str | None,
     ) -> None:
-        with connection_scope(self.settings.database_url) as connection:
+        with internal_job_connection_scope(self.settings.database_url) as connection:
             upsert_digest_dispatch(
                 connection,
                 user_id=user.id,
