@@ -375,10 +375,11 @@ describe('capture route', () => {
 
     expect(await screen.findByText('Your session is missing a CSRF token.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Retry Same Recording' })).not.toBeInTheDocument()
+    const fetchCalls = fetchMock.mock.calls as Array<[RequestInfo | URL, RequestInit | undefined]>
     expect(
-      fetchMock.mock.calls.some(([input, init]) => {
+      fetchCalls.some(([input, init]) => {
         const method = init?.method ?? 'GET'
-        return requestUrl(input as RequestInfo | URL).includes('/captures/voice') && method === 'POST'
+        return requestUrl(input).includes('/captures/voice') && method === 'POST'
       })
     ).toBe(false)
   })

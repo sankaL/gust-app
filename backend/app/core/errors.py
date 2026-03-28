@@ -141,7 +141,10 @@ class TranscriptionFailedError(ApiError):
 class TranscriptionNoSpeechError(ApiError):
     def __init__(
         self,
-        message: str = "No speech was detected. Check your microphone and try again, or use text capture.",
+        message: str = (
+            "No speech was detected. Check your microphone and try again, "
+            "or use text capture."
+        ),
     ) -> None:
         super().__init__(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -177,7 +180,10 @@ class TranscriptionProviderUnavailableError(ApiError):
 class TranscriptionProviderRejectedError(ApiError):
     def __init__(
         self,
-        message: str = "The recording could not be transcribed. Retry with clearer audio or use text capture.",
+        message: str = (
+            "The recording could not be transcribed. Retry with clearer audio "
+            "or use text capture."
+        ),
     ) -> None:
         super().__init__(
             status_code=status.HTTP_502_BAD_GATEWAY,

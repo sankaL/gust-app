@@ -327,7 +327,9 @@ def test_voice_capture_marks_capture_failed_on_transcription_error(
     assert capture_row.status == "transcription_failed"
     assert capture_row.error_code == "provider_unavailable"
 
-    failure_logs = [record for record in caplog.records if record.msg == "voice_transcription_failed"]
+    failure_logs = [
+        record for record in caplog.records if record.msg == "voice_transcription_failed"
+    ]
     assert len(failure_logs) == 1
     failure_log = failure_logs[0]
     assert failure_log.request_id == "req-transcription-1"

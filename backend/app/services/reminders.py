@@ -730,8 +730,9 @@ class ReminderWorkerService:
                 '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
                 'style="background:#f8fafc;border-radius:12px;'
                 'margin:0 0 10px 0;" data-group-card="true"><tr><td style="padding:10px 10px;">'
-                f'<div style="font-size:12px;line-height:16px;font-weight:700;letter-spacing:0.02em;'
-                f'text-transform:uppercase;color:{COLOR_PURPLE};margin-bottom:8px;">'
+                f'<div style="font-size:12px;line-height:16px;font-weight:700;'
+                f'letter-spacing:0.02em;text-transform:uppercase;color:{COLOR_PURPLE};'
+                'margin-bottom:8px;">'
                 f"{html.escape(group_label)}</div>"
                 f"{task_rows}"
                 "</td></tr></table>"
