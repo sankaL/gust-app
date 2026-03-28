@@ -454,8 +454,8 @@ export function TaskDetailRoute() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm">
+                <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                  <div className="min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm">
                     <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
                       Due date
                     </p>
@@ -496,14 +496,14 @@ export function TaskDetailRoute() {
                             recurrence: nextRecurrence,
                           })
                         }}
-                        className="mt-3 w-full rounded-card bg-surface-dim px-3 py-3 pr-10 text-[0.88rem] font-medium text-on-surface outline-none focus:bg-surface-container-high sm:text-[0.95rem]"
+                        className="mt-3 block w-full min-w-0 max-w-full rounded-card bg-surface-dim px-3 py-3 pr-10 text-[0.8rem] font-medium text-on-surface outline-none focus:bg-surface-container-high sm:text-[0.9rem]"
                       />
                     ) : (
                       <p className="mt-3 text-base font-medium text-on-surface">{dueLabel}</p>
                     )}
                   </div>
 
-                  <div className="rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm">
+                  <div className="min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm">
                     <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
                       Reminder
                     </p>
@@ -515,7 +515,7 @@ export function TaskDetailRoute() {
                           setDraft({ ...draft, reminderAt: event.target.value })
                         }
                         disabled={!draft.dueDate}
-                        className="mt-3 w-full rounded-card bg-surface-dim px-3 py-3 pr-10 text-[0.82rem] font-medium text-on-surface outline-none focus:bg-surface-container-high disabled:opacity-50 sm:text-[0.9rem]"
+                        className="mt-3 block w-full min-w-0 max-w-full rounded-card bg-surface-dim px-3 py-3 pr-10 text-[0.76rem] font-medium text-on-surface outline-none focus:bg-surface-container-high disabled:opacity-50 sm:text-[0.85rem]"
                       />
                     ) : (
                       <p className="mt-3 text-base font-medium text-on-surface">{reminderLabel}</p>
@@ -524,7 +524,7 @@ export function TaskDetailRoute() {
 
                   <div
                     className={[
-                      'rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm',
+                      'min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm',
                       isGroupDropdownOpen ? 'relative z-40' : '',
                     ].join(' ')}
                   >
@@ -552,7 +552,7 @@ export function TaskDetailRoute() {
                     )}
                   </div>
 
-                  <div className="relative z-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm sm:col-span-2">
+                  <div className="relative z-0 min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm sm:col-span-2">
                     <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
                       Recurrence
                     </p>

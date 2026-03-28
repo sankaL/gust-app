@@ -95,7 +95,7 @@ function GroupTabs({ groups, inboxGroupId, selectedGroupId, onSelectGroup }: Gro
   }, [isDropdownOpen])
 
   // Base styles for pills
-  const basePillClass = 'rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none flex items-center gap-2'
+  const basePillClass = 'rounded-pill px-3 py-1.5 font-body text-xs font-medium transition-all duration-200 active:scale-95 outline-none flex items-center gap-1.5 sm:px-4 sm:py-2 sm:text-sm sm:gap-2'
   
   const activePillClass = 'bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] -translate-y-[1px]'
   
@@ -106,15 +106,15 @@ function GroupTabs({ groups, inboxGroupId, selectedGroupId, onSelectGroup }: Gro
   const dropdownHoverClass = 'hover:bg-surface-container-highest text-on-surface'
 
   return (
-    <div className="flex gap-2 w-full">
+    <div className="flex w-full min-w-0 gap-1.5 sm:gap-2">
       {/* All Tab */}
       <button
         type="button"
         onClick={() => onSelectGroup('all')}
         className={`${basePillClass} ${isAllSelected ? activePillClass : inactivePillClass}`}
       >
-        <LayersIcon />
-        <span>All</span>
+        <LayersIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+        <span className="truncate">All</span>
       </button>
 
       {/* Inbox Tab */}
@@ -124,28 +124,28 @@ function GroupTabs({ groups, inboxGroupId, selectedGroupId, onSelectGroup }: Gro
           onClick={() => onSelectGroup(inboxGroup.id)}
           className={`${basePillClass} ${isInboxSelected ? activePillClass : inactivePillClass}`}
         >
-          <InboxIcon />
-          <span>Inbox</span>
-          <span className="opacity-70">· {inboxGroup.open_task_count}</span>
+          <InboxIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+          <span className="truncate">Inbox</span>
+          <span className="shrink-0 text-[0.68rem] opacity-70 sm:text-xs">· {inboxGroup.open_task_count}</span>
         </button>
       )}
 
       {/* Other Dropdown - Takes 50% width */}
-      <div ref={dropdownRef} className="relative flex-1 max-w-[50%]">
+      <div ref={dropdownRef} className="relative min-w-0 flex-1 max-w-[52%] sm:max-w-[50%]">
         <button
           type="button"
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-          className={`${basePillClass} w-full justify-between ${isOtherGroupSelected ? activePillClass : inactivePillClass}`}
+          className={`${basePillClass} w-full min-w-0 justify-between ${isOtherGroupSelected ? activePillClass : inactivePillClass}`}
         >
           {isOtherGroupSelected ? (
-            <span className="flex items-center gap-2 truncate">
+            <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate">{selectedOtherGroup.name}</span>
-              <span className="opacity-70 shrink-0">· {selectedOtherGroup.open_task_count}</span>
+              <span className="shrink-0 text-[0.68rem] opacity-70 sm:text-xs">· {selectedOtherGroup.open_task_count}</span>
             </span>
           ) : (
             <span className="text-current">Other</span>
           )}
-          <ChevronDownIcon className={`shrink-0 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+          <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 sm:h-4 sm:w-4 ${isDropdownOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {/* Dropdown Menu */}
