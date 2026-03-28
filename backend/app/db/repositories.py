@@ -12,6 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
 from app.db.schema import (
+    allowed_users,
     captures,
     digest_dispatches,
     extracted_tasks,
@@ -23,6 +24,10 @@ from app.db.schema import (
 )
 
 CURRENT_TIMESTAMP = sa.text("CURRENT_TIMESTAMP")
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
 
 
 @dataclass
@@ -396,6 +401,16 @@ def get_user(connection: Connection, user_id: str) -> UserRecord | None:
     if row is None:
         return None
     return _row_to_user(row)
+
+
+def is_email_allowed(connection: Connection, *, email: str) -> bool:
+    normalized_email = normalize_email(email)
+    row = connection.execute(
+        sa.select(allowed_users.c.email).where(
+            sa.func.lower(sa.func.trim(allowed_users.c.email)) == normalized_email
+        )
+    ).first()
+    return row is not None
 
 
 def list_users(connection: Connection) -> list[UserRecord]:

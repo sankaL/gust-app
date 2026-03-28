@@ -34,7 +34,8 @@ export function ManageGroupsRoute() {
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
-    queryFn: getSessionStatus
+    queryFn: getSessionStatus,
+    retry: false,
   })
 
   const groupsQuery = useQuery({

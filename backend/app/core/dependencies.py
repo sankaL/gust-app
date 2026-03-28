@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import Depends, Request, Response
 
 from app.core.errors import (
+    AuthEmailNotAllowedError,
     AuthRequiredError,
     ConfigurationError,
     CsrfValidationError,
@@ -23,7 +24,7 @@ from app.core.security import (
 from app.core.settings import Settings, get_settings
 from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
-from app.db.repositories import SessionContext, get_session_context
+from app.db.repositories import SessionContext, get_session_context, is_email_allowed
 from app.services.auth import (
     ExpiredSignatureError,
     InvalidTokenError,
@@ -165,6 +166,10 @@ async def get_optional_session_context(
 
     with timed_stage("auth.session.resolve"):
         with user_connection_scope(settings.database_url, user_id=identity.user_id) as connection:
+            if not is_email_allowed(connection, email=identity.email):
+                clear_session_cookies(response, settings)
+                clear_csrf_cookie(response, settings)
+                raise AuthEmailNotAllowedError()
             return get_session_context(connection, identity.user_id)
 
 

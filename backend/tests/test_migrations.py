@@ -58,6 +58,7 @@ def test_schema_metadata_contains_required_tables_and_phase4_capture_retention_c
         foreign_keys = inspector.get_foreign_keys("tasks")
 
     assert {
+        "allowed_users",
         "users",
         "groups",
         "tasks",

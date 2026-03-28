@@ -260,6 +260,12 @@ def main() -> None:
         supabase_anon_key=supabase_anon_key,
     )
     write_runtime_env(runtime_values)
+    shutil.rmtree(SUPABASE_RUNTIME_DIR / "migrations", ignore_errors=True)
+    if (SUPABASE_TEMPLATE_DIR / "migrations").exists():
+        shutil.copytree(
+            SUPABASE_TEMPLATE_DIR / "migrations",
+            SUPABASE_RUNTIME_DIR / "migrations",
+        )
     shutil.copy2(SUPABASE_TEMPLATE_DIR / "seed.sql", SUPABASE_RUNTIME_DIR / "seed.sql")
 
     config_template = (SUPABASE_TEMPLATE_DIR / "config.toml").read_text(encoding="utf-8")

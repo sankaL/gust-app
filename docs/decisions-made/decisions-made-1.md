@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-28 17:11:54 EDT
+
+- Chose a dual-layer Google auth allowlist for private access: a Supabase `before_user_created` hook to stop unauthorized `auth.users` creation plus a backend allowlist check on callback and refresh/session resolution so previously-created but now-removed emails still lose access.
+- Kept the allowlist as a data-only `public.allowed_users` table with lowercase-trim normalization and no admin UI, so future user additions/removals require SQL only and no code redeploy.
+- Treated the allowlist hook as Supabase-managed auth SQL versioned under `supabase/`, while still keeping Alembic as the sole owner of the main Gust application schema.
+
 ## 2026-03-28 14:21:00 EDT
 
 - Kept Gust performance work centered on in-memory TanStack Query caching and optimistic cache reconciliation, while continuing to avoid persistent/browser-runtime caching for authenticated task payloads.

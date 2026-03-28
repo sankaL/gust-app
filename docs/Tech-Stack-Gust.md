@@ -1,6 +1,6 @@
 # Tech Stack: Gust
 
-**Version:** 2.1  
+**Version:** 2.2  
 **Last Updated:** 2026-03-28  
 **Domain:** gustapp.ca
 
@@ -134,6 +134,12 @@ Do not cache authenticated API responses containing task data.
 ### Provider
 
 Supabase Auth handles Google OAuth.
+
+Private-access contract:
+
+- Google sign-in is restricted to emails present in `public.allowed_users`.
+- Supabase enforces new-user gating through a `before_user_created` Postgres hook.
+- The backend re-checks the same allowlist during callback bootstrap and session refresh so removed emails lose access on the next auth event.
 
 ### Session Storage
 

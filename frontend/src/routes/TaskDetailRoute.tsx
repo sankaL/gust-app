@@ -176,6 +176,7 @@ export function TaskDetailRoute() {
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
     queryFn: getSessionStatus,
+    retry: false,
   })
 
   const groupsQuery = useQuery({

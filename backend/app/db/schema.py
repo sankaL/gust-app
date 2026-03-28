@@ -62,6 +62,15 @@ users = sa.Table(
     ),
 )
 
+allowed_users = sa.Table(
+    "allowed_users",
+    metadata,
+    sa.Column("email", sa.Text(), primary_key=True),
+    sa.Column(
+        "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+)
+
 groups = sa.Table(
     "groups",
     metadata,
