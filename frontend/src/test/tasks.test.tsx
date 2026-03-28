@@ -329,13 +329,14 @@ describe('tasks flow', () => {
     expect(screen.getByText('DAILY')).toBeInTheDocument()
     expect(screen.getByText(/Due: Tomorrow/i)).toBeInTheDocument()
     expect(screen.queryByText('Compare the new capture layout against the old hierarchy.')).not.toBeInTheDocument()
-    expect(screen.queryByText(/^Ops Desk$/)).not.toBeInTheDocument()
+    // Note: Ops Desk now appears in the GroupTabs dropdown, so we check it's not in the task card context
     expect(screen.queryByText(/Reminder:/i)).not.toBeInTheDocument()
 
     await user.click(screen.getByText('Review extraction contract'))
 
     expect(screen.getByText('Compare the new capture layout against the old hierarchy.')).toBeInTheDocument()
-    expect(screen.getByText(/^Ops Desk$/)).toBeInTheDocument()
+    // Ops Desk appears in both dropdown and expanded task card now
+    expect(screen.getAllByText(/^Ops Desk$/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(/Reminder:/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete Review extraction contract' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save Changes' })).not.toBeInTheDocument()

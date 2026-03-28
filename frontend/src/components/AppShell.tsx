@@ -263,16 +263,25 @@ export function AppShell() {
                         type="button"
                         role="menuitem"
                         onClick={openCompletedTasks}
-                        className="w-full px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
+                        className="flex items-center gap-3 w-full px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
                       >
+                        <svg className="w-4 h-4 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                          <path d="M9 11l3 3L22 4" />
+                          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                        </svg>
                         Completed Tasks
                       </button>
                       <button
                         type="button"
                         role="menuitem"
                         onClick={openDesktopMode}
-                        className="w-full px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
+                        className="flex items-center gap-3 w-full px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
                       >
+                        <svg className="w-4 h-4 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                          <rect x="2" y="3" width="20" height="14" rx="2" />
+                          <line x1="8" y1="21" x2="16" y2="21" />
+                          <line x1="12" y1="17" x2="12" y2="21" />
+                        </svg>
                         Desktop Mode
                       </button>
                       <button
@@ -280,8 +289,13 @@ export function AppShell() {
                         role="menuitem"
                         onClick={() => logoutMutation.mutate()}
                         disabled={logoutMutation.isPending}
-                        className="w-full px-3 py-2 text-left font-body text-sm text-tertiary transition-colors hover:bg-surface-container-highest disabled:opacity-60"
+                        className="flex items-center gap-3 w-full px-3 py-2 text-left font-body text-sm text-tertiary transition-colors hover:bg-surface-container-highest disabled:opacity-60"
                       >
+                        <svg className="w-4 h-4 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                          <polyline points="16 17 21 12 16 7" />
+                          <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
                         {logoutMutation.isPending ? 'Logging out...' : 'Logout'}
                       </button>
                     </div>

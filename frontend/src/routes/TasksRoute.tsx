@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -13,7 +13,8 @@ import {
   restoreTask,
   type TaskDeleteScope,
   type SessionStatus,
-  type TaskSummary
+  type TaskSummary,
+  type GroupSummary
 } from '../lib/api'
 import { AllTasksView } from '../components/AllTasksView'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
@@ -21,6 +22,162 @@ import { useNotifications } from '../components/Notifications'
 import { OpenTaskCard } from '../components/OpenTaskCard'
 import { SessionGuard } from '../components/SessionGuard'
 import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
+
+// Icon Components (inline SVGs for consistency with codebase)
+function LayersIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  )
+}
+
+function InboxIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+    </svg>
+  )
+}
+
+function ChevronDownIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  )
+}
+
+// Group Tabs Component
+interface GroupTabsProps {
+  groups: GroupSummary[]
+  inboxGroupId: string | null | undefined
+  selectedGroupId: string | null
+  onSelectGroup: (groupId: string) => void
+}
+
+function GroupTabs({ groups, inboxGroupId, selectedGroupId, onSelectGroup }: GroupTabsProps) {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Find inbox group
+  const inboxGroup = groups.find(g => g.id === inboxGroupId)
+  
+  // Get non-inbox groups for dropdown
+  const otherGroups = groups.filter(g => g.id !== inboxGroupId)
+  
+  // Check if a non-inbox group is currently selected
+  const selectedOtherGroup = otherGroups.find(g => g.id === selectedGroupId)
+  
+  // Check current selection state
+  const isAllSelected = selectedGroupId === 'all'
+  const isInboxSelected = selectedGroupId === inboxGroupId
+  const isOtherGroupSelected = selectedOtherGroup !== undefined
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false)
+      }
+    }
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isDropdownOpen])
+
+  // Base styles for pills
+  const basePillClass = 'rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none flex items-center gap-2'
+  
+  const activePillClass = 'bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] -translate-y-[1px]'
+  
+  const inactivePillClass = 'bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5'
+
+  // Dropdown item styles
+  const dropdownBaseClass = 'flex items-center justify-between px-3 py-2 cursor-pointer transition-colors text-sm'
+  const dropdownHoverClass = 'hover:bg-surface-container-highest text-on-surface'
+
+  return (
+    <div className="flex gap-2 w-full">
+      {/* All Tab */}
+      <button
+        type="button"
+        onClick={() => onSelectGroup('all')}
+        className={`${basePillClass} ${isAllSelected ? activePillClass : inactivePillClass}`}
+      >
+        <LayersIcon />
+        <span>All</span>
+      </button>
+
+      {/* Inbox Tab */}
+      {inboxGroup && (
+        <button
+          type="button"
+          onClick={() => onSelectGroup(inboxGroup.id)}
+          className={`${basePillClass} ${isInboxSelected ? activePillClass : inactivePillClass}`}
+        >
+          <InboxIcon />
+          <span>Inbox</span>
+          <span className="opacity-70">· {inboxGroup.open_task_count}</span>
+        </button>
+      )}
+
+      {/* Other Dropdown - Takes 50% width */}
+      <div ref={dropdownRef} className="relative flex-1 max-w-[50%]">
+        <button
+          type="button"
+          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          className={`${basePillClass} w-full justify-between ${isOtherGroupSelected ? activePillClass : inactivePillClass}`}
+        >
+          {isOtherGroupSelected ? (
+            <span className="flex items-center gap-2 truncate">
+              <span className="truncate">{selectedOtherGroup.name}</span>
+              <span className="opacity-70 shrink-0">· {selectedOtherGroup.open_task_count}</span>
+            </span>
+          ) : (
+            <span className="text-current">Other</span>
+          )}
+          <ChevronDownIcon className={`shrink-0 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {/* Dropdown Menu */}
+        {isDropdownOpen && otherGroups.length > 0 && (
+          <ul
+            className="
+              absolute z-50 mt-2 w-full rounded-card
+              bg-surface-container-high/95 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.5)]
+              max-h-60 overflow-y-auto py-1 border-t border-white/10
+            "
+          >
+            {otherGroups.map((group) => (
+              <li key={group.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectGroup(group.id)
+                    setIsDropdownOpen(false)
+                  }}
+                  className={`${dropdownBaseClass} ${dropdownHoverClass} w-full ${group.id === selectedGroupId ? 'bg-surface-container-highest' : ''}`}
+                >
+                  <span className="truncate">{group.name}</span>
+                  <span className="text-on-surface-variant text-xs shrink-0">{group.open_task_count}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
 
 type UndoState =
   | {
@@ -260,35 +417,12 @@ export function TasksRoute() {
     >
       <section className="space-y-4">
         {groupsQuery.data?.length ? (
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setSearchParams({ group: 'all' })}
-              className={[
-                'rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none',
-                selectedGroupId === 'all'
-                  ? 'bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] -translate-y-[1px]'
-                  : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5'
-              ].join(' ')}
-            >
-              All
-            </button>
-            {groupsQuery.data.map((group) => (
-              <button
-                key={group.id}
-                type="button"
-                onClick={() => setSearchParams({ group: group.id })}
-                className={[
-                  'rounded-pill px-4 py-2 font-body text-sm font-medium transition-all duration-200 active:scale-95 outline-none',
-                  group.id === resolvedGroupId
-                    ? 'bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] -translate-y-[1px]'
-                    : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5'
-                ].join(' ')}
-              >
-                {group.name} · {group.open_task_count}
-              </button>
-            ))}
-          </div>
+          <GroupTabs
+            groups={groupsQuery.data}
+            inboxGroupId={sessionQuery.data?.inbox_group_id}
+            selectedGroupId={selectedGroupId}
+            onSelectGroup={(groupId) => setSearchParams({ group: groupId })}
+          />
         ) : null}
 
         {isAllView ? (

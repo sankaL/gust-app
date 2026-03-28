@@ -98,7 +98,7 @@ app-down:
 		docker compose down; \
 	fi
 
-dev-local: supabase-start app-up
+dev-local: supabase-start frontend-install app-up
 	@. "$(DEV_RUNTIME_ENV)"; \
 	printf '%s\n' \
 		'Local dev stack is ready:' \
