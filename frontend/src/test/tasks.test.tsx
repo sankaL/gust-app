@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -59,11 +59,14 @@ function renderTaskRoute(initialEntries: string[]) {
     { initialEntries }
   )
 
-  return render(
-    <AppProviders>
-      <RouterProvider router={router} />
-    </AppProviders>
-  )
+  return {
+    router,
+    ...render(
+      <AppProviders>
+        <RouterProvider router={router} />
+      </AppProviders>
+    )
+  }
 }
 
 function buildSessionResponse() {
@@ -339,11 +342,11 @@ describe('tasks flow', () => {
     expect(screen.getAllByText(/^Ops Desk$/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(/Reminder:/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete Review extraction contract' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Save Changes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save and return' })).not.toBeInTheDocument()
 
     await user.click(screen.getByText('Review extraction contract'))
 
-    expect(await screen.findByRole('button', { name: 'Save Changes' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Save and return' })).toBeInTheDocument()
   })
 
   it('renders overdue, today, and tomorrow due badges accurately', async () => {
@@ -472,9 +475,11 @@ describe('tasks flow', () => {
     expect(screen.getAllByText(/^Personal$/)).toHaveLength(2)
   })
 
-  it('clears reminder and recurrence when saving a task with no due date', async () => {
+  it('clears reminder and recurrence when saving a task with no due date and returns to the filtered task list', async () => {
+    let patchBody: Record<string, unknown> | null = null
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
+      const method = init?.method ?? 'GET'
 
       if (url.includes('/auth/session')) {
         return Promise.resolve(jsonResponse(buildSessionResponse()))
@@ -482,7 +487,27 @@ describe('tasks flow', () => {
       if (url.includes('/groups')) {
         return Promise.resolve(jsonResponse(buildGroupsResponse()))
       }
-      if (url.endsWith('/tasks/task-1') && !init?.method) {
+      if (url.includes('/tasks?group_id=inbox-1')) {
+        return Promise.resolve(
+          jsonResponse([
+            {
+              id: 'task-1',
+              title: 'Refine design system',
+              description: null,
+              status: 'open',
+              needs_review: false,
+              due_date: null,
+              reminder_at: null,
+              due_bucket: 'no_date',
+              group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+              completed_at: null,
+              deleted_at: null,
+              subtask_count: 0
+            }
+          ])
+        )
+      }
+      if (url.endsWith('/tasks/task-1') && method === 'GET') {
         return Promise.resolve(
           jsonResponse({
             id: 'task-1',
@@ -500,11 +525,16 @@ describe('tasks flow', () => {
           })
         )
       }
-      if (url.endsWith('/tasks/task-1') && init?.method === 'PATCH') {
+      if (url.endsWith('/tasks/task-1') && method === 'PATCH') {
+        patchBody =
+          typeof init?.body === 'string'
+            ? (JSON.parse(init.body) as Record<string, unknown>)
+            : {}
         return Promise.resolve(
           jsonResponse({
             id: 'task-1',
             title: 'Refine design system',
+            description: null,
             status: 'open',
             needs_review: false,
             due_date: null,
@@ -522,10 +552,25 @@ describe('tasks flow', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    renderTaskRoute(['/tasks/task-1?group=inbox-1'])
+    const { router } = renderTaskRoute(['/tasks/task-1?group=inbox-1'])
+    const user = userEvent.setup()
 
-    // Task opens in edit mode - verify the save button is visible
-    expect(await screen.findByRole('button', { name: 'Save Changes' })).toBeInTheDocument()
+    const dueDateInput = await screen.findByDisplayValue('2026-03-24')
+    fireEvent.change(dueDateInput, { target: { value: '' } })
+    await user.click(screen.getByRole('button', { name: 'Save and return' }))
+
+    await waitFor(() => {
+      expect(patchBody).toMatchObject({
+        due_date: null,
+        reminder_at: null,
+        recurrence: null
+      })
+    })
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/tasks')
+      expect(router.state.location.search).toBe('?group=inbox-1')
+    })
   })
 
   it('manages groups with inbox protections', async () => {
@@ -551,6 +596,55 @@ describe('tasks flow', () => {
     
     // Check Personal group is also shown
     expect(screen.getByText('Personal')).toBeInTheDocument()
+  })
+
+  it('opens non-review task detail in read mode first and enters edit mode from the sticky dock', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? 'GET'
+
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.endsWith('/tasks/task-1') && method === 'GET') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 'task-1',
+            title: 'Review production reminder copy',
+            description: 'Confirm the digest language before the next rollout window.',
+            status: 'open',
+            needs_review: false,
+            due_date: '2026-03-29',
+            reminder_at: '2026-03-29T13:00:00Z',
+            due_bucket: 'due_soon',
+            group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+            completed_at: null,
+            deleted_at: null,
+            recurrence: null,
+            subtasks: []
+          })
+        )
+      }
+
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks/task-1?group=inbox-1'])
+    const user = userEvent.setup()
+
+    expect(await screen.findByText('Task summary')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit task' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save and return' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back to tasks' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Edit task' }))
+
+    expect(await screen.findByRole('button', { name: 'Save and return' })).toBeInTheDocument()
+    expect(screen.getByText('Editing task')).toBeInTheDocument()
   })
 
   it('preserves unsaved task edits when a subtask mutation refetches detail', async () => {
@@ -588,8 +682,114 @@ describe('tasks flow', () => {
     renderTaskRoute(['/tasks/task-1?group=inbox-1'])
 
     // Task opens in edit mode - verify edit UI elements are visible
-    expect(await screen.findByRole('button', { name: 'Save Changes' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Delete Task' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Save and return' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete task' })).toBeInTheDocument()
+  })
+
+  it('returns to the all-tasks card view after recurring delete from detail', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? 'GET'
+
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?status=open')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                id: 'task-1',
+                title: 'Weekly planning',
+                description: null,
+                status: 'open',
+                needs_review: false,
+                due_date: null,
+                reminder_at: null,
+                due_bucket: 'no_date',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              }
+            ],
+            has_more: false,
+            next_cursor: null
+          })
+        )
+      }
+      if (url.endsWith('/tasks/task-1') && method === 'GET') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 'task-1',
+            title: 'Weekly planning',
+            description: null,
+            series_id: 'series-1',
+            status: 'open',
+            needs_review: false,
+            due_date: null,
+            reminder_at: null,
+            due_bucket: 'no_date',
+            group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+            completed_at: null,
+            deleted_at: null,
+            recurrence_frequency: 'weekly',
+            recurrence: { frequency: 'weekly', weekday: 2, day_of_month: null },
+            subtasks: []
+          })
+        )
+      }
+      if (url.includes('/tasks/task-1?scope=series') && method === 'DELETE') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 'task-1',
+            title: 'Weekly planning',
+            description: null,
+            series_id: 'series-1',
+            status: 'open',
+            needs_review: false,
+            due_date: null,
+            reminder_at: null,
+            due_bucket: 'no_date',
+            group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+            completed_at: null,
+            deleted_at: '2026-03-24T10:00:00Z',
+            recurrence: null,
+            subtasks: []
+          })
+        )
+      }
+
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { router } = renderTaskRoute(['/tasks/task-1?group=all'])
+    const user = userEvent.setup()
+
+    expect(await screen.findByRole('button', { name: 'Delete task' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Delete task' }))
+
+    expect(await screen.findByText('Delete recurring task')).toBeInTheDocument()
+    expect(screen.getByText("After delete, you'll return to the task list.")).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Delete this and future' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/tasks/task-1?scope=series'),
+        expect.objectContaining({ method: 'DELETE', credentials: 'include' })
+      )
+    })
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/tasks')
+      expect(router.state.location.search).toBe('?group=all')
+    })
   })
 
   it('asks recurring delete scope and sends series delete when selected', async () => {

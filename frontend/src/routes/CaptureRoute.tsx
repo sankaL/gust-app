@@ -42,6 +42,9 @@ export function CaptureRoute() {
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const recordedChunksRef = useRef<BlobPart[]>([])
   const retryAudioRef = useRef<RecordedAudio | null>(null)
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
+  const wakeLockRequestIdRef = useRef(0)
+  const isRecordingRef = useRef(false)
   const queryClient = useQueryClient()
   const { notifyError, notifySuccess } = useNotifications()
 
@@ -264,10 +267,99 @@ export function CaptureRoute() {
     }
   })
 
+  useEffect(() => {
+    isRecordingRef.current = isRecording
+  }, [isRecording])
+
+  async function requestWakeLock() {
+    if (
+      !navigator.wakeLock ||
+      document.visibilityState !== 'visible' ||
+      !isRecordingRef.current
+    ) {
+      return
+    }
+
+    const currentWakeLock = wakeLockRef.current
+    if (currentWakeLock && !currentWakeLock.released) {
+      return
+    }
+
+    const requestId = wakeLockRequestIdRef.current + 1
+    wakeLockRequestIdRef.current = requestId
+
+    try {
+      const sentinel = await navigator.wakeLock.request('screen')
+      if (
+        wakeLockRequestIdRef.current !== requestId ||
+        !isRecordingRef.current ||
+        document.visibilityState !== 'visible'
+      ) {
+        try {
+          await sentinel.release()
+        } catch {
+          // Ignore release errors; we only need to avoid keeping stale locks.
+        }
+        return
+      }
+      sentinel.addEventListener('release', () => {
+        if (wakeLockRef.current === sentinel) {
+          wakeLockRef.current = null
+        }
+      })
+      wakeLockRef.current = sentinel
+    } catch {
+      if (wakeLockRequestIdRef.current === requestId) {
+        wakeLockRef.current = null
+      }
+    }
+  }
+
+  async function releaseWakeLock() {
+    wakeLockRequestIdRef.current += 1
+    const sentinel = wakeLockRef.current
+    wakeLockRef.current = null
+    if (!sentinel) {
+      return
+    }
+
+    try {
+      await sentinel.release()
+    } catch {
+      // Ignore release failures; recording cleanup should still complete.
+    }
+  }
+
+  useEffect(() => {
+    if (!isRecording) {
+      void releaseWakeLock()
+      return
+    }
+
+    void requestWakeLock()
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void requestWakeLock()
+        return
+      }
+
+      void releaseWakeLock()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      void releaseWakeLock()
+    }
+  }, [isRecording])
+
 
 
   useEffect(() => {
     return () => {
+      void releaseWakeLock()
       mediaRecorderRef.current?.stream.getTracks().forEach((track) => track.stop())
       mediaRecorderRef.current = null
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
@@ -484,7 +576,7 @@ export function CaptureRoute() {
             <svg className="h-6 w-6 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
-            <p className="font-display text-lg font-medium tracking-wide">Write it instead</p>
+            <p className="font-display text-base font-medium tracking-wide">Write it instead</p>
           </div>
           <div className="flex items-center gap-1 font-body text-sm font-medium text-white/50 transition-colors group-hover:text-white/90">
             <span>Expand</span>
@@ -500,7 +592,7 @@ export function CaptureRoute() {
               <svg className="h-6 w-6 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
-              <p className="font-display text-lg font-medium tracking-wide">Write it instead</p>
+              <p className="font-display text-base font-medium tracking-wide">Write it instead</p>
             </div>
             <button
               onClick={() => setTextExpanded(false)}

@@ -160,6 +160,7 @@ Required behavior:
 
 - Large central mic button
 - Recording state is visually distinct
+- While voice recording is active, the app should keep the screen awake where the browser supports screen wake lock
 - Transcript review appears before task creation
 - Text fallback is available but collapsed by default
 - User can cancel before submission

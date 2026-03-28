@@ -10,6 +10,7 @@ interface SelectDropdownProps {
   options: SelectOption[]
   value: string | number
   onChange: (value: string | number) => void
+  onOpenChange?: (isOpen: boolean) => void
   placeholder?: string
   disabled?: boolean
 }
@@ -19,6 +20,7 @@ export function SelectDropdown({
   options,
   value,
   onChange,
+  onOpenChange,
   placeholder = 'Select an option',
   disabled = false,
 }: SelectDropdownProps) {
@@ -52,6 +54,10 @@ export function SelectDropdown({
       highlightedElement?.scrollIntoView({ block: 'nearest' })
     }
   }, [highlightedIndex])
+
+  useEffect(() => {
+    onOpenChange?.(isOpen)
+  }, [isOpen, onOpenChange])
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (disabled) return
@@ -109,7 +115,7 @@ export function SelectDropdown({
       {hasLabel ? (
         <label className="text-sm font-medium text-on-surface-variant">{label}</label>
       ) : null}
-      <div ref={containerRef} className="relative">
+      <div ref={containerRef} className={`relative ${isOpen ? 'z-[70]' : 'z-0'}`}>
         <button
           type="button"
           onClick={() => !disabled && setIsOpen(!isOpen)}
@@ -138,9 +144,10 @@ export function SelectDropdown({
             role="listbox"
             aria-label={hasLabel ? label : placeholder}
             className="
-              absolute z-50 mt-2 w-full rounded-card
-              bg-surface-container-high/95 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.5)]
-              max-h-60 overflow-y-auto py-1 border-t border-white/10
+              absolute z-[80] mt-2 w-full overflow-hidden rounded-card
+              bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)]
+              shadow-[0_18px_40px_rgba(0,0,0,0.58),_inset_0_1px_0_rgba(255,255,255,0.05)]
+              max-h-60 overflow-y-auto py-1
             "
           >
             {options.map((option, index) => (

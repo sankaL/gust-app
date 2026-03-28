@@ -75,7 +75,71 @@ class MediaRecorderMock {
   }
 }
 
+class WakeLockSentinelMock extends EventTarget {
+  released = false
+  onrelease: ((this: WakeLockSentinel, ev: Event) => unknown) | null = null
+  type: WakeLockType = 'screen'
+
+  release = vi.fn(async () => {
+    if (this.released) {
+      return
+    }
+
+    this.released = true
+    const event = new Event('release')
+    this.onrelease?.call(this as WakeLockSentinel, event)
+    this.dispatchEvent(event)
+  })
+}
+
 type FetchMock = ReturnType<typeof vi.fn>
+
+function stubSignedInFetch(overrides?: {
+  onVoiceCapture?: () => unknown
+  onExtractedTasks?: () => unknown
+  onPendingTasks?: () => unknown
+  onGroups?: () => unknown
+}) {
+  const fetchMock: FetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = requestUrl(input)
+    const method = init?.method ?? 'GET'
+
+    if (url.includes('/auth/session')) {
+      return Promise.resolve(
+        jsonResponse({
+          signed_in: true,
+          user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
+          timezone: 'UTC',
+          inbox_group_id: 'inbox-1',
+          csrf_token: 'csrf-token'
+        })
+      )
+    }
+
+    if (url.includes('/captures/voice') && method === 'POST') {
+      return Promise.resolve(
+        jsonResponse(overrides?.onVoiceCapture?.() ?? { capture_id: 'capture-1', transcript_text: 'voice note' })
+      )
+    }
+
+    if (url.includes('/captures/pending-tasks')) {
+      return Promise.resolve(jsonResponse(overrides?.onPendingTasks?.() ?? []))
+    }
+
+    if (url.includes('/extracted-tasks')) {
+      return Promise.resolve(jsonResponse(overrides?.onExtractedTasks?.() ?? []))
+    }
+
+    if (url.includes('/groups')) {
+      return Promise.resolve(jsonResponse(overrides?.onGroups?.() ?? []))
+    }
+
+    return Promise.resolve(jsonResponse({}))
+  })
+
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
 
 beforeEach(() => {
   MediaRecorderMock.instances = []
@@ -163,16 +227,7 @@ describe('capture route', () => {
   })
 
   it('keeps text fallback usable when microphone permission is denied', async () => {
-    const fetchMock: FetchMock = vi.fn(() =>
-      jsonResponse({
-        signed_in: true,
-        user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
-        timezone: 'UTC',
-        inbox_group_id: 'inbox-1',
-        csrf_token: 'csrf-token'
-      })
-    )
-    vi.stubGlobal('fetch', fetchMock)
+    stubSignedInFetch()
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
@@ -192,15 +247,7 @@ describe('capture route', () => {
   })
 
   it('routes text capture through staging review before submit', async () => {
-    // Simplified test - just verify text capture flow works
-    const fetchMock: FetchMock = vi.fn(() => Promise.resolve(jsonResponse({
-      signed_in: true,
-      user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
-      timezone: 'UTC',
-      inbox_group_id: 'inbox-1',
-      csrf_token: 'csrf-token'
-    })))
-    vi.stubGlobal('fetch', fetchMock)
+    stubSignedInFetch()
 
     renderCaptureRoute()
 
@@ -209,14 +256,7 @@ describe('capture route', () => {
   })
 
   it('shows extraction error in staging when extraction fails', async () => {
-    const fetchMock: FetchMock = vi.fn(() => Promise.resolve(jsonResponse({
-      signed_in: true,
-      user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
-      timezone: 'UTC',
-      inbox_group_id: 'inbox-1',
-      csrf_token: 'csrf-token'
-    })))
-    vi.stubGlobal('fetch', fetchMock)
+    stubSignedInFetch()
 
     renderCaptureRoute()
 
@@ -225,14 +265,7 @@ describe('capture route', () => {
   })
 
   it('handles voice transcription error gracefully', async () => {
-    const fetchMock: FetchMock = vi.fn(() => Promise.resolve(jsonResponse({
-      signed_in: true,
-      user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
-      timezone: 'UTC',
-      inbox_group_id: 'inbox-1',
-      csrf_token: 'csrf-token'
-    })))
-    vi.stubGlobal('fetch', fetchMock)
+    stubSignedInFetch()
 
     renderCaptureRoute()
 
@@ -241,18 +274,68 @@ describe('capture route', () => {
   })
 
   it('shows error when retrying transcription fails', async () => {
-    const fetchMock: FetchMock = vi.fn(() => Promise.resolve(jsonResponse({
-      signed_in: true,
-      user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
-      timezone: 'UTC',
-      inbox_group_id: 'inbox-1',
-      csrf_token: 'csrf-token'
-    })))
-    vi.stubGlobal('fetch', fetchMock)
+    stubSignedInFetch()
 
     renderCaptureRoute()
 
     // Verify the capture UI is rendered
     expect(await screen.findByText('Write it instead')).toBeInTheDocument()
+  })
+
+  it('requests a screen wake lock while recording when supported', async () => {
+    stubSignedInFetch()
+    const wakeLockSentinel = new WakeLockSentinelMock()
+    const wakeLockRequest = vi.fn().mockResolvedValue(wakeLockSentinel)
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: { request: wakeLockRequest }
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+
+    await waitFor(() => {
+      expect(wakeLockRequest).toHaveBeenCalledWith('screen')
+    })
+  })
+
+  it('releases the screen wake lock after recording stops', async () => {
+    stubSignedInFetch()
+    const wakeLockSentinel = new WakeLockSentinelMock()
+    const wakeLockRequest = vi.fn().mockResolvedValue(wakeLockSentinel)
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: { request: wakeLockRequest }
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+    await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
+
+    await waitFor(() => {
+      expect(wakeLockSentinel.release).toHaveBeenCalledTimes(1)
+    })
+
+    expect(wakeLockRequest).toHaveBeenCalledWith('screen')
   })
 })

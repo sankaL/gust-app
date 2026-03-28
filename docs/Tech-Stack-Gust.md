@@ -98,6 +98,7 @@ Frontend requirements:
 - do not upload partial audio chunks for v1
 - upload audio only after user stops recording
 - preserve the edited transcript locally until submission succeeds or the user discards it
+- request a screen wake lock during active recording when the browser supports it, and release it on stop or when the page is no longer visible
 
 ### Styling
 

@@ -3,6 +3,7 @@ type TaskDeleteDialogProps = {
   taskTitle: string
   isRecurring: boolean
   isDeleting: boolean
+  followUpMessage?: string
   onDeleteOccurrence: () => void
   onDeleteSeries: () => void
   onClose: () => void
@@ -13,6 +14,7 @@ export function TaskDeleteDialog({
   taskTitle,
   isRecurring,
   isDeleting,
+  followUpMessage,
   onDeleteOccurrence,
   onDeleteSeries,
   onClose
@@ -31,6 +33,11 @@ export function TaskDeleteDialog({
               Choose whether to delete only this occurrence or this and future open occurrences.
             </p>
             <p className="mt-2 truncate font-body text-sm text-on-surface">{taskTitle}</p>
+            {followUpMessage ? (
+              <p className="mt-2 font-body text-xs uppercase tracking-[0.12em] text-on-surface-variant">
+                {followUpMessage}
+              </p>
+            ) : null}
             <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"
@@ -65,6 +72,11 @@ export function TaskDeleteDialog({
             <p className="mt-2 font-body text-sm text-on-surface-variant">
               Are you sure you want to delete this task?
             </p>
+            {followUpMessage ? (
+              <p className="mt-2 font-body text-xs uppercase tracking-[0.12em] text-on-surface-variant">
+                {followUpMessage}
+              </p>
+            ) : null}
             <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"

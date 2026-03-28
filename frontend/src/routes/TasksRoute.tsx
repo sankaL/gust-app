@@ -152,9 +152,10 @@ function GroupTabs({ groups, inboxGroupId, selectedGroupId, onSelectGroup }: Gro
         {isDropdownOpen && otherGroups.length > 0 && (
           <ul
             className="
-              absolute z-50 mt-2 w-full rounded-card
-              bg-surface-container-high/95 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.5)]
-              max-h-60 overflow-y-auto py-1 border-t border-white/10
+              absolute z-50 mt-2 w-full overflow-hidden rounded-card
+              bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)]
+              shadow-[0_18px_40px_rgba(0,0,0,0.58),_inset_0_1px_0_rgba(255,255,255,0.05)]
+              max-h-60 overflow-y-auto py-1
             "
           >
             {otherGroups.map((group) => (
@@ -429,7 +430,8 @@ export function TasksRoute() {
           <AllTasksView
             onTaskOpen={(taskId) =>
               void navigate({
-                pathname: `/tasks/${taskId}`
+                pathname: `/tasks/${taskId}`,
+                search: '?group=all'
               })
             }
             onTaskComplete={(task) => {

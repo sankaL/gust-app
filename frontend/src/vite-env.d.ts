@@ -18,6 +18,16 @@ interface BeforeInstallPromptEvent extends Event {
   }>
 }
 
+interface WakeLockSentinel extends EventTarget {
+  readonly released: boolean
+  release: () => Promise<void>
+}
+
+interface WakeLock {
+  request: (type: 'screen') => Promise<WakeLockSentinel>
+}
+
 interface Navigator {
   standalone?: boolean
+  wakeLock?: WakeLock
 }

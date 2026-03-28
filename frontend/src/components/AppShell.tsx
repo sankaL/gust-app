@@ -248,9 +248,9 @@ export function AppShell() {
                 {isAccountMenuOpen ? (
                   <div
                     role="menu"
-                    className="absolute right-0 top-12 z-50 w-64 rounded-card bg-surface-container-high shadow-[0_4px_24px_rgba(0,0,0,0.6)] border border-white/10 py-1"
+                    className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-card bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)] py-1 shadow-[0_18px_40px_rgba(0,0,0,0.58),_inset_0_1px_0_rgba(255,255,255,0.05)]"
                   >
-                    <div className="px-3 py-2 border-b border-white/5 mb-1">
+                    <div className="mb-1 bg-white/[0.03] px-3 py-3">
                       <p className="font-body text-[0.65rem] uppercase tracking-[0.15em] text-on-surface-variant">
                         Signed in
                       </p>
@@ -263,7 +263,7 @@ export function AppShell() {
                         type="button"
                         role="menuitem"
                         onClick={openCompletedTasks}
-                        className="flex items-center gap-3 w-full px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
                       >
                         <svg className="w-4 h-4 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                           <path d="M9 11l3 3L22 4" />
@@ -275,7 +275,7 @@ export function AppShell() {
                         type="button"
                         role="menuitem"
                         onClick={openDesktopMode}
-                        className="flex items-center gap-3 w-full px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left font-body text-sm text-on-surface transition-colors hover:bg-surface-container-highest"
                       >
                         <svg className="w-4 h-4 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                           <rect x="2" y="3" width="20" height="14" rx="2" />
@@ -289,7 +289,7 @@ export function AppShell() {
                         role="menuitem"
                         onClick={() => logoutMutation.mutate()}
                         disabled={logoutMutation.isPending}
-                        className="flex items-center gap-3 w-full px-3 py-2 text-left font-body text-sm text-tertiary transition-colors hover:bg-surface-container-highest disabled:opacity-60"
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left font-body text-sm text-tertiary transition-colors hover:bg-surface-container-highest disabled:opacity-60"
                       >
                         <svg className="w-4 h-4 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                           <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
