@@ -204,6 +204,7 @@ Production database ownership rules:
 - backend deploys are expected to run `alembic upgrade head` before startup and then pass the startup revision check
 - run `python scripts/prod/check-postgres-rls.py --database-url "$DATABASE_URL"` against the production runtime connection string before and after rollout
 - if the runtime role reports `rolbypassrls=true`, switch the app to a non-bypass runtime role and reserve the privileged/admin connection for migrations only
+- once the runtime role is a least-privilege non-bypass role, do not rely on that runtime `DATABASE_URL` for future DDL-bearing migrations; run hosted Alembic with a privileged migration/admin connection before the backend deploy or provide a separate migration-only connection path
 
 ## Post-Deploy Verification
 

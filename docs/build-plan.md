@@ -104,6 +104,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 | ADH-22 | Fix README presentation and brand markup | DONE | 2026-03-27 | Centered the hero logo, replaced the drifting feature/how-it-works layouts with stable table/list markup, corrected brand badge colors, rebuilt the color swatches with inline chips, and replaced the remote footer separator with a plain markdown rule. | AGENTS |
 | ADH-23 | Fix README AI services and orchestration labels | DONE | 2026-03-28 | Updated the tech stack section to show Mistral AI for voice capture/transcription, LangChain for orchestration, and OpenAI GPT-5.4 mini for extraction. | AGENTS |
 | ADH-24 | Add Postgres row-level security enforcement and backend actor-scoped DB context | DONE | 2026-03-28 | Added Postgres-only Alembic RLS policies, transaction-scoped `app.current_user_id` / `app.internal_job` context, production RLS verification script, and schema/runbook/architecture updates. | Schema, Runbook, Tech, AGENTS |
+| ADH-25 | Roll Postgres RLS into production and cut backend runtime over to a non-bypass Supabase role | DONE | 2026-03-28 | Took a fresh hosted backup, upgraded production through `0010_enable_postgres_rls`, moved the Railway backend runtime from `postgres` to `gust_app_runtime.<project-ref>` so `rolbypassrls=false`, and redeployed the backend at `main@1af73c0` with health/RLS verification. | Runbook, Tech, AGENTS |
 
 ## Bug Fixes
 

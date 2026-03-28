@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-28 08:14:00 EDT
+
+- Completed the hosted RLS rollout only after switching the Railway backend runtime off the Supabase `postgres` role, because `postgres` had `BYPASSRLS` and would have silently ignored the new policies.
+- Standardized the production application connection on the dedicated login role `gust_app_runtime`, using the Supabase pooler username format `gust_app_runtime.<project-ref>` rather than the bare role name, because the pooler rejected the bare login with `Tenant or user not found`.
+- Kept hosted schema changes on Alembic and left the backend predeploy command as `alembic upgrade head`, while treating the runtime-role cutover as a separate production configuration step from the schema migration itself.
+
 ## 2026-03-28 07:24:15 EDT
 
 - Enabled and forced Postgres row-level security on all user-owned Gust tables, but kept explicit backend `user_id` filters as the primary correctness path instead of shifting authorization entirely into policies.
