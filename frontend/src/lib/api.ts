@@ -104,6 +104,7 @@ export type ExtractedTask = {
 }
 
 type ApiErrorPayload = {
+  request_id?: string
   error?: {
     code?: string
     message?: string
@@ -113,12 +114,14 @@ type ApiErrorPayload = {
 export class ApiError extends Error {
   code: string
   status: number
+  requestId: string | null
 
-  constructor(message: string, code: string, status: number) {
+  constructor(message: string, code: string, status: number, requestId: string | null = null) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.status = status
+    this.requestId = requestId
   }
 }
 
@@ -149,10 +152,14 @@ async function apiRequest<T>(
 
   if (!response.ok) {
     const errorPayload = payload as ApiErrorPayload | null
+    const requestId =
+      (typeof errorPayload?.request_id === 'string' ? errorPayload.request_id : null) ??
+      response.headers.get('X-Request-ID')
     throw new ApiError(
       errorPayload?.error?.message ?? 'Request failed.',
       errorPayload?.error?.code ?? 'request_failed',
-      response.status
+      response.status,
+      requestId
     )
   }
 

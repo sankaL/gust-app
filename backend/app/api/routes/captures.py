@@ -5,7 +5,7 @@ from datetime import date, datetime
 # ruff: noqa: UP045
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from pydantic import BaseModel
 
 from app.core.dependencies import (
@@ -94,6 +94,7 @@ class UpdateExtractedTaskRequest(BaseModel):
 @router.post("/voice", response_model=CaptureReviewResponse, status_code=status.HTTP_201_CREATED)
 async def create_voice_capture(
     audio: Annotated[UploadFile, File(...)],
+    request: Request,
     session_context: RequiredSessionContextDep,
     capture_service: CaptureServiceDep,
 ) -> CaptureReviewResponse:
@@ -103,6 +104,7 @@ async def create_voice_capture(
         audio_bytes=content,
         filename=audio.filename or "capture.webm",
         content_type=audio.content_type or "application/octet-stream",
+        request_id=getattr(request.state, "request_id", None),
     )
     return _build_review_response(result)
 

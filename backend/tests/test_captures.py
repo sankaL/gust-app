@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # ruff: noqa: UP045
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -293,11 +294,99 @@ def test_voice_capture_transcribes_audio_and_returns_review_state(
 def test_voice_capture_marks_capture_failed_on_transcription_error(
     app: FastAPI,
     client: TestClient,
+    caplog,
 ) -> None:
     headers = _authenticated_headers(app, client)
     _override_transcription_service(
         app,
-        FakeTranscriptionService(error=TranscriptionServiceError("provider down")),
+        FakeTranscriptionService(
+            error=TranscriptionServiceError(
+                "provider down",
+                failure_reason="provider_unavailable",
+                provider_status_code=503,
+                provider_error_type="upstream_unavailable",
+                provider_error_code="E503",
+            )
+        ),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="gust.api"):
+        response = client.post(
+            "/captures/voice",
+            headers={**headers, "X-Request-ID": "req-transcription-1"},
+            files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+        )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "transcription_provider_unavailable"
+    assert response.json()["request_id"] == "req-transcription-1"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "transcription_failed"
+    assert capture_row.error_code == "provider_unavailable"
+
+    failure_logs = [record for record in caplog.records if record.msg == "voice_transcription_failed"]
+    assert len(failure_logs) == 1
+    failure_log = failure_logs[0]
+    assert failure_log.request_id == "req-transcription-1"
+    assert failure_log.capture_id == str(capture_row.id)
+    assert failure_log.user_id == "11111111-1111-1111-1111-111111111111"
+    assert failure_log.transcription_failure_reason == "provider_unavailable"
+    assert failure_log.provider_status_code == 503
+    assert failure_log.provider_error_type == "upstream_unavailable"
+    assert failure_log.provider_error_code == "E503"
+    assert failure_log.audio_filename == "capture.webm"
+    assert failure_log.content_type == "audio/webm"
+    assert failure_log.audio_size_bytes == len(b"voice-bytes")
+    assert "Buy coffee beans at 5pm" not in caplog.text
+
+
+def test_voice_capture_returns_user_error_for_no_speech(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            error=TranscriptionServiceError(
+                "no speech",
+                failure_reason="no_speech",
+            )
+        ),
+    )
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "transcription_no_speech"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "transcription_failed"
+    assert capture_row.error_code == "no_speech"
+
+
+def test_voice_capture_returns_timeout_error_for_transcription_timeout(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            error=TranscriptionServiceError(
+                "timeout",
+                failure_reason="timeout",
+            )
+        ),
     )
 
     response = client.post(
@@ -307,13 +396,75 @@ def test_voice_capture_marks_capture_failed_on_transcription_error(
     )
 
     assert response.status_code == 502
-    assert response.json()["error"]["code"] == "transcription_failed"
+    assert response.json()["error"]["code"] == "transcription_timeout"
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         capture_row = connection.execute(sa.select(captures)).one()
 
     assert capture_row.status == "transcription_failed"
-    assert capture_row.error_code == "transcription_provider_error"
+    assert capture_row.error_code == "timeout"
+
+
+def test_voice_capture_returns_provider_rejected_error(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            error=TranscriptionServiceError(
+                "rejected",
+                failure_reason="provider_rejected",
+            )
+        ),
+    )
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "transcription_provider_rejected"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "transcription_failed"
+    assert capture_row.error_code == "provider_rejected"
+
+
+def test_voice_capture_returns_provider_invalid_response_error(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            error=TranscriptionServiceError(
+                "invalid payload",
+                failure_reason="provider_invalid_response",
+            )
+        ),
+    )
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "transcription_provider_invalid_response"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "transcription_failed"
+    assert capture_row.error_code == "provider_invalid_response"
 
 
 def test_voice_capture_returns_config_invalid_for_invalid_transcription_model(
@@ -342,6 +493,34 @@ def test_voice_capture_returns_config_invalid_for_invalid_transcription_model(
 
     assert capture_row.status == "transcription_failed"
     assert capture_row.error_code == "config_invalid"
+
+
+def test_voice_capture_surfaces_unexpected_transcription_errors_as_internal_error(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            error=RuntimeError("unexpected crash"),
+        ),
+    )
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "internal_error"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "transcription_failed"
+    assert capture_row.error_code == "unknown_error"
 
 
 def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(

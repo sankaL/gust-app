@@ -110,6 +110,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| BUG-23 | Voice transcript failures lack actionable diagnostics and user-facing guidance | DONE | 2026-03-28 | Added normalized transcription failure taxonomy end-to-end, structured voice failure logs (with request-id correlation and safe metadata), capture API error-code mapping for no-speech/timeout/provider cases, frontend code-aware voice error UX with support IDs and mic-error classification, and backend/frontend regression tests for new failure flows. | PRD, Tech, AGENTS |
 | BUG-01 | Capture, transcription, or extraction regression | DONE | 2026-03-22 | Restored the Mistral transcription default to `voxtral-mini-latest`, normalized strict extraction schemas, and switched extraction to `openai/gpt-5.4-mini` after validating it on the current OpenRouter route | PRD, Tech |
 | BUG-02 | Intermittent dentist task extraction failure (~90% miss rate) | IN PROGRESS | 2026-03-24 | Root cause: guardrails matching threshold too strict + subtasks not checked. Fix: lowered matching threshold in `_task_matches_intent`, added subtask checking in `find_missing_guarded_intents`, enhanced JSON extraction robustness | extraction_guardrails.py, extraction.py |
 | BUG-02 | Task, reminder, recurrence, or auth regression | DONE | 2026-03-22 | Fixed deleted-group reassignment for soft-deleted tasks plus task-list/task-detail frontend regressions, with backend and frontend regression tests | PRD, Tech |

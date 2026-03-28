@@ -17,6 +17,11 @@ from app.core.errors import (
     InvalidCaptureError,
     InvalidConfigurationError,
     TranscriptionFailedError,
+    TranscriptionNoSpeechError,
+    TranscriptionProviderInvalidResponseError,
+    TranscriptionProviderRejectedError,
+    TranscriptionProviderUnavailableError,
+    TranscriptionTimeoutError,
 )
 from app.core.settings import Settings
 from app.db.engine import user_connection_scope
@@ -156,6 +161,7 @@ class CaptureService:
         audio_bytes: bytes,
         filename: str,
         content_type: str,
+        request_id: str | None = None,
     ) -> ReviewCaptureResult:
         if not audio_bytes:
             raise InvalidCaptureError("Audio upload cannot be empty.")
@@ -168,6 +174,19 @@ class CaptureService:
             status="pending_transcription",
         )
 
+        logger.info(
+            "voice_transcription_started",
+            extra={
+                "event": "voice_transcription_started",
+                "capture_id": capture.id,
+                "user_id": user_id,
+                "request_id": request_id,
+                "audio_filename": filename,
+                "content_type": content_type,
+                "audio_size_bytes": len(audio_bytes),
+            },
+        )
+
         try:
             transcription = await self.transcription_service.transcribe(
                 audio_bytes=audio_bytes,
@@ -175,13 +194,26 @@ class CaptureService:
                 content_type=content_type,
             )
         except Exception as exc:
+            failure_reason, public_error = self._resolve_transcription_failure(exc)
+            self._log_voice_transcription_failure(
+                capture_id=capture.id,
+                user_id=user_id,
+                request_id=request_id,
+                filename=filename,
+                content_type=content_type,
+                audio_size_bytes=len(audio_bytes),
+                failure_reason=failure_reason,
+                error=exc,
+            )
             self._mark_capture_failure(
                 capture_id=capture.id,
                 user_id=user_id,
                 status="transcription_failed",
-                error_code=self._error_code_for_exception(exc),
+                error_code=failure_reason,
             )
-            raise self._map_transcription_error(exc) from exc
+            if public_error is exc:
+                raise
+            raise public_error from exc
 
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             updated = update_capture(
@@ -202,6 +234,7 @@ class CaptureService:
                 "event": "capture_transcribed",
                 "capture_id": updated.id,
                 "user_id": user_id,
+                "request_id": request_id,
             },
         )
 
@@ -640,10 +673,64 @@ class CaptureService:
         self.last_extraction_attempt_count = attempts
         return attempts
 
-    def _map_transcription_error(self, exc: Exception) -> Exception:
+    def _resolve_transcription_failure(
+        self,
+        exc: Exception,
+    ) -> tuple[str, Exception]:
+        if isinstance(exc, InvalidConfigurationError):
+            return "config_invalid", exc
+        if isinstance(exc, ConfigurationError):
+            return "config_missing", exc
         if isinstance(exc, TranscriptionServiceError):
-            return TranscriptionFailedError()
-        return exc
+            if exc.failure_reason == "no_speech":
+                return "no_speech", TranscriptionNoSpeechError()
+            if exc.failure_reason == "timeout":
+                return "timeout", TranscriptionTimeoutError()
+            if exc.failure_reason == "provider_unavailable":
+                return "provider_unavailable", TranscriptionProviderUnavailableError()
+            if exc.failure_reason == "provider_rejected":
+                return "provider_rejected", TranscriptionProviderRejectedError()
+            if exc.failure_reason == "provider_invalid_response":
+                return "provider_invalid_response", TranscriptionProviderInvalidResponseError()
+            return "unknown", TranscriptionFailedError()
+        return "unknown_error", exc
+
+    def _log_voice_transcription_failure(
+        self,
+        *,
+        capture_id: str,
+        user_id: str,
+        request_id: str | None,
+        filename: str,
+        content_type: str,
+        audio_size_bytes: int,
+        failure_reason: str,
+        error: Exception,
+    ) -> None:
+        provider_status_code = None
+        provider_error_type = None
+        provider_error_code = None
+        if isinstance(error, TranscriptionServiceError):
+            provider_status_code = error.provider_status_code
+            provider_error_type = error.provider_error_type
+            provider_error_code = error.provider_error_code
+
+        logger.warning(
+            "voice_transcription_failed",
+            extra={
+                "event": "voice_transcription_failed",
+                "capture_id": capture_id,
+                "user_id": user_id,
+                "request_id": request_id,
+                "transcription_failure_reason": failure_reason,
+                "provider_status_code": provider_status_code,
+                "provider_error_type": provider_error_type,
+                "provider_error_code": provider_error_code,
+                "audio_filename": filename,
+                "content_type": content_type,
+                "audio_size_bytes": audio_size_bytes,
+            },
+        )
 
     def _map_extraction_error(self, exc: Exception) -> Exception:
         if isinstance(exc, ExtractionServiceError):
@@ -658,7 +745,7 @@ class CaptureService:
         if isinstance(exc, ConfigurationError):
             return "config_missing"
         if isinstance(exc, TranscriptionServiceError):
-            return "transcription_provider_error"
+            return exc.failure_reason
         if isinstance(exc, ExtractorMalformedResponseError):
             return "extractor_payload_invalid"
         if isinstance(exc, ExtractionServiceError):
