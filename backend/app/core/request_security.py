@@ -40,6 +40,15 @@ def allowed_request_origins(settings: Settings) -> set[str]:
 
 def trusted_hosts(settings: Settings) -> list[str]:
     hosts = set(LOCAL_HOSTS)
+    has_railway_runtime = any(
+        (
+            settings.railway_private_domain,
+            settings.railway_public_domain,
+            settings.railway_service_backend_url,
+            settings.railway_service_frontend_url,
+            settings.railway_static_url,
+        )
+    )
     for candidate in settings.trusted_hosts:
         normalized = _hostname_or_host(candidate)
         if normalized is not None:
@@ -56,6 +65,9 @@ def trusted_hosts(settings: Settings) -> list[str]:
         normalized = _hostname_or_host(candidate)
         if normalized is not None:
             hosts.add(normalized)
+    if has_railway_runtime:
+        hosts.add("*.railway.internal")
+        hosts.add("*.up.railway.app")
     return sorted(hosts)
 
 

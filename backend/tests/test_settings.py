@@ -62,3 +62,5 @@ def test_trusted_hosts_include_railway_runtime_domains(
     assert "backend.railway.internal" in hosts
     assert "backend-production.up.railway.app" in hosts
     assert "backend-production-496e.up.railway.app" in hosts
+    assert "*.railway.internal" in hosts
+    assert "*.up.railway.app" in hosts
