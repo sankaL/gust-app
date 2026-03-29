@@ -30,6 +30,10 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GUST_DEV_MODE"),
     )
     database_url: str = Field(validation_alias=AliasChoices("DATABASE_URL"))
+    migration_database_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
+    )
     required_alembic_revision: str = Field(
         default="0011_rate_limit_counters",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
@@ -223,6 +227,10 @@ class Settings(BaseSettings):
         default=10.0,
         validation_alias=AliasChoices("REMINDER_REQUEST_TIMEOUT_SECONDS"),
     )
+
+    @property
+    def alembic_database_url(self) -> str:
+        return self.migration_database_url or self.database_url
 
     @field_validator("trusted_hosts", "extra_allowed_origins", mode="before")
     @classmethod

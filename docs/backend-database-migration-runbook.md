@@ -1,6 +1,6 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.7  
+**Version:** 1.8  
 **Last Updated:** 2026-03-28
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
@@ -50,6 +50,7 @@ Expected environment classes:
 Migration-sensitive configuration must include:
 
 - application database URL
+- migration/admin database URL for DDL-bearing deployed migrations once the runtime role is least-privilege
 - Alembic migration path
 - required migration revision or startup revision check enablement
 - app environment indicator
@@ -218,9 +219,10 @@ Production database ownership rules:
 - the backend runtime role must retain `SELECT` on `public.allowed_users`, because callback and session-refresh auth checks read that table directly
 - do not use `supabase db push` for the application schema
 - backend deploys are expected to run `alembic upgrade head` before startup and then pass the startup revision check
+- Railway production deploys must provide `MIGRATION_DATABASE_URL` as a privileged migration/admin connection, while `DATABASE_URL` remains the least-privilege runtime connection used by the app after startup
 - run `python scripts/prod/check-postgres-rls.py --database-url "$DATABASE_URL"` against the production runtime connection string before and after rollout
 - if the runtime role reports `rolbypassrls=true`, switch the app to a non-bypass runtime role and reserve the privileged/admin connection for migrations only
-- once the runtime role is a least-privilege non-bypass role, do not rely on that runtime `DATABASE_URL` for future DDL-bearing migrations; run hosted Alembic with a privileged migration/admin connection before the backend deploy or provide a separate migration-only connection path
+- once the runtime role is a least-privilege non-bypass role, do not rely on that runtime `DATABASE_URL` for future DDL-bearing migrations; use `MIGRATION_DATABASE_URL` or another privileged migration-only connection path for Alembic
 - backend deploy config must carry the trusted-host list, allowed frontend/backend origins, and any explicit rate-limit overrides expected for the environment
 
 Allowlist administration:
@@ -234,6 +236,7 @@ Allowlist administration:
 Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
+- Production Railway backend deploys fail closed if `APP_ENV=production` and `MIGRATION_DATABASE_URL` is missing.
 - The required revision configured for the backend matches `0011_rate_limit_counters` or the current deployed head.
 - Backend startup revision check passes.
 - `scripts/prod/check-postgres-rls.py` passes against the runtime `DATABASE_URL`.

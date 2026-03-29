@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-28 20:15:00 EDT
+
+- Split deployed database connectivity into two explicit roles: `DATABASE_URL` remains the least-privilege runtime connection, while Alembic now prefers `MIGRATION_DATABASE_URL` for privileged DDL-bearing migrations.
+- Made Railway production backend predeploy fail closed when `MIGRATION_DATABASE_URL` is missing, because privilege errors during `alembic upgrade head` are an avoidable configuration failure rather than a runtime surprise.
+- Kept local and simpler environments backward-compatible by letting Alembic fall back to `DATABASE_URL` when no separate migration connection is configured.
+
 ## 2026-03-28 18:58:01 EDT
 
 - Chose Postgres-backed fixed-window rate limiting as the shared abuse-control path for auth, capture, and general API routes, instead of adding Redis or a CAPTCHA-first flow, so Gust can harden expensive LLM/transcription paths without adding significant user friction or extra infrastructure.
