@@ -55,6 +55,26 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("BACKEND_PUBLIC_URL"),
     )
+    railway_private_domain: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("RAILWAY_PRIVATE_DOMAIN"),
+    )
+    railway_public_domain: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("RAILWAY_PUBLIC_DOMAIN"),
+    )
+    railway_service_backend_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("RAILWAY_SERVICE_BACKEND_URL"),
+    )
+    railway_service_frontend_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("RAILWAY_SERVICE_FRONTEND_URL"),
+    )
+    railway_static_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("RAILWAY_STATIC_URL"),
+    )
     supabase_url: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("SUPABASE_URL"),

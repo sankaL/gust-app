@@ -41,12 +41,21 @@ def allowed_request_origins(settings: Settings) -> set[str]:
 def trusted_hosts(settings: Settings) -> list[str]:
     hosts = set(LOCAL_HOSTS)
     for candidate in settings.trusted_hosts:
-        if candidate:
-            hosts.add(candidate)
-    for url in (settings.frontend_app_url, settings.backend_public_url):
-        hostname = _hostname_from_url(url)
-        if hostname is not None:
-            hosts.add(hostname)
+        normalized = _hostname_or_host(candidate)
+        if normalized is not None:
+            hosts.add(normalized)
+    for candidate in (
+        settings.frontend_app_url,
+        settings.backend_public_url,
+        settings.railway_private_domain,
+        settings.railway_public_domain,
+        settings.railway_service_backend_url,
+        settings.railway_service_frontend_url,
+        settings.railway_static_url,
+    ):
+        normalized = _hostname_or_host(candidate)
+        if normalized is not None:
+            hosts.add(normalized)
     return sorted(hosts)
 
 
@@ -101,3 +110,12 @@ def _hostname_from_url(value: str | None) -> str | None:
         return None
     parsed = urlparse(value)
     return parsed.hostname
+
+
+def _hostname_or_host(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if "://" in value:
+        return _hostname_from_url(value)
+    candidate = value.strip()
+    return candidate or None
