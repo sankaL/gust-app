@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from app.core.settings import Settings, get_settings
 from app.core.request_security import trusted_hosts
+from app.core.settings import Settings, get_settings
 
 
 def test_settings_fail_closed_when_required_config_is_missing(

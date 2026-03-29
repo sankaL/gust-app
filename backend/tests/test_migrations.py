@@ -281,7 +281,10 @@ def test_supabase_allowlist_hardening_migration_revokes_public_roles() -> None:
 
     sql = migration_path.read_text(encoding="utf-8")
 
-    assert "revoke all privileges on table public.allowed_users from public, anon, authenticated;" in sql
+    assert (
+        "revoke all privileges on table public.allowed_users from public, anon, authenticated;"
+        in sql
+    )
     assert "revoke all privileges on table public.allowed_users from gust_app_runtime;" in sql
     assert "grant select on table public.allowed_users to supabase_auth_admin;" in sql
     assert "grant select on table public.allowed_users to gust_app_runtime;" in sql
