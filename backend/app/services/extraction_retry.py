@@ -9,6 +9,8 @@ from typing import Any, Callable
 
 from pydantic import ValidationError
 
+from app.core.input_safety import sanitize_for_log
+
 logger = logging.getLogger("gust.api")
 
 
@@ -83,36 +85,26 @@ class ExtractionRetryManager:
                         "event": "extraction_validation_failed",
                         "attempt": attempt,
                         "max_retries": self.config.max_retries,
-                        "error": str(exc),
                         "error_type": type(exc).__name__,
-                        "validation_errors": exc.errors() if hasattr(exc, "errors") else None,
+                        "validation_error_count": len(exc.errors()) if hasattr(exc, "errors") else 0,
                     },
                 )
 
             except Exception as exc:
                 last_exception = exc
                 self.last_attempt_count = attempt
-                # Capture detailed error information
-                import traceback
-
                 error_details = {
                     "event": "extraction_attempt_failed",
                     "attempt": attempt,
                     "max_retries": self.config.max_retries,
-                    "error": str(exc),
                     "error_type": type(exc).__name__,
-                    "error_module": type(exc).__module__,
-                    "traceback": traceback.format_exc(),
+                    "error_message": sanitize_for_log(str(exc), max_length=160),
                 }
 
-                # Add specific details for common error types
                 if hasattr(exc, "response"):
                     error_details["response_status"] = getattr(exc.response, "status_code", None)
-                    error_details["response_text"] = getattr(exc.response, "text", None)
                 if hasattr(exc, "status_code"):
                     error_details["status_code"] = exc.status_code
-                if hasattr(exc, "body"):
-                    error_details["body"] = str(exc.body)
 
                 logger.warning("extraction_attempt_failed", extra=error_details)
 
@@ -130,30 +122,22 @@ class ExtractionRetryManager:
                 await asyncio.sleep(delay)
 
         # All retries exhausted
-        import traceback
-
         error_details = {
             "event": "extraction_retry_exhausted",
             "max_retries": self.config.max_retries,
-            "last_error": str(last_exception),
             "last_error_type": type(last_exception).__name__ if last_exception else None,
-            "last_error_module": type(last_exception).__module__ if last_exception else None,
+            "last_error_message": sanitize_for_log(str(last_exception), max_length=160)
+            if last_exception is not None
+            else None,
         }
 
-        # Add traceback if available
         if last_exception:
-            error_details["traceback"] = traceback.format_exc()
-
-            # Add specific details for common error types
             if hasattr(last_exception, "response"):
                 error_details["response_status"] = getattr(
                     last_exception.response, "status_code", None
                 )
-                error_details["response_text"] = getattr(last_exception.response, "text", None)
             if hasattr(last_exception, "status_code"):
                 error_details["status_code"] = last_exception.status_code
-            if hasattr(last_exception, "body"):
-                error_details["body"] = str(last_exception.body)
 
         logger.error("extraction_retry_exhausted", extra=error_details)
 

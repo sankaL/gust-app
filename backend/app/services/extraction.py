@@ -15,6 +15,7 @@ from langchain_core.runnables import RunnableLambda
 from langchain_openai import ChatOpenAI
 
 from app.core.errors import ConfigurationError
+from app.core.input_safety import sanitize_for_log
 from app.core.settings import Settings
 from app.prompts.extraction_prompts import ExtractionPromptManager
 from app.services.extraction_models import (
@@ -162,8 +163,10 @@ class LangChainExtractionService:
                     "model": model_config.model_id,
                     "model_name": model_config.name,
                     "attempt_count": self.last_attempt_count,
-                    "error": str(exc),
-                    "last_error": str(exc.last_exception) if exc.last_exception else None,
+                    "error_type": type(exc).__name__,
+                    "last_error_type": (
+                        type(exc.last_exception).__name__ if exc.last_exception else None
+                    ),
                 },
             )
             raise ExtractionServiceError("Extraction failed after retries.") from exc
@@ -285,27 +288,18 @@ class LangChainExtractionService:
                 }
             )
         except Exception as exc:
-            # Capture detailed error information for debugging
-            import traceback
-
             error_details = {
                 "event": "extraction_chain_error",
                 "model": model_config.model_id,
                 "model_name": model_config.name,
-                "error": str(exc),
                 "error_type": type(exc).__name__,
-                "error_module": type(exc).__module__,
-                "traceback": traceback.format_exc(),
+                "error_message": sanitize_for_log(str(exc), max_length=160),
             }
 
-            # Add specific details for common error types
             if hasattr(exc, "response"):
                 error_details["response_status"] = getattr(exc.response, "status_code", None)
-                error_details["response_text"] = getattr(exc.response, "text", None)
             if hasattr(exc, "status_code"):
                 error_details["status_code"] = exc.status_code
-            if hasattr(exc, "body"):
-                error_details["body"] = str(exc.body)
 
             logger.warning("extraction_chain_error", extra=error_details)
             raise ExtractorMalformedResponseError(
@@ -370,7 +364,7 @@ class LangChainExtractionService:
             extra={
                 "event": "extraction_raw_response",
                 "result_type": type(result).__name__,
-                "result_preview": str(result)[:500] if result else None,
+                "result_size_chars": len(str(result)) if result is not None else 0,
             },
         )
 
@@ -388,7 +382,7 @@ class LangChainExtractionService:
                     extra={
                         "event": "extraction_parse_error",
                         "content_length": len(result),
-                        "error": str(exc),
+                        "error_type": type(exc).__name__,
                     },
                 )
                 raise ExtractorMalformedResponseError(

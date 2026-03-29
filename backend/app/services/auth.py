@@ -99,6 +99,7 @@ class SupabaseAuthService:
         self,
         *,
         code_challenge: str,
+        state: str,
     ) -> str:
         self.ensure_configured()
         query = urlencode(
@@ -107,6 +108,7 @@ class SupabaseAuthService:
                 "redirect_to": self.callback_url,
                 "code_challenge": code_challenge,
                 "code_challenge_method": "S256",
+                "state": state,
             }
         )
         return f"{self.authorize_url}?{query}"
@@ -178,7 +180,12 @@ class SupabaseAuthService:
         if response.status_code >= 400:
             raise UpstreamAuthError("Authentication provider logout failed.")
 
-    def validate_access_token(self, access_token: str) -> AuthenticatedIdentity:
+    def validate_access_token(
+        self,
+        access_token: str,
+        *,
+        allow_expired: bool = False,
+    ) -> AuthenticatedIdentity:
         self.ensure_configured()
         signing_key = self._get_jwks_client().get_signing_key_from_jwt(access_token).key
         # NOTE: Supabase JWTs do not include an audience claim ("aud"), so we cannot
@@ -190,7 +197,12 @@ class SupabaseAuthService:
             access_token,
             signing_key,
             algorithms=["ES256", "RS256"],
-            options={"require": ["exp", "iat", "sub"], "verify_aud": False, "verify_iss": False},
+            options={
+                "require": ["exp", "iat", "sub"],
+                "verify_aud": False,
+                "verify_exp": not allow_expired,
+                "verify_iss": False,
+            },
         )
 
         issuer = claims.get("iss")

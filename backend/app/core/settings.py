@@ -1,8 +1,19 @@
+from __future__ import annotations
+
 from functools import lru_cache
 from typing import Optional
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.input_safety import (
+    DEFAULT_ALLOWED_AUDIO_CONTENT_TYPES,
+    DEFAULT_MAX_AUDIO_UPLOAD_BYTES,
+    MAX_GROUP_DESCRIPTION_CHARS,
+    MAX_TASK_DESCRIPTION_CHARS,
+    MAX_TITLE_CHARS,
+    MAX_TRANSCRIPT_CHARS,
+)
 
 
 class Settings(BaseSettings):
@@ -19,7 +30,7 @@ class Settings(BaseSettings):
     )
     database_url: str = Field(validation_alias=AliasChoices("DATABASE_URL"))
     required_alembic_revision: str = Field(
-        default="0010_enable_postgres_rls",
+        default="0011_rate_limit_counters",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -27,6 +38,10 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("RUN_STARTUP_CHECKS"),
     )
     log_level: str = Field(default="INFO", validation_alias=AliasChoices("LOG_LEVEL"))
+    enforce_origin_checks: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("ENFORCE_ORIGIN_CHECKS"),
+    )
     frontend_app_url: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("FRONTEND_APP_URL"),
@@ -50,6 +65,78 @@ class Settings(BaseSettings):
     session_cookie_domain: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("SESSION_COOKIE_DOMAIN"),
+    )
+    trusted_hosts: tuple[str, ...] = Field(
+        default=(),
+        validation_alias=AliasChoices("TRUSTED_HOSTS"),
+    )
+    extra_allowed_origins: tuple[str, ...] = Field(
+        default=(),
+        validation_alias=AliasChoices("EXTRA_ALLOWED_ORIGINS"),
+    )
+    max_transcript_chars: int = Field(
+        default=MAX_TRANSCRIPT_CHARS,
+        validation_alias=AliasChoices("MAX_TRANSCRIPT_CHARS"),
+    )
+    max_title_chars: int = Field(
+        default=MAX_TITLE_CHARS,
+        validation_alias=AliasChoices("MAX_TITLE_CHARS"),
+    )
+    max_task_description_chars: int = Field(
+        default=MAX_TASK_DESCRIPTION_CHARS,
+        validation_alias=AliasChoices("MAX_TASK_DESCRIPTION_CHARS"),
+    )
+    max_group_description_chars: int = Field(
+        default=MAX_GROUP_DESCRIPTION_CHARS,
+        validation_alias=AliasChoices("MAX_GROUP_DESCRIPTION_CHARS"),
+    )
+    max_audio_upload_bytes: int = Field(
+        default=DEFAULT_MAX_AUDIO_UPLOAD_BYTES,
+        validation_alias=AliasChoices("MAX_AUDIO_UPLOAD_BYTES"),
+    )
+    allowed_audio_content_types: tuple[str, ...] = Field(
+        default=DEFAULT_ALLOWED_AUDIO_CONTENT_TYPES,
+        validation_alias=AliasChoices("ALLOWED_AUDIO_CONTENT_TYPES"),
+    )
+    rate_limit_public_get_ip: str = Field(
+        default="120/60",
+        validation_alias=AliasChoices("RATE_LIMIT_PUBLIC_GET_IP"),
+    )
+    rate_limit_authenticated_get_user: str = Field(
+        default="120/60",
+        validation_alias=AliasChoices("RATE_LIMIT_AUTHENTICATED_GET_USER"),
+    )
+    rate_limit_authenticated_write_user: str = Field(
+        default="30/60,300/3600",
+        validation_alias=AliasChoices("RATE_LIMIT_AUTHENTICATED_WRITE_USER"),
+    )
+    rate_limit_auth_entry_ip: str = Field(
+        default="10/600,50/3600",
+        validation_alias=AliasChoices("RATE_LIMIT_AUTH_ENTRY_IP"),
+    )
+    rate_limit_capture_voice_user: str = Field(
+        default="3/60,12/600,40/86400",
+        validation_alias=AliasChoices("RATE_LIMIT_CAPTURE_VOICE_USER"),
+    )
+    rate_limit_capture_voice_ip: str = Field(
+        default="10/600,100/86400",
+        validation_alias=AliasChoices("RATE_LIMIT_CAPTURE_VOICE_IP"),
+    )
+    rate_limit_capture_text_user: str = Field(
+        default="6/60,20/600,80/86400",
+        validation_alias=AliasChoices("RATE_LIMIT_CAPTURE_TEXT_USER"),
+    )
+    rate_limit_capture_text_ip: str = Field(
+        default="20/600,150/86400",
+        validation_alias=AliasChoices("RATE_LIMIT_CAPTURE_TEXT_IP"),
+    )
+    rate_limit_capture_submit_user: str = Field(
+        default="4/60,15/600,60/86400",
+        validation_alias=AliasChoices("RATE_LIMIT_CAPTURE_SUBMIT_USER"),
+    )
+    rate_limit_capture_submit_ip: str = Field(
+        default="15/600,120/86400",
+        validation_alias=AliasChoices("RATE_LIMIT_CAPTURE_SUBMIT_IP"),
     )
     capture_retention_days: int = Field(
         default=7,
@@ -135,6 +222,34 @@ class Settings(BaseSettings):
         default=10.0,
         validation_alias=AliasChoices("REMINDER_REQUEST_TIMEOUT_SECONDS"),
     )
+
+    @field_validator("trusted_hosts", "extra_allowed_origins", mode="before")
+    @classmethod
+    def _split_csv_tuple(
+        cls,
+        value: str | tuple[str, ...] | list[str] | None,
+    ) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if isinstance(value, tuple):
+            return tuple(item.strip() for item in value if item and item.strip())
+        if isinstance(value, list):
+            return tuple(item.strip() for item in value if item and item.strip())
+        return tuple(item.strip() for item in value.split(",") if item.strip())
+
+    @field_validator("allowed_audio_content_types", mode="before")
+    @classmethod
+    def _split_audio_types(
+        cls,
+        value: str | tuple[str, ...] | list[str] | None,
+    ) -> tuple[str, ...]:
+        if value is None:
+            return DEFAULT_ALLOWED_AUDIO_CONTENT_TYPES
+        if isinstance(value, tuple):
+            return value
+        if isinstance(value, list):
+            return tuple(value)
+        return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 @lru_cache(maxsize=1)

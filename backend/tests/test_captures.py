@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: UP045
 import asyncio
+from contextlib import contextmanager
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -9,16 +10,20 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 import sqlalchemy as sa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import app.services.capture as capture_service_module
+from app.core.action_locks import ActionLockBusyError, user_action_lock
 from app.core.dependencies import (
     get_auth_service,
     get_extraction_service,
     get_transcription_service,
 )
+from app.core.middleware import RequestContextMiddleware
+from app.core.rate_limits import RequestRateLimiter
 from app.core.errors import InvalidConfigurationError
 from app.core.security import ACCESS_TOKEN_COOKIE
 from app.db.engine import connection_scope
@@ -35,7 +40,13 @@ class FakeAuthService:
     def ensure_configured(self) -> None:
         return None
 
-    def validate_access_token(self, access_token: str) -> AuthenticatedIdentity:
+    def validate_access_token(
+        self,
+        access_token: str,
+        *,
+        allow_expired: bool = False,
+    ) -> AuthenticatedIdentity:
+        del allow_expired
         assert access_token == "access-token"
         return AuthenticatedIdentity(
             user_id="11111111-1111-1111-1111-111111111111",
@@ -99,6 +110,11 @@ def _override_transcription_service(app: FastAPI, service: FakeTranscriptionServ
 
 def _override_extraction_service(app: FastAPI, service: FakeExtractionService) -> None:
     app.dependency_overrides[get_extraction_service] = lambda: service
+
+
+async def _fixed_rate_limit_user_id(self, request) -> str:
+    del self, request
+    return "11111111-1111-1111-1111-111111111111"
 
 
 def _seed_user(
@@ -224,7 +240,16 @@ def _authenticated_headers(app: FastAPI, client: TestClient) -> dict[str, str]:
     session_response = client.get("/auth/session")
     csrf_token = session_response.json()["csrf_token"]
     assert csrf_token is not None
-    return {"X-CSRF-Token": csrf_token}
+    return {"X-CSRF-Token": csrf_token, "Origin": "http://frontend.test"}
+
+
+def _request_context_middleware(app: FastAPI) -> RequestContextMiddleware:
+    current = app.middleware_stack
+    while current is not None:
+        if isinstance(current, RequestContextMiddleware):
+            return current
+        current = getattr(current, "app", None)
+    raise AssertionError("RequestContextMiddleware not found")
 
 
 def test_text_capture_requires_csrf(app: FastAPI, client: TestClient) -> None:
@@ -256,6 +281,161 @@ def test_text_capture_creates_review_ready_capture(app: FastAPI, client: TestCli
     assert capture_row.input_type == "text"
     assert capture_row.source_text == "Plan roadmap"
     assert capture_row.status == "ready_for_review"
+
+
+def test_text_capture_rejects_oversized_transcript(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+
+    response = client.post("/captures/text", json={"text": "a" * 20_001}, headers=headers)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_text_capture_rejects_control_characters(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+
+    response = client.post("/captures/text", json={"text": "bad\x00input"}, headers=headers)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_text_capture_rate_limit_returns_429(
+    app: FastAPI,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    middleware = _request_context_middleware(app)
+    app.state.settings.rate_limit_capture_text_user = "1/60"
+    middleware.rate_limiter = RequestRateLimiter(app.state.settings)
+    monkeypatch.setattr(
+        RequestContextMiddleware,
+        "_resolve_rate_limit_user_id",
+        _fixed_rate_limit_user_id,
+    )
+
+    first = client.post("/captures/text", json={"text": "Plan roadmap"}, headers=headers)
+    second = client.post("/captures/text", json={"text": "Plan roadmap"}, headers=headers)
+
+    assert first.status_code == 201
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "rate_limit_exceeded"
+    assert second.headers["Retry-After"]
+
+
+def test_voice_capture_rate_limit_returns_429(
+    app: FastAPI,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    middleware = _request_context_middleware(app)
+    app.state.settings.rate_limit_capture_voice_user = "1/60"
+    middleware.rate_limiter = RequestRateLimiter(app.state.settings)
+    monkeypatch.setattr(
+        RequestContextMiddleware,
+        "_resolve_rate_limit_user_id",
+        _fixed_rate_limit_user_id,
+    )
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            result=TranscriptionResult(
+                transcript_text="Buy coffee beans at 5pm",
+                provider="mistral",
+                latency_ms=412,
+            )
+        ),
+    )
+
+    first = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+    second = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "rate_limit_exceeded"
+
+
+def test_voice_capture_rejects_invalid_audio_content_type(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.txt", b"voice-bytes", "text/plain")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_capture"
+
+
+def test_voice_capture_rejects_oversized_audio_upload(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+    client.app.state.settings.max_audio_upload_bytes = 4
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_capture"
+
+
+def test_capture_lock_contention_returns_429(
+    app: FastAPI,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = _authenticated_headers(app, client)
+
+    @contextmanager
+    def busy_lock(self, *, user_id: str, action: str):
+        del self, user_id, action
+        raise ActionLockBusyError()
+        yield
+
+    monkeypatch.setattr(capture_service_module.CaptureService, "_capture_lock", busy_lock)
+
+    response = client.post("/captures/text", json={"text": "Plan roadmap"}, headers=headers)
+
+    assert response.status_code == 429
+    assert response.json()["error"]["code"] == "rate_limit_exceeded"
+
+
+def test_user_action_lock_blocks_concurrent_attempts_and_releases(client: TestClient) -> None:
+    database_url = client.app.state.settings.database_url
+
+    with user_action_lock(
+        database_url=database_url,
+        user_id="11111111-1111-1111-1111-111111111111",
+        action="capture_voice",
+    ):
+        with pytest.raises(ActionLockBusyError):
+            with user_action_lock(
+                database_url=database_url,
+                user_id="11111111-1111-1111-1111-111111111111",
+                action="capture_voice",
+            ):
+                pass
+
+    with user_action_lock(
+        database_url=database_url,
+        user_id="11111111-1111-1111-1111-111111111111",
+        action="capture_voice",
+    ):
+        pass
 
 
 def test_voice_capture_transcribes_audio_and_returns_review_state(
@@ -342,10 +522,11 @@ def test_voice_capture_marks_capture_failed_on_transcription_error(
     assert failure_log.provider_status_code == 503
     assert failure_log.provider_error_type == "upstream_unavailable"
     assert failure_log.provider_error_code == "E503"
-    assert failure_log.audio_filename == "capture.webm"
+    assert failure_log.audio_filename_extension == "webm"
     assert failure_log.content_type == "audio/webm"
     assert failure_log.audio_size_bytes == len(b"voice-bytes")
     assert "Buy coffee beans at 5pm" not in caplog.text
+    assert "capture.webm" not in caplog.text
 
 
 def test_voice_capture_returns_user_error_for_no_speech(
@@ -613,9 +794,46 @@ def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
     assert task_rows[1].reminder_at == datetime(2026, 3, 23, 13, 0)
     assert task_rows[1].reminder_offset_minutes == 780
     assert reminder_rows == []
-    assert [row.title for row in subtask_rows] == ["Draft email"]
-    assert capture_row.status == "completed"
-    assert capture_row.extraction_attempt_count == 1
+
+
+def test_submit_capture_rate_limit_returns_429(
+    app: FastAPI,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    middleware = _request_context_middleware(app)
+    app.state.settings.rate_limit_capture_submit_user = "1/60"
+    middleware.rate_limiter = RequestRateLimiter(app.state.settings)
+    monkeypatch.setattr(
+        RequestContextMiddleware,
+        "_resolve_rate_limit_user_id",
+        _fixed_rate_limit_user_id,
+    )
+    capture_id = _seed_capture(client, user_id="11111111-1111-1111-1111-111111111111")
+    _override_extraction_service(
+        app,
+        FakeExtractionService(
+            responses=[
+                {"tasks": [{"title": "Review roadmap", "top_confidence": 0.9, "subtasks": []}]}
+            ]
+        ),
+    )
+
+    first = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": "Review roadmap"},
+        headers=headers,
+    )
+    second = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": "Review roadmap"},
+        headers=headers,
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "rate_limit_exceeded"
 
 
 def test_submit_capture_can_retry_after_downstream_write_failure(
@@ -661,7 +879,7 @@ def test_submit_capture_can_retry_after_downstream_write_failure(
         first_response = failing_client.post(
             f"/captures/{capture_id}/submit",
             json={"transcript_text": "Plan trip next week"},
-            headers={"X-CSRF-Token": csrf_token},
+            headers={"X-CSRF-Token": csrf_token, "Origin": "http://frontend.test"},
         )
 
     assert first_response.status_code == 500

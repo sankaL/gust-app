@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 # ruff: noqa: UP045
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.core.dependencies import get_current_session_context, get_group_service, require_csrf
+from app.core.input_safety import (
+    MAX_GROUP_DESCRIPTION_CHARS,
+    MAX_TITLE_CHARS,
+    validate_optional_plain_text,
+    validate_plain_text,
+)
 from app.db.repositories import GroupRecord, GroupSummaryRecord, SessionContext
 from app.services.group_service import GroupService, GroupUpdateInput
 
@@ -20,20 +26,50 @@ RequiredSessionContextDep = Annotated[SessionContext, Depends(require_csrf)]
 class GroupResponse(BaseModel):
     id: str
     name: str
-    description: str | None
+    description: Optional[str]
     is_system: bool
-    system_key: str | None
+    system_key: Optional[str]
     open_task_count: int
 
 
 class CreateGroupRequest(BaseModel):
     name: str
-    description: str | None = None
+    description: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        return validate_plain_text(value, field_name="Group name", max_length=MAX_TITLE_CHARS)
+
+    @field_validator("description")
+    @classmethod
+    def _validate_description(cls, value: Optional[str]) -> Optional[str]:
+        return validate_optional_plain_text(
+            value,
+            field_name="Group description",
+            max_length=MAX_GROUP_DESCRIPTION_CHARS,
+        )
 
 
 class UpdateGroupRequest(BaseModel):
-    name: str | None = None
-    description: str | None = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return validate_plain_text(value, field_name="Group name", max_length=MAX_TITLE_CHARS)
+
+    @field_validator("description")
+    @classmethod
+    def _validate_description(cls, value: Optional[str]) -> Optional[str]:
+        return validate_optional_plain_text(
+            value,
+            field_name="Group description",
+            max_length=MAX_GROUP_DESCRIPTION_CHARS,
+        )
 
 
 class DeleteGroupRequest(BaseModel):
@@ -73,7 +109,11 @@ def update_group_route(
     group = group_service.update_group(
         user_id=session_context.user.id,
         group_id=group_id,
-        payload=GroupUpdateInput(name=payload.name, description=payload.description),
+        payload=GroupUpdateInput(
+            name=payload.name,
+            description=payload.description,
+            description_provided="description" in payload.model_fields_set,
+        ),
     )
     return _build_group_response(group)
 

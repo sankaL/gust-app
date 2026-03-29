@@ -34,7 +34,7 @@ LOCAL_SUPABASE_ANON_KEY = (
 LOCAL_ENV_DEFAULTS = {
     "APP_ENV": "development",
     "GUST_DEV_MODE": "true",
-    "REQUIRED_ALEMBIC_REVISION": "0009_task_descriptions",
+    "REQUIRED_ALEMBIC_REVISION": "0011_rate_limit_counters",
     "RUN_STARTUP_CHECKS": "true",
     "LOG_LEVEL": "INFO",
     "SESSION_COOKIE_SECURE": "false",
@@ -224,6 +224,7 @@ def build_runtime_values(
             "postgresql+psycopg://postgres:postgres@host.docker.internal:"
             f"{ports['GUST_SUPABASE_DB_PORT']}/postgres"
         ),
+        "REQUIRED_ALEMBIC_REVISION": LOCAL_ENV_DEFAULTS["REQUIRED_ALEMBIC_REVISION"],
         "FRONTEND_APP_URL": frontend_url,
         "BACKEND_PUBLIC_URL": backend_url,
         "SUPABASE_URL": f"http://host.docker.internal:{ports['GUST_SUPABASE_API_PORT']}",
@@ -265,6 +266,7 @@ def main() -> None:
         shutil.copytree(
             SUPABASE_TEMPLATE_DIR / "migrations",
             SUPABASE_RUNTIME_DIR / "migrations",
+            dirs_exist_ok=True,
         )
     shutil.copy2(SUPABASE_TEMPLATE_DIR / "seed.sql", SUPABASE_RUNTIME_DIR / "seed.sql")
 

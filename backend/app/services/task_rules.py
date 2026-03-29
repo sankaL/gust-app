@@ -7,6 +7,13 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from app.core.input_safety import (
+    MAX_TASK_DESCRIPTION_CHARS,
+    MAX_TITLE_CHARS,
+    validate_optional_plain_text,
+    validate_plain_text,
+)
+
 
 @dataclass
 class RecurrenceInput:
@@ -29,18 +36,18 @@ class NormalizedTaskFields:
 
 
 def normalize_task_description(description: str | None, *, title: str | None = None) -> str | None:
-    if description is None:
-        return None
-    if not isinstance(description, str):
-        return None
-
-    normalized_description = " ".join(description.strip().split())
-    if not normalized_description:
+    try:
+        normalized_description = validate_optional_plain_text(
+            description,
+            field_name="Description",
+            max_length=MAX_TASK_DESCRIPTION_CHARS,
+        )
+    except ValueError:
         return None
 
     if title is not None:
         normalized_title = " ".join(title.strip().split()).casefold()
-        if normalized_description.casefold() == normalized_title:
+        if normalized_description is not None and normalized_description.casefold() == normalized_title:
             return None
 
     return normalized_description
@@ -58,7 +65,11 @@ def normalize_task_fields(
     assume_utc_for_naive: bool = False,
     default_due_date_for_recurrence: bool = False,
 ) -> NormalizedTaskFields:
-    normalized_title = title.strip()
+    normalized_title = validate_plain_text(
+        title,
+        field_name="Task title",
+        max_length=MAX_TITLE_CHARS,
+    )
     if not normalized_title:
         raise ValueError("Task title cannot be blank.")
 

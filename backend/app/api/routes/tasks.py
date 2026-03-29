@@ -2,12 +2,18 @@ from __future__ import annotations
 
 # ruff: noqa: UP045
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.core.dependencies import get_current_session_context, get_task_service, require_csrf
+from app.core.input_safety import (
+    MAX_TASK_DESCRIPTION_CHARS,
+    MAX_TITLE_CHARS,
+    validate_optional_plain_text,
+    validate_plain_text,
+)
 from app.core.errors import InvalidTaskError
 from app.db.repositories import SessionContext, SubtaskRecord, TaskRecord
 from app.services.task_rules import RecurrenceInput, due_bucket_for_date
@@ -34,80 +40,120 @@ class GroupSummaryResponse(BaseModel):
 
 class RecurrenceResponse(BaseModel):
     frequency: str
-    weekday: int | None = None
-    day_of_month: int | None = None
+    weekday: Optional[int] = None
+    day_of_month: Optional[int] = None
 
 
 class SubtaskResponse(BaseModel):
     id: str
     title: str
     is_completed: bool
-    completed_at: datetime | None
+    completed_at: Optional[datetime]
 
 
 class TaskSummaryResponse(BaseModel):
     id: str
     title: str
-    description: str | None = None
-    series_id: str | None = None
-    recurrence_frequency: str | None = None
+    description: Optional[str] = None
+    series_id: Optional[str] = None
+    recurrence_frequency: Optional[str] = None
     status: str
     needs_review: bool
-    due_date: date | None
-    reminder_at: datetime | None
+    due_date: Optional[date]
+    reminder_at: Optional[datetime]
     due_bucket: str
     group: GroupSummaryResponse
-    completed_at: datetime | None
-    deleted_at: datetime | None
+    completed_at: Optional[datetime]
+    deleted_at: Optional[datetime]
     subtask_count: int = 0
 
 
 class TaskDetailResponse(TaskSummaryResponse):
-    recurrence: RecurrenceResponse | None
+    recurrence: Optional[RecurrenceResponse]
     subtasks: list[SubtaskResponse]
 
 
 class UpdateTaskRequest(BaseModel):
     title: str
-    description: str | None = None
+    description: Optional[str] = None
     group_id: str
-    due_date: date | None = None
-    reminder_at: datetime | None = None
-    recurrence: RecurrenceResponse | None = None
+    due_date: Optional[date] = None
+    reminder_at: Optional[datetime] = None
+    recurrence: Optional[RecurrenceResponse] = None
+
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, value: str) -> str:
+        return validate_plain_text(value, field_name="Task title", max_length=MAX_TITLE_CHARS)
+
+    @field_validator("description")
+    @classmethod
+    def _validate_description(cls, value: Optional[str]) -> Optional[str]:
+        return validate_optional_plain_text(
+            value,
+            field_name="Task description",
+            max_length=MAX_TASK_DESCRIPTION_CHARS,
+        )
 
 
 class CreateTaskRequest(BaseModel):
     title: str
-    description: str | None = None
+    description: Optional[str] = None
     group_id: str
-    due_date: date | None = None
-    reminder_at: datetime | None = None
-    recurrence: RecurrenceResponse | None = None
+    due_date: Optional[date] = None
+    reminder_at: Optional[datetime] = None
+    recurrence: Optional[RecurrenceResponse] = None
+
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, value: str) -> str:
+        return validate_plain_text(value, field_name="Task title", max_length=MAX_TITLE_CHARS)
+
+    @field_validator("description")
+    @classmethod
+    def _validate_description(cls, value: Optional[str]) -> Optional[str]:
+        return validate_optional_plain_text(
+            value,
+            field_name="Task description",
+            max_length=MAX_TASK_DESCRIPTION_CHARS,
+        )
 
 
 class CreateSubtaskRequest(BaseModel):
     title: str
 
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, value: str) -> str:
+        return validate_plain_text(value, field_name="Subtask title", max_length=MAX_TITLE_CHARS)
+
 
 class UpdateSubtaskRequest(BaseModel):
-    title: str | None = None
-    is_completed: bool | None = None
+    title: Optional[str] = None
+    is_completed: Optional[bool] = None
+
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return validate_plain_text(value, field_name="Subtask title", max_length=MAX_TITLE_CHARS)
 
 
 class PaginatedTaskListResponse(BaseModel):
     items: list[TaskSummaryResponse]
     has_more: bool
-    next_cursor: str | None
+    next_cursor: Optional[str]
 
 
 @router.get("", response_model=PaginatedTaskListResponse)
 def list_tasks_route(
     session_context: OptionalSessionContextDep,
     task_service: TaskServiceDep,
-    group_id: str | None = Query(None),
+    group_id: Optional[str] = Query(None),
     status_value: str = Query("open", alias="status"),
     limit: int = Query(50, ge=1, le=100),
-    cursor: str | None = Query(None),
+    cursor: Optional[str] = Query(None),
 ) -> PaginatedTaskListResponse:
     validated_status = _validate_status(status_value)
     result = task_service.list_tasks(

@@ -1,6 +1,6 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.6  
+**Version:** 1.7  
 **Last Updated:** 2026-03-28
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
@@ -164,6 +164,20 @@ Deployment implication:
 - environments must apply `0010_enable_postgres_rls` before running the backend that sets transaction-scoped DB actor context
 - the normal backend runtime role must not have `BYPASSRLS`, or the policies will not provide protection
 
+## Phase 11 Revision (Security Hardening Counters)
+
+Phase 11 introduces `0011_rate_limit_counters` as the required application revision.
+
+That revision establishes:
+
+- `rate_limit_counters` for shared fixed-window abuse counters keyed by scope, subject, and window
+- the migration floor required by backend request rate limiting on auth, capture, and general API routes
+- bounded cleanup support through `rate_limit_counters.expires_at`
+
+Deployment implication:
+
+- environments must apply `0011_rate_limit_counters` before running the backend that enforces request throttling, because startup revision checks now require that revision by default
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -173,8 +187,8 @@ For environments with existing deployments, use this order:
 3. Take or verify the availability of a recoverable database backup.
 4. Apply database migrations.
 5. Verify migration success and required invariants.
-6. Deploy backend services that depend on the new schema.
-7. Verify backend health and startup migration-level checks.
+6. Deploy backend services that depend on the new schema and new request-security settings.
+7. Verify backend health, startup migration-level checks, and edge-facing request protections.
 8. Deploy frontend changes that depend on the backend behavior.
 9. Verify the user-visible flow and background job behavior.
 
@@ -207,6 +221,7 @@ Production database ownership rules:
 - run `python scripts/prod/check-postgres-rls.py --database-url "$DATABASE_URL"` against the production runtime connection string before and after rollout
 - if the runtime role reports `rolbypassrls=true`, switch the app to a non-bypass runtime role and reserve the privileged/admin connection for migrations only
 - once the runtime role is a least-privilege non-bypass role, do not rely on that runtime `DATABASE_URL` for future DDL-bearing migrations; run hosted Alembic with a privileged migration/admin connection before the backend deploy or provide a separate migration-only connection path
+- backend deploy config must carry the trusted-host list, allowed frontend/backend origins, and any explicit rate-limit overrides expected for the environment
 
 Allowlist administration:
 
@@ -219,7 +234,7 @@ Allowlist administration:
 Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
-- The required revision configured for the backend matches `0010_enable_postgres_rls` or the current deployed head.
+- The required revision configured for the backend matches `0011_rate_limit_counters` or the current deployed head.
 - Backend startup revision check passes.
 - `scripts/prod/check-postgres-rls.py` passes against the runtime `DATABASE_URL`.
 - The current Postgres runtime role reports `rolbypassrls = false`.
@@ -243,11 +258,20 @@ Minimum verification after applying schema-affecting changes:
 - an allowlisted Google email can complete signup/sign-in.
 - a non-allowlisted Google email is rejected before `auth.users` insertion.
 - a previously-created but now-removed email cannot restore a backend session and is redirected or returned as `auth_email_not_allowed`.
+- `rate_limit_counters` exists with the composite primary key and `expires_at` cleanup index.
+- `POST /auth/session/google/start` returns both the PKCE verifier cookie and the backend OAuth state cookie.
+- `GET /auth/session/callback` rejects missing or invalid backend OAuth `state`.
+- Unsafe cookie-authenticated methods reject requests with missing or foreign `Origin` / `Referer`.
+- Trusted host enforcement accepts the deployed frontend/backend hosts and rejects unexpected `Host` headers.
+- Auth/session and authenticated JSON responses emit `Cache-Control: no-store` plus the committed security headers.
 
 For capture/extraction releases, also verify:
 
 - `POST /captures/text`, `POST /captures/voice`, and `POST /captures/{capture_id}/submit` succeed against the deployed schema
 - failed transcription or extraction attempts leave capture rows in explicit failure states without creating partial task writes
+- repeated capture/auth requests eventually return `429 rate_limit_exceeded` with `Retry-After` and `X-RateLimit-*` headers
+- lock contention on duplicate in-flight capture work returns `429 rate_limit_exceeded` instead of running concurrent expensive provider calls
+- oversized text captures, control-character payloads, oversize audio uploads, and disallowed audio MIME types are rejected cleanly
 
 For digest-related releases, also verify:
 

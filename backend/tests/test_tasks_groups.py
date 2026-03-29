@@ -25,7 +25,13 @@ class FakeAuthService:
     def ensure_configured(self) -> None:
         return None
 
-    def validate_access_token(self, access_token: str) -> AuthenticatedIdentity:
+    def validate_access_token(
+        self,
+        access_token: str,
+        *,
+        allow_expired: bool = False,
+    ) -> AuthenticatedIdentity:
+        del allow_expired
         assert access_token == "access-token"
         return AuthenticatedIdentity(
             user_id=USER_ID,
@@ -147,7 +153,7 @@ def _authenticated_headers(app: FastAPI, client: TestClient) -> dict[str, str]:
     client.cookies.set(ACCESS_TOKEN_COOKIE, "access-token")
     csrf_token = client.get("/auth/session").json()["csrf_token"]
     assert csrf_token is not None
-    return {"X-CSRF-Token": csrf_token}
+    return {"X-CSRF-Token": csrf_token, "Origin": "http://frontend.test"}
 
 
 def test_group_and_task_mutations_require_csrf(app: FastAPI, client: TestClient) -> None:
@@ -199,6 +205,38 @@ def test_group_crud_rejects_duplicates_and_system_updates(
     assert duplicate_response.status_code == 409
     assert duplicate_response.json()["error"]["code"] == "group_name_conflict"
     assert rename_inbox_response.status_code == 422
+
+
+def test_group_validation_rejects_oversized_description(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+
+    response = client.post(
+        "/groups",
+        json={"name": "Work", "description": "a" * 501},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_group_patch_allows_clearing_description(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Work", description="Needs cleanup")
+
+    response = client.patch(
+        f"/groups/{group_id}",
+        json={"description": ""},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["description"] is None
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        group_row = connection.execute(sa.select(groups).where(groups.c.id == group_id)).one()
+
+    assert group_row.description is None
 
 
 def test_group_delete_reassigns_tasks_and_clears_review(app: FastAPI, client: TestClient) -> None:
@@ -261,6 +299,27 @@ def test_create_task_persists_description(
         task_row = connection.execute(sa.select(tasks).where(tasks.c.id == payload["id"])).one()
 
     assert task_row.description == "Capture the schema and UI contract changes for descriptions."
+
+
+def test_create_task_rejects_oversized_title(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Work")
+
+    response = client.post(
+        "/tasks",
+        json={
+            "title": "a" * 201,
+            "description": None,
+            "group_id": group_id,
+            "due_date": None,
+            "reminder_at": None,
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
 
 
 def test_group_delete_reassigns_soft_deleted_tasks_too(app: FastAPI, client: TestClient) -> None:

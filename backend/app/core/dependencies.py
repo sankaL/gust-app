@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 # ruff: noqa: UP045
-from typing import Annotated
+from typing import Annotated, Optional, Union
 
 from fastapi import Depends, Request, Response
 
@@ -11,7 +11,9 @@ from app.core.errors import (
     ConfigurationError,
     CsrfValidationError,
     InternalJobAuthError,
+    OriginValidationError,
 )
+from app.core.request_security import validate_browser_origin
 from app.core.security import (
     ACCESS_TOKEN_COOKIE,
     CSRF_COOKIE,
@@ -51,7 +53,7 @@ def get_auth_service(settings: SettingsDep) -> SupabaseAuthService:
 
 def get_transcription_service(
     settings: SettingsDep,
-) -> MistralTranscriptionService | MockTranscriptionService:
+) -> Union[MistralTranscriptionService, MockTranscriptionService]:
     """Return the appropriate transcription service based on environment.
 
     In dev mode (GUST_DEV_MODE=true), returns a MockTranscriptionService
@@ -70,7 +72,7 @@ def get_extraction_service(settings: SettingsDep) -> LangChainExtractionService:
 def get_capture_service(
     settings: SettingsDep,
     transcription_service: Annotated[
-        MistralTranscriptionService | MockTranscriptionService,
+        Union[MistralTranscriptionService, MockTranscriptionService],
         Depends(get_transcription_service),
     ],
     extraction_service: Annotated[
@@ -127,11 +129,15 @@ async def get_optional_session_context(
     response: Response,
     settings: SettingsDep,
     auth_service: Annotated[SupabaseAuthService, Depends(get_auth_service)],
-) -> SessionContext | None:
+) -> Optional[SessionContext]:
     access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
+    prefetched_session = getattr(request.state, "prefetched_session", None)
 
-    if access_token:
+    if prefetched_session is not None:
+        identity = prefetched_session.identity
+        set_session_cookies(response, settings, prefetched_session.tokens)
+    elif access_token:
         try:
             identity = auth_service.validate_access_token(access_token)
         except ExpiredSignatureError:
@@ -174,7 +180,7 @@ async def get_optional_session_context(
 
 
 async def get_current_session_context(
-    session_context: Annotated[SessionContext | None, Depends(get_optional_session_context)],
+    session_context: Annotated[Optional[SessionContext], Depends(get_optional_session_context)],
 ) -> SessionContext:
     if session_context is None:
         raise AuthRequiredError()
@@ -183,6 +189,7 @@ async def get_current_session_context(
 
 def require_csrf(
     request: Request,
+    settings: SettingsDep,
     session_context: Annotated[SessionContext, Depends(get_current_session_context)],
 ) -> SessionContext:
     cookie_token = request.cookies.get(CSRF_COOKIE)
@@ -190,6 +197,8 @@ def require_csrf(
 
     if not cookie_token or not header_token or cookie_token != header_token:
         raise CsrfValidationError()
+    if not validate_browser_origin(request, settings):
+        raise OriginValidationError()
 
     return session_context
 

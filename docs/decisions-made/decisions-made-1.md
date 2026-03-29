@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-03-28 18:58:01 EDT
+
+- Chose Postgres-backed fixed-window rate limiting as the shared abuse-control path for auth, capture, and general API routes, instead of adding Redis or a CAPTCHA-first flow, so Gust can harden expensive LLM/transcription paths without adding significant user friction or extra infrastructure.
+- Added a second backend-owned OAuth `state` cookie check on top of PKCE and paired all unsafe cookie-authenticated methods with same-origin `Origin`/`Referer` validation, because CSRF protection alone was not enough for the tightened browser-session threat model.
+- Standardized security hardening around typed input boundaries and redacted operational logging: plain-text fields are normalized and size-bounded at the backend edge, audio uploads are MIME/size-checked before provider calls, and logs keep only sanitized metadata rather than transcript or provider payload content.
+
 ## 2026-03-28 17:11:54 EDT
 
 - Chose a dual-layer Google auth allowlist for private access: a Supabase `before_user_created` hook to stop unauthorized `auth.users` creation plus a backend allowlist check on callback and refresh/session resolution so previously-created but now-removed emails still lose access.

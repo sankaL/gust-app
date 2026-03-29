@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
+from app.core.action_locks import ActionLockBusyError, user_action_lock
 from app.core.errors import (
     CaptureNotFoundError,
     CaptureStateConflictError,
@@ -16,12 +17,20 @@ from app.core.errors import (
     ExtractionFailedError,
     InvalidCaptureError,
     InvalidConfigurationError,
+    RateLimitExceededError,
     TranscriptionFailedError,
     TranscriptionNoSpeechError,
     TranscriptionProviderInvalidResponseError,
     TranscriptionProviderRejectedError,
     TranscriptionProviderUnavailableError,
     TranscriptionTimeoutError,
+)
+from app.core.input_safety import (
+    sanitize_for_log,
+    validate_audio_content_type,
+    validate_audio_size,
+    validate_multiline_text,
+    validate_upload_filename,
 )
 from app.core.settings import Settings
 from app.core.timing import timed_stage
@@ -164,99 +173,108 @@ class CaptureService:
         content_type: str,
         request_id: str | None = None,
     ) -> ReviewCaptureResult:
-        if not audio_bytes:
-            raise InvalidCaptureError("Audio upload cannot be empty.")
-        if not content_type.startswith("audio/"):
-            raise InvalidCaptureError("Uploaded file must be audio.")
-
-        capture = self._create_capture(
-            user_id=user_id,
-            input_type="voice",
-            status="pending_transcription",
-        )
-
-        logger.info(
-            "voice_transcription_started",
-            extra={
-                "event": "voice_transcription_started",
-                "capture_id": capture.id,
-                "user_id": user_id,
-                "request_id": request_id,
-                "audio_filename": filename,
-                "content_type": content_type,
-                "audio_size_bytes": len(audio_bytes),
-            },
-        )
+        try:
+            validate_audio_size(audio_bytes, max_bytes=self.settings.max_audio_upload_bytes)
+            validated_content_type = validate_audio_content_type(
+                content_type,
+                allowed_content_types=self.settings.allowed_audio_content_types,
+            )
+            validated_filename = validate_upload_filename(filename)
+        except ValueError as exc:
+            raise InvalidCaptureError(str(exc)) from exc
 
         try:
-            with timed_stage("capture.transcription"):
-                transcription = await self.transcription_service.transcribe(
-                    audio_bytes=audio_bytes,
-                    filename=filename,
-                    content_type=content_type,
-                )
-        except Exception as exc:
-            failure_reason, public_error = self._resolve_transcription_failure(exc)
-            self._log_voice_transcription_failure(
-                capture_id=capture.id,
-                user_id=user_id,
-                request_id=request_id,
-                filename=filename,
-                content_type=content_type,
-                audio_size_bytes=len(audio_bytes),
-                failure_reason=failure_reason,
-                error=exc,
-            )
-            self._mark_capture_failure(
-                capture_id=capture.id,
-                user_id=user_id,
-                status="transcription_failed",
-                error_code=failure_reason,
-            )
-            raise public_error from exc
-
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            updated = update_capture(
-                connection,
-                user_id=user_id,
-                capture_id=capture.id,
-                status="ready_for_review",
-                transcript_text=self._normalize_transcript_text(transcription.transcript_text),
-                transcription_provider=transcription.provider,
-                transcription_latency_ms=transcription.latency_ms,
-                error_code=None,
-            )
-
-        assert updated is not None
-        logger.info(
-            "capture_transcribed",
-            extra={
-                "event": "capture_transcribed",
-                "capture_id": updated.id,
-                "user_id": user_id,
-                "request_id": request_id,
-            },
-        )
-
-        # Automatically extract and store in staging
-        try:
-            with timed_stage("capture.staging"):
-                await self._extract_and_store_in_staging(
+            with self._capture_lock(user_id=user_id, action="capture_voice"):
+                capture = self._create_capture(
                     user_id=user_id,
-                    capture_id=updated.id,
-                    transcript_text=updated.transcript_text or "",
+                    input_type="voice",
+                    status="pending_transcription",
                 )
-        except Exception as exc:
-            logger.warning(
-                "auto_extraction_failed",
-                extra={
-                    "event": "auto_extraction_failed",
-                    "capture_id": updated.id,
-                    "user_id": user_id,
-                    "error": str(exc),
-                },
-            )
-            # Don't fail the capture creation, just log the error
+
+                logger.info(
+                    "voice_transcription_started",
+                    extra={
+                        "event": "voice_transcription_started",
+                        "capture_id": capture.id,
+                        "user_id": user_id,
+                        "request_id": request_id,
+                        "audio_filename_extension": self._filename_extension(validated_filename),
+                        "content_type": sanitize_for_log(validated_content_type, max_length=80),
+                        "audio_size_bytes": len(audio_bytes),
+                    },
+                )
+
+                try:
+                    with timed_stage("capture.transcription"):
+                        transcription = await self.transcription_service.transcribe(
+                            audio_bytes=audio_bytes,
+                            filename=validated_filename,
+                            content_type=validated_content_type,
+                        )
+                except Exception as exc:
+                    failure_reason, public_error = self._resolve_transcription_failure(exc)
+                    self._log_voice_transcription_failure(
+                        capture_id=capture.id,
+                        user_id=user_id,
+                        request_id=request_id,
+                        filename=validated_filename,
+                        content_type=validated_content_type,
+                        audio_size_bytes=len(audio_bytes),
+                        failure_reason=failure_reason,
+                        error=exc,
+                    )
+                    self._mark_capture_failure(
+                        capture_id=capture.id,
+                        user_id=user_id,
+                        status="transcription_failed",
+                        error_code=failure_reason,
+                    )
+                    raise public_error from exc
+
+                with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                    updated = update_capture(
+                        connection,
+                        user_id=user_id,
+                        capture_id=capture.id,
+                        status="ready_for_review",
+                        transcript_text=self._normalize_transcript_text(transcription.transcript_text),
+                        transcription_provider=transcription.provider,
+                        transcription_latency_ms=transcription.latency_ms,
+                        error_code=None,
+                    )
+
+                assert updated is not None
+                logger.info(
+                    "capture_transcribed",
+                    extra={
+                        "event": "capture_transcribed",
+                        "capture_id": updated.id,
+                        "user_id": user_id,
+                        "request_id": request_id,
+                    },
+                )
+
+                try:
+                    with timed_stage("capture.staging"):
+                        await self._extract_and_store_in_staging(
+                            user_id=user_id,
+                            capture_id=updated.id,
+                            transcript_text=updated.transcript_text or "",
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "auto_extraction_failed",
+                        extra={
+                            "event": "auto_extraction_failed",
+                            "capture_id": updated.id,
+                            "user_id": user_id,
+                            "error_type": type(exc).__name__,
+                        },
+                    )
+        except ActionLockBusyError as exc:
+            raise RateLimitExceededError(
+                message="Another capture is already processing. Please wait a moment and retry."
+            ) from exc
 
         return ReviewCaptureResult(
             capture_id=updated.id,
@@ -269,33 +287,36 @@ class CaptureService:
         if not normalized:
             raise InvalidCaptureError("Text capture cannot be empty.")
 
-        capture = self._create_capture(
-            user_id=user_id,
-            input_type="text",
-            status="ready_for_review",
-            source_text=normalized,
-            transcript_text=normalized,
-        )
-
-        # Automatically extract and store in staging
         try:
-            with timed_stage("capture.staging"):
-                await self._extract_and_store_in_staging(
+            with self._capture_lock(user_id=user_id, action="capture_text"):
+                capture = self._create_capture(
                     user_id=user_id,
-                    capture_id=capture.id,
+                    input_type="text",
+                    status="ready_for_review",
+                    source_text=normalized,
                     transcript_text=normalized,
                 )
-        except Exception as exc:
-            logger.warning(
-                "auto_extraction_failed",
-                extra={
-                    "event": "auto_extraction_failed",
-                    "capture_id": capture.id,
-                    "user_id": user_id,
-                    "error": str(exc),
-                },
-            )
-            # Don't fail the capture creation, just log the error
+                try:
+                    with timed_stage("capture.staging"):
+                        await self._extract_and_store_in_staging(
+                            user_id=user_id,
+                            capture_id=capture.id,
+                            transcript_text=normalized,
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "auto_extraction_failed",
+                        extra={
+                            "event": "auto_extraction_failed",
+                            "capture_id": capture.id,
+                            "user_id": user_id,
+                            "error_type": type(exc).__name__,
+                        },
+                    )
+        except ActionLockBusyError as exc:
+            raise RateLimitExceededError(
+                message="Another capture is already processing. Please wait a moment and retry."
+            ) from exc
 
         return ReviewCaptureResult(
             capture_id=capture.id,
@@ -334,48 +355,54 @@ class CaptureService:
         )
 
         try:
-            with timed_stage("capture.extraction"):
-                (
-                    extractor_payload,
-                    extraction_attempt_count,
-                ) = await self._extract_payload_with_guardrails(
-                    transcript_text=normalized_transcript,
-                    extraction_request=extraction_request,
-                    inbox_group=inbox_group,
-                )
-        except (ExtractorMalformedResponseError, ValidationError) as exc:
-            extraction_attempt_count = self._resolve_extraction_attempt_count()
-            self._mark_capture_failure(
-                capture_id=capture_id,
-                user_id=user_id,
-                status="extraction_failed",
-                error_code="extractor_payload_invalid",
-                extraction_attempt_count=extraction_attempt_count,
-                transcript_edited_text=normalized_transcript,
-            )
-            raise ExtractionFailedError() from exc
-        except ExtractionServiceError as exc:
-            extraction_attempt_count = self._resolve_extraction_attempt_count()
-            self._mark_capture_failure(
-                capture_id=capture_id,
-                user_id=user_id,
-                status="extraction_failed",
-                error_code="extraction_provider_error",
-                extraction_attempt_count=extraction_attempt_count,
-                transcript_edited_text=normalized_transcript,
-            )
-            raise ExtractionFailedError() from exc
-        except Exception as exc:
-            extraction_attempt_count = self._resolve_extraction_attempt_count()
-            self._mark_capture_failure(
-                capture_id=capture_id,
-                user_id=user_id,
-                status="extraction_failed",
-                error_code=self._error_code_for_exception(exc),
-                extraction_attempt_count=extraction_attempt_count,
-                transcript_edited_text=normalized_transcript,
-            )
-            raise self._map_extraction_error(exc) from exc
+            with self._capture_lock(user_id=user_id, action="capture_submit"):
+                try:
+                    with timed_stage("capture.extraction"):
+                        (
+                            extractor_payload,
+                            extraction_attempt_count,
+                        ) = await self._extract_payload_with_guardrails(
+                            transcript_text=normalized_transcript,
+                            extraction_request=extraction_request,
+                            inbox_group=inbox_group,
+                        )
+                except (ExtractorMalformedResponseError, ValidationError) as exc:
+                    extraction_attempt_count = self._resolve_extraction_attempt_count()
+                    self._mark_capture_failure(
+                        capture_id=capture_id,
+                        user_id=user_id,
+                        status="extraction_failed",
+                        error_code="extractor_payload_invalid",
+                        extraction_attempt_count=extraction_attempt_count,
+                        transcript_edited_text=normalized_transcript,
+                    )
+                    raise ExtractionFailedError() from exc
+                except ExtractionServiceError as exc:
+                    extraction_attempt_count = self._resolve_extraction_attempt_count()
+                    self._mark_capture_failure(
+                        capture_id=capture_id,
+                        user_id=user_id,
+                        status="extraction_failed",
+                        error_code="extraction_provider_error",
+                        extraction_attempt_count=extraction_attempt_count,
+                        transcript_edited_text=normalized_transcript,
+                    )
+                    raise ExtractionFailedError() from exc
+                except Exception as exc:
+                    extraction_attempt_count = self._resolve_extraction_attempt_count()
+                    self._mark_capture_failure(
+                        capture_id=capture_id,
+                        user_id=user_id,
+                        status="extraction_failed",
+                        error_code=self._error_code_for_exception(exc),
+                        extraction_attempt_count=extraction_attempt_count,
+                        transcript_edited_text=normalized_transcript,
+                    )
+                    raise self._map_extraction_error(exc) from exc
+        except ActionLockBusyError as exc:
+            raise RateLimitExceededError(
+                message="Another capture is already processing. Please wait a moment and retry."
+            ) from exc
 
         skipped_items: list[SkippedTaskItem] = []
         prepared_tasks: list[PreparedTask] = []
@@ -657,7 +684,14 @@ class CaptureService:
         }
 
     def _normalize_transcript_text(self, value: str) -> str:
-        return value.strip()
+        try:
+            return validate_multiline_text(
+                value,
+                field_name="Transcript",
+                max_length=self.settings.max_transcript_chars,
+            )
+        except ValueError as exc:
+            raise InvalidCaptureError(str(exc)) from exc
 
     def _resolve_extraction_attempt_count(self) -> int:
         if self.last_extraction_attempt_count > 0:
@@ -730,8 +764,8 @@ class CaptureService:
                 "provider_status_code": provider_status_code,
                 "provider_error_type": provider_error_type,
                 "provider_error_code": provider_error_code,
-                "audio_filename": filename,
-                "content_type": content_type,
+                "audio_filename_extension": self._filename_extension(filename),
+                "content_type": sanitize_for_log(content_type, max_length=80),
                 "audio_size_bytes": audio_size_bytes,
             },
         )
@@ -925,7 +959,7 @@ class CaptureService:
                     "event": "extraction_failed_for_staging",
                     "capture_id": capture_id,
                     "user_id": user_id,
-                    "error": str(exc),
+                    "error_type": type(exc).__name__,
                 },
             )
             return
@@ -936,7 +970,7 @@ class CaptureService:
                     "event": "extraction_failed_for_staging",
                     "capture_id": capture_id,
                     "user_id": user_id,
-                    "error": str(exc),
+                    "error_type": type(exc).__name__,
                 },
             )
             return
@@ -988,39 +1022,41 @@ class CaptureService:
         if not normalized_transcript:
             raise InvalidCaptureError("Transcript cannot be empty.")
 
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
-            if capture is None:
-                raise CaptureNotFoundError()
-            if capture.status not in {"ready_for_review", "extraction_failed"}:
-                raise CaptureStateConflictError()
+        try:
+            with self._capture_lock(user_id=user_id, action="capture_reextract"):
+                with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                    capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
+                    if capture is None:
+                        raise CaptureNotFoundError()
+                    if capture.status not in {"ready_for_review", "extraction_failed"}:
+                        raise CaptureStateConflictError()
 
-            # Re-extraction should replace prior staged output for this capture.
-            delete_extracted_tasks_by_capture(
-                connection,
-                user_id=user_id,
-                capture_id=capture_id,
-            )
+                    delete_extracted_tasks_by_capture(
+                        connection,
+                        user_id=user_id,
+                        capture_id=capture_id,
+                    )
 
-            # Update the capture with the edited transcript
-            updated = update_capture(
-                connection,
-                user_id=user_id,
-                capture_id=capture_id,
-                transcript_text=normalized_transcript,
-                transcript_edited_text=normalized_transcript,
-                status="ready_for_review",
-                error_code=None,
-            )
+                    updated = update_capture(
+                        connection,
+                        user_id=user_id,
+                        capture_id=capture_id,
+                        transcript_text=normalized_transcript,
+                        transcript_edited_text=normalized_transcript,
+                        status="ready_for_review",
+                        error_code=None,
+                    )
 
-        assert updated is not None
-
-        # Re-extract and store in staging
-        await self._extract_and_store_in_staging(
-            user_id=user_id,
-            capture_id=capture_id,
-            transcript_text=normalized_transcript,
-        )
+                assert updated is not None
+                await self._extract_and_store_in_staging(
+                    user_id=user_id,
+                    capture_id=capture_id,
+                    transcript_text=normalized_transcript,
+                )
+        except ActionLockBusyError as exc:
+            raise RateLimitExceededError(
+                message="Another capture is already processing. Please wait a moment and retry."
+            ) from exc
 
         logger.info(
             "capture_re_extracted",
@@ -1036,6 +1072,16 @@ class CaptureService:
             status=updated.status,
             transcript_text=updated.transcript_text or "",
         )
+
+    def _capture_lock(self, *, user_id: str, action: str):
+        return user_action_lock(database_url=self.settings.database_url, user_id=user_id, action=action)
+
+    def _filename_extension(self, filename: str) -> str | None:
+        lowered = filename.lower()
+        if "." not in lowered:
+            return None
+        extension = lowered.rsplit(".", maxsplit=1)[-1]
+        return extension[:16] if extension else None
 
     async def complete_capture(
         self,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,8 +13,8 @@ class ExtractionAlternativeGroup(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    group_id: str | None = None
-    group_name: str | None = None
+    group_id: Optional[str] = None
+    group_name: Optional[str] = None
     confidence: float = Field(ge=0.0, le=1.0)
 
 
@@ -25,8 +26,8 @@ class ExtractionRecurrence(BaseModel):
     # Keep recurrence validation at candidate-normalization time so a single
     # malformed recurrence does not fail the whole extraction payload.
     frequency: str
-    weekday: int | None = None
-    day_of_month: int | None = None
+    weekday: Optional[int] = None
+    day_of_month: Optional[int] = None
 
 
 class ExtractionSubtask(BaseModel):
@@ -43,14 +44,14 @@ class ExtractedTaskCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str
-    description: str | None = None
-    due_date: date | None = None
-    reminder_at: datetime | None = None
-    group_id: str | None = None
-    group_name: str | None = None
+    description: Optional[str] = None
+    due_date: Optional[date] = None
+    reminder_at: Optional[datetime] = None
+    group_id: Optional[str] = None
+    group_name: Optional[str] = None
     top_confidence: float = Field(default=0.9, ge=0.0, le=1.0)
     alternative_groups: list[ExtractionAlternativeGroup] = Field(default_factory=list)
-    recurrence: ExtractionRecurrence | None = None
+    recurrence: Optional[ExtractionRecurrence] = None
     subtasks: list[ExtractionSubtask] = Field(default_factory=list)
 
 
@@ -72,7 +73,7 @@ class ExtractionModelConfig(BaseModel):
     model_id: str
     weight: float = 1.0  # For weighted A/B testing
     temperature: float = 0.0
-    max_tokens: int | None = None
+    max_tokens: Optional[int] = None
     is_default: bool = False
 
 

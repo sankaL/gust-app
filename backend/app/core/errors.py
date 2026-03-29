@@ -23,6 +23,7 @@ class ApiError(Exception):
     status_code: int
     code: str
     message: str
+    headers: dict[str, str] | None = None
 
 
 class AuthRequiredError(ApiError):
@@ -57,6 +58,15 @@ class InternalJobAuthError(ApiError):
         super().__init__(
             status_code=status.HTTP_403_FORBIDDEN,
             code="internal_job_auth_invalid",
+            message=message,
+        )
+
+
+class OriginValidationError(ApiError):
+    def __init__(self, message: str = "Request origin validation failed.") -> None:
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="origin_invalid",
             message=message,
         )
 
@@ -294,6 +304,21 @@ class ConflictError(ApiError):
         )
 
 
+class RateLimitExceededError(ApiError):
+    def __init__(
+        self,
+        *,
+        message: str = "Rate limit exceeded. Please retry shortly.",
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            code="rate_limit_exceeded",
+            message=message,
+            headers=headers,
+        )
+
+
 def not_implemented(resource: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -307,6 +332,7 @@ def build_error_response(
     status_code: int,
     code: str,
     message: str,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
     payload = {
@@ -321,6 +347,9 @@ def build_error_response(
     response = JSONResponse(status_code=status_code, content=payload)
     if request_id is not None:
         response.headers["X-Request-ID"] = request_id
+    if headers:
+        for key, value in headers.items():
+            response.headers[key] = value
     return response
 
 
@@ -340,6 +369,7 @@ async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
         status_code=exc.status_code,
         code=exc.code,
         message=exc.message,
+        headers=exc.headers,
     )
     if isinstance(exc, AuthEmailNotAllowedError):
         settings = getattr(request.app.state, "settings", None)

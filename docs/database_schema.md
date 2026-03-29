@@ -1,6 +1,6 @@
 # Gust Database Schema
 
-**Version:** 1.6
+**Version:** 1.7
 **Last Updated:** 2026-03-28
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
@@ -24,6 +24,8 @@ The schema is designed to support:
 - `group_id` is never null for tasks.
 - Raw audio is never persisted in the application schema.
 - Active digest delivery state is normalized into a dedicated `digest_dispatches` table.
+- User-provided plain-text fields reject NUL and non-printable control characters other than carriage return, newline, and tab.
+- User-facing titles and descriptions are normalized as plain text at the backend boundary; transcripts preserve line structure after control-character cleanup.
 - Legacy per-task reminder rows are preserved for compatibility but are no longer the active email-send source.
 - Group names must be unique per user.
 
@@ -149,8 +151,8 @@ Task group container, including the required system Inbox.
 |---|---|---|---|
 | `id` | `uuid` | No | Primary key. |
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
-| `name` | `text` | No | User-visible name. Unique per user. |
-| `description` | `text` | Yes | Optional AI-routing hint. |
+| `name` | `text` | No | User-visible name. Unique per user. Plain text, max 200 chars after normalization. |
+| `description` | `text` | Yes | Optional AI-routing hint. Plain text, max 500 chars after normalization. |
 | `is_system` | `boolean` | No | `true` only for system-managed groups. |
 | `system_key` | `text` | Yes | Reserved identifier for system groups. `inbox` for the Inbox group. |
 | `created_at` | `timestamptz` | No | Default `now()`. |
@@ -176,8 +178,8 @@ Primary task record for open and completed tasks.
 | `group_id` | `uuid` | No | Foreign key to `groups.id`. Never null. |
 | `capture_id` | `uuid` | Yes | Foreign key to `captures.id` when task originated from a capture. Uses `ON DELETE SET NULL` so bounded capture cleanup does not delete long-lived tasks. |
 | `series_id` | `uuid` | Yes | Stable recurrence-series identifier shared by occurrences. Null for non-recurring tasks and actively maintained when recurrence is added, edited, or removed. |
-| `title` | `text` | No | Non-empty task title. |
-| `description` | `text` | Yes | Optional short plain-text context for the task. Not a rich-notes field. |
+| `title` | `text` | No | Non-empty task title. Plain text, max 200 chars after normalization. |
+| `description` | `text` | Yes | Optional short plain-text context for the task. Not a rich-notes field. Max 2,000 chars after normalization. |
 | `status` | `task_status` | No | `open` or `completed`. |
 | `needs_review` | `boolean` | No | Defaults to `false`. |
 | `due_date` | `date` | Yes | Optional due date in the user's calendar context. |
@@ -224,7 +226,7 @@ Flat checklist items attached to a parent task.
 | `id` | `uuid` | No | Primary key. |
 | `task_id` | `uuid` | No | Foreign key to `tasks.id`. |
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
-| `title` | `text` | No | Non-empty subtask title. |
+| `title` | `text` | No | Non-empty subtask title. Plain text, max 200 chars after normalization. |
 | `is_completed` | `boolean` | No | Defaults to `false`. |
 | `completed_at` | `timestamptz` | Yes | Optional completion timestamp. |
 | `created_at` | `timestamptz` | No | Default `now()`. |
@@ -245,8 +247,8 @@ Staging table for extracted tasks before user approval. Tasks remain here until 
 | `id` | `uuid` | No | Primary key. |
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
 | `capture_id` | `uuid` | No | Foreign key to `captures.id`. |
-| `title` | `text` | No | Non-empty task title. |
-| `description` | `text` | Yes | Optional short plain-text context extracted from the transcript. |
+| `title` | `text` | No | Non-empty task title. Plain text, max 200 chars after normalization. |
+| `description` | `text` | Yes | Optional short plain-text context extracted from the transcript. Max 2,000 chars after normalization. |
 | `group_id` | `uuid` | No | Foreign key to `groups.id`. |
 | `group_name` | `text` | Yes | Denormalized group name for display. |
 | `due_date` | `date` | Yes | Optional due date. |
@@ -282,9 +284,9 @@ Bounded-retention record of capture attempts and transcript review state.
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
 | `input_type` | `text` | No | `voice` or `text`. |
 | `status` | `capture_status` | No | Tracks transcription/extraction progress. |
-| `source_text` | `text` | Yes | Original manual text capture when input type is text. |
-| `transcript_text` | `text` | Yes | Current transcript shown for review. |
-| `transcript_edited_text` | `text` | Yes | User-edited transcript snapshot if submitted. |
+| `source_text` | `text` | Yes | Original manual text capture when input type is text. Plain text, max 20,000 chars. |
+| `transcript_text` | `text` | Yes | Current transcript shown for review. Plain text, max 20,000 chars. |
+| `transcript_edited_text` | `text` | Yes | User-edited transcript snapshot if submitted. Plain text, max 20,000 chars. |
 | `transcription_provider` | `text` | Yes | Initial provider name, for example `mistral`. |
 | `transcription_latency_ms` | `integer` | Yes | Optional provider latency metric. |
 | `extraction_attempt_count` | `smallint` | No | Defaults to `0`. |
@@ -298,6 +300,7 @@ Bounded-retention record of capture attempts and transcript review state.
 Constraints and invariants:
 
 - Raw audio bytes, object storage paths, and provider payload blobs are out of scope for v1 storage.
+- Voice uploads are validated before transcription: maximum body size `10 MiB`, allowlisted MIME types only, empty files rejected.
 - `expires_at` must always be populated for cleanup eligibility.
 - Failed extraction may retain transcript text until `expires_at` to support retry/troubleshooting.
 - Logs must not duplicate full transcript text even when `captures` stores it temporarily.
@@ -356,6 +359,28 @@ Constraints and invariants:
 - Unique constraint on `idempotency_key`.
 - One logical send outcome per user/digest/period, retry-safe across reruns.
 
+### `rate_limit_counters`
+
+Backend-owned shared counter table for fixed-window rate limiting and bounded abuse tracking.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `scope` | `text` | No | Logical action key, for example `capture_text:user` or `auth_entry:ip`. |
+| `subject_key` | `text` | No | Sanitized subject identifier, typically a user UUID or client IP-derived key. |
+| `window_start` | `timestamptz` | No | Inclusive fixed-window start timestamp in UTC. |
+| `window_seconds` | `integer` | No | Window length in seconds. |
+| `request_count` | `integer` | No | Current count in the active window. |
+| `expires_at` | `timestamptz` | No | Cleanup cutoff after the window has safely elapsed. |
+| `created_at` | `timestamptz` | No | Default `now()`. |
+| `updated_at` | `timestamptz` | No | Default `now()`. |
+
+Constraints and invariants:
+
+- Primary key on `(`scope`, `subject_key`, `window_start`, `window_seconds`)`.
+- This table is backend-owned operational state, not user-owned application data.
+- Counters are updated atomically through upsert/increment logic.
+- Expired rows may be deleted opportunistically without affecting active enforcement.
+
 ## Cross-Table Rules
 
 - `tasks.user_id`, `groups.user_id`, `subtasks.user_id`, `captures.user_id`, `reminders.user_id`, and `digest_dispatches.user_id` must all match the owning `users.id`.
@@ -363,6 +388,7 @@ Constraints and invariants:
 - `subtasks.task_id` must reference a task owned by the same user.
 - `reminders.task_id` must reference a task owned by the same user.
 - `captures.id` may be referenced by tasks created from that capture for traceability and result summaries until retention cleanup removes the capture and nulls `tasks.capture_id`.
+- `rate_limit_counters` is intentionally excluded from user-owned data rules and from end-user API exposure.
 
 ## Indexing Guidance
 
@@ -387,6 +413,8 @@ The initial migration set should include indexes for:
 - `extracted_tasks (user_id)` for user queries
 - `extracted_tasks (capture_id)` for capture queries
 - `extracted_tasks (user_id, status)` for pending task queries
+- `rate_limit_counters (expires_at)` for bounded cleanup
+- `rate_limit_counters (scope, subject_key, window_start, window_seconds)` primary key for atomic fixed-window enforcement
 
 ## Retention and Cleanup
 
@@ -395,6 +423,7 @@ The initial migration set should include indexes for:
 - Extracted task rows: **pending** tasks persist until user action (approve/discard); **approved/discarded** tasks are retained for 7 days and then cleaned up by the retention job.
 - Reminder rows may be retained for legacy audit history.
 - Digest dispatch rows are retained for idempotency and operational audit.
+- Expired `rate_limit_counters` rows may be deleted in bounded cleanup passes.
 - Task, subtask, group, and user retention policy is outside Phase 0 and should not conflict with reminder or capture cleanup.
 
 ## Deferred Decisions

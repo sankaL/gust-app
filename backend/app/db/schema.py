@@ -269,6 +269,23 @@ digest_dispatches = sa.Table(
     ),
 )
 
+rate_limit_counters = sa.Table(
+    "rate_limit_counters",
+    metadata,
+    sa.Column("scope", sa.Text(), primary_key=True),
+    sa.Column("subject_key", sa.Text(), primary_key=True),
+    sa.Column("window_start", sa.DateTime(timezone=True), primary_key=True),
+    sa.Column("window_seconds", sa.Integer(), primary_key=True),
+    sa.Column("request_count", sa.Integer(), nullable=False, server_default="0"),
+    sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column(
+        "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+    sa.Column(
+        "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+)
+
 sa.Index(
     "uq_groups_user_lower_name",
     groups.c.user_id,
@@ -308,3 +325,4 @@ sa.Index(
 sa.Index("ix_extracted_tasks_user_id", extracted_tasks.c.user_id)
 sa.Index("ix_extracted_tasks_capture_id", extracted_tasks.c.capture_id)
 sa.Index("ix_extracted_tasks_user_status", extracted_tasks.c.user_id, extracted_tasks.c.status)
+sa.Index("ix_rate_limit_counters_expires_at", rate_limit_counters.c.expires_at)

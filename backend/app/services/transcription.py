@@ -10,6 +10,7 @@ from typing import Literal
 import httpx
 
 from app.core.errors import ConfigurationError, InvalidConfigurationError
+from app.core.input_safety import sanitize_for_log
 from app.core.settings import Settings
 
 logger = logging.getLogger("gust.api")
@@ -105,8 +106,8 @@ class MistralTranscriptionService:
                     "provider_status_code": response.status_code,
                     "provider_error_type": provider_error.provider_error_type,
                     "provider_error_code": provider_error.provider_error_code,
-                    "audio_filename": filename,
-                    "content_type": content_type,
+                    "audio_filename_extension": _filename_extension(filename),
+                    "content_type": sanitize_for_log(content_type, max_length=80),
                     "audio_size_bytes": len(audio_bytes),
                 },
             )
@@ -231,3 +232,11 @@ class MockTranscriptionService:
             provider="mock",
             latency_ms=int(random.uniform(200, 500)),
         )
+
+
+def _filename_extension(filename: str) -> str | None:
+    lowered = filename.lower()
+    if "." not in lowered:
+        return None
+    extension = lowered.rsplit(".", maxsplit=1)[-1]
+    return extension[:16] if extension else None
