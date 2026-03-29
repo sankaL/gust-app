@@ -12,7 +12,6 @@ from app.core.security import (
     ACCESS_TOKEN_COOKIE,
     CSRF_COOKIE,
     OAUTH_CODE_VERIFIER_COOKIE,
-    OAUTH_STATE_COOKIE,
     REFRESH_TOKEN_COOKIE,
     TokenBundle,
 )
@@ -33,10 +32,10 @@ class FakeAuthService:
     def ensure_configured(self) -> None:
         return None
 
-    def build_google_authorize_url(self, *, code_challenge: str, state: str) -> str:
+    def build_google_authorize_url(self, *, code_challenge: str) -> str:
         return (
             "https://supabase.example/auth/v1/authorize"
-            f"?provider=google&code_challenge={code_challenge}&state={state}"
+            f"?provider=google&code_challenge={code_challenge}"
         )
 
     async def exchange_code_for_session(
@@ -197,16 +196,14 @@ def test_google_start_sets_pkce_cookies(app: FastAPI, client: TestClient) -> Non
     assert response.status_code == 302
     assert response.headers["location"].startswith("https://supabase.example/auth/v1/authorize")
     assert OAUTH_CODE_VERIFIER_COOKIE in response.headers["set-cookie"]
-    assert "gust_oauth_state=" in response.headers["set-cookie"]
 
 
 def test_callback_bootstraps_user_session_and_inbox(app: FastAPI, client: TestClient) -> None:
     _override_auth_service(app, FakeAuthService())
     _allow_email(client, "user@example.com")
     client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
-    client.cookies.set(OAUTH_STATE_COOKIE, "expected-state")
 
-    response = client.get("/auth/session/callback?code=valid-code&state=expected-state")
+    response = client.get("/auth/session/callback?code=valid-code")
 
     assert response.status_code == 302
     assert response.headers["location"] == "http://frontend.test"
@@ -230,19 +227,12 @@ def test_callback_bootstraps_user_session_and_inbox(app: FastAPI, client: TestCl
     assert context.inbox_group_id == payload["inbox_group_id"]
 
 
-def test_callback_rejects_missing_or_invalid_oauth_state(app: FastAPI, client: TestClient) -> None:
+def test_callback_rejects_missing_oauth_verifier(app: FastAPI, client: TestClient) -> None:
     _override_auth_service(app, FakeAuthService())
-    client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
+    response = client.get("/auth/session/callback?code=valid-code")
 
-    missing_state_response = client.get("/auth/session/callback?code=valid-code&state=missing")
-
-    client.cookies.set(OAUTH_STATE_COOKIE, "expected-state")
-    invalid_state_response = client.get("/auth/session/callback?code=valid-code&state=wrong-state")
-
-    assert missing_state_response.status_code == 403
-    assert missing_state_response.json()["error"]["code"] == "csrf_invalid"
-    assert invalid_state_response.status_code == 403
-    assert invalid_state_response.json()["error"]["code"] == "csrf_invalid"
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "csrf_invalid"
 
 
 def test_local_dev_login_bootstraps_cookie_session(app: FastAPI, client: TestClient) -> None:
@@ -299,9 +289,8 @@ def test_callback_preserves_existing_timezone(app: FastAPI, client: TestClient) 
         )
 
     client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
-    client.cookies.set(OAUTH_STATE_COOKIE, "expected-state")
 
-    response = client.get("/auth/session/callback?code=valid-code&state=expected-state")
+    response = client.get("/auth/session/callback?code=valid-code")
 
     assert response.status_code == 302
 
@@ -482,9 +471,8 @@ def test_callback_redirects_blocked_email_to_login(app: FastAPI, client: TestCli
     _override_auth_service(app, FakeAuthService())
     _disallow_email(client, "user@example.com")
     client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
-    client.cookies.set(OAUTH_STATE_COOKIE, "expected-state")
 
-    response = client.get("/auth/session/callback?code=valid-code&state=expected-state")
+    response = client.get("/auth/session/callback?code=valid-code")
 
     assert response.status_code == 302
     assert response.headers["location"] == "http://frontend.test/login?auth_error=email_not_allowed"

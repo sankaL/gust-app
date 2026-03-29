@@ -99,7 +99,6 @@ class SupabaseAuthService:
         self,
         *,
         code_challenge: str,
-        state: str,
     ) -> str:
         self.ensure_configured()
         query = urlencode(
@@ -108,7 +107,6 @@ class SupabaseAuthService:
                 "redirect_to": self.callback_url,
                 "code_challenge": code_challenge,
                 "code_challenge_method": "S256",
-                "state": state,
             }
         )
         return f"{self.authorize_url}?{query}"

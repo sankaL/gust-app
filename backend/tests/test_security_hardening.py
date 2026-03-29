@@ -24,8 +24,8 @@ class FakeAuthService:
     def ensure_configured(self) -> None:
         return None
 
-    def build_google_authorize_url(self, *, code_challenge: str, state: str) -> str:
-        return f"https://supabase.example/auth?challenge={code_challenge}&state={state}"
+    def build_google_authorize_url(self, *, code_challenge: str) -> str:
+        return f"https://supabase.example/auth?challenge={code_challenge}"
 
     async def refresh_session(self, *, refresh_token: str) -> AuthenticatedSession:
         assert refresh_token == "refresh-token"
