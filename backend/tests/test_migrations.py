@@ -285,6 +285,7 @@ def test_supabase_allowlist_hardening_migration_revokes_public_roles() -> None:
         "revoke all privileges on table public.allowed_users from public, anon, authenticated;"
         in sql
     )
+    assert "if exists (select 1 from pg_roles where rolname = 'gust_app_runtime') then" in sql
     assert "revoke all privileges on table public.allowed_users from gust_app_runtime;" in sql
     assert "grant select on table public.allowed_users to supabase_auth_admin;" in sql
     assert "grant select on table public.allowed_users to gust_app_runtime;" in sql

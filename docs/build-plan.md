@@ -81,6 +81,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| ADH-28 | Redeploy the merged frontend release to Railway production | DONE | 2026-03-29 | Deployed the `main` merge commit `36c0411` through the Railway CLI, confirmed the `frontend` service reached `SUCCESS`, and verified `https://gustapp.ca` returns HTTP 200. | Tech, AGENTS |
 | ADH-01 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Expanded env example coverage for runtime, frontend, and provider config | AGENTS, Tech |
 | ADH-02 | Tooling or workflow improvements needed to unblock delivery | DONE | 2026-03-22 | Added `make dev local` local-stack startup with conditional Alembic upgrades, dynamic port assignment, and ready-state checks | AGENTS, Runbook |
 | ADH-03 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Added Gust logo SVG colorway assets aligned to the sonic minimalist palette | Design |
