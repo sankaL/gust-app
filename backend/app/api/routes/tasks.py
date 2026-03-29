@@ -8,13 +8,13 @@ from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, field_validator
 
 from app.core.dependencies import get_current_session_context, get_task_service, require_csrf
+from app.core.errors import InvalidTaskError
 from app.core.input_safety import (
     MAX_TASK_DESCRIPTION_CHARS,
     MAX_TITLE_CHARS,
     validate_optional_plain_text,
     validate_plain_text,
 )
-from app.core.errors import InvalidTaskError
 from app.db.repositories import SessionContext, SubtaskRecord, TaskRecord
 from app.services.task_rules import RecurrenceInput, due_bucket_for_date
 from app.services.task_service import (

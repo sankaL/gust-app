@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
 
-from app.core.input_safety import MAX_TITLE_CHARS, validate_plain_text
 from app.core.errors import (
     ConflictError,
     GroupNotFoundError,
@@ -18,6 +17,7 @@ from app.core.errors import (
     SubtaskNotFoundError,
     TaskNotFoundError,
 )
+from app.core.input_safety import MAX_TITLE_CHARS, validate_plain_text
 from app.core.settings import Settings
 from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope

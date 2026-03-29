@@ -86,7 +86,9 @@ class ExtractionRetryManager:
                         "attempt": attempt,
                         "max_retries": self.config.max_retries,
                         "error_type": type(exc).__name__,
-                        "validation_error_count": len(exc.errors()) if hasattr(exc, "errors") else 0,
+                        "validation_error_count": (
+                            len(exc.errors()) if hasattr(exc, "errors") else 0
+                        ),
                     },
                 )
 

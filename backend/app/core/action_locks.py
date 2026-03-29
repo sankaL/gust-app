@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 
 import sqlalchemy as sa
 
@@ -112,8 +112,12 @@ def _lock_insert_statement(
         rate_limit_counters.c.window_seconds,
     ]
     if connection.dialect.name == "sqlite":
-        return sa.dialects.sqlite.insert(rate_limit_counters).values(**values).on_conflict_do_nothing(
-            index_elements=index_elements,
+        return (
+            sa.dialects.sqlite.insert(rate_limit_counters)
+            .values(**values)
+            .on_conflict_do_nothing(
+                index_elements=index_elements,
+            )
         )
     return sa.dialects.postgresql.insert(
         rate_limit_counters,

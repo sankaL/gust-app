@@ -6,13 +6,13 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from app.core.input_safety import MAX_TITLE_CHARS, sanitize_for_log, validate_plain_text
 from app.core.errors import (
     ExtractedTaskNotFoundError,
     ExtractedTaskStateConflictError,
     GroupNotFoundError,
     InvalidTaskError,
 )
+from app.core.input_safety import MAX_TITLE_CHARS, sanitize_for_log, validate_plain_text
 from app.core.settings import Settings
 from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope

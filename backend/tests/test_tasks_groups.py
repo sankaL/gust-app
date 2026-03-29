@@ -359,7 +359,7 @@ def test_list_tasks_applies_sorting_and_user_scope(app: FastAPI, client: TestCli
     _seed_user(client, user_id=OTHER_USER_ID)
     other_group_id = _seed_group(client, user_id=OTHER_USER_ID, name="Other")
 
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     _seed_task(
         client,
         user_id=USER_ID,

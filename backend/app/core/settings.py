@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# ruff: noqa: UP045
 from functools import lru_cache
 from typing import Optional
 

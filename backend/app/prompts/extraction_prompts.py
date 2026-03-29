@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 from datetime import date
 
+
 def sanitize_transcript_for_extraction(transcript: str) -> str:
     """Render transcript text safely inside the extraction prompt.
 

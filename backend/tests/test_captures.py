@@ -2,9 +2,9 @@ from __future__ import annotations
 
 # ruff: noqa: UP045
 import asyncio
-from contextlib import contextmanager
 import logging
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -22,13 +22,13 @@ from app.core.dependencies import (
     get_extraction_service,
     get_transcription_service,
 )
+from app.core.errors import InvalidConfigurationError
 from app.core.middleware import RequestContextMiddleware
 from app.core.rate_limits import RequestRateLimiter
-from app.core.errors import InvalidConfigurationError
 from app.core.security import ACCESS_TOKEN_COOKIE
 from app.db.engine import connection_scope
 from app.db.repositories import ensure_inbox_group, upsert_user
-from app.db.schema import captures, extracted_tasks, groups, reminders, subtasks, tasks
+from app.db.schema import captures, extracted_tasks, groups, reminders, tasks
 from app.services.auth import AuthenticatedIdentity
 from app.services.extraction import ExtractorMalformedResponseError
 from app.services.staging import ApproveResult, StagingService
@@ -778,10 +778,6 @@ def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
             sa.select(tasks).where(tasks.c.capture_id == capture_id).order_by(tasks.c.title)
         ).fetchall()
         reminder_rows = connection.execute(sa.select(reminders)).fetchall()
-        subtask_rows = connection.execute(sa.select(subtasks)).fetchall()
-        capture_row = connection.execute(
-            sa.select(captures).where(captures.c.id == capture_id)
-        ).one()
         inbox_group = ensure_inbox_group(connection, user_id=user_id)
 
     assert [row.title for row in task_rows] == ["Buy groceries", "Send invoice"]

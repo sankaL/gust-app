@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
+# ruff: noqa: UP007, UP045
 from typing import Annotated, Optional, Union
 
 from fastapi import Depends, Request, Response

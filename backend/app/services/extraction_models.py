@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+# ruff: noqa: UP045
 from datetime import date, datetime
 from typing import Optional
 

@@ -231,7 +231,10 @@ class CaptureService:
                     )
                     raise public_error from exc
 
-                with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                with user_connection_scope(
+                    self.settings.database_url,
+                    user_id=user_id,
+                ) as connection:
                     updated = update_capture(
                         connection,
                         user_id=user_id,
@@ -1024,7 +1027,10 @@ class CaptureService:
 
         try:
             with self._capture_lock(user_id=user_id, action="capture_reextract"):
-                with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+                with user_connection_scope(
+                    self.settings.database_url,
+                    user_id=user_id,
+                ) as connection:
                     capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
                     if capture is None:
                         raise CaptureNotFoundError()
@@ -1074,7 +1080,11 @@ class CaptureService:
         )
 
     def _capture_lock(self, *, user_id: str, action: str):
-        return user_action_lock(database_url=self.settings.database_url, user_id=user_id, action=action)
+        return user_action_lock(
+            database_url=self.settings.database_url,
+            user_id=user_id,
+            action=action,
+        )
 
     def _filename_extension(self, filename: str) -> str | None:
         lowered = filename.lower()

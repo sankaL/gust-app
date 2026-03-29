@@ -6,13 +6,13 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 
+from app.core.errors import ConflictError, GroupNotFoundError, InvalidGroupError
 from app.core.input_safety import (
     MAX_GROUP_DESCRIPTION_CHARS,
     MAX_TITLE_CHARS,
     validate_optional_plain_text,
     validate_plain_text,
 )
-from app.core.errors import ConflictError, GroupNotFoundError, InvalidGroupError
 from app.core.settings import Settings
 from app.db.engine import user_connection_scope
 from app.db.repositories import (

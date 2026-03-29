@@ -47,7 +47,10 @@ def normalize_task_description(description: str | None, *, title: str | None = N
 
     if title is not None:
         normalized_title = " ".join(title.strip().split()).casefold()
-        if normalized_description is not None and normalized_description.casefold() == normalized_title:
+        if (
+            normalized_description is not None
+            and normalized_description.casefold() == normalized_title
+        ):
             return None
 
     return normalized_description
