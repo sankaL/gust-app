@@ -76,6 +76,29 @@ select {
   font: inherit;
 }
 
+/* iOS-specific fixes */
+
+/* Prevent iOS zoom on input focus - font-size must be >= 16px */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Better mobile input sizing to prevent overflow */
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'] {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Prevent iOS text size adjustment on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 .safe-area-shell {
   min-height: 100vh;
   min-height: 100dvh;

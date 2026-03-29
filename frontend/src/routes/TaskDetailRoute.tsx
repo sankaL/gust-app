@@ -4,8 +4,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
-import { SelectDropdown } from '../components/SelectDropdown'
 import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
+import { TaskFormFields } from '../components/TaskFormFields'
 import {
   ApiError,
   createSubtask,
@@ -113,31 +113,6 @@ function buildReturnPath(searchParams: URLSearchParams) {
   return nextSearch ? `/tasks?${nextSearch}` : '/tasks'
 }
 
-function recurrenceForDueDate(
-  frequency: 'daily' | 'weekly' | 'monthly',
-  dueDate: string,
-  current: TaskRecurrence | null
-): TaskRecurrence {
-  if (frequency === 'daily') {
-    return { frequency, weekday: null, day_of_month: null }
-  }
-
-  if (!dueDate) {
-    return current ?? { frequency, weekday: null, day_of_month: null }
-  }
-
-  const localDate = new Date(`${dueDate}T12:00:00`)
-  if (frequency === 'weekly') {
-    return { frequency, weekday: localDate.getDay(), day_of_month: null }
-  }
-
-  return {
-    frequency,
-    weekday: null,
-    day_of_month: Number(dueDate.split('-')[2] ?? current?.day_of_month ?? 1),
-  }
-}
-
 function buildDraftState(task: Awaited<ReturnType<typeof getTaskDetail>>): DraftState {
   return {
     title: task.title,
@@ -232,6 +207,10 @@ export function TaskDetailRoute() {
       }
       return current.filter((candidate) => candidate !== subtaskId)
     })
+  }
+
+  function updateDraft(updater: (current: DraftState) => DraftState) {
+    setDraft((current) => (current ? updater(current) : current))
   }
 
   function syncTaskCaches(task: Awaited<ReturnType<typeof getTaskDetail>>) {
@@ -607,25 +586,45 @@ export function TaskDetailRoute() {
 
                   <div className="space-y-3">
                     {isEditMode ? (
-                      <>
-                        <input
-                          value={draft.title}
-                          onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                          className="w-full rounded-[1.25rem] bg-surface/60 px-4 py-3 font-display text-[1.85rem] leading-tight text-on-surface outline-none placeholder:text-on-surface-variant/40 focus:bg-surface/75 focus:text-white sm:text-[2rem]"
-                          aria-label="Task title"
-                          placeholder="Task title"
-                        />
-                        <textarea
-                          value={draft.description}
-                          onChange={(event) =>
-                            setDraft({ ...draft, description: event.target.value })
+                      <TaskFormFields
+                        title={draft.title}
+                        description={draft.description}
+                        groupId={draft.groupId}
+                        dueDate={draft.dueDate}
+                        reminderAt={draft.reminderAt}
+                        recurrence={draft.recurrence}
+                        groups={groupsQuery.data ?? []}
+                        isGroupDropdownOpen={isGroupDropdownOpen}
+                        disabled={isBusy}
+                        onTitleChange={(value) =>
+                          updateDraft((current) => ({ ...current, title: value }))
+                        }
+                        onDescriptionChange={(value) =>
+                          updateDraft((current) => ({ ...current, description: value }))
+                        }
+                        onGroupIdChange={(value) =>
+                          updateDraft((current) => ({ ...current, groupId: value }))
+                        }
+                        onDueDateChange={(value) => {
+                          if (!value) {
+                            updateDraft((current) => ({
+                              ...current,
+                              dueDate: '',
+                              reminderAt: '',
+                              recurrence: null,
+                            }))
+                          } else {
+                            updateDraft((current) => ({ ...current, dueDate: value }))
                           }
-                          rows={3}
-                          className="w-full rounded-[1.25rem] bg-surface/55 px-4 py-3 text-sm leading-6 text-on-surface-variant outline-none placeholder:text-on-surface-variant/45 resize-none focus:bg-surface/70 focus:text-on-surface"
-                          aria-label="Task description"
-                          placeholder="Add context that helps you act on this later"
-                        />
-                      </>
+                        }}
+                        onReminderAtChange={(value) =>
+                          updateDraft((current) => ({ ...current, reminderAt: value }))
+                        }
+                        onRecurrenceChange={(value) =>
+                          updateDraft((current) => ({ ...current, recurrence: value }))
+                        }
+                        onGroupDropdownOpenChange={setIsGroupDropdownOpen}
+                      />
                     ) : (
                       <>
                         <h2 className="font-display text-[2.15rem] leading-tight text-on-surface">
@@ -639,179 +638,61 @@ export function TaskDetailRoute() {
                   </div>
                 </div>
 
-                <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-                  <div className="min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm">
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                      Due date
-                    </p>
-                    {isEditMode ? (
-                      <input
-                        type="date"
-                        value={draft.dueDate}
-                        onChange={(event) => {
-                          const nextDueDate = event.target.value
-                          if (!nextDueDate) {
-                            setDraft({
-                              ...draft,
-                              dueDate: '',
-                              reminderAt: '',
-                              recurrence: null,
-                            })
-                            return
-                          }
-
-                          let nextRecurrence = draft.recurrence
-                          if (draft.recurrence?.frequency === 'weekly') {
-                            nextRecurrence = recurrenceForDueDate(
-                              'weekly',
-                              nextDueDate,
-                              draft.recurrence
-                            )
-                          }
-                          if (draft.recurrence?.frequency === 'monthly') {
-                            nextRecurrence = recurrenceForDueDate(
-                              'monthly',
-                              nextDueDate,
-                              draft.recurrence
-                            )
-                          }
-                          setDraft({
-                            ...draft,
-                            dueDate: nextDueDate,
-                            recurrence: nextRecurrence,
-                          })
-                        }}
-                        className="mt-3 block w-full min-w-0 max-w-full rounded-card bg-surface-dim px-3 py-3 pr-10 text-[0.8rem] font-medium text-on-surface outline-none focus:bg-surface-container-high sm:text-[0.9rem]"
-                      />
-                    ) : (
-                      <p className="mt-3 text-base font-medium text-on-surface">{dueLabel}</p>
-                    )}
-                  </div>
-
-                  <div className="min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm">
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                      Reminder
-                    </p>
-                    {isEditMode ? (
-                      <input
-                        type="datetime-local"
-                        value={draft.reminderAt}
-                        onChange={(event) =>
-                          setDraft({ ...draft, reminderAt: event.target.value })
-                        }
-                        disabled={!draft.dueDate}
-                        className="mt-3 block w-full min-w-0 max-w-full rounded-card bg-surface-dim px-3 py-3 pr-10 text-[0.76rem] font-medium text-on-surface outline-none focus:bg-surface-container-high disabled:opacity-50 sm:text-[0.85rem]"
-                      />
-                    ) : (
-                      <p className="mt-3 text-base font-medium text-on-surface">{reminderLabel}</p>
-                    )}
-                  </div>
-
-                  <div
-                    className={[
-                      'min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm',
-                      isGroupDropdownOpen ? 'relative z-40' : '',
-                    ].join(' ')}
-                  >
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                      Group
-                    </p>
-                    {isEditMode ? (
-                      <div className="mt-3">
-                        <SelectDropdown
-                          label=""
-                          options={
-                            groupsQuery.data?.map((group) => ({
-                              value: group.id,
-                              label: group.name,
-                            })) ?? []
-                          }
-                          value={draft.groupId}
-                          onChange={(value) => setDraft({ ...draft, groupId: value as string })}
-                          onOpenChange={setIsGroupDropdownOpen}
-                          placeholder="No Group"
-                        />
-                      </div>
-                    ) : (
-                      <p className="mt-3 text-base font-medium text-on-surface">{groupName}</p>
-                    )}
-                  </div>
-
-                  <div className="relative z-0 min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm sm:col-span-2">
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                      Recurrence
-                    </p>
-                    <p className="mt-3 text-base font-medium text-on-surface">{recurrenceLabel}</p>
-                    {isEditMode ? (
-                      <p className="mt-2 text-xs leading-5 text-on-surface-variant">
-                        Choose a cadence only when this task should recreate itself after completion.
+                {!isEditMode && (
+                  <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                    <div className="min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm">
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                        Due date
                       </p>
-                    ) : null}
+                      <p className="mt-3 text-base font-medium text-on-surface">{dueLabel}</p>
+                    </div>
+
+                    <div className="min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm">
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                        Reminder
+                      </p>
+                      <p className="mt-3 text-base font-medium text-on-surface">{reminderLabel}</p>
+                    </div>
+
+                    <div className="min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm">
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                        Group
+                      </p>
+                      <p className="mt-3 text-base font-medium text-on-surface">{groupName}</p>
+                    </div>
+
+                    <div className="relative z-0 min-w-0 rounded-[1.35rem] bg-black/20 p-4 backdrop-blur-sm sm:col-span-2">
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                        Recurrence
+                      </p>
+                      <p className="mt-3 text-base font-medium text-on-surface">{recurrenceLabel}</p>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div className="rounded-[1.35rem] bg-surface/45 p-4 text-sm text-on-surface-variant shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
-                  {isEditMode
-                    ? 'Save and return closes this detail view after your changes are written.'
-                    : 'Open edit mode when you want to change details. Delete still asks for confirmation before it removes this task.'}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
-              <div className="space-y-3">
-                <div>
-                  <p className="font-display text-xl text-on-surface">Recurrence</p>
-                  <p className="mt-1 font-body text-xs text-on-surface-variant">
-                    {isEditMode
-                      ? 'Daily, weekly, and monthly only. Clearing the due date also clears reminder timing and recurrence.'
-                      : 'This task keeps a simple cadence. Edit it if you need to change how often it repeats.'}
-                  </p>
-                </div>
-
-                {isEditMode ? (
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { label: 'Daily', value: 'daily' },
-                      { label: 'Weekly', value: 'weekly' },
-                      { label: 'Monthly', value: 'monthly' },
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        disabled={!draft.dueDate}
-                        onClick={() =>
-                          setDraft({
-                            ...draft,
-                            recurrence:
-                              draft.recurrence?.frequency === option.value
-                                ? null
-                                : recurrenceForDueDate(
-                                    option.value as 'daily' | 'weekly' | 'monthly',
-                                    draft.dueDate,
-                                    draft.recurrence
-                                  ),
-                          })
-                        }
-                        className={[
-                          'rounded-card px-3 py-3 text-sm transition',
-                          draft.recurrence?.frequency === option.value
-                            ? 'bg-primary text-surface'
-                            : 'bg-surface-dim text-on-surface-variant',
-                          !draft.dueDate ? 'opacity-50' : '',
-                        ].join(' ')}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-card bg-surface-dim px-4 py-4">
-                    <p className="text-on-surface">{recurrenceLabel}</p>
+                {!isEditMode && (
+                  <div className="rounded-[1.35rem] bg-surface/45 p-4 text-sm text-on-surface-variant shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                    Open edit mode when you want to change details. Delete still asks for confirmation before it removes this task.
                   </div>
                 )}
               </div>
             </div>
+
+            {!isEditMode && (
+              <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
+                <div className="space-y-3">
+                  <div>
+                    <p className="font-display text-xl text-on-surface">Recurrence</p>
+                    <p className="mt-1 font-body text-xs text-on-surface-variant">
+                      This task keeps a simple cadence. Edit it if you need to change how often it repeats.
+                    </p>
+                  </div>
+                  <div className="rounded-card bg-surface-dim px-4 py-4">
+                    <p className="text-on-surface">{recurrenceLabel}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
               <div className="space-y-3">
