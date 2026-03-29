@@ -7,6 +7,12 @@ from dataclasses import dataclass
 import sqlalchemy as sa
 
 from app.core.errors import ConflictError, GroupNotFoundError, InvalidGroupError
+from app.core.input_safety import (
+    MAX_GROUP_DESCRIPTION_CHARS,
+    MAX_TITLE_CHARS,
+    validate_optional_plain_text,
+    validate_plain_text,
+)
 from app.core.settings import Settings
 from app.db.engine import user_connection_scope
 from app.db.repositories import (
@@ -25,6 +31,7 @@ from app.services.task_service import TaskService
 class GroupUpdateInput:
     name: str | None = None
     description: str | None = None
+    description_provided: bool = False
 
 
 class GroupService:
@@ -43,13 +50,19 @@ class GroupService:
         name: str,
         description: str | None,
     ) -> GroupRecord:
-        normalized_name = name.strip()
-        if not normalized_name:
-            raise InvalidGroupError("Group name cannot be blank.")
-
-        normalized_description = description.strip() if description is not None else None
-        if normalized_description == "":
-            normalized_description = None
+        try:
+            normalized_name = validate_plain_text(
+                name,
+                field_name="Group name",
+                max_length=MAX_TITLE_CHARS,
+            )
+            normalized_description = validate_optional_plain_text(
+                description,
+                field_name="Group description",
+                max_length=MAX_GROUP_DESCRIPTION_CHARS,
+            )
+        except ValueError as exc:
+            raise InvalidGroupError(str(exc)) from exc
 
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             try:
@@ -78,13 +91,23 @@ class GroupService:
 
             values: dict[str, object] = {}
             if payload.name is not None:
-                normalized_name = payload.name.strip()
-                if not normalized_name:
-                    raise InvalidGroupError("Group name cannot be blank.")
-                values["name"] = normalized_name
-            if payload.description is not None:
-                normalized_description = payload.description.strip()
-                values["description"] = normalized_description or None
+                try:
+                    values["name"] = validate_plain_text(
+                        payload.name,
+                        field_name="Group name",
+                        max_length=MAX_TITLE_CHARS,
+                    )
+                except ValueError as exc:
+                    raise InvalidGroupError(str(exc)) from exc
+            if payload.description_provided:
+                try:
+                    values["description"] = validate_optional_plain_text(
+                        payload.description,
+                        field_name="Group description",
+                        max_length=MAX_GROUP_DESCRIPTION_CHARS,
+                    )
+                except ValueError as exc:
+                    raise InvalidGroupError(str(exc)) from exc
             if not values:
                 raise InvalidGroupError("At least one group field must be provided.")
 

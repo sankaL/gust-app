@@ -3,16 +3,24 @@ from __future__ import annotations
 from datetime import date, datetime
 
 # ruff: noqa: UP045
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.core.dependencies import (
     get_capture_service,
     get_current_session_context,
     get_staging_service,
     require_csrf,
+)
+from app.core.input_safety import (
+    MAX_TASK_DESCRIPTION_CHARS,
+    MAX_TITLE_CHARS,
+    MAX_TRANSCRIPT_CHARS,
+    validate_multiline_text,
+    validate_optional_plain_text,
+    validate_plain_text,
 )
 from app.db.repositories import SessionContext
 from app.services.capture import CaptureService, ReviewCaptureResult, SubmitCaptureResult
@@ -29,9 +37,27 @@ AuthenticatedSessionContextDep = Annotated[SessionContext, Depends(get_current_s
 class TextCaptureRequest(BaseModel):
     text: str
 
+    @field_validator("text")
+    @classmethod
+    def _validate_text(cls, value: str) -> str:
+        return validate_multiline_text(
+            value,
+            field_name="Text capture",
+            max_length=MAX_TRANSCRIPT_CHARS,
+        )
+
 
 class SubmitCaptureRequest(BaseModel):
     transcript_text: str
+
+    @field_validator("transcript_text")
+    @classmethod
+    def _validate_transcript_text(cls, value: str) -> str:
+        return validate_multiline_text(
+            value,
+            field_name="Transcript",
+            max_length=MAX_TRANSCRIPT_CHARS,
+        )
 
 
 class CaptureReviewResponse(BaseModel):
@@ -43,7 +69,7 @@ class CaptureReviewResponse(BaseModel):
 class SkippedCaptureItemResponse(BaseModel):
     code: str
     message: str
-    title: str | None = None
+    title: Optional[str] = None
 
 
 class SubmitCaptureResponse(BaseModel):
@@ -60,14 +86,14 @@ class ExtractedTaskResponse(BaseModel):
     id: str
     capture_id: str
     title: str
-    description: str | None = None
+    description: Optional[str] = None
     group_id: str
-    group_name: str | None
-    due_date: str | None
-    reminder_at: str | None
-    recurrence_frequency: str | None
-    recurrence_weekday: int | None
-    recurrence_day_of_month: int | None
+    group_name: Optional[str]
+    due_date: Optional[str]
+    reminder_at: Optional[str]
+    recurrence_frequency: Optional[str]
+    recurrence_weekday: Optional[int]
+    recurrence_day_of_month: Optional[int]
     top_confidence: float
     needs_review: bool
     status: str
@@ -79,16 +105,41 @@ class ExtractedTaskResponse(BaseModel):
 class ReExtractRequest(BaseModel):
     transcript_text: str
 
+    @field_validator("transcript_text")
+    @classmethod
+    def _validate_reextract_text(cls, value: str) -> str:
+        return validate_multiline_text(
+            value,
+            field_name="Transcript",
+            max_length=MAX_TRANSCRIPT_CHARS,
+        )
+
 
 class UpdateExtractedTaskRequest(BaseModel):
-    title: str | None = None
-    description: str | None = None
-    group_id: str | None = None
-    due_date: date | None = None
-    reminder_at: datetime | None = None  # ISO datetime string (with timezone) or null
-    recurrence_frequency: Literal["daily", "weekly", "monthly"] | None = None
-    recurrence_weekday: int | None = None  # 0-6 for weekly
-    recurrence_day_of_month: int | None = None  # 1-31 for monthly
+    title: Optional[str] = None
+    description: Optional[str] = None
+    group_id: Optional[str] = None
+    due_date: Optional[date] = None
+    reminder_at: Optional[datetime] = None  # ISO datetime string (with timezone) or null
+    recurrence_frequency: Optional[Literal["daily", "weekly", "monthly"]] = None
+    recurrence_weekday: Optional[int] = None  # 0-6 for weekly
+    recurrence_day_of_month: Optional[int] = None  # 1-31 for monthly
+
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return validate_plain_text(value, field_name="Title", max_length=MAX_TITLE_CHARS)
+
+    @field_validator("description")
+    @classmethod
+    def _validate_description(cls, value: Optional[str]) -> Optional[str]:
+        return validate_optional_plain_text(
+            value,
+            field_name="Description",
+            max_length=MAX_TASK_DESCRIPTION_CHARS,
+        )
 
 
 @router.post("/voice", response_model=CaptureReviewResponse, status_code=status.HTTP_201_CREATED)

@@ -17,6 +17,7 @@ from app.core.errors import (
     SubtaskNotFoundError,
     TaskNotFoundError,
 )
+from app.core.input_safety import MAX_TITLE_CHARS, validate_plain_text
 from app.core.settings import Settings
 from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
@@ -477,9 +478,14 @@ class TaskService:
         return TaskDetail(task=updated, group=group, subtasks=task_subtasks)
 
     def create_subtask(self, *, user_id: str, task_id: str, title: str) -> SubtaskRecord:
-        normalized_title = title.strip()
-        if not normalized_title:
-            raise InvalidSubtaskError("Subtask title cannot be blank.")
+        try:
+            normalized_title = validate_plain_text(
+                title,
+                field_name="Subtask title",
+                max_length=MAX_TITLE_CHARS,
+            )
+        except ValueError as exc:
+            raise InvalidSubtaskError(str(exc)) from exc
 
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
@@ -519,10 +525,14 @@ class TaskService:
 
             values: dict[str, object] = {}
             if title is not None:
-                normalized_title = title.strip()
-                if not normalized_title:
-                    raise InvalidSubtaskError("Subtask title cannot be blank.")
-                values["title"] = normalized_title
+                try:
+                    values["title"] = validate_plain_text(
+                        title,
+                        field_name="Subtask title",
+                        max_length=MAX_TITLE_CHARS,
+                    )
+                except ValueError as exc:
+                    raise InvalidSubtaskError(str(exc)) from exc
             if is_completed is not None:
                 values["is_completed"] = is_completed
                 values["completed_at"] = datetime.now(timezone.utc) if is_completed else None

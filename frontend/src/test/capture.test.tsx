@@ -448,6 +448,31 @@ describe('capture route', () => {
     ).toBe(false)
   })
 
+  it('shows rate limit errors from voice capture without a retry prompt', async () => {
+    stubSignedInFetchWithVoiceError({
+      code: 'rate_limit_exceeded',
+      message: 'Rate limit exceeded. Please retry shortly.',
+      status: 429
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+    await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
+
+    expect(await screen.findByText('Rate limit exceeded. Please retry shortly.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry Same Recording' })).not.toBeInTheDocument()
+  })
+
   it('shows error when retrying transcription fails', async () => {
     stubSignedInFetchWithVoiceError({
       code: 'transcription_no_speech',

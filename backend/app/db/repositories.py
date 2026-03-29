@@ -17,6 +17,7 @@ from app.db.schema import (
     digest_dispatches,
     extracted_tasks,
     groups,
+    rate_limit_counters,
     reminders,
     subtasks,
     tasks,
@@ -1863,3 +1864,95 @@ def cancel_reminder(
     )
     row = connection.execute(sa.select(reminders).where(reminders.c.id == existing.id)).one()
     return _row_to_reminder(row)
+
+
+def delete_expired_rate_limit_counters(
+    connection: Connection,
+    *,
+    now: datetime,
+    limit: int,
+) -> int:
+    rows = connection.execute(
+        sa.select(
+            rate_limit_counters.c.scope,
+            rate_limit_counters.c.subject_key,
+            rate_limit_counters.c.window_start,
+            rate_limit_counters.c.window_seconds,
+        )
+        .where(rate_limit_counters.c.expires_at <= now)
+        .order_by(rate_limit_counters.c.expires_at.asc())
+        .limit(limit)
+    ).fetchall()
+    if not rows:
+        return 0
+
+    conditions = [
+        sa.tuple_(
+            rate_limit_counters.c.scope,
+            rate_limit_counters.c.subject_key,
+            rate_limit_counters.c.window_start,
+            rate_limit_counters.c.window_seconds,
+        ).in_(
+            [
+                (
+                    row.scope,
+                    row.subject_key,
+                    row.window_start,
+                    row.window_seconds,
+                )
+                for row in rows
+            ]
+        )
+    ]
+    result = connection.execute(rate_limit_counters.delete().where(*conditions))
+    return int(result.rowcount or 0)
+
+
+def increment_rate_limit_counter(
+    connection: Connection,
+    *,
+    scope: str,
+    subject_key: str,
+    window_start: datetime,
+    window_seconds: int,
+    expires_at: datetime,
+) -> int:
+    values = {
+        "scope": scope,
+        "subject_key": subject_key,
+        "window_start": window_start,
+        "window_seconds": window_seconds,
+        "request_count": 1,
+        "expires_at": expires_at,
+    }
+    dialect_name = connection.dialect.name
+
+    if dialect_name == "sqlite":
+        insert_stmt = sa.dialects.sqlite.insert(rate_limit_counters).values(**values)
+    else:
+        insert_stmt = sa.dialects.postgresql.insert(rate_limit_counters).values(**values)
+
+    statement = insert_stmt.on_conflict_do_update(
+        index_elements=[
+            rate_limit_counters.c.scope,
+            rate_limit_counters.c.subject_key,
+            rate_limit_counters.c.window_start,
+            rate_limit_counters.c.window_seconds,
+        ],
+        set_={
+            "request_count": rate_limit_counters.c.request_count + 1,
+            "expires_at": expires_at,
+            "updated_at": CURRENT_TIMESTAMP,
+        },
+    )
+    connection.execute(statement)
+
+    row = connection.execute(
+        sa.select(rate_limit_counters.c.request_count).where(
+            rate_limit_counters.c.scope == scope,
+            rate_limit_counters.c.subject_key == subject_key,
+            rate_limit_counters.c.window_start == window_start,
+            rate_limit_counters.c.window_seconds == window_seconds,
+        )
+    ).one()
+    return int(row.request_count)

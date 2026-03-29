@@ -12,6 +12,7 @@ from app.core.errors import (
     GroupNotFoundError,
     InvalidTaskError,
 )
+from app.core.input_safety import MAX_TITLE_CHARS, sanitize_for_log, validate_plain_text
 from app.core.settings import Settings
 from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
@@ -126,7 +127,7 @@ class StagingService:
                                 "event": "staging_task_normalization_failed",
                                 "user_id": user_id,
                                 "capture_id": capture_id,
-                                "task_title": candidate.title,
+                                "task_title": sanitize_for_log(candidate.title),
                             },
                         )
                         continue
@@ -163,8 +164,8 @@ class StagingService:
                             "event": "staging_task_creation_failed",
                             "user_id": user_id,
                             "capture_id": capture_id,
-                            "task_title": candidate.title,
-                            "error": str(exc),
+                            "task_title": sanitize_for_log(candidate.title),
+                            "error_type": type(exc).__name__,
                         },
                     )
                     continue
@@ -388,9 +389,16 @@ class StagingService:
 
             if "title" in values:
                 title = values["title"]
-                if not isinstance(title, str) or not title.strip():
-                    raise InvalidTaskError("Title cannot be blank.")
-                values["title"] = title.strip()
+                if not isinstance(title, str):
+                    raise InvalidTaskError("Title must be a string.")
+                try:
+                    values["title"] = validate_plain_text(
+                        title,
+                        field_name="Title",
+                        max_length=MAX_TITLE_CHARS,
+                    )
+                except ValueError as exc:
+                    raise InvalidTaskError(str(exc)) from exc
 
             if "description" in values:
                 values["description"] = normalize_task_description(
@@ -539,7 +547,7 @@ class StagingService:
                             "user_id": user_id,
                             "capture_id": capture_id,
                             "extracted_task_id": extracted_task.id,
-                            "error": str(exc),
+                            "error_type": type(exc).__name__,
                         },
                     )
                     continue

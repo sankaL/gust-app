@@ -1,6 +1,6 @@
 # Tech Stack: Gust
 
-**Version:** 2.2  
+**Version:** 2.3  
 **Last Updated:** 2026-03-28  
 **Domain:** gustapp.ca
 
@@ -129,6 +129,11 @@ Service worker caching must be limited to:
 
 Do not cache authenticated API responses containing task data.
 
+Frontend security contract:
+
+- the app shell may define a restrictive CSP that allows only self, the Gust backend/API origins, and local dev origins required for Vite/HMR
+- browser code must not read or embed provider credentials; only backend/base-URL and dev-mode env reads are allowed
+
 ## Authentication Architecture
 
 ### Provider
@@ -149,8 +154,9 @@ Committed model:
 
 - Google OAuth flow completes through Supabase
 - backend exchanges and manages the session
+- backend generates and validates both PKCE verifier state and a separate OAuth `state` cookie on the callback path
 - browser receives `Secure`, `HttpOnly` session cookies on the app domain
-- unsafe HTTP methods require CSRF protection
+- unsafe HTTP methods require CSRF protection plus same-origin `Origin` or `Referer` validation
 
 The frontend learns whether the user is signed in by calling the backend session endpoint, not by reading tokens from browser storage.
 Logout must clear client-side query caches before the next account signs in so stale user data is not reused.
@@ -165,6 +171,17 @@ On each authenticated request, the backend:
 4. rejects the request if validation fails
 
 The backend is the only trusted access layer for application data.
+
+### Abuse Controls
+
+The backend owns request-abuse protection.
+
+Required behavior:
+
+- centralized fixed-window rate limiting backed by Postgres for auth, capture, and general API routes
+- stricter per-user and per-IP limits on expensive capture/transcription/extraction endpoints
+- one-at-a-time per-user locking for expensive capture processing so duplicate in-flight submissions do not fan out provider calls
+- low-friction bot resistance through auth allowlisting, CSRF, same-origin checks, and throttling rather than CAPTCHA by default
 
 ## Backend Architecture
 
@@ -265,6 +282,7 @@ Backend behavior:
 
 - construct prompt from transcript, user timezone, groups, descriptions, and recent tasks
 - request strict JSON-schema output
+- treat transcript content as untrusted data inside the prompt and never as instructions
 - validate every returned task candidate with Pydantic
 - perform one bounded retry on malformed full-payload output
 - run a deterministic guarded-intent completeness check for medical calls, appointments, communication tasks, and similar standalone errands
@@ -359,7 +377,10 @@ If the schema cannot represent those contracts cleanly, the product spec is not 
 - No application secrets in frontend code.
 - No direct browser access to privileged database or provider APIs.
 - No auth token storage in localStorage.
-- All mutating routes require CSRF protection in addition to auth cookies.
+- All mutating routes require CSRF protection, same-origin request validation, and backend-managed auth cookies.
+- All API routes are subject to centralized request throttling; capture and auth routes use stricter limits.
+- Expensive capture routes use per-user concurrency locks so only one costly provider-backed action runs at a time.
+- Trusted host validation and conservative response security headers are part of the backend HTTP contract.
 - All SQL must be parameterized.
 
 ### Privacy
@@ -368,6 +389,7 @@ If the schema cannot represent those contracts cleanly, the product spec is not 
 - Do not store raw audio after transcription.
 - Keep capture retention bounded.
 - Keep digest email content minimal.
+- Do not log provider response bodies, raw extraction payloads, or raw uploaded filenames.
 
 ## Observability
 
@@ -380,6 +402,7 @@ Log:
 - extractor validation failures
 - digest dispatch outcomes
 - recurrence generation outcomes
+- rate-limit and origin-validation rejections
 
 Do not log:
 
@@ -387,6 +410,8 @@ Do not log:
 - auth tokens
 - full transcript text
 - full digest email bodies
+- provider response bodies
+- raw uploaded filenames
 
 ## Testing Requirements
 

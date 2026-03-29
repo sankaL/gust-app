@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.routes import auth, captures, groups, health, reminders, tasks
 from app.core.errors import (
@@ -15,6 +16,7 @@ from app.core.errors import (
 )
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.core.request_security import trusted_hosts
 from app.core.settings import get_settings
 from app.db.engine import dispose_all_engines
 from app.db.migrations import MigrationVersionError, check_required_revision
@@ -50,7 +52,8 @@ def create_app() -> FastAPI:
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=["Content-Type", "X-CSRF-Token"],
         )
-    app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts(settings))
+    app.add_middleware(RequestContextMiddleware, settings=settings)
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)

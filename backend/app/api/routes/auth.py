@@ -23,13 +23,17 @@ from app.core.errors import (
 from app.core.security import (
     CSRF_COOKIE,
     OAUTH_CODE_VERIFIER_COOKIE,
+    OAUTH_STATE_COOKIE,
     REFRESH_TOKEN_COOKIE,
     clear_csrf_cookie,
     clear_oauth_code_verifier_cookie,
+    clear_oauth_state_cookie,
     clear_session_cookies,
     ensure_csrf_cookie,
+    generate_oauth_state_token,
     generate_pkce_challenge,
     set_oauth_code_verifier_cookie,
+    set_oauth_state_cookie,
     set_session_cookies,
 )
 from app.core.settings import Settings, get_settings
@@ -63,15 +67,15 @@ AuthServiceDep = Annotated[SupabaseAuthService, Depends(get_auth_service)]
 class UserSummary(BaseModel):
     id: str
     email: str
-    display_name: str | None
+    display_name: Optional[str]
 
 
 class SessionStatusResponse(BaseModel):
     signed_in: bool
-    user: UserSummary | None = None
-    timezone: str | None = None
-    inbox_group_id: str | None = None
-    csrf_token: str | None = None
+    user: Optional[UserSummary] = None
+    timezone: Optional[str] = None
+    inbox_group_id: Optional[str] = None
+    csrf_token: Optional[str] = None
 
 
 class TimezoneUpdateRequest(BaseModel):
@@ -101,13 +105,16 @@ async def start_google_sign_in(
 ) -> RedirectResponse:
     auth_service.ensure_configured()
     pkce_challenge = generate_pkce_challenge()
+    state_token = generate_oauth_state_token()
     response = RedirectResponse(
         url=auth_service.build_google_authorize_url(
             code_challenge=pkce_challenge.challenge,
+            state=state_token,
         ),
         status_code=302,
     )
     set_oauth_code_verifier_cookie(response, settings, pkce_challenge)
+    set_oauth_state_cookie(response, settings, state_token)
     return response
 
 
@@ -117,12 +124,16 @@ async def auth_callback(
     settings: SettingsDep,
     auth_service: AuthServiceDep,
     code: str = Query(...),
+    state: str = Query(...),
 ) -> RedirectResponse:
     auth_service.ensure_configured()
 
     code_verifier = request.cookies.get(OAUTH_CODE_VERIFIER_COOKIE)
     if not code_verifier:
         raise CsrfValidationError("OAuth PKCE verifier was missing or expired.")
+    state_token = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not state_token or state != state_token:
+        raise CsrfValidationError("OAuth state was missing, expired, or invalid.")
 
     try:
         session = await auth_service.exchange_code_for_session(
@@ -153,6 +164,7 @@ async def auth_callback(
 
     response = RedirectResponse(url=settings.frontend_app_url or "/", status_code=302)
     clear_oauth_code_verifier_cookie(response, settings)
+    clear_oauth_state_cookie(response, settings)
     set_session_cookies(response, settings, session.tokens)
     ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
     return response
@@ -299,6 +311,7 @@ def _build_blocked_auth_redirect_response(
 ) -> RedirectResponse:
     response = RedirectResponse(url=response_url, status_code=302)
     clear_oauth_code_verifier_cookie(response, settings)
+    clear_oauth_state_cookie(response, settings)
     clear_session_cookies(response, settings)
     clear_csrf_cookie(response, settings)
     return response

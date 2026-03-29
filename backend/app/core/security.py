@@ -14,6 +14,7 @@ ACCESS_TOKEN_COOKIE = "gust_access_token"
 REFRESH_TOKEN_COOKIE = "gust_refresh_token"
 CSRF_COOKIE = "gust_csrf_token"
 OAUTH_CODE_VERIFIER_COOKIE = "gust_oauth_code_verifier"
+OAUTH_STATE_COOKIE = "gust_oauth_state"
 CSRF_HEADER = "X-CSRF-Token"
 
 
@@ -31,6 +32,10 @@ class PkceChallenge:
 
 
 def generate_csrf_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def generate_oauth_state_token() -> str:
     return secrets.token_urlsafe(32)
 
 
@@ -125,6 +130,34 @@ def set_oauth_code_verifier_cookie(
 def clear_oauth_code_verifier_cookie(response: Response, settings: Settings) -> None:
     response.delete_cookie(
         OAUTH_CODE_VERIFIER_COOKIE,
+        path="/auth/session",
+        domain=settings.session_cookie_domain,
+        secure=settings.session_cookie_secure,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def set_oauth_state_cookie(
+    response: Response,
+    settings: Settings,
+    state_token: str,
+) -> None:
+    response.set_cookie(
+        OAUTH_STATE_COOKIE,
+        state_token,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+        path="/auth/session",
+        domain=settings.session_cookie_domain,
+        max_age=600,
+    )
+
+
+def clear_oauth_state_cookie(response: Response, settings: Settings) -> None:
+    response.delete_cookie(
+        OAUTH_STATE_COOKIE,
         path="/auth/session",
         domain=settings.session_cookie_domain,
         secure=settings.session_cookie_secure,
