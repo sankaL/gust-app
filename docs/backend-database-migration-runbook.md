@@ -1,6 +1,6 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.8  
+**Version:** 1.9  
 **Last Updated:** 2026-03-28
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
@@ -179,6 +179,21 @@ Deployment implication:
 
 - environments must apply `0011_rate_limit_counters` before running the backend that enforces request throttling, because startup revision checks now require that revision by default
 
+## Phase 12 Revision (Backend-Only Table Grants)
+
+Phase 12 introduces `0012_harden_backend_table_grants` as the required application revision.
+
+That revision establishes:
+
+- `public.rate_limit_counters` revoked from hosted `anon` and `authenticated` roles
+- explicit read/write grants on `public.rate_limit_counters` only for the backend runtime role
+- the migration floor required to keep backend-only operational tables out of end-user Supabase API reach
+
+Deployment implication:
+
+- environments must apply `0012_harden_backend_table_grants` before running the backend, because startup revision checks now require that revision by default
+- hosted Supabase environments must also apply the paired `supabase/` grant-hardening migration for `public.allowed_users`
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -216,7 +231,9 @@ Production database ownership rules:
 - hosted Supabase project provisioning and config are managed through the Supabase CLI
 - application schema changes are applied through Alembic only
 - Supabase Auth hook assets such as `public.allowed_users` and `public.before_user_created_allowlist(jsonb)` are versioned under `supabase/` and applied through the Supabase project workflow, not Alembic
-- the backend runtime role must retain `SELECT` on `public.allowed_users`, because callback and session-refresh auth checks read that table directly
+- hosted `anon` and `authenticated` roles must not retain table privileges on `public.allowed_users` or `public.rate_limit_counters`
+- the backend runtime role must retain only `SELECT` on `public.allowed_users`, because callback and session-refresh auth checks read that table directly
+- the backend runtime role may retain only `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `public.rate_limit_counters`
 - do not use `supabase db push` for the application schema
 - backend deploys are expected to run `alembic upgrade head` before startup and then pass the startup revision check
 - Railway production deploys must provide `MIGRATION_DATABASE_URL` as a privileged migration/admin connection, while `DATABASE_URL` remains the least-privilege runtime connection used by the app after startup
@@ -237,7 +254,7 @@ Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
 - Production Railway backend deploys fail closed if `APP_ENV=production` and `MIGRATION_DATABASE_URL` is missing.
-- The required revision configured for the backend matches `0011_rate_limit_counters` or the current deployed head.
+- The required revision configured for the backend matches `0012_harden_backend_table_grants` or the current deployed head.
 - Backend startup revision check passes.
 - `scripts/prod/check-postgres-rls.py` passes against the runtime `DATABASE_URL`.
 - The current Postgres runtime role reports `rolbypassrls = false`.
@@ -256,14 +273,15 @@ Minimum verification after applying schema-affecting changes:
 - Capture retention fields exist and new rows receive an `expires_at` value.
 - `tasks.capture_id` supports capture cleanup without orphaning tasks.
 - `public.allowed_users` exists and contains the intended private-access email set.
-- the backend runtime role can `SELECT` from `public.allowed_users`.
+- the backend runtime role can `SELECT` from `public.allowed_users` and hosted `anon` / `authenticated` roles cannot.
 - the Supabase `before_user_created` hook is enabled and points to `public.before_user_created_allowlist`.
 - an allowlisted Google email can complete signup/sign-in.
 - a non-allowlisted Google email is rejected before `auth.users` insertion.
 - a previously-created but now-removed email cannot restore a backend session and is redirected or returned as `auth_email_not_allowed`.
 - `rate_limit_counters` exists with the composite primary key and `expires_at` cleanup index.
-- `POST /auth/session/google/start` returns both the PKCE verifier cookie and the backend OAuth state cookie.
-- `GET /auth/session/callback` rejects missing or invalid backend OAuth `state`.
+- hosted `anon` / `authenticated` roles cannot read or mutate `public.rate_limit_counters`.
+- `POST /auth/session/google/start` returns the PKCE verifier cookie and does not attach a backend-owned OAuth `state` parameter to the Supabase authorize URL.
+- `GET /auth/session/callback` rejects a missing PKCE verifier cookie.
 - Unsafe cookie-authenticated methods reject requests with missing or foreign `Origin` / `Referer`.
 - Trusted host enforcement accepts the deployed frontend/backend hosts and rejects unexpected `Host` headers.
 - Auth/session and authenticated JSON responses emit `Cache-Control: no-store` plus the committed security headers.

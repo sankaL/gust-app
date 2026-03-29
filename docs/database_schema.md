@@ -1,6 +1,6 @@
 # Gust Database Schema
 
-**Version:** 1.7
+**Version:** 1.8
 **Last Updated:** 2026-03-28
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
@@ -142,6 +142,8 @@ Constraints and invariants:
 - `email` is the exact allowlist key after normalization.
 - New rows must be safe to add or remove without backend/frontend code changes.
 - Reads are limited to Supabase auth-hook execution and backend auth/session enforcement.
+- Hosted `anon` and `authenticated` roles must not have table privileges on `public.allowed_users`.
+- The backend runtime role is `SELECT`-only on `public.allowed_users`.
 
 ### `groups`
 
@@ -380,6 +382,8 @@ Constraints and invariants:
 - This table is backend-owned operational state, not user-owned application data.
 - Counters are updated atomically through upsert/increment logic.
 - Expired rows may be deleted opportunistically without affecting active enforcement.
+- Hosted `anon` and `authenticated` roles must not have table privileges on `public.rate_limit_counters`.
+- The backend runtime role may hold only the read/write privileges needed for fixed-window enforcement.
 
 ## Cross-Table Rules
 

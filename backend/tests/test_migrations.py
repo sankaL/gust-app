@@ -226,6 +226,67 @@ def test_phase10_migration_enables_postgres_rls_policies() -> None:
     )
 
 
+def test_phase12_migration_revokes_public_access_to_rate_limit_counters() -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0012_harden_backend_table_grants.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "harden_backend_table_grants_migration",
+        migration_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    class _Dialect:
+        name = "postgresql"
+
+    class _Bind:
+        dialect = _Dialect()
+
+    executed_sql: list[str] = []
+    module.op.get_bind = lambda: _Bind()
+    module.op.execute = lambda statement: executed_sql.append(statement)
+
+    module.upgrade()
+
+    assert module.revision == "0012_harden_backend_table_grants"
+    assert module.down_revision == "0011_rate_limit_counters"
+    assert any(
+        "REVOKE ALL PRIVILEGES ON TABLE public.rate_limit_counters" in statement
+        and "anon" in statement
+        and "authenticated" in statement
+        for statement in executed_sql
+    )
+    assert any(
+        "GRANT SELECT, INSERT, UPDATE, DELETE" in statement
+        and "public.rate_limit_counters" in statement
+        and "gust_app_runtime" in statement
+        for statement in executed_sql
+    )
+
+
+def test_supabase_allowlist_hardening_migration_revokes_public_roles() -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[2]
+        / "supabase"
+        / "migrations"
+        / "20260328214500_harden_allowed_users_grants.sql"
+    )
+
+    sql = migration_path.read_text(encoding="utf-8")
+
+    assert "revoke all privileges on table public.allowed_users from public, anon, authenticated;" in sql
+    assert "revoke all privileges on table public.allowed_users from gust_app_runtime;" in sql
+    assert "grant select on table public.allowed_users to supabase_auth_admin;" in sql
+    assert "grant select on table public.allowed_users to gust_app_runtime;" in sql
+
+
 def test_phase10_migration_noops_for_sqlite() -> None:
     migration_path = (
         Path(__file__).resolve().parents[1] / "alembic" / "versions" / "0010_enable_postgres_rls.py"
