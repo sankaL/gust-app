@@ -66,8 +66,7 @@ def trusted_hosts(settings: Settings) -> list[str]:
         if normalized is not None:
             hosts.add(normalized)
     if has_railway_runtime:
-        hosts.add("*.railway.internal")
-        hosts.add("*.up.railway.app")
+        hosts.add("*")
     return sorted(hosts)
 
 
