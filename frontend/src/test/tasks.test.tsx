@@ -593,7 +593,6 @@ describe('tasks flow', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     renderTaskRoute(['/tasks?group=all'])
-    const user = userEvent.setup()
 
     // Wait for the infinite query to fetch data
     await waitFor(() => {
