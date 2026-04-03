@@ -94,6 +94,7 @@ class ExtractedTaskResponse(BaseModel):
     recurrence_frequency: Optional[str]
     recurrence_weekday: Optional[int]
     recurrence_day_of_month: Optional[int]
+    recurrence_month: Optional[int]
     top_confidence: float
     needs_review: bool
     status: str
@@ -121,9 +122,10 @@ class UpdateExtractedTaskRequest(BaseModel):
     group_id: Optional[str] = None
     due_date: Optional[date] = None
     reminder_at: Optional[datetime] = None  # ISO datetime string (with timezone) or null
-    recurrence_frequency: Optional[Literal["daily", "weekly", "monthly"]] = None
+    recurrence_frequency: Optional[Literal["daily", "weekly", "monthly", "yearly"]] = None
     recurrence_weekday: Optional[int] = None  # 0-6 for weekly
     recurrence_day_of_month: Optional[int] = None  # 1-31 for monthly
+    recurrence_month: Optional[int] = None  # 1-12 for yearly
 
     @field_validator("title")
     @classmethod
@@ -224,6 +226,7 @@ def _build_extracted_task_response(task) -> ExtractedTaskResponse:
         recurrence_frequency=task.recurrence_frequency,
         recurrence_weekday=task.recurrence_weekday,
         recurrence_day_of_month=task.recurrence_day_of_month,
+        recurrence_month=task.recurrence_month,
         top_confidence=task.top_confidence,
         needs_review=task.needs_review,
         status=task.status,

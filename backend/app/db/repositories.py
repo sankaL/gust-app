@@ -95,6 +95,7 @@ class TaskRecord:
     recurrence_interval: int | None
     recurrence_weekday: int | None
     recurrence_day_of_month: int | None
+    recurrence_month: int | None
     completed_at: datetime | None
     deleted_at: datetime | None
     created_at: datetime
@@ -172,6 +173,7 @@ class ExtractedTaskRecord:
     recurrence_frequency: str | None
     recurrence_weekday: int | None
     recurrence_day_of_month: int | None
+    recurrence_month: int | None
     top_confidence: float
     needs_review: bool
     status: str
@@ -255,6 +257,7 @@ def _row_to_task(row: sa.Row) -> TaskRecord:
         recurrence_interval=row.recurrence_interval,
         recurrence_weekday=row.recurrence_weekday,
         recurrence_day_of_month=row.recurrence_day_of_month,
+        recurrence_month=row.recurrence_month,
         completed_at=row.completed_at,
         deleted_at=row.deleted_at,
         created_at=row.created_at,
@@ -344,6 +347,7 @@ def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
         recurrence_frequency=row.recurrence_frequency,
         recurrence_weekday=row.recurrence_weekday,
         recurrence_day_of_month=row.recurrence_day_of_month,
+        recurrence_month=row.recurrence_month,
         top_confidence=float(row.top_confidence),
         needs_review=bool(row.needs_review),
         status=row.status,
@@ -1011,6 +1015,7 @@ def create_task(
     recurrence_interval: int | None = None,
     recurrence_weekday: int | None = None,
     recurrence_day_of_month: int | None = None,
+    recurrence_month: int | None = None,
     series_id: str | None = None,
 ) -> TaskRecord:
     task_id = str(uuid.uuid4())
@@ -1032,6 +1037,7 @@ def create_task(
             recurrence_interval=recurrence_interval,
             recurrence_weekday=recurrence_weekday,
             recurrence_day_of_month=recurrence_day_of_month,
+            recurrence_month=recurrence_month,
         )
     )
     row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
@@ -1614,6 +1620,7 @@ def create_extracted_task(
     recurrence_frequency: str | None,
     recurrence_weekday: int | None,
     recurrence_day_of_month: int | None,
+    recurrence_month: int | None,
     top_confidence: float,
     needs_review: bool,
     subtask_titles: list[str] | None = None,
@@ -1633,6 +1640,7 @@ def create_extracted_task(
             recurrence_frequency=recurrence_frequency,
             recurrence_weekday=recurrence_weekday,
             recurrence_day_of_month=recurrence_day_of_month,
+            recurrence_month=recurrence_month,
             top_confidence=top_confidence,
             needs_review=needs_review,
             subtask_titles=subtask_titles or [],

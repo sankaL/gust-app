@@ -1,5 +1,13 @@
 # Decisions Made
 
+## 2026-04-02 21:26:00 EDT
+
+- Added yearly recurrence support with a new `recurrence_month` column on both `tasks` and `extracted_tasks` tables, extending the existing `ck_tasks_recurrence_shape` check constraint to require `month` and `day_of_month` together for `yearly` frequency while keeping `weekday` null.
+- Yearly recurrence advances by exactly one calendar year from the completed/deleted occurrence date, clamping the day to the last day of the target month (e.g., Feb 29 → Feb 28 in non-leap years) via `calendar.monthrange`.
+- The extraction prompt was extended with yearly signal words ("every year", "yearly", "annually", named holidays, tax day, etc.) so the AI can produce `frequency: "yearly"` with `month` and `day_of_month` from voice/text capture.
+- Frontend forms (`TaskFormFields`, `TaskForm`, `EditExtractedTaskModal`) were extended with a month dropdown (1–12) alongside the existing day-of-month input for yearly recurrence, following the same conditional rendering pattern as weekly/monthly.
+- A critical bug was found and fixed during review: the staging service's `RecurrenceInput` construction was missing the `month` field, which would have caused all yearly tasks from AI extraction to fail validation and be silently dropped.
+
 ## 2026-03-28 20:15:00 EDT
 
 - Split deployed database connectivity into two explicit roles: `DATABASE_URL` remains the least-privilege runtime connection, while Alembic now prefers `MIGRATION_DATABASE_URL` for privileged DDL-bearing migrations.

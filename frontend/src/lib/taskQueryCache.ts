@@ -153,6 +153,7 @@ export function updateTaskDetailCache(queryClient: QueryClient, task: TaskDetail
               frequency: task.recurrence_frequency,
               weekday: null,
               day_of_month: null,
+              month: null,
             }
           : null,
       subtasks: current?.subtasks ?? [],

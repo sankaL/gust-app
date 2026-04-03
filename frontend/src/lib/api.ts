@@ -48,9 +48,10 @@ export type TaskGroupRef = {
 }
 
 export type TaskRecurrence = {
-  frequency: 'daily' | 'weekly' | 'monthly'
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'
   weekday: number | null
   day_of_month: number | null
+  month: number | null
 }
 
 export type TaskSubtask = {
@@ -65,7 +66,7 @@ export type TaskSummary = {
   title: string
   description: string | null
   series_id?: string | null
-  recurrence_frequency?: 'daily' | 'weekly' | 'monthly' | null
+  recurrence_frequency?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
   status: 'open' | 'completed'
   needs_review: boolean
   due_date: string | null
@@ -96,6 +97,7 @@ export type ExtractedTask = {
   recurrence_frequency: string | null
   recurrence_weekday: number | null
   recurrence_day_of_month: number | null
+  recurrence_month: number | null
   top_confidence: number
   needs_review: boolean
   status: 'pending' | 'approved' | 'discarded'
@@ -551,6 +553,7 @@ export type ExtractedTaskUpdates = {
   recurrence_frequency?: string | null
   recurrence_weekday?: number | null
   recurrence_day_of_month?: number | null
+  recurrence_month?: number | null
 }
 
 export function updateExtractedTask(

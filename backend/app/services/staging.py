@@ -106,6 +106,7 @@ class StagingService:
                             frequency=candidate.recurrence.frequency,
                             weekday=candidate.recurrence.weekday,
                             day_of_month=candidate.recurrence.day_of_month,
+                            month=candidate.recurrence.month,
                         )
 
                     try:
@@ -151,6 +152,7 @@ class StagingService:
                         recurrence_frequency=normalized.recurrence_frequency,
                         recurrence_weekday=normalized.recurrence_weekday,
                         recurrence_day_of_month=normalized.recurrence_day_of_month,
+                        recurrence_month=normalized.recurrence_month,
                         top_confidence=candidate.top_confidence,
                         needs_review=needs_review,
                         subtask_titles=subtask_titles or None,
@@ -369,6 +371,7 @@ class StagingService:
             "recurrence_frequency",
             "recurrence_weekday",
             "recurrence_day_of_month",
+            "recurrence_month",
         }
         unknown_fields = set(updates.keys()) - allowed_update_fields
         if unknown_fields:
@@ -437,9 +440,10 @@ class StagingService:
                 "recurrence_frequency",
                 "recurrence_weekday",
                 "recurrence_day_of_month",
+                "recurrence_month",
             }
             if recurrence_fields & values.keys():
-                allowed_frequencies = {"daily", "weekly", "monthly"}
+                allowed_frequencies = {"daily", "weekly", "monthly", "yearly"}
                 existing_frequency = (
                     extracted_task.recurrence_frequency
                     if extracted_task.recurrence_frequency in allowed_frequencies
@@ -460,33 +464,53 @@ class StagingService:
                     if "recurrence_day_of_month" in values
                     else extracted_task.recurrence_day_of_month
                 )
+                next_month = (
+                    values["recurrence_month"]
+                    if "recurrence_month" in values
+                    else extracted_task.recurrence_month
+                )
 
                 if next_frequency is None:
                     next_weekday = None
                     next_day_of_month = None
+                    next_month = None
                 elif next_frequency == "daily":
                     next_weekday = None
                     next_day_of_month = None
+                    next_month = None
                 elif next_frequency == "weekly":
                     if next_weekday is None or not isinstance(next_weekday, int):
                         raise InvalidTaskError("Weekly recurrence requires a weekday (0-6).")
                     if next_weekday < 0 or next_weekday > 6:
                         raise InvalidTaskError("Weekly recurrence weekday must be between 0 and 6.")
                     next_day_of_month = None
+                    next_month = None
                 elif next_frequency == "monthly":
                     if next_day_of_month is None or not isinstance(next_day_of_month, int):
                         raise InvalidTaskError("Monthly recurrence requires a day of month (1-31).")
                     if next_day_of_month < 1 or next_day_of_month > 31:
                         raise InvalidTaskError("Monthly recurrence day must be between 1 and 31.")
                     next_weekday = None
+                    next_month = None
+                elif next_frequency == "yearly":
+                    if next_month is None or not isinstance(next_month, int):
+                        raise InvalidTaskError("Yearly recurrence requires a month (1-12).")
+                    if next_month < 1 or next_month > 12:
+                        raise InvalidTaskError("Yearly recurrence month must be between 1 and 12.")
+                    if next_day_of_month is None or not isinstance(next_day_of_month, int):
+                        raise InvalidTaskError("Yearly recurrence requires a day of month (1-31).")
+                    if next_day_of_month < 1 or next_day_of_month > 31:
+                        raise InvalidTaskError("Yearly recurrence day must be between 1 and 31.")
+                    next_weekday = None
                 else:
                     raise InvalidTaskError(
-                        "recurrence_frequency must be one of daily, weekly, monthly, or null."
+                        "recurrence_frequency must be one of daily, weekly, monthly, yearly, or null."
                     )
 
                 values["recurrence_frequency"] = next_frequency
                 values["recurrence_weekday"] = next_weekday
                 values["recurrence_day_of_month"] = next_day_of_month
+                values["recurrence_month"] = next_month
 
             updated_task = update_extracted_task(
                 connection,
@@ -680,6 +704,7 @@ class StagingService:
             recurrence_frequency=extracted_task.recurrence_frequency,
             recurrence_weekday=extracted_task.recurrence_weekday,
             recurrence_day_of_month=extracted_task.recurrence_day_of_month,
+            recurrence_month=extracted_task.recurrence_month,
         )
 
         if extracted_task.subtask_titles:

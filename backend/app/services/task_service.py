@@ -193,6 +193,7 @@ class TaskService:
                 recurrence_interval=normalized.recurrence_interval,
                 recurrence_weekday=normalized.recurrence_weekday,
                 recurrence_day_of_month=normalized.recurrence_day_of_month,
+                recurrence_month=normalized.recurrence_month,
                 series_id=normalized.series_id,
             )
             self._sync_reminder(
@@ -245,6 +246,7 @@ class TaskService:
                 "recurrence_interval": normalized.recurrence_interval,
                 "recurrence_weekday": normalized.recurrence_weekday,
                 "recurrence_day_of_month": normalized.recurrence_day_of_month,
+                "recurrence_month": normalized.recurrence_month,
                 "series_id": normalized.series_id,
             }
             if payload.description_provided:
@@ -646,6 +648,7 @@ class TaskService:
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
+            recurrence_month=task.recurrence_month,
             user_timezone=user_timezone,
         )
 
@@ -675,8 +678,13 @@ class TaskService:
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=(
                 next_day_of_month
-                if task.recurrence_frequency == "monthly"
+                if task.recurrence_frequency in ("monthly", "yearly")
                 else task.recurrence_day_of_month
+            ),
+            recurrence_month=(
+                task.recurrence_month
+                if task.recurrence_frequency == "yearly"
+                else None
             ),
             series_id=task.series_id,
         )
@@ -722,6 +730,7 @@ class TaskService:
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
+            recurrence_month=task.recurrence_month,
         )
 
         next_reminder_at = None
@@ -750,8 +759,13 @@ class TaskService:
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=(
                 next_day_of_month
-                if task.recurrence_frequency == "monthly"
+                if task.recurrence_frequency in ("monthly", "yearly")
                 else task.recurrence_day_of_month
+            ),
+            recurrence_month=(
+                task.recurrence_month
+                if task.recurrence_frequency == "yearly"
+                else None
             ),
             series_id=task.series_id,
         )
@@ -796,11 +810,12 @@ class TaskService:
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
+            recurrence_month=task.recurrence_month,
             user_timezone=user_timezone,
         )
         expected_day_of_month = (
             next_day_of_month
-            if task.recurrence_frequency == "monthly"
+            if task.recurrence_frequency in ("monthly", "yearly")
             else task.recurrence_day_of_month
         )
 
@@ -866,10 +881,11 @@ class TaskService:
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
+            recurrence_month=task.recurrence_month,
         )
         expected_day_of_month = (
             next_day_of_month
-            if task.recurrence_frequency == "monthly"
+            if task.recurrence_frequency in ("monthly", "yearly")
             else task.recurrence_day_of_month
         )
 

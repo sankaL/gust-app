@@ -49,30 +49,26 @@ const SECTIONS = [
   { key: 'others', label: 'Others' },
 ] as const
 
-function getTodayIsoDate(timezone: string | null): string {
-  if (!timezone) {
-    return new Date().toISOString().slice(0, 10)
-  }
-
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  })
-
-  return formatter.format(new Date())
+function getTodayIsoDate(_timezone: string | null): string {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function getTaskSection(
   task: TaskSummary,
   todayIsoDate: string
 ): 'today' | 'overdue' | 'others' {
-  if (task.due_bucket === 'overdue') {
-    return 'overdue'
+  if (!task.due_date) {
+    return 'others'
   }
   if (task.due_date === todayIsoDate) {
     return 'today'
+  }
+  if (task.due_date < todayIsoDate) {
+    return 'overdue'
   }
   return 'others'
 }

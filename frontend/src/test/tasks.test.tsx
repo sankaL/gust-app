@@ -639,7 +639,7 @@ describe('tasks flow', () => {
                 needs_review: false,
                 due_date: localDate(0),
                 reminder_at: null,
-                due_bucket: 'due_soon',
+                due_bucket: 'overdue',
                 group: { id: 'personal-1', name: 'Personal', is_system: false },
                 completed_at: null,
                 deleted_at: null,
@@ -651,6 +651,19 @@ describe('tasks flow', () => {
                 status: 'open',
                 needs_review: false,
                 due_date: localDate(1),
+                reminder_at: null,
+                due_bucket: 'due_soon',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              },
+              {
+                id: 'task-later',
+                title: 'Book annual physical',
+                status: 'open',
+                needs_review: false,
+                due_date: localDate(5),
                 reminder_at: null,
                 due_bucket: 'due_soon',
                 group: { id: 'inbox-1', name: 'Inbox', is_system: true },
@@ -672,9 +685,16 @@ describe('tasks flow', () => {
     renderTaskRoute(['/tasks?group=all'])
 
     expect(await screen.findByText('Submit reimbursement')).toBeInTheDocument()
-    expect(screen.getByText('Today')).toBeInTheDocument()
-    expect(screen.getByText('Overdue')).toBeInTheDocument()
-    expect(screen.getByText('Others')).toBeInTheDocument()
+    const todayHeading = screen.getByRole('heading', { name: 'Today' })
+    const overdueHeading = screen.getByRole('heading', { name: 'Overdue' })
+    const othersHeading = screen.getByRole('heading', { name: 'Others' })
+
+    expect(todayHeading).toBeInTheDocument()
+    expect(overdueHeading).toBeInTheDocument()
+    expect(othersHeading).toBeInTheDocument()
+    expect(todayHeading.parentElement).toHaveTextContent('1 tasks')
+    expect(overdueHeading.parentElement).toHaveTextContent('1 tasks')
+    expect(othersHeading.parentElement).toHaveTextContent('2 tasks')
   })
 
   it('loads the all-tasks view when a legacy paginated cache entry exists for the old key', async () => {

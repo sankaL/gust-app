@@ -20,6 +20,7 @@ class RecurrenceInput:
     frequency: str
     weekday: int | None = None
     day_of_month: int | None = None
+    month: int | None = None
 
 
 @dataclass
@@ -32,6 +33,7 @@ class NormalizedTaskFields:
     recurrence_interval: int | None
     recurrence_weekday: int | None
     recurrence_day_of_month: int | None
+    recurrence_month: int | None
     series_id: str | None
 
 
@@ -115,6 +117,7 @@ def normalize_task_fields(
     recurrence_interval = None
     recurrence_weekday = None
     recurrence_day_of_month = None
+    recurrence_month = None
     series_id = None
     if recurrence is not None:
         validate_recurrence(recurrence)
@@ -122,6 +125,7 @@ def normalize_task_fields(
         recurrence_interval = 1
         recurrence_weekday = recurrence.weekday
         recurrence_day_of_month = recurrence.day_of_month
+        recurrence_month = recurrence.month
         series_id = current_series_id or str(uuid.uuid4())
 
     reminder_offset_minutes = None
@@ -141,20 +145,26 @@ def normalize_task_fields(
         recurrence_interval=recurrence_interval,
         recurrence_weekday=recurrence_weekday,
         recurrence_day_of_month=recurrence_day_of_month,
+        recurrence_month=recurrence_month,
         series_id=series_id,
     )
 
 
 def validate_recurrence(recurrence: RecurrenceInput) -> None:
     if recurrence.frequency == "daily":
-        if recurrence.weekday is None and recurrence.day_of_month is None:
+        if recurrence.weekday is None and recurrence.day_of_month is None and recurrence.month is None:
             return
     elif recurrence.frequency == "weekly":
         if recurrence.weekday is not None and 0 <= recurrence.weekday <= 6:
-            if recurrence.day_of_month is None:
+            if recurrence.day_of_month is None and recurrence.month is None:
                 return
     elif recurrence.frequency == "monthly":
         if recurrence.day_of_month is not None and 1 <= recurrence.day_of_month <= 31:
+            if recurrence.weekday is None and recurrence.month is None:
+                return
+    elif recurrence.frequency == "yearly":
+        if (recurrence.month is not None and 1 <= recurrence.month <= 12 and
+                recurrence.day_of_month is not None and 1 <= recurrence.day_of_month <= 31):
             if recurrence.weekday is None:
                 return
 
@@ -191,6 +201,7 @@ def next_due_date_for_completed_task(
     recurrence_frequency: str,
     recurrence_weekday: int | None,
     recurrence_day_of_month: int | None,
+    recurrence_month: int | None,
     user_timezone: str,
 ) -> tuple[date, int | None]:
     local_completed_date = completed_at.astimezone(ZoneInfo(user_timezone)).date()
@@ -210,6 +221,14 @@ def next_due_date_for_completed_task(
         next_month = _add_one_month(local_completed_date)
         return (next_month, next_month.day)
 
+    if recurrence_frequency == "yearly":
+        if recurrence_month is None or recurrence_day_of_month is None:
+            raise ValueError("Yearly recurrence requires month and day_of_month.")
+        next_year = local_completed_date.year + 1
+        last_day = calendar.monthrange(next_year, recurrence_month)[1]
+        day = min(recurrence_day_of_month, last_day)
+        return (date(next_year, recurrence_month, day), recurrence_day_of_month)
+
     raise ValueError("Unsupported recurrence frequency.")
 
 
@@ -219,6 +238,7 @@ def next_due_date_for_deleted_occurrence(
     recurrence_frequency: str,
     recurrence_weekday: int | None,
     recurrence_day_of_month: int | None,
+    recurrence_month: int | None,
 ) -> tuple[date, int | None]:
     if recurrence_frequency == "daily":
         return (occurrence_due_date + timedelta(days=1), recurrence_day_of_month)
@@ -234,6 +254,14 @@ def next_due_date_for_deleted_occurrence(
     if recurrence_frequency == "monthly":
         next_month = _add_one_month(occurrence_due_date)
         return (next_month, next_month.day)
+
+    if recurrence_frequency == "yearly":
+        if recurrence_month is None or recurrence_day_of_month is None:
+            raise ValueError("Yearly recurrence requires month and day_of_month.")
+        next_year = occurrence_due_date.year + 1
+        last_day = calendar.monthrange(next_year, recurrence_month)[1]
+        day = min(recurrence_day_of_month, last_day)
+        return (date(next_year, recurrence_month, day), recurrence_day_of_month)
 
     raise ValueError("Unsupported recurrence frequency.")
 

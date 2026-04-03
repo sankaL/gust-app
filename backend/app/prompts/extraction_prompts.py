@@ -132,6 +132,18 @@ When you see these words, they usually introduce NEW SEPARATE TASKS:
 - "I need to" → NEW TASK
 - "oh and" / "oh I also" → NEW TASK
 
+## RECURRENCE SIGNAL WORDS
+
+When you see these patterns, set the recurrence frequency accordingly:
+- "every day" / "daily" / "each day" → frequency: "daily"
+- "every week" / "weekly" / "each week" / "every Monday" → frequency: "weekly" (set weekday)
+- "every month" / "monthly" / "each month" / "on the 15th of each month" → frequency: "monthly" (set day_of_month)
+- "every year" / "yearly" / "annually" / "each year" → frequency: "yearly" (set month + day_of_month)
+- "every April 15th" / "on March 20th every year" → frequency: "yearly" (set month + day_of_month)
+- "every birthday" / "on my birthday" → frequency: "yearly" (set month + day_of_month based on context)
+- "every tax season" / "every tax day" → frequency: "yearly" (month: 4, day_of_month: 15 for US)
+- "every New Year's" / "every Christmas" → frequency: "yearly" (set appropriate month/day)
+
 When you see "to do Y" after an action X:
 - "fix up my resume to apply" → X is SUBTASK of Y
 
@@ -272,6 +284,60 @@ PASS 2 OUTPUT:
 }
 ```
 
+### Example 5: Yearly recurrence
+---BEGIN TRANSCRIPT---
+I need to file my taxes every year by April 15th
+---END TRANSCRIPT---
+
+PASS 1 ENUMERATION:
+```
+ENUMERATED TASKS:
+1. File taxes every year by April 15th
+TOTAL: 1 task identified
+```
+
+PASS 2 OUTPUT:
+```json
+{
+  "tasks": [
+    {
+      "title": "File taxes",
+      "description": "Annual tax filing deadline.",
+      "due_date": "2026-04-15",
+      "recurrence": {"frequency": "yearly", "month": 4, "day_of_month": 15},
+      "top_confidence": 0.9
+    }
+  ]
+}
+```
+
+### Example 6: Yearly recurrence with birthday
+---BEGIN TRANSCRIPT---
+Remind me to buy mom a birthday gift every year on March 20th
+---END TRANSCRIPT---
+
+PASS 1 ENUMERATION:
+```
+ENUMERATED TASKS:
+1. Buy mom a birthday gift every year on March 20th
+TOTAL: 1 task identified
+```
+
+PASS 2 OUTPUT:
+```json
+{
+  "tasks": [
+    {
+      "title": "Buy mom a birthday gift",
+      "description": "Annual birthday gift for mom.",
+      "due_date": "2026-03-20",
+      "recurrence": {"frequency": "yearly", "month": 3, "day_of_month": 20},
+      "top_confidence": 0.9
+    }
+  ]
+}
+```
+
 ## OUTPUT FORMAT
 
 Return EXACTLY this format:
@@ -303,7 +369,7 @@ JSON SCHEMA:
       "group_name": "string (optional)",
       "top_confidence": "float (0.0 to 1.0, default 0.9)",
       "alternative_groups": [{"group_id": "string", "group_name": "string", "confidence": "float"}],
-      "recurrence": "object {frequency: 'daily'|'weekly'|'monthly', weekday: 0-6, day_of_month: 1-31} or null - NOTE: weekly/monthly recurrence REQUIRES due_date to be set",
+      "recurrence": "object {frequency: 'daily'|'weekly'|'monthly'|'yearly', weekday: 0-6, day_of_month: 1-31, month: 1-12} or null - NOTE: weekly/monthly/yearly recurrence REQUIRES due_date to be set; yearly requires both month and day_of_month",
       "subtasks": [{"title": "string"}]
     }
   ]
@@ -319,10 +385,11 @@ JSON SCHEMA:
 5. Health, appointment, and personal errand tasks should be separate top-level tasks regardless of dominant transcript theme
 6. Parse dates relative to user's timezone and current date provided
 7. Set reminder_at ONLY when a specific time is mentioned — ALWAYS include timezone (e.g., +00:00 for UTC)
-8. For weekly or monthly recurrence, you MUST set due_date to the first occurrence date
+8. For weekly, monthly, or yearly recurrence, you MUST set due_date to the first occurrence date
 9. Always include top_confidence (use 0.9 when not otherwise specified)
 10. Set description to null when the title already captures the full task or no extra context is available
-11. Return ONLY the enumeration text, cross-domain check, and JSON — nothing else"""
+11. Return ONLY the enumeration text, cross-domain check, and JSON — nothing else
+12. For yearly recurrence, ALWAYS set both month (1-12) and day_of_month (1-31) in the recurrence object"""
 
     def get_user_prompt(
         self,

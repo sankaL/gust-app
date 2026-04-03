@@ -29,6 +29,7 @@ class ExtractionRecurrence(BaseModel):
     frequency: str
     weekday: Optional[int] = None
     day_of_month: Optional[int] = None
+    month: Optional[int] = None
 
 
 class ExtractionSubtask(BaseModel):

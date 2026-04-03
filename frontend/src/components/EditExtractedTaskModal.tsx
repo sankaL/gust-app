@@ -57,9 +57,10 @@ export function EditExtractedTaskModal({
     ? null
     : task.recurrence_frequency
       ? {
-          frequency: task.recurrence_frequency as 'daily' | 'weekly' | 'monthly',
+          frequency: task.recurrence_frequency as 'daily' | 'weekly' | 'monthly' | 'yearly',
           weekday: task.recurrence_weekday,
           day_of_month: task.recurrence_day_of_month,
+          month: task.recurrence_month,
         }
       : null
 
@@ -122,8 +123,24 @@ export function EditExtractedTaskModal({
           if (task.recurrence_day_of_month !== null) {
             cleanUpdates.recurrence_day_of_month = null
           }
+          if (task.recurrence_month !== null) {
+            cleanUpdates.recurrence_month = null
+          }
         } else if (newRecurrenceFrequency === 'monthly') {
           if (data.recurrence?.day_of_month !== task.recurrence_day_of_month || initialRecurrenceFrequency !== 'monthly') {
+            cleanUpdates.recurrence_day_of_month = data.recurrence?.day_of_month ?? null
+          }
+          if (task.recurrence_weekday !== null) {
+            cleanUpdates.recurrence_weekday = null
+          }
+          if (task.recurrence_month !== null) {
+            cleanUpdates.recurrence_month = null
+          }
+        } else if (newRecurrenceFrequency === 'yearly') {
+          if (data.recurrence?.month !== task.recurrence_month || initialRecurrenceFrequency !== 'yearly') {
+            cleanUpdates.recurrence_month = data.recurrence?.month ?? null
+          }
+          if (data.recurrence?.day_of_month !== task.recurrence_day_of_month || initialRecurrenceFrequency !== 'yearly') {
             cleanUpdates.recurrence_day_of_month = data.recurrence?.day_of_month ?? null
           }
           if (task.recurrence_weekday !== null) {
@@ -135,6 +152,9 @@ export function EditExtractedTaskModal({
           }
           if (task.recurrence_day_of_month !== null) {
             cleanUpdates.recurrence_day_of_month = null
+          }
+          if (task.recurrence_month !== null) {
+            cleanUpdates.recurrence_month = null
           }
         }
 
