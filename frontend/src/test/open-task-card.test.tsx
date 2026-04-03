@@ -5,6 +5,51 @@ import { describe, expect, it, vi } from 'vitest'
 import { OpenTaskCard } from '../components/OpenTaskCard'
 
 describe('open task card metadata layout', () => {
+  it('keeps collapsed metadata on a single line when the group badge is visible', () => {
+    const groupName = 'Operations and Long-Running Cross-Team Planning Group'
+
+    render(
+      <OpenTaskCard
+        task={{
+          id: 'task-1',
+          title: 'Check on Loku Caters orders page',
+          description: 'Review the current implementation of actions on the orders page.',
+          status: 'open',
+          needs_review: false,
+          due_date: '2026-04-03',
+          reminder_at: '2026-03-29T13:00:00Z',
+          due_bucket: 'due_soon',
+          recurrence_frequency: 'weekly',
+          group: { id: 'group-1', name: groupName, is_system: false },
+          completed_at: null,
+          deleted_at: null,
+          subtask_count: 12
+        }}
+        onOpen={vi.fn()}
+        onComplete={vi.fn()}
+        onDelete={vi.fn()}
+        isBusy={false}
+        showCollapsedGroupLabel
+      />
+    )
+
+    const metadataRow = screen.getByText(groupName).parentElement
+    if (!metadataRow) {
+      throw new Error('Expected collapsed metadata row')
+    }
+
+    expect(metadataRow).toHaveClass('w-full')
+    expect(metadataRow).toHaveClass('flex-nowrap')
+    expect(metadataRow).toHaveClass('overflow-hidden')
+    expect(metadataRow).not.toHaveClass('flex-wrap')
+    expect(metadataRow.className).toContain('text-[0.58rem]')
+    expect(screen.getByText(groupName)).toHaveClass('truncate')
+    expect(screen.getByText(groupName)).toHaveClass('shrink')
+    expect(screen.getByText(/^Due:/)).toHaveClass('whitespace-nowrap')
+    expect(screen.getByText('WEEKLY')).toHaveClass('shrink-0')
+    expect(screen.getByText('12')).toBeInTheDocument()
+  })
+
   it('keeps expanded metadata rows single-line with truncation and preserves action buttons', async () => {
     const groupName = 'Operations and Long-Running Cross-Team Planning Group'
     const user = userEvent.setup()

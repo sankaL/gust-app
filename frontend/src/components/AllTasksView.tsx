@@ -146,6 +146,13 @@ export function AllTasksView({
     return items
   }, [sectionedTasks])
 
+  // Stable key function so the virtualizer tracks rows by identity, not shifted index
+  const getItemKey = useCallback((index: number): string => {
+    const item = virtualItems[index]
+    if (!item) return String(index)
+    return item.type === 'header' ? `header-${item.sectionKey}` : `task-${item.task.id}`
+  }, [virtualItems])
+
   // Estimate size function for virtualizer
   const estimateSize = useCallback((index: number): number => {
     const item = virtualItems[index]
@@ -156,10 +163,17 @@ export function AllTasksView({
   const virtualizer = useVirtualizer({
     count: virtualItems.length,
     getScrollElement: () => parentRef.current,
+    getItemKey,
     estimateSize,
     overscan: 5,
     measureElement: (el) => el.getBoundingClientRect().height,
   })
+
+  // Re-measure after the virtualized structure changes (e.g. task deleted, section header removed).
+  // This prevents stale cached offsets from leaving a visual gap in the absolute-positioned layout.
+  useEffect(() => {
+    void virtualizer.measure()
+  }, [virtualizer, virtualItems.length])
 
   // Intersection Observer for infinite scroll (attached to virtualized container)
   useEffect(() => {
@@ -255,7 +269,7 @@ export function AllTasksView({
             if (item.type === 'header') {
               return (
                 <div
-                  key={item.sectionKey}
+                  key={virtualRow.key}
                   data-index={virtualRow.index}
                   ref={virtualizer.measureElement}
                   style={{
@@ -278,7 +292,7 @@ export function AllTasksView({
             // Task card
             return (
               <div
-                key={item.task.id}
+                key={virtualRow.key}
                 data-index={virtualRow.index}
                 ref={virtualizer.measureElement}
                 style={{
