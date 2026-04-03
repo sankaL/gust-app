@@ -24,11 +24,6 @@ type VirtualItemDef =
   | { type: 'header'; sectionKey: string; label: string; count: number }
   | { type: 'task'; task: TaskSummary }
 
-type RenderedVirtualRow = {
-  index: number
-  start: number
-}
-
 function TaskCard({
   task,
   onOpen,
@@ -166,24 +161,6 @@ export function AllTasksView({
     measureElement: (el) => el.getBoundingClientRect().height,
   })
 
-  const renderedRows = useMemo((): RenderedVirtualRow[] => {
-    const measuredRows = virtualizer.getVirtualItems().map((item) => ({
-      index: item.index,
-      start: item.start,
-    }))
-
-    if (measuredRows.length > 0 || virtualItems.length === 0) {
-      return measuredRows
-    }
-
-    let currentStart = 0
-    return virtualItems.map((_, index) => {
-      const row = { index, start: currentStart }
-      currentStart += estimateSize(index)
-      return row
-    })
-  }, [estimateSize, virtualItems, virtualizer])
-
   // Intersection Observer for infinite scroll (attached to virtualized container)
   useEffect(() => {
     const loadMoreElement = loadMoreRef.current
@@ -271,7 +248,7 @@ export function AllTasksView({
             position: 'relative',
           }}
         >
-          {renderedRows.map((virtualRow) => {
+          {virtualizer.getVirtualItems().map((virtualRow) => {
             const item = virtualItems[virtualRow.index]
             if (!item) return null
 
