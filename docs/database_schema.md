@@ -1,7 +1,7 @@
 # Gust Database Schema
 
-**Version:** 1.8
-**Last Updated:** 2026-03-28
+**Version:** 1.9
+**Last Updated:** 2026-04-02
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
 
@@ -106,6 +106,7 @@ Use PostgreSQL check constraints or named enums for the following value sets.
 - `daily`
 - `weekly`
 - `monthly`
+- `yearly`
 
 ## Tables
 
@@ -191,6 +192,7 @@ Primary task record for open and completed tasks.
 | `recurrence_interval` | `integer` | Yes | Reserved for v1 default `1`; must be `1` in v1. |
 | `recurrence_weekday` | `smallint` | Yes | `0-6` for Sunday-Saturday. Required for weekly recurrence. |
 | `recurrence_day_of_month` | `smallint` | Yes | `1-31`. Required for monthly recurrence. |
+| `recurrence_month` | `smallint` | Yes | `1-12`. Required for yearly recurrence. |
 | `completed_at` | `timestamptz` | Yes | Set when completed. |
 | `deleted_at` | `timestamptz` | Yes | Soft-delete marker adopted in v1 for swipe-delete undo and operational safety. |
 | `created_at` | `timestamptz` | No | Default `now()`. |
@@ -210,6 +212,7 @@ Constraints and invariants:
   - `recurrence_frequency = 'daily'` requires no weekday or day-of-month.
   - `recurrence_frequency = 'weekly'` requires `recurrence_weekday`.
   - `recurrence_frequency = 'monthly'` requires `recurrence_day_of_month`.
+  - `recurrence_frequency = 'yearly'` requires both `recurrence_month` and `recurrence_day_of_month`.
   - `recurrence_interval` is fixed to `1` in v1.
 - Recurring completion generation is completion-based in the user's timezone:
   - daily generates the next local calendar day
@@ -258,6 +261,7 @@ Staging table for extracted tasks before user approval. Tasks remain here until 
 | `recurrence_frequency` | `text` | Yes | Null when not recurring. |
 | `recurrence_weekday` | `smallint` | Yes | `0-6` for Sunday-Saturday. Required for weekly recurrence. |
 | `recurrence_day_of_month` | `smallint` | Yes | `1-31`. Required for monthly recurrence. |
+| `recurrence_month` | `smallint` | Yes | `1-12`. Required for yearly recurrence. |
 | `top_confidence` | `float` | No | Extraction confidence score (0.0-1.0). |
 | `needs_review` | `boolean` | No | `true` when confidence < 0.7. |
 | `status` | `text` | No | `pending`, `approved`, or `discarded`. |
@@ -404,6 +408,7 @@ The initial migration set should include indexes for:
 - `tasks (user_id, needs_review)` for review filtering
 - `tasks (user_id, due_date)`
 - `tasks (series_id, status)` for recurrence checks
+- `tasks (user_id, status, created_at desc, id desc)` partial on `deleted_at is null` for cursor pagination
 - `subtasks (task_id)`
 - `captures (user_id, created_at desc)`
 - `captures (expires_at)` for retention cleanup
