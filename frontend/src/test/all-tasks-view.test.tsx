@@ -111,6 +111,7 @@ class MockIntersectionObserver implements IntersectionObserver {
   readonly root: Element | Document | null
   readonly rootMargin: string
   readonly thresholds: ReadonlyArray<number>
+  readonly scrollMargin: string
 
   private readonly instance: ObserverInstance
 
@@ -120,6 +121,7 @@ class MockIntersectionObserver implements IntersectionObserver {
     this.thresholds = Array.isArray(options?.threshold)
       ? options.threshold
       : [options?.threshold ?? 0]
+    this.scrollMargin = ''
     this.instance = {
       callback,
       observed: [],
@@ -250,7 +252,7 @@ describe('AllTasksView', () => {
       needs_review: false,
       due_date: new Date().toISOString().slice(0, 10),
       reminder_at: null,
-      due_bucket: 'due_soon',
+      due_bucket: 'due_soon' as const,
       group: { id: 'inbox-1', name: 'Inbox', is_system: true },
       completed_at: null,
       deleted_at: null,
@@ -264,7 +266,7 @@ describe('AllTasksView', () => {
       needs_review: false,
       due_date: null,
       reminder_at: null,
-      due_bucket: 'no_date',
+      due_bucket: 'no_date' as const,
       group: { id: 'personal-1', name: 'Personal', is_system: false },
       completed_at: null,
       deleted_at: null,
