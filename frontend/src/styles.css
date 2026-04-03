@@ -131,3 +131,14 @@ html {
   letter-spacing: 0.16em;
   line-height: 1;
 }
+
+/* Subtask badge - info-dim background with white icon and text */
+.subtask-badge {
+  background-color: var(--color-info-dim);
+  border-radius: 9999px;
+  padding: 0.15rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  line-height: 1;
+}

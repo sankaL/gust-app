@@ -1,4 +1,5 @@
 import { memo, useMemo, useRef, useState } from 'react'
+import { ListChecks } from 'lucide-react'
 
 import { type TaskSummary } from '../lib/api'
 import { Card } from './Card'
@@ -245,8 +246,9 @@ const OpenTaskCardInner = function OpenTaskCardInner({
                 </span>
 
                 {!isExpanded ? (
-                  <span className="rounded-pill bg-surface-dim px-2 py-0.5 font-body tracking-[0.16em] text-on-surface-variant/75 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
-                    {subtaskLabel}
+                  <span className="subtask-badge shrink-0">
+                    <ListChecks size={12} className="text-white" />
+                    <span className="text-white text-[0.65rem] font-bold">{task.subtask_count ?? 0}</span>
                   </span>
                 ) : null}
               </div>
