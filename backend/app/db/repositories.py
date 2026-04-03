@@ -95,11 +95,18 @@ class TaskRecord:
     recurrence_interval: int | None
     recurrence_weekday: int | None
     recurrence_day_of_month: int | None
+    recurrence_month: int | None
     completed_at: datetime | None
     deleted_at: datetime | None
     created_at: datetime
     updated_at: datetime
     subtask_count: int = 0
+
+
+@dataclass
+class TaskWithGroupRecord:
+    task: TaskRecord
+    group: GroupRecord
 
 
 @dataclass
@@ -172,6 +179,7 @@ class ExtractedTaskRecord:
     recurrence_frequency: str | None
     recurrence_weekday: int | None
     recurrence_day_of_month: int | None
+    recurrence_month: int | None
     top_confidence: float
     needs_review: bool
     status: str
@@ -255,6 +263,7 @@ def _row_to_task(row: sa.Row) -> TaskRecord:
         recurrence_interval=row.recurrence_interval,
         recurrence_weekday=row.recurrence_weekday,
         recurrence_day_of_month=row.recurrence_day_of_month,
+        recurrence_month=row.recurrence_month,
         completed_at=row.completed_at,
         deleted_at=row.deleted_at,
         created_at=row.created_at,
@@ -262,6 +271,17 @@ def _row_to_task(row: sa.Row) -> TaskRecord:
         subtask_count=int(row.subtask_count)
         if hasattr(row, "subtask_count") and row.subtask_count is not None
         else 0,
+    )
+
+
+def _row_to_joined_group(row: sa.Row) -> GroupRecord:
+    return GroupRecord(
+        id=str(row.joined_group_id),
+        user_id=str(row.joined_group_user_id),
+        name=row.joined_group_name,
+        description=row.joined_group_description,
+        is_system=bool(row.joined_group_is_system),
+        system_key=row.joined_group_system_key,
     )
 
 
@@ -344,6 +364,7 @@ def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
         recurrence_frequency=row.recurrence_frequency,
         recurrence_weekday=row.recurrence_weekday,
         recurrence_day_of_month=row.recurrence_day_of_month,
+        recurrence_month=row.recurrence_month,
         top_confidence=float(row.top_confidence),
         needs_review=bool(row.needs_review),
         status=row.status,
@@ -894,21 +915,22 @@ def list_tasks(
     include_deleted: bool = False,
     limit: int = 50,
     cursor: str | None = None,
-) -> tuple[list[TaskRecord], bool, str | None]:
-    """Returns (tasks, has_more, next_cursor)."""
+) -> tuple[list[TaskWithGroupRecord], bool, str | None]:
+    """Returns (task rows with groups, has_more, next_cursor)."""
     conditions = [tasks.c.user_id == user_id, tasks.c.status == status]
     if group_id is not None and group_id != "all":
         conditions.append(tasks.c.group_id == group_id)
     if not include_deleted:
         conditions.append(tasks.c.deleted_at.is_(None))
 
-    # Scalar subquery to count subtasks per task
-    subtask_count_subquery = (
-        sa.select(sa.func.count(subtasks.c.id))
-        .where(subtasks.c.task_id == tasks.c.id)
-        .correlate(tasks)
-        .scalar_subquery()
-        .label("subtask_count")
+    # Pre-aggregated subquery count via LEFT JOIN (avoids O(n) scalar subqueries)
+    subtask_counts = (
+        sa.select(
+            subtasks.c.task_id,
+            sa.func.count(subtasks.c.id).label("subtask_count"),
+        )
+        .group_by(subtasks.c.task_id)
+        .subquery()
     )
 
     # Apply cursor-based pagination if provided
@@ -928,13 +950,29 @@ def list_tasks(
             # Invalid cursor, ignore and fetch from beginning
             pass
 
-    # Fetch limit+1 to determine if there are more results
-    rows = connection.execute(
-        sa.select(tasks, subtask_count_subquery)
+    # Fetch limit+1 to determine if there are more results.
+    # The inner join to groups keeps task/group data in the same statement snapshot.
+    stmt = (
+        sa.select(
+            tasks,
+            subtask_counts.c.subtask_count,
+            groups.c.id.label("joined_group_id"),
+            groups.c.user_id.label("joined_group_user_id"),
+            groups.c.name.label("joined_group_name"),
+            groups.c.description.label("joined_group_description"),
+            groups.c.is_system.label("joined_group_is_system"),
+            groups.c.system_key.label("joined_group_system_key"),
+        )
+        .join(
+            groups,
+            sa.and_(groups.c.id == tasks.c.group_id, groups.c.user_id == tasks.c.user_id),
+        )
+        .outerjoin(subtask_counts, tasks.c.id == subtask_counts.c.task_id)
         .where(*conditions)
         .order_by(tasks.c.created_at.desc(), tasks.c.id.desc())
         .limit(limit + 1)
-    ).fetchall()
+    )
+    rows = connection.execute(stmt).fetchall()
 
     has_more = len(rows) > limit
     if has_more:
@@ -947,7 +985,9 @@ def list_tasks(
         cursor_data = {"created_at": last_row.created_at.isoformat(), "id": str(last_row.id)}
         next_cursor = base64.b64encode(json.dumps(cursor_data).encode("utf-8")).decode("utf-8")
 
-    return [_row_to_task(row) for row in rows], has_more, next_cursor
+    return [
+        TaskWithGroupRecord(task=_row_to_task(row), group=_row_to_joined_group(row)) for row in rows
+    ], has_more, next_cursor
 
 
 def get_open_task_in_series(
@@ -1011,6 +1051,7 @@ def create_task(
     recurrence_interval: int | None = None,
     recurrence_weekday: int | None = None,
     recurrence_day_of_month: int | None = None,
+    recurrence_month: int | None = None,
     series_id: str | None = None,
 ) -> TaskRecord:
     task_id = str(uuid.uuid4())
@@ -1032,6 +1073,7 @@ def create_task(
             recurrence_interval=recurrence_interval,
             recurrence_weekday=recurrence_weekday,
             recurrence_day_of_month=recurrence_day_of_month,
+            recurrence_month=recurrence_month,
         )
     )
     row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
@@ -1614,6 +1656,7 @@ def create_extracted_task(
     recurrence_frequency: str | None,
     recurrence_weekday: int | None,
     recurrence_day_of_month: int | None,
+    recurrence_month: int | None,
     top_confidence: float,
     needs_review: bool,
     subtask_titles: list[str] | None = None,
@@ -1633,6 +1676,7 @@ def create_extracted_task(
             recurrence_frequency=recurrence_frequency,
             recurrence_weekday=recurrence_weekday,
             recurrence_day_of_month=recurrence_day_of_month,
+            recurrence_month=recurrence_month,
             top_confidence=top_confidence,
             needs_review=needs_review,
             subtask_titles=subtask_titles or [],

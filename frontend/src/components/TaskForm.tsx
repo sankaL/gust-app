@@ -114,6 +114,25 @@ export function TaskForm({
       }
     }
 
+    if (recurrence?.frequency === 'yearly') {
+      if (recurrence.month === null) {
+        setInternalError('Please select a month for yearly recurrence')
+        return
+      }
+      if (recurrence.month < 1 || recurrence.month > 12) {
+        setInternalError('Month must be between 1 and 12')
+        return
+      }
+      if (recurrence.day_of_month === null) {
+        setInternalError('Please select a day of the month for yearly recurrence')
+        return
+      }
+      if (recurrence.day_of_month < 1 || recurrence.day_of_month > 31) {
+        setInternalError('Day of month must be between 1 and 31')
+        return
+      }
+    }
+
     await onSave({
       title: title.trim(),
       description: description.trim(),

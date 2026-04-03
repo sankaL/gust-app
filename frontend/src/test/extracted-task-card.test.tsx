@@ -19,6 +19,7 @@ describe('extracted task card', () => {
           recurrence_frequency: 'weekly',
           recurrence_weekday: 5,
           recurrence_day_of_month: null,
+          recurrence_month: null,
           top_confidence: 0.92,
           needs_review: false,
           status: 'pending',

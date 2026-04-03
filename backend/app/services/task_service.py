@@ -117,10 +117,6 @@ class TaskService:
                     if group is None:
                         raise GroupNotFoundError()
 
-                group_lookup = {
-                    candidate.id: candidate
-                    for candidate in self._list_groups(connection, user_id=user_id)
-                }
                 task_rows, has_more, next_cursor = list_tasks(
                     connection,
                     user_id=user_id,
@@ -132,12 +128,12 @@ class TaskService:
 
         items = [
             TaskListItem(
-                task=task,
-                group=group_lookup[task.group_id],
-                due_bucket=self._due_bucket(task=task, user_timezone=user_timezone),
-                subtask_count=task.subtask_count,
+                task=row.task,
+                group=row.group,
+                due_bucket=self._due_bucket(task=row.task, user_timezone=user_timezone),
+                subtask_count=row.task.subtask_count,
             )
-            for task in task_rows
+            for row in task_rows
         ]
         if status == "completed":
             items.sort(key=self._completed_task_sort_key)
@@ -193,6 +189,7 @@ class TaskService:
                 recurrence_interval=normalized.recurrence_interval,
                 recurrence_weekday=normalized.recurrence_weekday,
                 recurrence_day_of_month=normalized.recurrence_day_of_month,
+                recurrence_month=normalized.recurrence_month,
                 series_id=normalized.series_id,
             )
             self._sync_reminder(
@@ -245,6 +242,7 @@ class TaskService:
                 "recurrence_interval": normalized.recurrence_interval,
                 "recurrence_weekday": normalized.recurrence_weekday,
                 "recurrence_day_of_month": normalized.recurrence_day_of_month,
+                "recurrence_month": normalized.recurrence_month,
                 "series_id": normalized.series_id,
             }
             if payload.description_provided:
@@ -646,6 +644,7 @@ class TaskService:
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
+            recurrence_month=task.recurrence_month,
             user_timezone=user_timezone,
         )
 
@@ -675,8 +674,13 @@ class TaskService:
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=(
                 next_day_of_month
-                if task.recurrence_frequency == "monthly"
+                if task.recurrence_frequency in ("monthly", "yearly")
                 else task.recurrence_day_of_month
+            ),
+            recurrence_month=(
+                task.recurrence_month
+                if task.recurrence_frequency == "yearly"
+                else None
             ),
             series_id=task.series_id,
         )
@@ -722,6 +726,7 @@ class TaskService:
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
+            recurrence_month=task.recurrence_month,
         )
 
         next_reminder_at = None
@@ -750,8 +755,13 @@ class TaskService:
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=(
                 next_day_of_month
-                if task.recurrence_frequency == "monthly"
+                if task.recurrence_frequency in ("monthly", "yearly")
                 else task.recurrence_day_of_month
+            ),
+            recurrence_month=(
+                task.recurrence_month
+                if task.recurrence_frequency == "yearly"
+                else None
             ),
             series_id=task.series_id,
         )
@@ -796,11 +806,12 @@ class TaskService:
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
+            recurrence_month=task.recurrence_month,
             user_timezone=user_timezone,
         )
         expected_day_of_month = (
             next_day_of_month
-            if task.recurrence_frequency == "monthly"
+            if task.recurrence_frequency in ("monthly", "yearly")
             else task.recurrence_day_of_month
         )
 
@@ -866,10 +877,11 @@ class TaskService:
             recurrence_frequency=task.recurrence_frequency,
             recurrence_weekday=task.recurrence_weekday,
             recurrence_day_of_month=task.recurrence_day_of_month,
+            recurrence_month=task.recurrence_month,
         )
         expected_day_of_month = (
             next_day_of_month
-            if task.recurrence_frequency == "monthly"
+            if task.recurrence_frequency in ("monthly", "yearly")
             else task.recurrence_day_of_month
         )
 
@@ -938,12 +950,11 @@ class TaskService:
         raw_bucket = due_bucket_for_date(due_date=item.task.due_date, user_timezone=user_timezone)
         bucket_rank = {"overdue": 0, "due_soon": 1, "future": 1, "no_date": 2}[raw_bucket]
         urgency_rank = 0 if raw_bucket != "future" else 1
-        due_value = item.task.due_date or date.max
+        due_value = item.task.due_date or date.max  # Tasks without dates go to bottom
         created_value = item.task.created_at
         return (
             bucket_rank,
             urgency_rank,
-            0 if item.task.needs_review else 1,
             due_value,
             -created_value.timestamp(),
         )

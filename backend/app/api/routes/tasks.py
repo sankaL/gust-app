@@ -42,6 +42,7 @@ class RecurrenceResponse(BaseModel):
     frequency: str
     weekday: Optional[int] = None
     day_of_month: Optional[int] = None
+    month: Optional[int] = None
 
 
 class SubtaskResponse(BaseModel):
@@ -406,6 +407,7 @@ def _build_recurrence_input(value: RecurrenceResponse | None) -> RecurrenceInput
         frequency=value.frequency,
         weekday=value.weekday,
         day_of_month=value.day_of_month,
+        month=value.month,
     )
 
 
@@ -416,6 +418,7 @@ def _build_recurrence_response(task: TaskRecord) -> RecurrenceResponse | None:
         frequency=task.recurrence_frequency,
         weekday=task.recurrence_weekday,
         day_of_month=task.recurrence_day_of_month,
+        month=task.recurrence_month,
     )
 
 

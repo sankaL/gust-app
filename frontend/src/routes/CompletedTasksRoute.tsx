@@ -260,8 +260,8 @@ export function CompletedTasksRoute() {
                 <div className="flex flex-col items-end justify-between gap-4 shrink-0 px-2">
                   <div className="flex items-center gap-2">
                     {task.recurrence_frequency && (
-                      <span className="font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-primary/20 text-primary">
-                        {task.recurrence_frequency}
+                      <span className="recurrence-badge shrink-0">
+                        {task.recurrence_frequency.toUpperCase()}
                       </span>
                     )}
                   </div>

@@ -293,7 +293,10 @@ export function TasksRoute() {
   const tasksQuery = useQuery({
     queryKey: ['tasks', resolvedGroupId, 'open'],
     queryFn: () => listTasks(resolvedGroupId as string),
-    enabled: sessionQuery.data?.signed_in === true && Boolean(resolvedGroupId) && !isAllView
+    enabled: sessionQuery.data?.signed_in === true && Boolean(resolvedGroupId) && !isAllView,
+    // Stale-while-revalidate: show cached data while fetching fresh in background
+    staleTime: 1000 * 30,
+    gcTime: 1000 * 60 * 5,
   })
 
   function requireCsrf(session: SessionStatus | undefined) {
@@ -349,13 +352,17 @@ export function TasksRoute() {
   }
 
   async function invalidateTaskViews(taskId: string, groupId: string) {
+    // Selective invalidation: only refetch what's necessary
+    // syncTaskCaches already handles optimistic updates for open lists
+    // We only need to invalidate the detail query and groups count
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['groups'] }),
       queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] }),
+      // Only invalidate the specific open list that was affected
       queryClient.invalidateQueries({ queryKey: ['tasks', groupId, 'open'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', groupId, 'completed'] }),
       queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'completed'] }),
+      // Invalidate infinite scroll variants
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open', 'infinite'] }),
     ])
   }
 
@@ -555,6 +562,7 @@ export function TasksRoute() {
 
         {isAllView ? (
           <AllTasksView
+            userTimezone={sessionQuery.data?.timezone ?? null}
             onTaskOpen={(taskId) =>
               void navigate({
                 pathname: `/tasks/${taskId}`,

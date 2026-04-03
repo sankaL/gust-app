@@ -41,35 +41,63 @@ const FREQUENCIES = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
 ]
 
 function normalizeRecurrenceFrequency(value: string | null | undefined): string {
-  if (value === 'daily' || value === 'weekly' || value === 'monthly') return value
+  if (value === 'daily' || value === 'weekly' || value === 'monthly' || value === 'yearly') return value
   return 'none'
 }
 
+const MONTHS = [
+  { value: '', label: 'Select a month' },
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'December' },
+]
+
 function recurrenceForDueDate(
-  frequency: 'daily' | 'weekly' | 'monthly',
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly',
   dueDate: string,
   current: TaskRecurrence | null
 ): TaskRecurrence {
   if (frequency === 'daily') {
-    return { frequency, weekday: null, day_of_month: null }
+    return { frequency, weekday: null, day_of_month: null, month: null }
   }
 
   if (!dueDate) {
-    return current ?? { frequency, weekday: null, day_of_month: null }
+    return current ?? { frequency, weekday: null, day_of_month: null, month: null }
   }
 
   const localDate = new Date(`${dueDate}T12:00:00`)
   if (frequency === 'weekly') {
-    return { frequency, weekday: localDate.getDay(), day_of_month: null }
+    return { frequency, weekday: localDate.getDay(), day_of_month: null, month: null }
+  }
+
+  const dateParts = dueDate.split('-')
+  if (frequency === 'yearly') {
+    return {
+      frequency,
+      weekday: null,
+      day_of_month: Number(dateParts[2] ?? current?.day_of_month ?? 1),
+      month: Number(dateParts[1] ?? current?.month ?? 1),
+    }
   }
 
   return {
     frequency,
     weekday: null,
-    day_of_month: Number(dueDate.split('-')[2] ?? current?.day_of_month ?? 1),
+    day_of_month: Number(dateParts[2] ?? current?.day_of_month ?? 1),
+    month: null,
   }
 }
 
@@ -94,6 +122,7 @@ export function TaskFormFields({
   const recurrenceFrequency = normalizeRecurrenceFrequency(recurrence?.frequency)
   const recurrenceWeekday = recurrence?.weekday ?? null
   const recurrenceDayOfMonth = recurrence?.day_of_month ?? null
+  const recurrenceMonth = recurrence?.month ?? null
 
   const handleDueDateChange = (newDueDate: string) => {
     if (!newDueDate) {
@@ -112,6 +141,9 @@ export function TaskFormFields({
     } else if (recurrenceFrequency === 'monthly') {
       const newRecurrence = recurrenceForDueDate('monthly', newDueDate, null)
       onRecurrenceChange(newRecurrence)
+    } else if (recurrenceFrequency === 'yearly') {
+      const newRecurrence = recurrenceForDueDate('yearly', newDueDate, null)
+      onRecurrenceChange(newRecurrence)
     }
   }
 
@@ -119,20 +151,27 @@ export function TaskFormFields({
     if (frequency === 'none') {
       onRecurrenceChange(null)
     } else if (frequency === 'daily') {
-      onRecurrenceChange({ frequency: 'daily', weekday: null, day_of_month: null })
+      onRecurrenceChange({ frequency: 'daily', weekday: null, day_of_month: null, month: null })
     } else if (frequency === 'weekly') {
       if (dueDate) {
         const newRecurrence = recurrenceForDueDate('weekly', dueDate, null)
         onRecurrenceChange(newRecurrence)
       } else {
-        onRecurrenceChange({ frequency: 'weekly', weekday: null, day_of_month: null })
+        onRecurrenceChange({ frequency: 'weekly', weekday: null, day_of_month: null, month: null })
       }
     } else if (frequency === 'monthly') {
       if (dueDate) {
         const newRecurrence = recurrenceForDueDate('monthly', dueDate, null)
         onRecurrenceChange(newRecurrence)
       } else {
-        onRecurrenceChange({ frequency: 'monthly', weekday: null, day_of_month: 1 })
+        onRecurrenceChange({ frequency: 'monthly', weekday: null, day_of_month: 1, month: null })
+      }
+    } else if (frequency === 'yearly') {
+      if (dueDate) {
+        const newRecurrence = recurrenceForDueDate('yearly', dueDate, null)
+        onRecurrenceChange(newRecurrence)
+      } else {
+        onRecurrenceChange({ frequency: 'yearly', weekday: null, day_of_month: 1, month: 1 })
       }
     }
   }
@@ -143,22 +182,36 @@ export function TaskFormFields({
         frequency: 'weekly',
         weekday: null,
         day_of_month: null,
+        month: null,
       })
     } else {
       onRecurrenceChange({
         frequency: 'weekly',
         weekday: Number(value),
         day_of_month: null,
+        month: null,
       })
     }
   }
 
   const handleDayOfMonthChange = (value: string) => {
     const numValue = value ? Number(value) : null
+    const frequency = recurrence?.frequency === 'yearly' ? 'yearly' : 'monthly'
     onRecurrenceChange({
-      frequency: 'monthly',
+      frequency,
       weekday: null,
       day_of_month: numValue,
+      month: frequency === 'yearly' ? (recurrence?.month ?? 1) : null,
+    })
+  }
+
+  const handleMonthChange = (value: string | number) => {
+    const numValue = value ? Number(value) : null
+    onRecurrenceChange({
+      frequency: 'yearly',
+      weekday: null,
+      day_of_month: recurrence?.day_of_month ?? 1,
+      month: numValue,
     })
   }
 
@@ -267,13 +320,13 @@ export function TaskFormFields({
           <div>
             <p className="font-display text-xl text-on-surface">Recurrence</p>
             <p className="mt-1 font-body text-xs text-on-surface-variant">
-              Daily, weekly, and monthly only. Clearing the due date also clears reminder timing and
+              Daily, weekly, monthly, and yearly only. Clearing the due date also clears reminder timing and
               recurrence.
             </p>
           </div>
 
           {/* Frequency Selection */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {FREQUENCIES.map((option) => (
               <button
                 key={option.value}
@@ -329,6 +382,43 @@ export function TaskFormFields({
                 placeholder="1-31"
                 disabled={disabled}
               />
+            </div>
+          )}
+
+          {/* Yearly: Month + Day of Month */}
+          {recurrenceFrequency === 'yearly' && (
+            <div className="rounded-card bg-black/10 p-4 space-y-4">
+              <div>
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                  Month
+                </p>
+                <div className="mt-3">
+                  <SelectDropdown
+                    label=""
+                    options={MONTHS}
+                    value={recurrenceMonth ?? ''}
+                    onChange={handleMonthChange}
+                    placeholder="Select a month"
+                    disabled={disabled}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                  Day of Month
+                </p>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={recurrenceDayOfMonth ?? ''}
+                  onChange={(e) => handleDayOfMonthChange(e.target.value)}
+                  className="mt-3 block w-full min-w-0 max-w-full rounded-card bg-surface-dim px-3 py-3 text-sm font-medium text-on-surface outline-none focus:bg-surface-container-high"
+                  style={{ fontSize: '16px' }} /* Prevent iOS zoom */
+                  placeholder="1-31"
+                  disabled={disabled}
+                />
+              </div>
             </div>
           )}
         </div>

@@ -592,6 +592,7 @@ describe('tasks flow', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByText('Plan follow-up sprint')).toBeInTheDocument()
+    expect(screen.getByText(/^Personal$/)).toBeInTheDocument()
     expect(screen.getByText('4 subtasks')).toBeInTheDocument()
     expect(screen.getByText('WEEKLY')).toBeInTheDocument()
     expect(screen.queryByText('Bring capture and tasks back into visual alignment.')).not.toBeInTheDocument()
@@ -601,7 +602,99 @@ describe('tasks flow', () => {
 
     expect(screen.getByText('Bring capture and tasks back into visual alignment.')).toBeInTheDocument()
     expect(screen.getByText(/Reminder:/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/^Personal$/)).toHaveLength(2)
+    expect(screen.getByText(/^Personal$/)).toBeInTheDocument()
+  })
+
+  it('derives the all-tasks today section without changing the shared task bucket', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?status=open')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                id: 'task-overdue',
+                title: 'Renew passport',
+                status: 'open',
+                needs_review: false,
+                due_date: localDate(-1),
+                reminder_at: null,
+                due_bucket: 'overdue',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              },
+              {
+                id: 'task-today',
+                title: 'Submit reimbursement',
+                status: 'open',
+                needs_review: false,
+                due_date: localDate(0),
+                reminder_at: null,
+                due_bucket: 'overdue',
+                group: { id: 'personal-1', name: 'Personal', is_system: false },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              },
+              {
+                id: 'task-tomorrow',
+                title: 'Call landlord',
+                status: 'open',
+                needs_review: false,
+                due_date: localDate(1),
+                reminder_at: null,
+                due_bucket: 'due_soon',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              },
+              {
+                id: 'task-later',
+                title: 'Book annual physical',
+                status: 'open',
+                needs_review: false,
+                due_date: localDate(5),
+                reminder_at: null,
+                due_bucket: 'due_soon',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              }
+            ],
+            has_more: false,
+            next_cursor: null
+          })
+        )
+      }
+
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks?group=all'])
+
+    expect(await screen.findByText('Submit reimbursement')).toBeInTheDocument()
+    const todayHeading = screen.getByRole('heading', { name: 'Today' })
+    const overdueHeading = screen.getByRole('heading', { name: 'Overdue' })
+    const othersHeading = screen.getByRole('heading', { name: 'Others' })
+
+    expect(todayHeading).toBeInTheDocument()
+    expect(overdueHeading).toBeInTheDocument()
+    expect(othersHeading).toBeInTheDocument()
+    expect(todayHeading.parentElement).toHaveTextContent('1 tasks')
+    expect(overdueHeading.parentElement).toHaveTextContent('1 tasks')
+    expect(othersHeading.parentElement).toHaveTextContent('2 tasks')
   })
 
   it('loads the all-tasks view when a legacy paginated cache entry exists for the old key', async () => {

@@ -41,6 +41,7 @@ recurrence_frequency = sa.Enum(
     "daily",
     "weekly",
     "monthly",
+    "yearly",
     name="recurrence_frequency",
     native_enum=False,
 )
@@ -112,6 +113,7 @@ tasks = sa.Table(
     sa.Column("recurrence_interval", sa.Integer(), nullable=True),
     sa.Column("recurrence_weekday", sa.SmallInteger(), nullable=True),
     sa.Column("recurrence_day_of_month", sa.SmallInteger(), nullable=True),
+    sa.Column("recurrence_month", sa.SmallInteger(), nullable=True),
     sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column(
@@ -128,14 +130,17 @@ tasks = sa.Table(
     ),
     sa.CheckConstraint(
         "(recurrence_frequency IS NULL AND recurrence_interval IS NULL "
-        "AND recurrence_weekday IS NULL AND recurrence_day_of_month IS NULL) "
+        "AND recurrence_weekday IS NULL AND recurrence_day_of_month IS NULL "
+        "AND recurrence_month IS NULL) "
         "OR (recurrence_interval = 1 AND ("
         "(recurrence_frequency = 'daily' AND recurrence_weekday IS NULL "
-        "AND recurrence_day_of_month IS NULL) "
+        "AND recurrence_day_of_month IS NULL AND recurrence_month IS NULL) "
         "OR (recurrence_frequency = 'weekly' AND recurrence_weekday IS NOT NULL "
-        "AND recurrence_day_of_month IS NULL) "
+        "AND recurrence_day_of_month IS NULL AND recurrence_month IS NULL) "
         "OR (recurrence_frequency = 'monthly' AND recurrence_weekday IS NULL "
-        "AND recurrence_day_of_month IS NOT NULL)))",
+        "AND recurrence_day_of_month IS NOT NULL AND recurrence_month IS NULL) "
+        "OR (recurrence_frequency = 'yearly' AND recurrence_weekday IS NULL "
+        "AND recurrence_day_of_month IS NOT NULL AND recurrence_month IS NOT NULL)))",
         name="ck_tasks_recurrence_shape",
     ),
 )
@@ -198,6 +203,7 @@ extracted_tasks = sa.Table(
     sa.Column("recurrence_frequency", sa.Text(), nullable=True),
     sa.Column("recurrence_weekday", sa.SmallInteger(), nullable=True),
     sa.Column("recurrence_day_of_month", sa.SmallInteger(), nullable=True),
+    sa.Column("recurrence_month", sa.SmallInteger(), nullable=True),
     sa.Column("top_confidence", sa.Float(), nullable=False),
     sa.Column("needs_review", sa.Boolean(), nullable=False, server_default=sa.false()),
     sa.Column("status", sa.Text(), nullable=False, server_default="'pending'"),

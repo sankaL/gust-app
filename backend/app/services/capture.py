@@ -138,6 +138,7 @@ class PreparedTask:
     recurrence_interval: int | None
     recurrence_weekday: int | None
     recurrence_day_of_month: int | None
+    recurrence_month: int | None
     subtasks: list[str]
 
 
@@ -464,6 +465,7 @@ class CaptureService:
                         recurrence_interval=prepared.recurrence_interval,
                         recurrence_weekday=prepared.recurrence_weekday,
                         recurrence_day_of_month=prepared.recurrence_day_of_month,
+                        recurrence_month=prepared.recurrence_month,
                         series_id=prepared.series_id,
                     )
                     if prepared.subtasks:
@@ -647,6 +649,7 @@ class CaptureService:
             recurrence_interval=normalized.recurrence_interval,
             recurrence_weekday=normalized.recurrence_weekday,
             recurrence_day_of_month=normalized.recurrence_day_of_month,
+            recurrence_month=normalized.recurrence_month,
             subtasks=[subtask.strip() for subtask in subtasks],
         )
 
