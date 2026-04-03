@@ -152,7 +152,11 @@ def normalize_task_fields(
 
 def validate_recurrence(recurrence: RecurrenceInput) -> None:
     if recurrence.frequency == "daily":
-        if recurrence.weekday is None and recurrence.day_of_month is None and recurrence.month is None:
+        if (
+            recurrence.weekday is None
+            and recurrence.day_of_month is None
+            and recurrence.month is None
+        ):
             return
     elif recurrence.frequency == "weekly":
         if recurrence.weekday is not None and 0 <= recurrence.weekday <= 6:

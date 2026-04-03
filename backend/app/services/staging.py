@@ -504,7 +504,8 @@ class StagingService:
                     next_weekday = None
                 else:
                     raise InvalidTaskError(
-                        "recurrence_frequency must be one of daily, weekly, monthly, yearly, or null."
+                        "recurrence_frequency must be one of daily, weekly, monthly, yearly, "
+                        "or null."
                     )
 
                 values["recurrence_frequency"] = next_frequency

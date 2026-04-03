@@ -14,13 +14,13 @@ type OpenTaskCardProps = {
   showCollapsedGroupLabel?: boolean
 }
 
-function buildDueLabel(task: TaskSummary) {
-  if (!task.due_date) {
+function buildDueLabel(dueDate: string | null) {
+  if (!dueDate) {
     return '--'
   }
 
   const today = new Date()
-  const due = new Date(`${task.due_date}T00:00:00`)
+  const due = new Date(`${dueDate}T00:00:00`)
   const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
   const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
   const diffDays = dueDay - todayDay
@@ -35,11 +35,11 @@ function buildDueLabel(task: TaskSummary) {
   }).format(due)
 }
 
-function buildDueTone(task: TaskSummary) {
-  if (!task.due_date) return 'text-on-surface-variant/55'
+function buildDueTone(dueDate: string | null) {
+  if (!dueDate) return 'text-on-surface-variant/55'
 
   const today = new Date()
-  const due = new Date(`${task.due_date}T00:00:00`)
+  const due = new Date(`${dueDate}T00:00:00`)
   const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
   const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
   const diffDays = dueDay - todayDay
@@ -86,8 +86,8 @@ const OpenTaskCardInner = function OpenTaskCardInner({
   const offsetRef = useRef(0)
   const suppressClickRef = useRef(false)
 
-  const dueLabel = useMemo(() => buildDueLabel(task), [task.due_date])
-  const dueTone = useMemo(() => buildDueTone(task), [task.due_date])
+  const dueLabel = useMemo(() => buildDueLabel(task.due_date), [task.due_date])
+  const dueTone = useMemo(() => buildDueTone(task.due_date), [task.due_date])
   const recurrenceLabel = useMemo(
     () => formatRecurrenceLabel(task.recurrence_frequency ?? null),
     [task.recurrence_frequency]

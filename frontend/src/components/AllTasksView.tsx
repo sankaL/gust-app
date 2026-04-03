@@ -58,11 +58,22 @@ const SECTIONS = [
   { key: 'others', label: 'Others' },
 ] as const
 
-function getTodayIsoDate(_timezone: string | null): string {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  const day = String(today.getDate()).padStart(2, '0')
+function getTodayIsoDate(timezone: string | null): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone ?? undefined,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const parts = formatter.formatToParts(new Date())
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+
+  if (!year || !month || !day) {
+    throw new Error('Failed to compute current date in user timezone.')
+  }
+
   return `${year}-${month}-${day}`
 }
 
@@ -101,7 +112,10 @@ export function AllTasksView({
     // Stale-while-revalidate: keep cached data fresh for 30s
     staleTime: 1000 * 30,
   })
-  const allTasks = allTasksQuery.data?.pages.flatMap((page) => page.items) ?? []
+  const allTasks = useMemo(
+    () => allTasksQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [allTasksQuery.data]
+  )
   const hasMore = Boolean(allTasksQuery.hasNextPage)
   const todayIsoDate = useMemo(() => getTodayIsoDate(userTimezone), [userTimezone])
 
