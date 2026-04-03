@@ -1,7 +1,7 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.9  
-**Last Updated:** 2026-03-28
+**Version:** 1.10
+**Last Updated:** 2026-04-02
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
 
@@ -194,6 +194,33 @@ Deployment implication:
 - environments must apply `0012_harden_backend_table_grants` before running the backend, because startup revision checks now require that revision by default
 - hosted Supabase environments must also apply the paired `supabase/` grant-hardening migration for `public.allowed_users`
 
+## Phase 13 Revision (Yearly Recurrence)
+
+Phase 13 introduces `0013_add_yearly_recurrence` as the required application revision.
+
+That revision establishes:
+
+- `tasks.recurrence_month` and `extracted_tasks.recurrence_month`
+- yearly recurrence support in task normalization, extraction, editing, and completion flows
+- the migration floor required by backend/frontend code that reads or writes yearly recurrence values
+
+Deployment implication:
+
+- environments must apply `0013_add_yearly_recurrence` before running the backend or frontend that understands yearly recurrence
+
+## Phase 14 Revision (Task List Pagination Index)
+
+Phase 14 introduces `0014_task_list_index` as the required application revision.
+
+That revision establishes:
+
+- the composite partial task-list pagination index on `tasks(user_id, status, created_at DESC, id DESC) WHERE deleted_at IS NULL`
+- the migration floor required by the optimized task-list query path
+
+Deployment implication:
+
+- environments must apply `0014_task_list_index` before relying on the optimized task-list pagination path in production
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -254,7 +281,7 @@ Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
 - Production Railway backend deploys fail closed if `APP_ENV=production` and `MIGRATION_DATABASE_URL` is missing.
-- The required revision configured for the backend matches `0012_harden_backend_table_grants` or the current deployed head.
+- The required revision configured for the backend matches `0014_task_list_index` or the current deployed head.
 - Backend startup revision check passes.
 - `scripts/prod/check-postgres-rls.py` passes against the runtime `DATABASE_URL`.
 - The current Postgres runtime role reports `rolbypassrls = false`.

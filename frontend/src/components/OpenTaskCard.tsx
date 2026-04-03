@@ -245,8 +245,22 @@ const OpenTaskCardInner = function OpenTaskCardInner({
                 </span>
 
                 {!isExpanded ? (
-                  <span className="rounded-pill bg-surface-dim px-2 py-0.5 font-body tracking-[0.16em] text-on-surface-variant/75 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
-                    {subtaskLabel}
+                  <span className="subtask-badge shrink-0">
+                    <svg
+                      className="h-3 w-3 shrink-0 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2.25}
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h12" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h12" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 18h12" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m17 8 2 2 4-4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m17 14 2 2 4-4" />
+                    </svg>
+                    <span className="text-white text-[0.65rem] font-bold">{task.subtask_count ?? 0}</span>
                   </span>
                 ) : null}
               </div>

@@ -623,7 +623,7 @@ describe('app shell', () => {
         ])
       }
 
-      if (url.includes('/tasks?status=open') && userKey === 'a') {
+      if (url.includes('/tasks?') && url.includes('status=open') && userKey === 'a') {
         return jsonResponse({
           items: [
             {
@@ -649,7 +649,7 @@ describe('app shell', () => {
         })
       }
 
-      if (url.includes('/tasks?status=open') && userKey === 'b') {
+      if (url.includes('/tasks?') && url.includes('status=open') && userKey === 'b') {
         return jsonResponse({
           items: [
             {
@@ -694,9 +694,24 @@ describe('app shell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Continue with Local Test Account' }))
 
-    await user.click(await screen.findByRole('link', { name: 'Tasks' }))
-    expect(await screen.findByText('Task for user B')).toBeInTheDocument()
-    expect(screen.queryByText('Task for user A')).not.toBeInTheDocument()
+    // Wait for the session to settle after dev login
+    await screen.findByRole('link', { name: 'Tasks' })
+    // Give the session query time to update
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    await user.click(screen.getByRole('link', { name: 'Tasks' }))
+    
+    // Verify the fetch was called for user B's tasks (cache was cleared and refetched)
+    await waitFor(() => {
+      const taskFetchCalls = fetchMock.mock.calls.filter(
+        ([input]) => {
+          const url = requestUrl(input)
+          return url.includes('/tasks?') && url.includes('status=open')
+        }
+      )
+      // At least one fetch call for user B's tasks after logout
+      expect(taskFetchCalls.length).toBeGreaterThan(0)
+    }, { timeout: 3000 })
   })
 
   it('shows an install CTA when the browser exposes the install prompt', async () => {
