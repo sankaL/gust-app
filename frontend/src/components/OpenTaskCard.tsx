@@ -217,10 +217,10 @@ const OpenTaskCardInner = function OpenTaskCardInner({
               ) : null}
 
               <div
-                className={`flex min-w-0 items-center ${
+                className={`flex w-full min-w-0 items-center ${
                   isExpanded
                     ? 'mt-2 flex-nowrap gap-1.5 overflow-hidden text-[0.62rem] tracking-[0.12em]'
-                    : 'flex-wrap gap-1.5 text-[0.6rem] tracking-[0.14em]'
+                    : 'flex-nowrap gap-1 overflow-hidden text-[0.58rem] tracking-[0.12em] sm:text-[0.6rem]'
                 } uppercase`}
               >
                 {isExpanded || showCollapsedGroupLabel ? (
@@ -235,7 +235,7 @@ const OpenTaskCardInner = function OpenTaskCardInner({
                   </span>
                 ) : null}
 
-                <span className={`shrink-0 font-bold ${dueTone}`}>Due: {dueLabel}</span>
+                <span className={`shrink-0 whitespace-nowrap font-bold ${dueTone}`}>Due: {dueLabel}</span>
 
                 <span
                   className="recurrence-badge shrink-0"
