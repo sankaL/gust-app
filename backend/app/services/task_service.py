@@ -938,12 +938,11 @@ class TaskService:
         raw_bucket = due_bucket_for_date(due_date=item.task.due_date, user_timezone=user_timezone)
         bucket_rank = {"overdue": 0, "due_soon": 1, "future": 1, "no_date": 2}[raw_bucket]
         urgency_rank = 0 if raw_bucket != "future" else 1
-        due_value = item.task.due_date or date.max
+        due_value = item.task.due_date or date.max  # Tasks without dates go to bottom
         created_value = item.task.created_at
         return (
             bucket_rank,
             urgency_rank,
-            0 if item.task.needs_review else 1,
             due_value,
             -created_value.timestamp(),
         )

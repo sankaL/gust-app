@@ -555,6 +555,7 @@ export function TasksRoute() {
 
         {isAllView ? (
           <AllTasksView
+            userTimezone={sessionQuery.data?.timezone ?? null}
             onTaskOpen={(taskId) =>
               void navigate({
                 pathname: `/tasks/${taskId}`,

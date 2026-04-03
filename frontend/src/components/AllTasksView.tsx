@@ -4,6 +4,7 @@ import { listAllTasks, type TaskSummary } from '../lib/api'
 import { OpenTaskCard } from './OpenTaskCard'
 
 interface AllTasksViewProps {
+  userTimezone: string | null
   onTaskOpen: (taskId: string) => void
   onTaskPrepareOpen?: (taskId: string) => void
   onTaskComplete: (task: TaskSummary) => void
@@ -37,11 +38,47 @@ function TaskCard({
       onComplete={onComplete}
       onDelete={onDelete}
       isBusy={isBusy}
+      showCollapsedGroupLabel
     />
   )
 }
 
+const SECTIONS = [
+  { key: 'today', label: 'Today' },
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'others', label: 'Others' },
+] as const
+
+function getTodayIsoDate(timezone: string | null): string {
+  if (!timezone) {
+    return new Date().toISOString().slice(0, 10)
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+
+  return formatter.format(new Date())
+}
+
+function getTaskSection(
+  task: TaskSummary,
+  todayIsoDate: string
+): 'today' | 'overdue' | 'others' {
+  if (task.due_bucket === 'overdue') {
+    return 'overdue'
+  }
+  if (task.due_date === todayIsoDate) {
+    return 'today'
+  }
+  return 'others'
+}
+
 export function AllTasksView({
+  userTimezone,
   onTaskOpen,
   onTaskPrepareOpen,
   onTaskComplete,
@@ -57,6 +94,20 @@ export function AllTasksView({
   })
   const allTasks = allTasksQuery.data?.pages.flatMap((page) => page.items) ?? []
   const hasMore = Boolean(allTasksQuery.hasNextPage)
+  const todayIsoDate = useMemo(() => getTodayIsoDate(userTimezone), [userTimezone])
+
+  const sectionedTasks = useMemo(() => {
+    const result: Record<string, TaskSummary[]> = {
+      today: [],
+      overdue: [],
+      others: [],
+    }
+    for (const task of allTasks) {
+      const section = getTaskSection(task, todayIsoDate)
+      result[section].push(task)
+    }
+    return result
+  }, [allTasks, todayIsoDate])
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -77,28 +128,6 @@ export function AllTasksView({
 
     return () => observer.disconnect()
   }, [allTasksQuery, hasMore])
-
-  // Group tasks by group_id
-  const groupedTasks = useMemo(() => {
-    const groups = new Map<string, { name: string; tasks: TaskSummary[] }>()
-
-    for (const task of allTasks) {
-      const existing = groups.get(task.group.id)
-      if (existing) {
-        existing.tasks.push(task)
-      } else {
-        groups.set(task.group.id, {
-          name: task.group.name,
-          tasks: [task]
-        })
-      }
-    }
-
-    // Sort groups by name for consistent ordering
-    return new Map(
-      Array.from(groups.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name))
-    )
-  }, [allTasks])
 
   if (allTasksQuery.isLoading && allTasks.length === 0) {
     return (
@@ -133,30 +162,36 @@ export function AllTasksView({
   }
 
   return (
-    <div className="space-y-4">
-      {Array.from(groupedTasks.entries()).map(([groupId, groupData]) => (
-        <section key={groupId} className="space-y-3">
-          <div className="sticky top-0 z-10 bg-surface px-3 py-2 flex items-center justify-between">
-            <h3 className="font-display text-lg text-on-surface">{groupData.name}</h3>
-            <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
-              {groupData.tasks.length} tasks
-            </span>
-          </div>
-          <div className="space-y-2">
-            {groupData.tasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onOpen={onTaskOpen}
-                onPrepareOpen={onTaskPrepareOpen}
-                onComplete={onTaskComplete}
-                onDelete={onTaskDelete}
-                isBusy={busyTaskIds.includes(task.id)}
-              />
-            ))}
-          </div>
-        </section>
-      ))}
+    <div className="space-y-6">
+      {SECTIONS.map((section) => {
+        const tasks = sectionedTasks[section.key]
+        if (tasks.length === 0) {
+          return null
+        }
+        return (
+          <section key={section.key} className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-xl text-on-surface">{section.label}</h3>
+              <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
+                {tasks.length} tasks
+              </span>
+            </div>
+            <div className="space-y-2">
+              {tasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onOpen={onTaskOpen}
+                  onPrepareOpen={onTaskPrepareOpen}
+                  onComplete={onTaskComplete}
+                  onDelete={onTaskDelete}
+                  isBusy={busyTaskIds.includes(task.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )
+      })}
 
       {/* Load more trigger */}
       <div ref={loadMoreRef} className="h-4" />

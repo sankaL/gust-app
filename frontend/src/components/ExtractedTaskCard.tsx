@@ -121,11 +121,7 @@ export function ExtractedTaskCard({
               Due: {task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString() : '--'}
             </span>
             <span
-              className={`shrink-0 rounded-pill px-2 py-0.5 font-body tracking-[0.16em] ${
-                task.recurrence_frequency && task.recurrence_frequency !== 'none'
-                  ? 'bg-[radial-gradient(circle_at_top,_#a855f7_8%,_#7e22ce_55%,_#581c87_100%)] text-white shadow-[0_3px_10px_rgba(126,34,206,0.28),_inset_0_1px_1px_rgba(255,255,255,0.14)]'
-                  : 'bg-surface-dim text-on-surface-variant/75 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]'
-              }`}
+              className="recurrence-badge shrink-0"
               title={
                 task.recurrence_frequency && task.recurrence_frequency !== 'none'
                   ? `Recurring: ${task.recurrence_frequency}`

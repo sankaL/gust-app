@@ -11,6 +11,7 @@ type OpenTaskCardProps = {
   onDelete?: (task: TaskSummary) => void
   isBusy: boolean
   enableSwipe?: boolean
+  showCollapsedGroupLabel?: boolean
 }
 
 function buildDueLabel(task: TaskSummary) {
@@ -75,7 +76,8 @@ export function OpenTaskCard({
   onComplete,
   onDelete,
   isBusy,
-  enableSwipe = false
+  enableSwipe = false,
+  showCollapsedGroupLabel = false
 }: OpenTaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [offsetX, setOffsetX] = useState(0)
@@ -88,9 +90,6 @@ export function OpenTaskCard({
   const dueTone = buildDueTone(task)
   const recurrenceLabel = formatRecurrenceLabel(task.recurrence_frequency ?? null)
   const subtaskLabel = formatSubtaskLabel(task.subtask_count)
-  const recurrenceBadgeClass = task.recurrence_frequency
-    ? 'bg-[radial-gradient(circle_at_top,_#a855f7_8%,_#7e22ce_55%,_#581c87_100%)] text-white shadow-[0_3px_10px_rgba(126,34,206,0.28),_inset_0_1px_1px_rgba(255,255,255,0.14)]'
-    : 'bg-surface-dim text-on-surface-variant/75 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]'
 
   function resetSwipe() {
     startXRef.current = null
@@ -218,8 +217,14 @@ export function OpenTaskCard({
                     : 'flex-wrap gap-1.5 text-[0.6rem] tracking-[0.14em]'
                 } uppercase`}
               >
-                {isExpanded ? (
-                  <span className="min-w-0 max-w-[44%] shrink truncate font-medium text-on-surface-variant/85">
+                {isExpanded || showCollapsedGroupLabel ? (
+                  <span
+                    className={
+                      isExpanded
+                        ? 'min-w-0 max-w-[44%] shrink truncate font-medium text-on-surface-variant/85'
+                        : 'min-w-0 max-w-[48%] shrink truncate rounded-pill bg-surface-dim px-2 py-0.5 font-body tracking-[0.14em] text-on-surface-variant/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]'
+                    }
+                  >
                     {task.group?.name || 'Inbox'}
                   </span>
                 ) : null}
@@ -227,7 +232,7 @@ export function OpenTaskCard({
                 <span className={`shrink-0 font-bold ${dueTone}`}>Due: {dueLabel}</span>
 
                 <span
-                  className={`shrink-0 rounded-pill px-2 py-0.5 font-body tracking-[0.16em] ${recurrenceBadgeClass}`}
+                  className="recurrence-badge shrink-0"
                   title={task.recurrence_frequency ? `Recurring: ${task.recurrence_frequency}` : 'No recurrence'}
                 >
                   {recurrenceLabel}
