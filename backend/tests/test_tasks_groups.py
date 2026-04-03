@@ -1406,3 +1406,25 @@ def test_task_list_emits_server_timing_headers(app: FastAPI, client: TestClient)
     assert server_timing is not None
     assert "db.tasks.list" in server_timing
     assert "request.total" in server_timing
+
+
+def test_all_tasks_list_includes_group_context_from_joined_query(
+    app: FastAPI, client: TestClient
+) -> None:
+    headers = _authenticated_headers(app, client)
+    inbox_group_id = client.get("/auth/session").json()["inbox_group_id"]
+    work_group_id = _seed_group(client, user_id=USER_ID, name="Work")
+
+    _seed_task(client, user_id=USER_ID, group_id=inbox_group_id, title="Inbox task")
+    _seed_task(client, user_id=USER_ID, group_id=work_group_id, title="Work task")
+
+    response = client.get("/tasks?status=open", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["has_more"] is False
+    assert payload["next_cursor"] is None
+    assert {item["title"]: item["group"]["name"] for item in payload["items"]} == {
+        "Inbox task": "Inbox",
+        "Work task": "Work",
+    }

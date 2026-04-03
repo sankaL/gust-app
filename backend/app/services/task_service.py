@@ -117,10 +117,6 @@ class TaskService:
                     if group is None:
                         raise GroupNotFoundError()
 
-                group_lookup = {
-                    candidate.id: candidate
-                    for candidate in self._list_groups(connection, user_id=user_id)
-                }
                 task_rows, has_more, next_cursor = list_tasks(
                     connection,
                     user_id=user_id,
@@ -132,12 +128,12 @@ class TaskService:
 
         items = [
             TaskListItem(
-                task=task,
-                group=group_lookup[task.group_id],
-                due_bucket=self._due_bucket(task=task, user_timezone=user_timezone),
-                subtask_count=task.subtask_count,
+                task=row.task,
+                group=row.group,
+                due_bucket=self._due_bucket(task=row.task, user_timezone=user_timezone),
+                subtask_count=row.task.subtask_count,
             )
-            for task in task_rows
+            for row in task_rows
         ]
         if status == "completed":
             items.sort(key=self._completed_task_sort_key)

@@ -1,5 +1,6 @@
-import { useMemo, useRef, useEffect } from 'react'
+import { useMemo, useRef, useEffect, useCallback } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { listAllTasks, type TaskSummary } from '../lib/api'
 import { OpenTaskCard } from './OpenTaskCard'
 
@@ -14,6 +15,14 @@ interface AllTasksViewProps {
 
 const PAGE_SIZE = 50
 const ALL_TASKS_INFINITE_QUERY_KEY = ['tasks', 'all', 'open', 'infinite'] as const
+
+// Estimated heights for virtualizer
+const SECTION_HEADER_HEIGHT = 48
+const TASK_CARD_HEIGHT = 100
+
+type VirtualItemDef =
+  | { type: 'header'; sectionKey: string; label: string; count: number }
+  | { type: 'task'; task: TaskSummary }
 
 function TaskCard({
   task,
@@ -82,11 +91,15 @@ export function AllTasksView({
   busyTaskIds = [],
 }: AllTasksViewProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null)
+  const parentRef = useRef<HTMLDivElement>(null)
+
   const allTasksQuery = useInfiniteQuery({
     queryKey: ALL_TASKS_INFINITE_QUERY_KEY,
     queryFn: ({ pageParam }) => listAllTasks('open', pageParam ?? null, PAGE_SIZE),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor,
+    // Stale-while-revalidate: keep cached data fresh for 30s
+    staleTime: 1000 * 30,
   })
   const allTasks = allTasksQuery.data?.pages.flatMap((page) => page.items) ?? []
   const hasMore = Boolean(allTasksQuery.hasNextPage)
@@ -105,9 +118,41 @@ export function AllTasksView({
     return result
   }, [allTasks, todayIsoDate])
 
-  // Intersection Observer for infinite scroll
+  // Flatten sections into a single virtualizable array
+  const virtualItems = useMemo((): VirtualItemDef[] => {
+    const items: VirtualItemDef[] = []
+    for (const section of SECTIONS) {
+      const tasks = sectionedTasks[section.key]
+      if (tasks.length === 0) continue
+      items.push({ type: 'header', sectionKey: section.key, label: section.label, count: tasks.length })
+      for (const task of tasks) {
+        items.push({ type: 'task', task })
+      }
+    }
+    return items
+  }, [sectionedTasks])
+
+  // Estimate size function for virtualizer
+  const estimateSize = useCallback((index: number): number => {
+    const item = virtualItems[index]
+    if (!item) return TASK_CARD_HEIGHT
+    return item.type === 'header' ? SECTION_HEADER_HEIGHT : TASK_CARD_HEIGHT
+  }, [virtualItems])
+
+  const virtualizer = useVirtualizer({
+    count: virtualItems.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize,
+    overscan: 5,
+    measureElement: (el) => el.getBoundingClientRect().height,
+  })
+
+  // Intersection Observer for infinite scroll (attached to virtualized container)
   useEffect(() => {
-    if (!loadMoreRef.current || !hasMore || allTasksQuery.isFetchingNextPage) {
+    const loadMoreElement = loadMoreRef.current
+    const scrollElement = parentRef.current
+
+    if (!loadMoreElement || !scrollElement || !hasMore || allTasksQuery.isFetchingNextPage) {
       return
     }
 
@@ -117,18 +162,35 @@ export function AllTasksView({
           void allTasksQuery.fetchNextPage()
         }
       },
-      { rootMargin: '200px' }
+      {
+        root: scrollElement,
+        rootMargin: '200px 0px',
+      }
     )
 
-    observer.observe(loadMoreRef.current)
+    observer.observe(loadMoreElement)
 
     return () => observer.disconnect()
   }, [allTasksQuery, hasMore])
 
   if (allTasksQuery.isLoading && allTasks.length === 0) {
     return (
-      <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
-        Loading all tasks...
+      <div className="space-y-6">
+        {/* Skeleton loading state */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="h-7 w-24 animate-pulse rounded bg-surface-container-highest" />
+            <div className="h-4 w-16 animate-pulse rounded bg-surface-container-highest" />
+          </div>
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-24 animate-pulse rounded-card bg-surface-container-high"
+              />
+            ))}
+          </div>
+        </section>
       </div>
     )
   }
@@ -158,39 +220,78 @@ export function AllTasksView({
   }
 
   return (
-    <div className="space-y-6">
-      {SECTIONS.map((section) => {
-        const tasks = sectionedTasks[section.key]
-        if (tasks.length === 0) {
-          return null
-        }
-        return (
-          <section key={section.key} className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-xl text-on-surface">{section.label}</h3>
-              <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
-                {tasks.length} tasks
-              </span>
-            </div>
-            <div className="space-y-2">
-              {tasks.map((task) => (
+    <div className="flex flex-col">
+      {/* Virtualized scroll container */}
+      <div
+        ref={parentRef}
+        className="relative overflow-auto"
+        style={{ maxHeight: 'calc(100vh - 200px)' }}
+      >
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const item = virtualItems[virtualRow.index]
+            if (!item) return null
+
+            if (item.type === 'header') {
+              return (
+                <div
+                  key={item.sectionKey}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                  className="flex items-center justify-between px-1"
+                >
+                  <h3 className="font-display text-xl text-on-surface">{item.label}</h3>
+                  <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">
+                    {item.count} tasks
+                  </span>
+                </div>
+              )
+            }
+
+            // Task card
+            return (
+              <div
+                key={item.task.id}
+                data-index={virtualRow.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                className="px-1 py-1"
+              >
                 <TaskCard
-                  key={task.id}
-                  task={task}
+                  task={item.task}
                   onOpen={onTaskOpen}
                   onPrepareOpen={onTaskPrepareOpen}
                   onComplete={onTaskComplete}
                   onDelete={onTaskDelete}
-                  isBusy={busyTaskIds.includes(task.id)}
+                  isBusy={busyTaskIds.includes(item.task.id)}
                 />
-              ))}
-            </div>
-          </section>
-        )
-      })}
+              </div>
+            )
+          })}
+        </div>
 
-      {/* Load more trigger */}
-      <div ref={loadMoreRef} className="h-4" />
+        {/* Load more trigger must live inside the scroll container for the observer root */}
+        <div ref={loadMoreRef} className="h-1" />
+      </div>
 
       {(allTasksQuery.isFetching || allTasksQuery.isFetchingNextPage) && (
         <div className="text-center text-sm text-on-surface-variant py-2">

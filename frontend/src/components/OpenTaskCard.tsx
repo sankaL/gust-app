@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 
 import { type TaskSummary } from '../lib/api'
 import { Card } from './Card'
@@ -69,7 +69,7 @@ function formatSubtaskLabel(subtaskCount: number | undefined) {
   return `${count} ${count === 1 ? 'subtask' : 'subtasks'}`
 }
 
-export function OpenTaskCard({
+const OpenTaskCardInner = function OpenTaskCardInner({
   task,
   onOpen,
   onPrepareOpen,
@@ -86,10 +86,16 @@ export function OpenTaskCard({
   const offsetRef = useRef(0)
   const suppressClickRef = useRef(false)
 
-  const dueLabel = buildDueLabel(task)
-  const dueTone = buildDueTone(task)
-  const recurrenceLabel = formatRecurrenceLabel(task.recurrence_frequency ?? null)
-  const subtaskLabel = formatSubtaskLabel(task.subtask_count)
+  const dueLabel = useMemo(() => buildDueLabel(task), [task.due_date])
+  const dueTone = useMemo(() => buildDueTone(task), [task.due_date])
+  const recurrenceLabel = useMemo(
+    () => formatRecurrenceLabel(task.recurrence_frequency ?? null),
+    [task.recurrence_frequency]
+  )
+  const subtaskLabel = useMemo(
+    () => formatSubtaskLabel(task.subtask_count),
+    [task.subtask_count]
+  )
 
   function resetSwipe() {
     startXRef.current = null
@@ -309,3 +315,5 @@ export function OpenTaskCard({
     </Card>
   )
 }
+
+export const OpenTaskCard = memo(OpenTaskCardInner)

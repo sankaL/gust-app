@@ -1,5 +1,18 @@
 # Decisions Made
 
+## 2026-04-03 02:06:00 EDT
+
+- Optimized task loading performance across the full stack to address 2+ second load times with 10+ tasks.
+- Backend: added composite partial index `idx_tasks_list_pagination(user_id, status, created_at DESC, id DESC) WHERE deleted_at IS NULL` (migration 0014) to support efficient cursor-based pagination for task list queries.
+- Backend: replaced O(n) correlated scalar subquery for subtask counting with a single LEFT JOIN against a pre-aggregated subquery in `list_tasks()`, eliminating per-row subquery executions.
+- Backend: changed group lookup in `TaskService.list_tasks()` from fetching ALL user groups to batch-fetching only the groups actually referenced by returned tasks via new `get_groups_by_ids()` repository function.
+- Frontend: memoized date calculations (`buildDueLabel`, `buildDueTone`) and formatting functions (`formatRecurrenceLabel`, `formatSubtaskLabel`) in `OpenTaskCard` using `useMemo` to prevent redundant computation on re-renders.
+- Frontend: wrapped `OpenTaskCard` with `React.memo` to prevent unnecessary re-renders when props haven't changed.
+- Frontend: replaced full DOM rendering of all task cards with window virtualization using `@tanstack/react-virtual`, rendering only ~10-15 visible cards plus overscan instead of 50+.
+- Frontend: reduced query invalidation scope in `TasksRoute.tsx` from 6+ queries to 5 targeted queries, removing unnecessary completed-list invalidations after open-task actions.
+- Frontend: added skeleton loading states to `AllTasksView` for better perceived performance during initial load.
+- Frontend: configured stale-while-revalidate caching (`staleTime: 30s`, `gcTime: 5m`) on both the infinite all-tasks query and the per-group task query to show cached data while fetching fresh data in background.
+
 ## 2026-04-02 21:26:00 EDT
 
 - Added yearly recurrence support with a new `recurrence_month` column on both `tasks` and `extracted_tasks` tables, extending the existing `ck_tasks_recurrence_shape` check constraint to require `month` and `day_of_month` together for `yearly` frequency while keeping `weekday` null.
