@@ -104,12 +104,20 @@ app-down:
 
 dev-local: supabase-start frontend-install app-up
 	@. "$(DEV_RUNTIME_ENV)"; \
+	LOCAL_IP=$$(ipconfig getifaddr en0 2>/dev/null || echo "unknown"); \
 	printf '%s\n' \
 		'Local dev stack is ready:' \
 		"  frontend: http://localhost:$$GUST_FRONTEND_PORT" \
 		"  backend: http://localhost:$$GUST_BACKEND_PORT" \
 		"  supabase api: http://localhost:$$GUST_SUPABASE_API_PORT" \
-		"  supabase studio: http://localhost:$$GUST_SUPABASE_STUDIO_PORT"
+		"  supabase studio: http://localhost:$$GUST_SUPABASE_STUDIO_PORT" \
+		'' \
+		'Access from your phone (on the same network):' \
+		"  frontend: http://$$LOCAL_IP:$$GUST_FRONTEND_PORT" \
+		"  backend: http://$$LOCAL_IP:$$GUST_BACKEND_PORT"; \
+	if [ "$$LOCAL_IP" != "unknown" ]; then \
+		printf '\n%s\n' "  👆 Tap to open on mobile: http://$$LOCAL_IP:$$GUST_FRONTEND_PORT"; \
+	fi
 
 dev: dev-local
 
