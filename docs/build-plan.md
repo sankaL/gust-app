@@ -81,6 +81,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| ADH-38 | Deploy `main` commit `062de98` to Railway production via CLI | DONE | 2026-04-11 | Deployed `backend` (`67ebb8f3-721e-4d39-9833-1ea426e546d7`) from `main@062de98`, confirmed all production services report `SUCCESS`, verified `https://api.gustapp.ca/health` and `https://gustapp.ca` return HTTP 200, validated internal digest route auth fail-closed (`403` without secret), and confirmed authenticated daily/weekly internal digest runs return HTTP 200. | Runbook, AGENTS |
 | ADH-29 | Roll the hosted Supabase allowlist-grant hotfix through production | DONE | 2026-03-29 | Pushed `codex/hotfix-5`, merged PR #21 into `main` at `799d5c1`, captured fresh schema and data dumps from the linked `gust-prod` project, and applied hosted Supabase migration `20260328214500_harden_allowed_users_grants.sql`. | Runbook, Tech, AGENTS |
 | ADH-28 | Redeploy the merged frontend release to Railway production | DONE | 2026-03-29 | Deployed the `main` merge commit `36c0411` through the Railway CLI, confirmed the `frontend` service reached `SUCCESS`, and verified `https://gustapp.ca` returns HTTP 200. | Tech, AGENTS |
 | ADH-01 | Unplanned implementation or documentation work discovered during delivery | DONE | 2026-03-22 | Expanded env example coverage for runtime, frontend, and provider config | AGENTS, Tech |
