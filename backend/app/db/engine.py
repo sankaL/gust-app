@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from app.core.settings import get_settings
 
 DATABASE_USER_ID_SETTING = "app.current_user_id"
 DATABASE_INTERNAL_JOB_SETTING = "app.internal_job"
+INTERNAL_JOB_SENTINEL_USER_ID = "00000000-0000-0000-0000-000000000000"
 _engine_registry: dict[str, Engine] = {}
 _engine_registry_lock = Lock()
 
@@ -75,12 +77,25 @@ def _apply_database_actor(connection: Connection, actor: DatabaseActor | None) -
     if actor is None or connection.dialect.name != "postgresql":
         return
 
+    user_setting_value: str | None = None
     if actor.user_id is not None:
+        normalized_user_id = actor.user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("Database actor user_id must be a non-empty UUID.")
+        try:
+            uuid.UUID(normalized_user_id)
+        except ValueError as exc:
+            raise ValueError("Database actor user_id must be a valid UUID.") from exc
+        user_setting_value = normalized_user_id
+    elif actor.is_internal_job:
+        user_setting_value = INTERNAL_JOB_SENTINEL_USER_ID
+
+    if user_setting_value is not None:
         connection.execute(
             text("SELECT set_config(:setting_name, :setting_value, true)"),
             {
                 "setting_name": DATABASE_USER_ID_SETTING,
-                "setting_value": actor.user_id,
+                "setting_value": user_setting_value,
             },
         )
 
