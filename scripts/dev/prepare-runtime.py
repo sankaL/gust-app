@@ -4,6 +4,8 @@ from __future__ import annotations
 import shutil
 import socket
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -122,6 +124,60 @@ def port_is_available(port: int) -> bool:
     return True
 
 
+def stop_existing_supabase(workdir: Path) -> bool:
+    """Stop existing Supabase instance and clean up state. Returns True if successful."""
+    try:
+        # Always try to stop Supabase first, ignore errors if not running
+        print("Checking for existing Supabase instance...", file=sys.stderr)
+        subprocess.run(
+            ["npx", "supabase@latest", "stop", "--workdir", str(workdir)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        
+        # Remove Supabase state files that track running status
+        state_dir = workdir / ".temp"
+        if state_dir.exists():
+            print("Cleaning up Supabase state files...", file=sys.stderr)
+            shutil.rmtree(state_dir, ignore_errors=True)
+        
+        # Also stop any leftover Docker containers from Supabase
+        subprocess.run(
+            ["docker", "ps", "-a", "--filter", "name=supabase_", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        
+        # Get and stop all supabase containers
+        result = subprocess.run(
+            ["docker", "ps", "-a", "--filter", "name=supabase_", "--format", "{{.ID}}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.stdout.strip():
+            container_ids = result.stdout.strip().split('\n')
+            print(f"Stopping {len(container_ids)} Supabase Docker containers...", file=sys.stderr)
+            subprocess.run(
+                ["docker", "stop"] + container_ids,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            subprocess.run(
+                ["docker", "rm"] + container_ids,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        
+        return True
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
 def choose_port(default_port: int, reserved: set[int]) -> int:
     if default_port not in reserved and port_is_available(default_port):
         reserved.add(default_port)
@@ -199,14 +255,23 @@ def render_supabase_config(
 
 
 def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
-    if all(key in existing_values for key in PORT_DEFAULTS):
-        return {key: int(existing_values[key]) for key in PORT_DEFAULTS}
-
+    """Resolve ports, checking availability even if already set in existing values."""
     reserved: set[int] = set()
-    return {
-        key: choose_port(default_port, reserved)
-        for key, default_port in PORT_DEFAULTS.items()
-    }
+    ports: dict[str, int] = {}
+    
+    for key, default_port in PORT_DEFAULTS.items():
+        # Try the existing/default port first
+        candidate_port = int(existing_values.get(key, default_port))
+        
+        # If port is available and not reserved, use it
+        if candidate_port not in reserved and port_is_available(candidate_port):
+            ports[key] = candidate_port
+            reserved.add(candidate_port)
+        else:
+            # Port is in use, find a free one
+            ports[key] = choose_port(candidate_port, reserved)
+    
+    return ports
 
 
 def build_runtime_values(
@@ -247,6 +312,9 @@ def main() -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     SUPABASE_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Stop existing Supabase instance if running to free up ports
+    stop_existing_supabase(SUPABASE_RUNTIME_DIR)
+
     root_env_values = parse_env_file(ROOT_ENV_PATH)
     existing_runtime_values = parse_env_file(RUNTIME_ENV_PATH)
     ports = resolve_ports(existing_runtime_values)
@@ -273,6 +341,11 @@ def main() -> None:
     config_template = (SUPABASE_TEMPLATE_DIR / "config.toml").read_text(encoding="utf-8")
     rendered_config = render_supabase_config(config_template, ports, runtime_values)
     (SUPABASE_RUNTIME_DIR / "config.toml").write_text(rendered_config, encoding="utf-8")
+
+    # Print port information for debugging
+    print(f"Using workdir {RUNTIME_DIR}", file=sys.stderr)
+    for key, port in sorted(ports.items()):
+        print(f"  {key}={port}", file=sys.stderr)
 
 
 if __name__ == "__main__":

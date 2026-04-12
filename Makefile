@@ -10,7 +10,7 @@ DEV_SUPABASE_DIR := $(DEV_RUNTIME_DIR)/supabase
 DEV_SUPABASE_WORKDIR := $(DEV_RUNTIME_DIR)
 DOCKER_COMPOSE := docker compose --env-file $(DEV_RUNTIME_ENV)
 
-.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime supabase-start supabase-stop supabase-sync-local wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
+.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime supabase-start supabase-stop supabase-clean supabase-restart supabase-sync-local wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
 
 frontend-install:
 	npm --prefix frontend install
@@ -66,6 +66,9 @@ supabase-stop:
 		$(SUPABASE) stop --workdir "$(DEV_SUPABASE_WORKDIR)"; \
 	fi
 
+supabase-clean: supabase-stop
+	@rm -rf "$(DEV_SUPABASE_DIR)"
+
 supabase-start: prepare-dev-runtime
 	@set -a; \
 	. "$(DEV_RUNTIME_ENV)"; \
@@ -73,7 +76,9 @@ supabase-start: prepare-dev-runtime
 	$(SUPABASE) start --workdir "$(DEV_SUPABASE_WORKDIR)"
 	$(MAKE) supabase-sync-local
 
-supabase-sync-local: prepare-dev-runtime
+supabase-restart: supabase-stop supabase-start
+
+supabase-sync-local:
 	$(SUPABASE) db push --local --include-all --include-seed --workdir "$(DEV_SUPABASE_WORKDIR)" --yes
 
 app-up: prepare-dev-runtime
