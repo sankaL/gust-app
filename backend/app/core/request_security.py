@@ -65,8 +65,13 @@ def trusted_hosts(settings: Settings) -> list[str]:
         normalized = _hostname_or_host(candidate)
         if normalized is not None:
             hosts.add(normalized)
-    if has_railway_runtime:
+    
+    # In dev mode, allow local network IPs for mobile testing
+    if settings.gust_dev_mode:
         hosts.add("*")
+    elif has_railway_runtime:
+        hosts.add("*")
+    
     return sorted(hosts)
 
 

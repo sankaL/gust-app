@@ -26,12 +26,21 @@ function inferApiBaseUrl(): string {
     return 'http://localhost:8000'
   }
 
-  return window.location.origin
+  // For local network IPs (e.g., 192.168.x.x), use the same IP for the backend
+  return window.location.origin.replace(/:\d+$/, ':8000')
 }
 
 export function getAppConfig(): AppConfig {
   const devMode = import.meta.env.VITE_GUST_DEV_MODE === 'true'
-  const apiBaseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL ?? inferApiBaseUrl())
+  
+  // In dev mode, infer the API URL from the current location to support
+  // accessing from local network IPs (e.g., 192.168.x.x for mobile testing)
+  let apiBaseUrl: string
+  if (devMode && typeof window !== 'undefined') {
+    apiBaseUrl = inferApiBaseUrl()
+  } else {
+    apiBaseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL ?? inferApiBaseUrl())
+  }
 
   return {
     apiBaseUrl,
