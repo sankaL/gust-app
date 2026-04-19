@@ -173,12 +173,12 @@ export function TaskForm({
 
       {/* Action Buttons (for standalone mode) */}
       {onCancel && (
-        <div className="flex items-center justify-end gap-2 pt-4">
+        <div className="grid grid-cols-2 gap-3 pt-4">
           <button
             type="button"
             onClick={onCancel}
             disabled={isSaving}
-            className="rounded-pill shrink-0 border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-on-surface transition hover:bg-white/10 disabled:opacity-50 disabled:visible"
+            className="w-full rounded-pill border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-medium text-on-surface transition-colors hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-white/5"
           >
             Cancel
           </button>
@@ -186,7 +186,7 @@ export function TaskForm({
             type="button"
             onClick={() => void handleSubmit()}
             disabled={isSaving}
-            className="rounded-pill bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_8px_0_#4c1d95,_0_16px_22px_rgba(0,0,0,0.35),_inset_0_2px_3px_rgba(255,255,255,0.38)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] active:shadow-[0_0px_0_#4c1d95,_0_4px_10px_rgba(0,0,0,0.35),_inset_0_2px_4px_rgba(0,0,0,0.18)] disabled:opacity-50 disabled:hover:translate-y-0 disabled:active:translate-y-0"
+            className="w-full rounded-pill bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_8px_0_#4c1d95,_0_16px_22px_rgba(0,0,0,0.35),_inset_0_2px_3px_rgba(255,255,255,0.38)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] active:shadow-[0_0px_0_#4c1d95,_0_4px_10px_rgba(0,0,0,0.35),_inset_0_2px_4px_rgba(0,0,0,0.18)] disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0 disabled:active:translate-y-0"
           >
             {isSaving ? 'Saving...' : isCreateMode ? 'Add Task' : 'Save Changes'}
           </button>
