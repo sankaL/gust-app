@@ -178,7 +178,7 @@ export function TaskForm({
             type="button"
             onClick={onCancel}
             disabled={isSaving}
-            className="rounded-pill border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-on-surface transition hover:bg-white/10 disabled:opacity-50"
+            className="rounded-pill shrink-0 border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-on-surface transition hover:bg-white/10 disabled:opacity-50 disabled:visible"
           >
             Cancel
           </button>
