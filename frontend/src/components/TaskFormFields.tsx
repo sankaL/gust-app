@@ -1,5 +1,6 @@
 import type { TaskRecurrence } from '../lib/api'
 import { SelectDropdown } from './SelectDropdown'
+import { DatePicker } from './DatePicker'
 
 interface GroupSummary {
   id: string
@@ -247,33 +248,35 @@ export function TaskFormFields({
       {/* Grid: Due Date, Reminder, Group */}
       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         {/* Due Date */}
-        <div className="min-w-0 overflow-hidden rounded-[1.35rem] bg-black/20 p-3 sm:p-4 backdrop-blur-sm">
+        <div className="min-w-0 overflow-visible rounded-[1.35rem] bg-black/20 p-3 sm:p-4 backdrop-blur-sm">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
             Due date
           </p>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => handleDueDateChange(e.target.value)}
-            className="mt-3 block w-full min-w-0 max-w-full rounded-card bg-surface-dim px-3 py-3 pr-8 text-sm font-medium text-on-surface outline-none focus:bg-surface-container-high"
-            style={{ fontSize: '16px', width: '100%', boxSizing: 'border-box' }} /* Prevent iOS zoom and force containment */
-            disabled={disabled}
-          />
+          <div className="mt-3">
+            <DatePicker
+              value={dueDate || null}
+              onChange={handleDueDateChange}
+              mode="date"
+              disabled={disabled}
+              placeholder="Select a date"
+            />
+          </div>
         </div>
 
         {/* Reminder */}
-        <div className="min-w-0 overflow-hidden rounded-[1.35rem] bg-black/20 p-3 sm:p-4 backdrop-blur-sm">
+        <div className="min-w-0 overflow-visible rounded-[1.35rem] bg-black/20 p-3 sm:p-4 backdrop-blur-sm">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
             Reminder
           </p>
-          <input
-            type="datetime-local"
-            value={reminderAt}
-            onChange={(e) => onReminderAtChange(e.target.value)}
-            disabled={!dueDate || disabled}
-            className="mt-3 block w-full min-w-0 max-w-full rounded-card bg-surface-dim px-3 py-3 pr-8 text-sm font-medium text-on-surface outline-none focus:bg-surface-container-high disabled:opacity-50"
-            style={{ fontSize: '16px', width: '100%', boxSizing: 'border-box' }} /* Prevent iOS zoom and force containment */
-          />
+          <div className="mt-3">
+            <DatePicker
+              value={reminderAt || null}
+              onChange={onReminderAtChange}
+              mode="datetime"
+              disabled={!dueDate || disabled}
+              placeholder="Select date & time"
+            />
+          </div>
           {!dueDate && (
             <p className="mt-2 text-xs text-on-surface-variant/60">Set a due date first</p>
           )}
@@ -282,7 +285,7 @@ export function TaskFormFields({
         {/* Group */}
         <div
           className={[
-            'min-w-0 overflow-hidden rounded-[1.35rem] bg-black/20 p-3 sm:p-4 backdrop-blur-sm',
+            'min-w-0 overflow-visible rounded-[1.35rem] bg-black/20 p-3 sm:p-4 backdrop-blur-sm',
             isGroupDropdownOpen ? 'relative z-40' : '',
           ].join(' ')}
         >
@@ -348,7 +351,7 @@ export function TaskFormFields({
 
           {/* Weekly: Day of Week */}
           {recurrenceFrequency === 'weekly' && (
-            <div className="rounded-card overflow-hidden bg-black/10 p-3 sm:p-4">
+            <div className="rounded-card overflow-visible bg-black/10 p-3 sm:p-4">
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
                 Day of Week
               </p>
@@ -387,7 +390,7 @@ export function TaskFormFields({
 
           {/* Yearly: Month + Day of Month */}
           {recurrenceFrequency === 'yearly' && (
-            <div className="rounded-card overflow-hidden bg-black/10 p-3 sm:p-4 space-y-4">
+            <div className="rounded-card overflow-visible bg-black/10 p-3 sm:p-4 space-y-4">
               <div>
                 <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
                   Month

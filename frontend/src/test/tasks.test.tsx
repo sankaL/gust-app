@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
@@ -858,8 +858,13 @@ describe('tasks flow', () => {
     const { router } = renderTaskRoute(['/tasks/task-1?group=inbox-1'])
     const user = userEvent.setup()
 
-    const dueDateInput = await screen.findByDisplayValue('2026-03-24')
-    fireEvent.change(dueDateInput, { target: { value: '' } })
+    // Find and click the due date picker to open it
+    const dueDateButton = await screen.findByText('Mar 24, 2026')
+    await user.click(dueDateButton)
+    
+    // Click the "Clear" or close without selecting to clear the date
+    const clearButton = screen.getByRole('button', { name: /clear/i })
+    await user.click(clearButton)
     await user.click(screen.getByRole('button', { name: 'Save and return' }))
 
     await waitFor(() => {
