@@ -45,12 +45,26 @@ def create_app() -> FastAPI:
 
     app.state.settings = settings
     if settings.frontend_app_url:
+        # In dev mode, allow localhost and local network IPs for mobile testing
+        if settings.gust_dev_mode:
+            # Allow all localhost variations and local network IPs
+            cors_kwargs = {
+                "allow_origin_regex": r"https?://(localhost|127\.0\.0\.1|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+):\d+",
+                "allow_credentials": True,
+                "allow_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "X-CSRF-Token"],
+            }
+        else:
+            cors_kwargs = {
+                "allow_origins": [settings.frontend_app_url],
+                "allow_credentials": True,
+                "allow_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "X-CSRF-Token"],
+            }
+        
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=[settings.frontend_app_url],
-            allow_credentials=True,
-            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["Content-Type", "X-CSRF-Token"],
+            **cors_kwargs,
         )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts(settings))
     app.add_middleware(RequestContextMiddleware, settings=settings)
