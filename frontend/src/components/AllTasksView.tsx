@@ -2,6 +2,7 @@ import { useMemo, useRef, useEffect, useCallback } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { listAllTasks, type TaskSummary } from '../lib/api'
+import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/queryTuning'
 import { OpenTaskCard } from './OpenTaskCard'
 
 interface AllTasksViewProps {
@@ -109,8 +110,8 @@ export function AllTasksView({
     queryFn: ({ pageParam }) => listAllTasks('open', pageParam ?? null, PAGE_SIZE),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor,
-    // Stale-while-revalidate: keep cached data fresh for 30s
-    staleTime: 1000 * 30,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
   const allTasks = useMemo(
     () => allTasksQuery.data?.pages.flatMap((page) => page.items) ?? [],

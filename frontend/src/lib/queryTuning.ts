@@ -1,0 +1,2 @@
+export const TASK_SCREEN_STALE_TIME_MS = 120_000
+export const TASK_SCREEN_GC_TIME_MS = 10 * 60_000
