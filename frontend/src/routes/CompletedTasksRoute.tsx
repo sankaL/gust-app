@@ -20,6 +20,7 @@ import {
   snapshotTaskQueries,
   updateTaskDetailCache,
 } from '../lib/taskQueryCache'
+import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/queryTuning'
 import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
 
@@ -94,7 +95,9 @@ export function CompletedTasksRoute() {
   const groupsQuery = useQuery({
     queryKey: ['groups'],
     queryFn: listGroups,
-    enabled: sessionQuery.data?.signed_in === true
+    enabled: sessionQuery.data?.signed_in === true,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
   const selectedGroupId = searchParams.get('group')
@@ -117,7 +120,9 @@ export function CompletedTasksRoute() {
     queryFn: () =>
       isAllGroupsView ? listAllTasks('completed') : listTasks(resolvedGroupId as string, 'completed'),
     enabled:
-      sessionQuery.data?.signed_in === true && (isAllGroupsView || Boolean(resolvedGroupId))
+      sessionQuery.data?.signed_in === true && (isAllGroupsView || Boolean(resolvedGroupId)),
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
   function requireCsrf(session: SessionStatus | undefined) {

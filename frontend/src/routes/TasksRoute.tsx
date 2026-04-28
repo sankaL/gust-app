@@ -25,6 +25,7 @@ import {
   snapshotTaskQueries,
   updateTaskDetailCache,
 } from '../lib/taskQueryCache'
+import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/queryTuning'
 import { AllTasksView } from '../components/AllTasksView'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { useNotifications } from '../components/Notifications'
@@ -269,34 +270,30 @@ export function TasksRoute() {
   const groupsQuery = useQuery({
     queryKey: ['groups'],
     queryFn: listGroups,
-    enabled: sessionQuery.data?.signed_in === true
+    enabled: sessionQuery.data?.signed_in === true,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
   const selectedGroupId = searchParams.get('group')
-  const resolvedGroupId =
-    selectedGroupId ??
-    sessionQuery.data?.inbox_group_id ??
-    groupsQuery.data?.[0]?.id ??
-    null
+  const effectiveGroupId = selectedGroupId ?? 'all'
+  const isAllView = effectiveGroupId === 'all'
+  const resolvedGroupId = isAllView ? null : effectiveGroupId
 
   useEffect(() => {
-    if (!sessionQuery.data?.signed_in || !groupsQuery.data?.length || selectedGroupId) {
+    if (!sessionQuery.data?.signed_in || selectedGroupId) {
       return
     }
 
-    // Default to 'all' view instead of a specific group
     setSearchParams({ group: 'all' }, { replace: true })
-  }, [groupsQuery.data, selectedGroupId, sessionQuery.data, setSearchParams])
-
-  const isAllView = selectedGroupId === 'all'
+  }, [selectedGroupId, sessionQuery.data, setSearchParams])
 
   const tasksQuery = useQuery({
     queryKey: ['tasks', resolvedGroupId, 'open'],
     queryFn: () => listTasks(resolvedGroupId as string),
     enabled: sessionQuery.data?.signed_in === true && Boolean(resolvedGroupId) && !isAllView,
-    // Stale-while-revalidate: show cached data while fetching fresh in background
-    staleTime: 1000 * 30,
-    gcTime: 1000 * 60 * 5,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
   function requireCsrf(session: SessionStatus | undefined) {
@@ -351,19 +348,40 @@ export function TasksRoute() {
     updateTaskDetailCache(queryClient, task)
   }
 
-  async function invalidateTaskViews(taskId: string, groupId: string) {
-    // Selective invalidation: only refetch what's necessary
-    // syncTaskCaches already handles optimistic updates for open lists
-    // We only need to invalidate the detail query and groups count
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] }),
-      // Only invalidate the specific open list that was affected
-      queryClient.invalidateQueries({ queryKey: ['tasks', groupId, 'open'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] }),
-      // Invalidate infinite scroll variants
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open', 'infinite'] }),
-    ])
+  async function invalidateTaskViews(
+    taskId: string,
+    groupId: string,
+    shouldRefetchOpenLists: boolean
+  ) {
+    const invalidations = [
+      queryClient.invalidateQueries({
+        queryKey: ['task-detail', taskId],
+        refetchType: 'inactive' as const,
+      }),
+    ]
+
+    if (shouldRefetchOpenLists) {
+      invalidations.push(
+        queryClient.invalidateQueries({ queryKey: ['groups'] }),
+        queryClient.invalidateQueries({ queryKey: ['tasks', groupId, 'open'] }),
+        queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] }),
+        queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open', 'infinite'] }),
+      )
+    } else {
+      invalidations.push(
+        queryClient.invalidateQueries({ queryKey: ['groups'], refetchType: 'inactive' as const })
+      )
+    }
+
+    await Promise.all(invalidations)
+  }
+
+  function canCreateFollowUpOccurrence(task: TaskSummary) {
+    return Boolean(task.series_id || task.recurrence_frequency)
+  }
+
+  function shouldRefetchOpenListsAfterDelete(scope: TaskDeleteScope, task: TaskSummary) {
+    return scope === 'series' || (scope === 'occurrence' && canCreateFollowUpOccurrence(task))
   }
 
   const completeMutation = useMutation({
@@ -424,7 +442,7 @@ export function TasksRoute() {
             }
             dismissNotification(notificationId)
             notifySuccess(`Moved ${task.title} back to To-do.`)
-            await invalidateTaskViews(task.id, task.group.id)
+            await invalidateTaskViews(task.id, task.group.id, canCreateFollowUpOccurrence(task))
           } catch (error) {
             updateNotification(notificationId, {
               type: 'error',
@@ -435,7 +453,7 @@ export function TasksRoute() {
           }
         },
       })
-      void invalidateTaskViews(task.id, task.group.id)
+      void invalidateTaskViews(task.id, task.group.id, canCreateFollowUpOccurrence(task))
     },
     onError: (error, task, context) => {
       if (context?.snapshots) {
@@ -507,7 +525,11 @@ export function TasksRoute() {
             }
             dismissNotification(notificationId)
             notifySuccess(`Restored ${variables.task.title}.`)
-            await invalidateTaskViews(variables.task.id, variables.task.group.id)
+            await invalidateTaskViews(
+              variables.task.id,
+              variables.task.group.id,
+              shouldRefetchOpenListsAfterDelete(variables.scope, variables.task)
+            )
           } catch (error) {
             updateNotification(notificationId, {
               type: 'error',
@@ -518,7 +540,11 @@ export function TasksRoute() {
           }
         },
       })
-      void invalidateTaskViews(variables.task.id, variables.task.group.id)
+      void invalidateTaskViews(
+        variables.task.id,
+        variables.task.group.id,
+        shouldRefetchOpenListsAfterDelete(variables.scope, variables.task)
+      )
     },
     onError: (error, variables, context) => {
       if (context?.snapshots) {
@@ -555,7 +581,7 @@ export function TasksRoute() {
           <GroupTabs
             groups={groupsQuery.data}
             inboxGroupId={sessionQuery.data?.inbox_group_id}
-            selectedGroupId={selectedGroupId}
+            selectedGroupId={effectiveGroupId}
             onSelectGroup={(groupId) => setSearchParams({ group: groupId })}
           />
         ) : null}
@@ -646,7 +672,7 @@ export function TasksRoute() {
           <Link
             to={{
               pathname: '/tasks/completed',
-              search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
+              search: effectiveGroupId ? `?group=${effectiveGroupId}` : ''
             }}
             className="inline-flex items-center gap-2 rounded-pill border border-outline/20 bg-surface-container px-4 py-2 text-sm font-medium text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface hover:shadow-ambient"
           >
@@ -678,7 +704,7 @@ export function TasksRoute() {
           await refreshTaskData()
         }}
         csrfToken={sessionQuery.data?.csrf_token ?? ''}
-        defaultGroupId={resolvedGroupId ?? undefined}
+        defaultGroupId={resolvedGroupId ?? sessionQuery.data?.inbox_group_id ?? undefined}
       />
 
       <TaskDeleteDialog

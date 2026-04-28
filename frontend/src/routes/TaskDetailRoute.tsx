@@ -28,6 +28,7 @@ import {
   snapshotTaskQueries,
   updateTaskDetailCache,
 } from '../lib/taskQueryCache'
+import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/queryTuning'
 
 type DraftState = {
   title: string
@@ -154,16 +155,24 @@ export function TaskDetailRoute() {
     retry: false,
   })
 
-  const groupsQuery = useQuery({
-    queryKey: ['groups'],
-    queryFn: listGroups,
-    enabled: sessionQuery.data?.signed_in === true,
-  })
-
   const taskQuery = useQuery({
     queryKey: ['task-detail', taskId],
     queryFn: () => getTaskDetail(taskId as string),
     enabled: sessionQuery.data?.signed_in === true && Boolean(taskId),
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
+  })
+
+  const shouldLoadGroups = Boolean(
+    sessionQuery.data?.signed_in === true && (isEditMode || taskQuery.data?.needs_review)
+  )
+
+  const groupsQuery = useQuery({
+    queryKey: ['groups'],
+    queryFn: listGroups,
+    enabled: shouldLoadGroups,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
   useEffect(() => {
@@ -192,12 +201,29 @@ export function TaskDetailRoute() {
     return csrfToken
   }
 
-  async function refreshTaskData() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['tasks'] }),
-      queryClient.invalidateQueries({ queryKey: ['groups'] }),
+  async function refreshTaskData(groupIds: Array<string | null | undefined> = []) {
+    const currentTask = taskQuery.data
+    const status = currentTask?.status ?? 'open'
+    const affectedGroupIds = new Set(
+      [...groupIds, currentTask?.group.id].filter((value): value is string => Boolean(value))
+    )
+    const invalidations = [
+      queryClient.invalidateQueries({ queryKey: ['groups'], refetchType: 'inactive' as const }),
       queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] }),
-    ])
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', status] }),
+    ]
+
+    for (const groupId of affectedGroupIds) {
+      invalidations.push(queryClient.invalidateQueries({ queryKey: ['tasks', groupId, status] }))
+    }
+
+    if (status === 'open') {
+      invalidations.push(
+        queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open', 'infinite'] })
+      )
+    }
+
+    await Promise.all(invalidations)
   }
 
   function markSubtaskPending(subtaskId: string, isPending: boolean) {
@@ -262,7 +288,11 @@ export function TaskDetailRoute() {
         adjustGroupOpenCount(queryClient, optimisticTask.group.id, 1)
       }
 
-      return { snapshots }
+      return {
+        snapshots,
+        previousGroupId: previousTask.group.id,
+        nextGroupId: optimisticTask.group.id,
+      }
     },
     mutationFn: async () => {
       if (!taskId || !draft) {
@@ -283,10 +313,10 @@ export function TaskDetailRoute() {
         csrfToken
       )
     },
-    onSuccess: async (task) => {
+    onSuccess: async (task, _variables, context) => {
       syncTaskCaches(task)
       notifySuccess('Task saved.')
-      await refreshTaskData()
+      await refreshTaskData([context?.previousGroupId, context?.nextGroupId, task.group.id])
       await returnToTasks(true)
     },
     onError: (error, _variables, context) => {
@@ -495,11 +525,7 @@ export function TaskDetailRoute() {
             syncTaskCaches(restoredTask)
             dismissNotification(notificationId)
             notifySuccess(`Restored ${taskTitle}.`)
-            await Promise.all([
-              queryClient.invalidateQueries({ queryKey: ['tasks'] }),
-              queryClient.invalidateQueries({ queryKey: ['groups'] }),
-              queryClient.invalidateQueries({ queryKey: ['task-detail', deletedTaskId] }),
-            ])
+            await refreshTaskData([restoredTask.group.id])
           } catch (error) {
             updateNotification(notificationId, {
               type: 'error',

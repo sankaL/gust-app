@@ -923,16 +923,6 @@ def list_tasks(
     if not include_deleted:
         conditions.append(tasks.c.deleted_at.is_(None))
 
-    # Pre-aggregated subquery count via LEFT JOIN (avoids O(n) scalar subqueries)
-    subtask_counts = (
-        sa.select(
-            subtasks.c.task_id,
-            sa.func.count(subtasks.c.id).label("subtask_count"),
-        )
-        .group_by(subtasks.c.task_id)
-        .subquery()
-    )
-
     # Apply cursor-based pagination if provided
     if cursor:
         try:
@@ -955,7 +945,6 @@ def list_tasks(
     stmt = (
         sa.select(
             tasks,
-            subtask_counts.c.subtask_count,
             groups.c.id.label("joined_group_id"),
             groups.c.user_id.label("joined_group_user_id"),
             groups.c.name.label("joined_group_name"),
@@ -967,7 +956,6 @@ def list_tasks(
             groups,
             sa.and_(groups.c.id == tasks.c.group_id, groups.c.user_id == tasks.c.user_id),
         )
-        .outerjoin(subtask_counts, tasks.c.id == subtask_counts.c.task_id)
         .where(*conditions)
         .order_by(tasks.c.created_at.desc(), tasks.c.id.desc())
         .limit(limit + 1)
@@ -985,9 +973,28 @@ def list_tasks(
         cursor_data = {"created_at": last_row.created_at.isoformat(), "id": str(last_row.id)}
         next_cursor = base64.b64encode(json.dumps(cursor_data).encode("utf-8")).decode("utf-8")
 
-    return [
-        TaskWithGroupRecord(task=_row_to_task(row), group=_row_to_joined_group(row)) for row in rows
-    ], has_more, next_cursor
+    task_ids = [str(row.id) for row in rows]
+    subtask_counts_by_task_id: dict[str, int] = {}
+    if task_ids:
+        count_rows = connection.execute(
+            sa.select(
+                subtasks.c.task_id,
+                sa.func.count(subtasks.c.id).label("subtask_count"),
+            )
+            .where(subtasks.c.user_id == user_id, subtasks.c.task_id.in_(task_ids))
+            .group_by(subtasks.c.task_id)
+        ).fetchall()
+        subtask_counts_by_task_id = {
+            str(row.task_id): int(row.subtask_count) for row in count_rows
+        }
+
+    task_rows: list[TaskWithGroupRecord] = []
+    for row in rows:
+        task = _row_to_task(row)
+        task.subtask_count = subtask_counts_by_task_id.get(task.id, 0)
+        task_rows.append(TaskWithGroupRecord(task=task, group=_row_to_joined_group(row)))
+
+    return task_rows, has_more, next_cursor
 
 
 def get_open_task_in_series(
