@@ -1,7 +1,6 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
 
-export const TASK_SCREEN_STALE_TIME_MS = 5 * 60 * 1000
-export const TASK_SCREEN_GC_TIME_MS = 15 * 60 * 1000
+export { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from './queryTuning'
 
 export type TaskStatusSegment = 'open' | 'completed'
 

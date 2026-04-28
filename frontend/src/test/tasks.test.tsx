@@ -162,6 +162,37 @@ afterEach(() => {
 })
 
 describe('tasks flow', () => {
+  it('defaults the task route to all tasks without first fetching Inbox tasks', async () => {
+    const taskRequests: string[] = []
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?')) {
+        taskRequests.push(url)
+        return Promise.resolve(
+          jsonResponse({
+            items: [],
+            has_more: false,
+            next_cursor: null
+          })
+        )
+      }
+      return Promise.resolve(jsonResponse({}))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks'])
+
+    expect(await screen.findByText('No tasks across any group')).toBeInTheDocument()
+    expect(taskRequests.some((url) => url.includes('status=open'))).toBe(true)
+    expect(taskRequests.some((url) => url.includes('group_id=inbox-1'))).toBe(false)
+  })
+
   it('renders the selected group and review indicators from URL state', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = requestUrl(input)
@@ -1056,6 +1087,7 @@ describe('tasks flow', () => {
   })
 
   it('opens non-review task detail in read mode first and enters edit mode from the sticky dock', async () => {
+    let groupRequestCount = 0
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
       const method = init?.method ?? 'GET'
@@ -1064,6 +1096,7 @@ describe('tasks flow', () => {
         return Promise.resolve(jsonResponse(buildSessionResponse()))
       }
       if (url.includes('/groups')) {
+        groupRequestCount += 1
         return Promise.resolve(jsonResponse(buildGroupsResponse()))
       }
       if (url.endsWith('/tasks/task-1') && method === 'GET') {
@@ -1097,15 +1130,13 @@ describe('tasks flow', () => {
     expect(screen.getByRole('button', { name: 'Edit task' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save and return' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back to tasks' })).toBeInTheDocument()
-    expect(fetchMock.mock.calls.filter(([input]) => requestUrl(input).includes('/groups'))).toHaveLength(0)
+    expect(groupRequestCount).toBe(0)
 
     await user.click(screen.getByRole('button', { name: 'Edit task' }))
 
     expect(await screen.findByRole('button', { name: 'Save and return' })).toBeInTheDocument()
     expect(screen.getByText('Editing task')).toBeInTheDocument()
-    await waitFor(() => {
-      expect(fetchMock.mock.calls.filter(([input]) => requestUrl(input).includes('/groups'))).toHaveLength(1)
-    })
+    await waitFor(() => expect(groupRequestCount).toBe(1))
   })
 
   it('preserves unsaved task edits when a subtask mutation refetches detail', async () => {
@@ -1254,6 +1285,8 @@ describe('tasks flow', () => {
   })
 
   it('asks recurring delete scope and sends series delete when selected', async () => {
+    let seriesDeleted = false
+    let postDeleteListRequestCount = 0
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
       const method = init?.method ?? 'GET'
@@ -1265,25 +1298,55 @@ describe('tasks flow', () => {
         return Promise.resolve(jsonResponse(buildGroupsResponse()))
       }
       if (url.includes('/tasks?group_id=inbox-1')) {
+        if (seriesDeleted) {
+          postDeleteListRequestCount += 1
+          return Promise.resolve(
+            jsonResponse({
+              items: [],
+              has_more: false,
+              next_cursor: null
+            })
+          )
+        }
         return Promise.resolve(
-          jsonResponse([
-            {
-              id: 'task-1',
-              title: 'Weekly planning',
-              series_id: 'series-1',
-              status: 'open',
-              needs_review: false,
-              due_date: null,
-              reminder_at: null,
-              due_bucket: 'no_date',
-              group: { id: 'inbox-1', name: 'Inbox', is_system: true },
-              completed_at: null,
-              deleted_at: null
-            }
-          ])
+          jsonResponse({
+            items: [
+              {
+                id: 'task-1',
+                title: 'Weekly planning',
+                series_id: 'series-1',
+                status: 'open',
+                needs_review: false,
+                due_date: null,
+                reminder_at: null,
+                due_bucket: 'no_date',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              },
+              {
+                id: 'task-2',
+                title: 'Weekly planning tomorrow',
+                series_id: 'series-1',
+                status: 'open',
+                needs_review: false,
+                due_date: null,
+                reminder_at: null,
+                due_bucket: 'no_date',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              }
+            ],
+            has_more: false,
+            next_cursor: null
+          })
         )
       }
       if (url.includes('/tasks/task-1?scope=series') && method === 'DELETE') {
+        seriesDeleted = true
         return Promise.resolve(
           jsonResponse({
             id: 'task-1',
@@ -1310,7 +1373,7 @@ describe('tasks flow', () => {
     renderTaskRoute(['/tasks?group=inbox-1'])
     const user = userEvent.setup()
 
-    expect(await screen.findByText('Swipe right to complete')).toBeInTheDocument()
+    expect((await screen.findAllByText('Swipe right to complete')).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: 'Delete Weekly planning' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Expand Weekly planning' }))
@@ -1330,6 +1393,7 @@ describe('tasks flow', () => {
     })
 
     expect(await screen.findByText(/Deleted Weekly planning/i)).toBeInTheDocument()
+    await waitFor(() => expect(postDeleteListRequestCount).toBeGreaterThan(0))
   })
 
   it('waits for the full task detail response before rendering a recurring task', async () => {

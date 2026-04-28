@@ -168,12 +168,14 @@ export function TaskDetailRoute() {
     gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
+  const shouldLoadGroups = Boolean(
+    sessionQuery.data?.signed_in === true && (isEditMode || taskQuery.data?.needs_review)
+  )
+
   const groupsQuery = useQuery({
     queryKey: ['groups'],
     queryFn: listGroups,
-    enabled:
-      sessionQuery.data?.signed_in === true &&
-      (isEditMode || taskQuery.data?.needs_review === true),
+    enabled: shouldLoadGroups,
     staleTime: TASK_SCREEN_STALE_TIME_MS,
     gcTime: TASK_SCREEN_GC_TIME_MS,
   })

@@ -373,8 +373,33 @@ export function TasksRoute() {
   async function invalidateTaskViews(
     taskId: string,
     groupId: string,
-    statuses: TaskStatusSegment[] = ['open']
+    statusesOrShouldRefetchOpenLists: TaskStatusSegment[] | boolean = ['open']
   ) {
+    if (!Array.isArray(statusesOrShouldRefetchOpenLists)) {
+      if (!statusesOrShouldRefetchOpenLists) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['task-detail', taskId],
+            refetchType: 'inactive',
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['groups'],
+            refetchType: 'inactive',
+          }),
+        ])
+        return
+      }
+
+      await refreshTaskScreenQueries(queryClient, {
+        taskId,
+        groupIds: [groupId],
+        statuses: ['open'],
+        includeAllOpen: true,
+      })
+      return
+    }
+
+    const statuses = statusesOrShouldRefetchOpenLists
     await refreshTaskScreenQueries(queryClient, {
       taskId,
       groupIds: [groupId],
@@ -382,6 +407,14 @@ export function TasksRoute() {
       includeAllOpen: true,
       includeAllCompleted: statuses.includes('completed'),
     })
+  }
+
+  function canCreateFollowUpOccurrence(task: TaskSummary) {
+    return Boolean(task.series_id || task.recurrence_frequency)
+  }
+
+  function shouldRefetchOpenListsAfterDelete(scope: TaskDeleteScope, task: TaskSummary) {
+    return scope === 'series' || (scope === 'occurrence' && canCreateFollowUpOccurrence(task))
   }
 
   const completeMutation = useMutation({
@@ -525,7 +558,11 @@ export function TasksRoute() {
             }
             dismissNotification(notificationId)
             notifySuccess(`Restored ${variables.task.title}.`)
-            await invalidateTaskViews(variables.task.id, variables.task.group.id)
+            await invalidateTaskViews(
+              variables.task.id,
+              variables.task.group.id,
+              shouldRefetchOpenListsAfterDelete(variables.scope, variables.task)
+            )
           } catch (error) {
             updateNotification(notificationId, {
               type: 'error',
@@ -536,7 +573,11 @@ export function TasksRoute() {
           }
         },
       })
-      void invalidateTaskViews(variables.task.id, variables.task.group.id)
+      void invalidateTaskViews(
+        variables.task.id,
+        variables.task.group.id,
+        shouldRefetchOpenListsAfterDelete(variables.scope, variables.task)
+      )
     },
     onError: (error, variables, context) => {
       if (context?.snapshots) {

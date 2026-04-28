@@ -415,6 +415,72 @@ def test_list_tasks_applies_sorting_and_user_scope(app: FastAPI, client: TestCli
     ]
 
 
+def test_list_tasks_returns_subtask_counts_from_returned_page(
+    app: FastAPI, client: TestClient
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Projects")
+    other_user_inbox_id = _seed_user(client, user_id=OTHER_USER_ID)
+
+    parent_task_id = _seed_task(client, user_id=USER_ID, group_id=group_id, title="Parent task")
+    single_subtask_task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Single subtask task",
+    )
+    other_task_id = _seed_task(
+        client,
+        user_id=OTHER_USER_ID,
+        group_id=other_user_inbox_id,
+        title="Other user parent",
+    )
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        connection.execute(
+            subtasks.insert(),
+            [
+                {
+                    "id": str(uuid.uuid4()),
+                    "task_id": parent_task_id,
+                    "user_id": USER_ID,
+                    "title": "First child",
+                    "is_completed": False,
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "task_id": parent_task_id,
+                    "user_id": USER_ID,
+                    "title": "Second child",
+                    "is_completed": False,
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "task_id": single_subtask_task_id,
+                    "user_id": USER_ID,
+                    "title": "Only child",
+                    "is_completed": False,
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "task_id": other_task_id,
+                    "user_id": OTHER_USER_ID,
+                    "title": "Other child",
+                    "is_completed": False,
+                },
+            ],
+        )
+
+    response = client.get(f"/tasks?group_id={group_id}", headers=headers)
+
+    assert response.status_code == 200
+    subtask_counts = {item["title"]: item["subtask_count"] for item in response.json()["items"]}
+    assert subtask_counts == {
+        "Parent task": 2,
+        "Single subtask task": 1,
+    }
+
+
 def test_update_task_keeps_digest_only_reminder_state_and_series_id(
     app: FastAPI,
     client: TestClient,
