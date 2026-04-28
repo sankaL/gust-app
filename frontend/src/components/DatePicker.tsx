@@ -244,7 +244,8 @@ export function DatePicker({
 
     const rect = triggerRef.current.getBoundingClientRect()
     const viewportPadding = 16
-    const calendarWidth = Math.min(320, window.innerWidth - viewportPadding * 2)
+    const availableWidth = window.innerWidth - viewportPadding * 2
+    const calendarWidth = Math.min(Math.max(rect.width, 280), availableWidth)
     const calendarHeight = mode === 'datetime' ? 420 : 380
 
     let left = rect.left
@@ -392,11 +393,11 @@ export function DatePicker({
             </svg>
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2 px-2">
             <select
               value={getMonth(viewDate)}
               onChange={(e) => handleMonthChange(Number(e.target.value))}
-              className="cursor-pointer rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary"
+              className="min-w-0 flex-1 cursor-pointer rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary"
             >
               {MONTHS.map((month, index) => (
                 <option key={month} value={index}>{month}</option>
@@ -406,7 +407,7 @@ export function DatePicker({
             <select
               value={getYear(viewDate)}
               onChange={(e) => handleYearChange(Number(e.target.value))}
-              className="cursor-pointer rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary"
+              className="min-w-0 flex-1 cursor-pointer rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary"
             >
               {yearOptions.map((year) => (
                 <option key={year} value={year}>{year}</option>
@@ -457,7 +458,7 @@ export function DatePicker({
                 onClick={() => !isDisabled && handleDateSelect(day)}
                 disabled={isDisabled}
                 className={`
-                  h-9 w-9 rounded-lg text-sm font-medium transition-all
+                  flex h-9 w-full items-center justify-center rounded-lg text-sm font-medium transition-all
                   ${isSelected
                     ? 'bg-primary text-surface'
                     : isToday

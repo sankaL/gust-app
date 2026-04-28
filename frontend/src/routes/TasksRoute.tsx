@@ -26,6 +26,7 @@ import {
   updateTaskDetailCache,
 } from '../lib/taskQueryCache'
 import { AllTasksView } from '../components/AllTasksView'
+import { useAppShellActions } from '../components/AppShellActions'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { useNotifications } from '../components/Notifications'
 import { OpenTaskCard } from '../components/OpenTaskCard'
@@ -146,8 +147,8 @@ function GroupTabs({ groups, inboxGroupId, selectedGroupId, onSelectGroup }: Gro
         </button>
       )}
 
-      {/* Other Dropdown - Takes 50% width */}
-      <div ref={dropdownRef} className="relative min-w-0 flex-1 max-w-[52%] sm:max-w-[50%]">
+      {/* Other Dropdown */}
+      <div ref={dropdownRef} className="relative min-w-0 flex-1">
         <button
           type="button"
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -260,6 +261,7 @@ function SwipeTaskCard({ task, onOpen, onPrepareOpen, onComplete, onDelete, isBu
 export function TasksRoute() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const shellActions = useAppShellActions()
   const [searchParams, setSearchParams] = useSearchParams()
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
   const [pendingDeleteTask, setPendingDeleteTask] = useState<TaskSummary | null>(null)
@@ -599,6 +601,23 @@ export function TasksRoute() {
   ] as const
   const openTaskItems = normalizeOpenTaskItems(tasksQuery.data)
 
+  useEffect(() => {
+    if (isAllView) {
+      return undefined
+    }
+
+    shellActions?.setTopBarAction(
+      <TaskScreenRefreshButton
+        isRefreshing={isRefreshingGroupedTasks}
+        label="Refresh tasks"
+        onRefresh={refreshCurrentTasks}
+      />
+    )
+
+    return () => {
+      shellActions?.setTopBarAction(null)
+    }
+  }, [isAllView, isRefreshingGroupedTasks, refreshCurrentTasks, shellActions])
 
   return (
     <SessionGuard
@@ -640,11 +659,6 @@ export function TasksRoute() {
         ) : (
           <PullToRefresh isRefreshing={isRefreshingGroupedTasks} onRefresh={refreshCurrentTasks}>
             <div className="space-y-3">
-              <TaskScreenRefreshButton
-                isRefreshing={isRefreshingGroupedTasks}
-                label="Refresh tasks"
-                onRefresh={refreshCurrentTasks}
-              />
             {tasksQuery.isLoading ? (
               <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
                 Loading open tasks.

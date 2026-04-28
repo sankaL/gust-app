@@ -42,15 +42,15 @@ export function TaskScreenRefreshButton({
         disabled={isRefreshing}
         aria-label={label}
         title={label}
-        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-pill border border-outline/20 bg-surface-container text-on-surface-variant shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition hover:bg-surface-container-high hover:text-on-surface disabled:cursor-wait disabled:opacity-70"
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/35 bg-[radial-gradient(circle_at_top,_rgba(196,181,253,0.26),_rgba(36,36,36,0.98)_68%)] text-primary shadow-[0_4px_0_rgba(23,16,51,0.92),_0_8px_14px_rgba(0,0,0,0.34),_inset_0_1px_2px_rgba(255,255,255,0.14)] outline-none transition-all duration-200 hover:-translate-y-[1px] hover:border-primary/55 hover:text-white hover:shadow-[0_5px_0_rgba(23,16,51,0.92),_0_11px_18px_rgba(0,0,0,0.42),_inset_0_1px_3px_rgba(255,255,255,0.18)] active:translate-y-[4px] active:shadow-[0_0px_0_rgba(23,16,51,0.92),_0_3px_7px_rgba(0,0,0,0.38),_inset_0_2px_5px_rgba(0,0,0,0.24)] disabled:cursor-wait disabled:opacity-70 disabled:hover:translate-y-0"
       >
         <svg
           aria-hidden="true"
-          className={['h-4 w-4', isRefreshing ? 'animate-spin' : ''].join(' ')}
+          className={['h-5 w-5 drop-shadow-[0_0_8px_rgba(186,158,255,0.32)]', isRefreshing ? 'animate-spin' : ''].join(' ')}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          strokeWidth={2}
+          strokeWidth={2.25}
         >
           <path
             strokeLinecap="round"

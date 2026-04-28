@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { ApiError, getSessionStatus, logoutSession } from '../lib/api'
+import { AppShellActionsContext } from './AppShellActions'
 import { Button } from './Button'
 import { Card } from './Card'
 import { useNotifications } from './Notifications'
@@ -72,7 +73,15 @@ export function AppShell() {
   const [needRefresh, setNeedRefresh] = useState(false)
   const [offlineReady, setOfflineReady] = useState(false)
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
+  const [topBarAction, setTopBarAction] = useState<ReactNode | null>(null)
   const accountMenuRef = useRef<HTMLDivElement | null>(null)
+
+  const shellActions = useMemo(
+    () => ({
+      setTopBarAction,
+    }),
+    []
+  )
 
   const { updateServiceWorker } = useRegisterSW({
     onNeedRefresh() {
@@ -245,6 +254,7 @@ export function AppShell() {
                   {installPrompt ? 'Install' : 'Add to Home'}
                 </Button>
               ) : null}
+              {topBarAction}
               <div className="relative" ref={accountMenuRef}>
                 <button
                   type="button"
@@ -390,9 +400,11 @@ export function AppShell() {
           </nav>
         </header>
 
-        <main className="flex-1">
-          <Outlet />
-        </main>
+        <AppShellActionsContext.Provider value={shellActions}>
+          <main className="flex-1">
+            <Outlet />
+          </main>
+        </AppShellActionsContext.Provider>
       </div>
     </div>
   )

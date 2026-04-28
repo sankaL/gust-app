@@ -8,6 +8,7 @@ import {
   TASK_SCREEN_STALE_TIME_MS,
 } from '../lib/taskScreenCache'
 import { OpenTaskCard } from './OpenTaskCard'
+import { useAppShellActions } from './AppShellActions'
 import { PullToRefresh, TaskScreenRefreshButton } from './TaskScreenRefresh'
 
 interface AllTasksViewProps {
@@ -108,6 +109,7 @@ export function AllTasksView({
   busyTaskIds = [],
 }: AllTasksViewProps) {
   const queryClient = useQueryClient()
+  const shellActions = useAppShellActions()
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -130,6 +132,20 @@ export function AllTasksView({
   )
   const hasMore = Boolean(allTasksQuery.hasNextPage)
   const todayIsoDate = useMemo(() => getTodayIsoDate(userTimezone), [userTimezone])
+
+  useEffect(() => {
+    shellActions?.setTopBarAction(
+      <TaskScreenRefreshButton
+        isRefreshing={isRefreshingAllTasks}
+        label="Refresh tasks"
+        onRefresh={refreshAllTasks}
+      />
+    )
+
+    return () => {
+      shellActions?.setTopBarAction(null)
+    }
+  }, [isRefreshingAllTasks, refreshAllTasks, shellActions])
 
   const sectionedTasks = useMemo(() => {
     const result: Record<string, TaskSummary[]> = {
@@ -238,11 +254,6 @@ export function AllTasksView({
   if (allTasksQuery.isError) {
     return (
       <div className="space-y-3">
-        <TaskScreenRefreshButton
-          isRefreshing={isRefreshingAllTasks}
-          label="Refresh tasks"
-          onRefresh={refreshAllTasks}
-        />
         <div className="flex items-start gap-3 rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.4)]">
           <svg className="w-5 h-5 shrink-0 mt-0.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -259,11 +270,6 @@ export function AllTasksView({
     return (
       <PullToRefresh isRefreshing={isRefreshingAllTasks} onRefresh={refreshAllTasks}>
         <div className="space-y-3">
-          <TaskScreenRefreshButton
-            isRefreshing={isRefreshingAllTasks}
-            label="Refresh tasks"
-            onRefresh={refreshAllTasks}
-          />
           <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
             <p className="font-display text-2xl text-on-surface">No tasks across any group</p>
             <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
@@ -282,11 +288,6 @@ export function AllTasksView({
       getScrollTop={() => parentRef.current?.scrollTop ?? window.scrollY}
     >
     <div className="flex flex-col gap-3">
-      <TaskScreenRefreshButton
-        isRefreshing={isRefreshingAllTasks}
-        label="Refresh tasks"
-        onRefresh={refreshAllTasks}
-      />
       {/* Virtualized scroll container */}
       <div
         ref={parentRef}

@@ -114,7 +114,6 @@ def parse_env_file(path: Path) -> dict[str, str]:
 
 def port_is_available(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             sock.bind(("127.0.0.1", port))
         except OSError:
@@ -199,14 +198,21 @@ def render_supabase_config(
 
 
 def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
-    if all(key in existing_values for key in PORT_DEFAULTS):
-        return {key: int(existing_values[key]) for key in PORT_DEFAULTS}
-
+    """Return ports, reusing existing ones only if they are still available."""
     reserved: set[int] = set()
-    return {
-        key: choose_port(default_port, reserved)
-        for key, default_port in PORT_DEFAULTS.items()
-    }
+    resolved: dict[str, int] = {}
+
+    for key, default_port in PORT_DEFAULTS.items():
+        existing = existing_values.get(key)
+        if existing is not None:
+            candidate = int(existing)
+            if candidate not in reserved and port_is_available(candidate):
+                reserved.add(candidate)
+                resolved[key] = candidate
+                continue
+        resolved[key] = choose_port(default_port, reserved)
+
+    return resolved
 
 
 def build_runtime_values(
