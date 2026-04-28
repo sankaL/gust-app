@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
+import { PullToRefresh, TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
 import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
 import { TaskFormFields } from '../components/TaskFormFields'
 import {
@@ -28,7 +29,11 @@ import {
   snapshotTaskQueries,
   updateTaskDetailCache,
 } from '../lib/taskQueryCache'
-import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/queryTuning'
+import {
+  refreshTaskScreenQueries,
+  TASK_SCREEN_GC_TIME_MS,
+  TASK_SCREEN_STALE_TIME_MS,
+} from '../lib/taskScreenCache'
 
 type DraftState = {
   title: string
@@ -201,30 +206,20 @@ export function TaskDetailRoute() {
     return csrfToken
   }
 
-  async function refreshTaskData(groupIds: Array<string | null | undefined> = []) {
-    const currentTask = taskQuery.data
-    const status = currentTask?.status ?? 'open'
-    const affectedGroupIds = new Set(
-      [...groupIds, currentTask?.group.id].filter((value): value is string => Boolean(value))
-    )
-    const invalidations = [
-      queryClient.invalidateQueries({ queryKey: ['groups'], refetchType: 'inactive' as const }),
-      queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', status] }),
-    ]
-
-    for (const groupId of affectedGroupIds) {
-      invalidations.push(queryClient.invalidateQueries({ queryKey: ['tasks', groupId, status] }))
-    }
-
-    if (status === 'open') {
-      invalidations.push(
-        queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open', 'infinite'] })
-      )
-    }
-
-    await Promise.all(invalidations)
-  }
+  const refreshTaskData = useCallback(
+    (groupIds: Array<string | null | undefined> = [taskQuery.data?.group.id]) =>
+      refreshTaskScreenQueries(queryClient, {
+        taskId,
+        groupIds,
+        statuses: ['open', 'completed'],
+        includeAllOpen: true,
+        includeAllCompleted: true,
+      }),
+    [queryClient, taskId, taskQuery.data?.group.id]
+  )
+  const isRefreshingTaskDetail =
+    (taskQuery.isFetching && !taskQuery.isLoading) ||
+    (groupsQuery.isFetching && !groupsQuery.isLoading)
 
   function markSubtaskPending(subtaskId: string, isPending: boolean) {
     setPendingSubtaskIds((current) => {
@@ -525,7 +520,13 @@ export function TaskDetailRoute() {
             syncTaskCaches(restoredTask)
             dismissNotification(notificationId)
             notifySuccess(`Restored ${taskTitle}.`)
-            await refreshTaskData([restoredTask.group.id])
+            await refreshTaskScreenQueries(queryClient, {
+              taskId: deletedTaskId,
+              groupIds: [restoredTask.group.id],
+              statuses: ['open', 'completed'],
+              includeAllOpen: true,
+              includeAllCompleted: true,
+            })
           } catch (error) {
             updateNotification(notificationId, {
               type: 'error',
@@ -579,10 +580,17 @@ export function TaskDetailRoute() {
       eyebrow="Focused editing"
       description="Refine the title, group, dates, reminders, and subtasks for a single task."
     >
+      <PullToRefresh isRefreshing={isRefreshingTaskDetail} onRefresh={refreshTaskData}>
       <section
         className="space-y-5"
         style={{ paddingBottom: 'calc(12.5rem + var(--safe-area-bottom))' }}
       >
+        <TaskScreenRefreshButton
+          isRefreshing={isRefreshingTaskDetail}
+          label="Refresh task"
+          onRefresh={refreshTaskData}
+        />
+
         {taskQuery.isError ? (
           <div className="rounded-card bg-[rgba(80,18,18,0.92)] p-6 text-sm text-red-100 shadow-[0_18px_36px_rgba(0,0,0,0.4)]">
             {buildFriendlyMessage(taskQuery.error, 'Task detail could not be loaded.')}
@@ -911,6 +919,7 @@ export function TaskDetailRoute() {
           </div>
         ) : null}
       </section>
+      </PullToRefresh>
     </SessionGuard>
   )
 }

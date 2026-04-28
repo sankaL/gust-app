@@ -13,6 +13,11 @@ import {
   listGroups,
   updateGroup
 } from '../lib/api'
+import {
+  refreshTaskScreenQueries,
+  TASK_SCREEN_GC_TIME_MS,
+  TASK_SCREEN_STALE_TIME_MS,
+} from '../lib/taskScreenCache'
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -41,7 +46,9 @@ export function ManageGroupsRoute() {
   const groupsQuery = useQuery({
     queryKey: ['groups'],
     queryFn: listGroups,
-    enabled: sessionQuery.data?.signed_in === true
+    enabled: sessionQuery.data?.signed_in === true,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
   function requireCsrf() {
@@ -53,11 +60,13 @@ export function ManageGroupsRoute() {
   }
 
   async function refreshGroups() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks'] }),
-      queryClient.invalidateQueries({ queryKey: ['task-detail'] })
-    ])
+    await refreshTaskScreenQueries(queryClient, {
+      statuses: ['open', 'completed'],
+      includeAllOpen: true,
+      includeAllCompleted: true,
+      includeGroupedTaskLists: true,
+      includeTaskDetails: true,
+    })
   }
 
   const createGroupMutation = useMutation({

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -25,13 +25,19 @@ import {
   snapshotTaskQueries,
   updateTaskDetailCache,
 } from '../lib/taskQueryCache'
-import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/queryTuning'
 import { AllTasksView } from '../components/AllTasksView'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { useNotifications } from '../components/Notifications'
 import { OpenTaskCard } from '../components/OpenTaskCard'
 import { SessionGuard } from '../components/SessionGuard'
+import { PullToRefresh, TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
 import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
+import {
+  refreshTaskScreenQueries,
+  TASK_SCREEN_GC_TIME_MS,
+  TASK_SCREEN_STALE_TIME_MS,
+  type TaskStatusSegment,
+} from '../lib/taskScreenCache'
 
 // Icon Components (inline SVGs for consistency with codebase)
 function LayersIcon({ className = 'w-4 h-4' }: { className?: string }) {
@@ -296,6 +302,20 @@ export function TasksRoute() {
     gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
+  const refreshCurrentTasks = useCallback(
+    () =>
+      refreshTaskScreenQueries(queryClient, {
+        groupIds: [resolvedGroupId],
+        statuses: ['open'],
+        includeAllOpen: true,
+      }),
+    [queryClient, resolvedGroupId]
+  )
+  const isRefreshingGroupedTasks =
+    !isAllView &&
+    ((tasksQuery.isFetching && !tasksQuery.isLoading) ||
+      (groupsQuery.isFetching && !groupsQuery.isLoading))
+
   function requireCsrf(session: SessionStatus | undefined) {
     const csrfToken = session?.csrf_token
     if (!csrfToken) {
@@ -304,12 +324,12 @@ export function TasksRoute() {
     return csrfToken
   }
 
-  async function refreshTaskData() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', resolvedGroupId, 'open'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] })
-    ])
+  async function refreshTaskData(groupIds: Array<string | null | undefined> = [resolvedGroupId]) {
+    await refreshTaskScreenQueries(queryClient, {
+      groupIds,
+      statuses: ['open'],
+      includeAllOpen: true,
+    })
   }
 
   function markTaskPending(taskId: string, isPending: boolean) {
@@ -325,6 +345,8 @@ export function TasksRoute() {
     void queryClient.prefetchQuery({
       queryKey: ['task-detail', taskId],
       queryFn: () => getTaskDetail(taskId),
+      staleTime: TASK_SCREEN_STALE_TIME_MS,
+      gcTime: TASK_SCREEN_GC_TIME_MS,
     })
   }
 
@@ -351,29 +373,40 @@ export function TasksRoute() {
   async function invalidateTaskViews(
     taskId: string,
     groupId: string,
-    shouldRefetchOpenLists: boolean
+    statusesOrShouldRefetchOpenLists: TaskStatusSegment[] | boolean = ['open']
   ) {
-    const invalidations = [
-      queryClient.invalidateQueries({
-        queryKey: ['task-detail', taskId],
-        refetchType: 'inactive' as const,
-      }),
-    ]
+    if (!Array.isArray(statusesOrShouldRefetchOpenLists)) {
+      if (!statusesOrShouldRefetchOpenLists) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['task-detail', taskId],
+            refetchType: 'inactive',
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['groups'],
+            refetchType: 'inactive',
+          }),
+        ])
+        return
+      }
 
-    if (shouldRefetchOpenLists) {
-      invalidations.push(
-        queryClient.invalidateQueries({ queryKey: ['groups'] }),
-        queryClient.invalidateQueries({ queryKey: ['tasks', groupId, 'open'] }),
-        queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] }),
-        queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open', 'infinite'] }),
-      )
-    } else {
-      invalidations.push(
-        queryClient.invalidateQueries({ queryKey: ['groups'], refetchType: 'inactive' as const })
-      )
+      await refreshTaskScreenQueries(queryClient, {
+        taskId,
+        groupIds: [groupId],
+        statuses: ['open'],
+        includeAllOpen: true,
+      })
+      return
     }
 
-    await Promise.all(invalidations)
+    const statuses = statusesOrShouldRefetchOpenLists
+    await refreshTaskScreenQueries(queryClient, {
+      taskId,
+      groupIds: [groupId],
+      statuses,
+      includeAllOpen: true,
+      includeAllCompleted: statuses.includes('completed'),
+    })
   }
 
   function canCreateFollowUpOccurrence(task: TaskSummary) {
@@ -442,7 +475,7 @@ export function TasksRoute() {
             }
             dismissNotification(notificationId)
             notifySuccess(`Moved ${task.title} back to To-do.`)
-            await invalidateTaskViews(task.id, task.group.id, canCreateFollowUpOccurrence(task))
+            await invalidateTaskViews(task.id, task.group.id, ['open', 'completed'])
           } catch (error) {
             updateNotification(notificationId, {
               type: 'error',
@@ -453,7 +486,7 @@ export function TasksRoute() {
           }
         },
       })
-      void invalidateTaskViews(task.id, task.group.id, canCreateFollowUpOccurrence(task))
+      void invalidateTaskViews(task.id, task.group.id, ['open', 'completed'])
     },
     onError: (error, task, context) => {
       if (context?.snapshots) {
@@ -605,7 +638,13 @@ export function TasksRoute() {
             busyTaskIds={pendingTaskIds}
           />
         ) : (
-          <>
+          <PullToRefresh isRefreshing={isRefreshingGroupedTasks} onRefresh={refreshCurrentTasks}>
+            <div className="space-y-3">
+              <TaskScreenRefreshButton
+                isRefreshing={isRefreshingGroupedTasks}
+                label="Refresh tasks"
+                onRefresh={refreshCurrentTasks}
+              />
             {tasksQuery.isLoading ? (
               <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
                 Loading open tasks.
@@ -666,13 +705,14 @@ export function TasksRoute() {
                 )
               })}
             </div>
-          </>
+            </div>
+          </PullToRefresh>
         )}
         <div className="mt-8 mb-20 flex justify-center pb-8">
           <Link
             to={{
               pathname: '/tasks/completed',
-              search: effectiveGroupId ? `?group=${effectiveGroupId}` : ''
+              search: `?group=${effectiveGroupId}`
             }}
             className="inline-flex items-center gap-2 rounded-pill border border-outline/20 bg-surface-container px-4 py-2 text-sm font-medium text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface hover:shadow-ambient"
           >
