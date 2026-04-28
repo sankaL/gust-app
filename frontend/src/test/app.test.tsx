@@ -683,7 +683,7 @@ describe('app shell', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    renderWithRoute(['/tasks'])
+    renderWithRoute(['/tasks?group=inbox-a'])
 
     expect(await screen.findByText('Task for user A')).toBeInTheDocument()
 
@@ -700,7 +700,9 @@ describe('app shell', () => {
     await new Promise((resolve) => setTimeout(resolve, 200))
 
     await user.click(screen.getByRole('link', { name: 'Tasks' }))
-    
+    await user.click(await screen.findByRole('button', { name: /Inbox/ }))
+    expect(await screen.findByText('Task for user B')).toBeInTheDocument()
+
     // Verify the fetch was called for user B's tasks (cache was cleared and refetched)
     await waitFor(() => {
       const taskFetchCalls = fetchMock.mock.calls.filter(

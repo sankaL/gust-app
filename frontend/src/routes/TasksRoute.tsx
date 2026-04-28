@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -30,7 +30,14 @@ import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { useNotifications } from '../components/Notifications'
 import { OpenTaskCard } from '../components/OpenTaskCard'
 import { SessionGuard } from '../components/SessionGuard'
+import { PullToRefresh, TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
 import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
+import {
+  refreshTaskScreenQueries,
+  TASK_SCREEN_GC_TIME_MS,
+  TASK_SCREEN_STALE_TIME_MS,
+  type TaskStatusSegment,
+} from '../lib/taskScreenCache'
 
 // Icon Components (inline SVGs for consistency with codebase)
 function LayersIcon({ className = 'w-4 h-4' }: { className?: string }) {
@@ -269,35 +276,45 @@ export function TasksRoute() {
   const groupsQuery = useQuery({
     queryKey: ['groups'],
     queryFn: listGroups,
-    enabled: sessionQuery.data?.signed_in === true
+    enabled: sessionQuery.data?.signed_in === true,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
   const selectedGroupId = searchParams.get('group')
-  const resolvedGroupId =
-    selectedGroupId ??
-    sessionQuery.data?.inbox_group_id ??
-    groupsQuery.data?.[0]?.id ??
-    null
+  const effectiveGroupId = selectedGroupId ?? 'all'
+  const isAllView = effectiveGroupId === 'all'
+  const resolvedGroupId = isAllView ? null : effectiveGroupId
 
   useEffect(() => {
-    if (!sessionQuery.data?.signed_in || !groupsQuery.data?.length || selectedGroupId) {
+    if (!sessionQuery.data?.signed_in || selectedGroupId) {
       return
     }
 
-    // Default to 'all' view instead of a specific group
     setSearchParams({ group: 'all' }, { replace: true })
-  }, [groupsQuery.data, selectedGroupId, sessionQuery.data, setSearchParams])
-
-  const isAllView = selectedGroupId === 'all'
+  }, [selectedGroupId, sessionQuery.data, setSearchParams])
 
   const tasksQuery = useQuery({
     queryKey: ['tasks', resolvedGroupId, 'open'],
     queryFn: () => listTasks(resolvedGroupId as string),
     enabled: sessionQuery.data?.signed_in === true && Boolean(resolvedGroupId) && !isAllView,
-    // Stale-while-revalidate: show cached data while fetching fresh in background
-    staleTime: 1000 * 30,
-    gcTime: 1000 * 60 * 5,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
+
+  const refreshCurrentTasks = useCallback(
+    () =>
+      refreshTaskScreenQueries(queryClient, {
+        groupIds: [resolvedGroupId],
+        statuses: ['open'],
+        includeAllOpen: true,
+      }),
+    [queryClient, resolvedGroupId]
+  )
+  const isRefreshingGroupedTasks =
+    !isAllView &&
+    ((tasksQuery.isFetching && !tasksQuery.isLoading) ||
+      (groupsQuery.isFetching && !groupsQuery.isLoading))
 
   function requireCsrf(session: SessionStatus | undefined) {
     const csrfToken = session?.csrf_token
@@ -307,12 +324,12 @@ export function TasksRoute() {
     return csrfToken
   }
 
-  async function refreshTaskData() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', resolvedGroupId, 'open'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] })
-    ])
+  async function refreshTaskData(groupIds: Array<string | null | undefined> = [resolvedGroupId]) {
+    await refreshTaskScreenQueries(queryClient, {
+      groupIds,
+      statuses: ['open'],
+      includeAllOpen: true,
+    })
   }
 
   function markTaskPending(taskId: string, isPending: boolean) {
@@ -328,6 +345,8 @@ export function TasksRoute() {
     void queryClient.prefetchQuery({
       queryKey: ['task-detail', taskId],
       queryFn: () => getTaskDetail(taskId),
+      staleTime: TASK_SCREEN_STALE_TIME_MS,
+      gcTime: TASK_SCREEN_GC_TIME_MS,
     })
   }
 
@@ -351,19 +370,18 @@ export function TasksRoute() {
     updateTaskDetailCache(queryClient, task)
   }
 
-  async function invalidateTaskViews(taskId: string, groupId: string) {
-    // Selective invalidation: only refetch what's necessary
-    // syncTaskCaches already handles optimistic updates for open lists
-    // We only need to invalidate the detail query and groups count
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] }),
-      // Only invalidate the specific open list that was affected
-      queryClient.invalidateQueries({ queryKey: ['tasks', groupId, 'open'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] }),
-      // Invalidate infinite scroll variants
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open', 'infinite'] }),
-    ])
+  async function invalidateTaskViews(
+    taskId: string,
+    groupId: string,
+    statuses: TaskStatusSegment[] = ['open']
+  ) {
+    await refreshTaskScreenQueries(queryClient, {
+      taskId,
+      groupIds: [groupId],
+      statuses,
+      includeAllOpen: true,
+      includeAllCompleted: statuses.includes('completed'),
+    })
   }
 
   const completeMutation = useMutation({
@@ -424,7 +442,7 @@ export function TasksRoute() {
             }
             dismissNotification(notificationId)
             notifySuccess(`Moved ${task.title} back to To-do.`)
-            await invalidateTaskViews(task.id, task.group.id)
+            await invalidateTaskViews(task.id, task.group.id, ['open', 'completed'])
           } catch (error) {
             updateNotification(notificationId, {
               type: 'error',
@@ -435,7 +453,7 @@ export function TasksRoute() {
           }
         },
       })
-      void invalidateTaskViews(task.id, task.group.id)
+      void invalidateTaskViews(task.id, task.group.id, ['open', 'completed'])
     },
     onError: (error, task, context) => {
       if (context?.snapshots) {
@@ -555,7 +573,7 @@ export function TasksRoute() {
           <GroupTabs
             groups={groupsQuery.data}
             inboxGroupId={sessionQuery.data?.inbox_group_id}
-            selectedGroupId={selectedGroupId}
+            selectedGroupId={effectiveGroupId}
             onSelectGroup={(groupId) => setSearchParams({ group: groupId })}
           />
         ) : null}
@@ -579,7 +597,13 @@ export function TasksRoute() {
             busyTaskIds={pendingTaskIds}
           />
         ) : (
-          <>
+          <PullToRefresh isRefreshing={isRefreshingGroupedTasks} onRefresh={refreshCurrentTasks}>
+            <div className="space-y-3">
+              <TaskScreenRefreshButton
+                isRefreshing={isRefreshingGroupedTasks}
+                label="Refresh tasks"
+                onRefresh={refreshCurrentTasks}
+              />
             {tasksQuery.isLoading ? (
               <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
                 Loading open tasks.
@@ -640,13 +664,14 @@ export function TasksRoute() {
                 )
               })}
             </div>
-          </>
+            </div>
+          </PullToRefresh>
         )}
         <div className="mt-8 mb-20 flex justify-center pb-8">
           <Link
             to={{
               pathname: '/tasks/completed',
-              search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
+              search: `?group=${effectiveGroupId}`
             }}
             className="inline-flex items-center gap-2 rounded-pill border border-outline/20 bg-surface-container px-4 py-2 text-sm font-medium text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface hover:shadow-ambient"
           >
@@ -678,7 +703,7 @@ export function TasksRoute() {
           await refreshTaskData()
         }}
         csrfToken={sessionQuery.data?.csrf_token ?? ''}
-        defaultGroupId={resolvedGroupId ?? undefined}
+        defaultGroupId={resolvedGroupId ?? sessionQuery.data?.inbox_group_id ?? undefined}
       />
 
       <TaskDeleteDialog

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
@@ -203,6 +203,155 @@ describe('tasks flow', () => {
       expect.stringContaining('/tasks?group_id=personal-1'),
       expect.objectContaining({ credentials: 'include' })
     )
+  })
+
+  it('loads /tasks as all tasks without fetching Inbox first', async () => {
+    const fetchedGroupTaskUrls: string[] = []
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?group_id=')) {
+        fetchedGroupTaskUrls.push(url)
+        return Promise.resolve(jsonResponse([]))
+      }
+      if (url.includes('/tasks?') && url.includes('status=open')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                id: 'task-1',
+                title: 'All-view task',
+                status: 'open',
+                needs_review: false,
+                due_date: null,
+                reminder_at: null,
+                due_bucket: 'no_date',
+                group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+                completed_at: null,
+                deleted_at: null,
+                subtask_count: 0
+              }
+            ],
+            has_more: false,
+            next_cursor: null
+          })
+        )
+      }
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks'])
+
+    expect(await screen.findByText('All tasks loaded')).toBeInTheDocument()
+    expect(fetchedGroupTaskUrls).toEqual([])
+  })
+
+  it('uses cached grouped tasks immediately and refreshes them from the button', async () => {
+    let taskFetches = 0
+    const refreshDeferred: { resolve: (() => void) | null } = { resolve: null }
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?group_id=personal-1')) {
+        taskFetches += 1
+        const responseBody = [
+          {
+            id: 'task-1',
+            title: taskFetches === 1 ? 'Cached task title' : 'Fresh task title',
+            status: 'open',
+            needs_review: false,
+            due_date: null,
+            reminder_at: null,
+            due_bucket: 'no_date',
+            group: { id: 'personal-1', name: 'Personal', is_system: false },
+            completed_at: null,
+            deleted_at: null,
+            subtask_count: 0
+          }
+        ]
+        if (taskFetches === 1) {
+          return Promise.resolve(jsonResponse(responseBody))
+        }
+
+        return new Promise<Response>((resolve) => {
+          refreshDeferred.resolve = () => resolve(jsonResponse(responseBody))
+        })
+      }
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks?group=personal-1'])
+    const user = userEvent.setup()
+
+    expect(await screen.findByText('Cached task title')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Refresh tasks' }))
+    await waitFor(() => {
+      expect(taskFetches).toBe(2)
+    })
+    expect(screen.getByText('Cached task title')).toBeInTheDocument()
+    if (!refreshDeferred.resolve) {
+      throw new Error('Expected refresh request to be pending.')
+    }
+    refreshDeferred.resolve()
+    expect(await screen.findByText('Fresh task title')).toBeInTheDocument()
+  })
+
+  it('refreshes grouped tasks from pull down without clearing cached content', async () => {
+    let taskFetches = 0
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks?group_id=personal-1')) {
+        taskFetches += 1
+        return Promise.resolve(
+          jsonResponse([
+            {
+              id: 'task-1',
+              title: taskFetches === 1 ? 'Pull cached task' : 'Pull fresh task',
+              status: 'open',
+              needs_review: false,
+              due_date: null,
+              reminder_at: null,
+              due_bucket: 'no_date',
+              group: { id: 'personal-1', name: 'Personal', is_system: false },
+              completed_at: null,
+              deleted_at: null,
+              subtask_count: 0
+            }
+          ])
+        )
+      }
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks?group=personal-1'])
+
+    expect(await screen.findByText('Pull cached task')).toBeInTheDocument()
+    const refreshSurface = screen.getByTestId('pull-to-refresh')
+    fireEvent.touchStart(refreshSurface, { touches: [{ clientY: 0 }] })
+    fireEvent.touchMove(refreshSurface, { touches: [{ clientY: 90 }] })
+    fireEvent.touchEnd(refreshSurface)
+    expect(screen.getByText('Pull cached task')).toBeInTheDocument()
+    expect(await screen.findByText('Pull fresh task')).toBeInTheDocument()
+    expect(taskFetches).toBe(2)
   })
 
   it('supports complete undo reopen from the task list', async () => {
@@ -948,11 +1097,15 @@ describe('tasks flow', () => {
     expect(screen.getByRole('button', { name: 'Edit task' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save and return' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back to tasks' })).toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([input]) => requestUrl(input).includes('/groups'))).toHaveLength(0)
 
     await user.click(screen.getByRole('button', { name: 'Edit task' }))
 
     expect(await screen.findByRole('button', { name: 'Save and return' })).toBeInTheDocument()
     expect(screen.getByText('Editing task')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([input]) => requestUrl(input).includes('/groups'))).toHaveLength(1)
+    })
   })
 
   it('preserves unsaved task edits when a subtask mutation refetches detail', async () => {

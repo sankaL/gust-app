@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 
@@ -22,6 +22,12 @@ import {
 } from '../lib/taskQueryCache'
 import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
+import { PullToRefresh, TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
+import {
+  refreshTaskScreenQueries,
+  TASK_SCREEN_GC_TIME_MS,
+  TASK_SCREEN_STALE_TIME_MS,
+} from '../lib/taskScreenCache'
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -94,7 +100,9 @@ export function CompletedTasksRoute() {
   const groupsQuery = useQuery({
     queryKey: ['groups'],
     queryFn: listGroups,
-    enabled: sessionQuery.data?.signed_in === true
+    enabled: sessionQuery.data?.signed_in === true,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
   const selectedGroupId = searchParams.get('group')
@@ -117,8 +125,24 @@ export function CompletedTasksRoute() {
     queryFn: () =>
       isAllGroupsView ? listAllTasks('completed') : listTasks(resolvedGroupId as string, 'completed'),
     enabled:
-      sessionQuery.data?.signed_in === true && (isAllGroupsView || Boolean(resolvedGroupId))
+      sessionQuery.data?.signed_in === true && (isAllGroupsView || Boolean(resolvedGroupId)),
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
+
+  const refreshCompletedTasks = useCallback(
+    () =>
+      refreshTaskScreenQueries(queryClient, {
+        groupIds: [resolvedGroupId],
+        statuses: ['completed'],
+        includeAllOpen: true,
+        includeAllCompleted: true,
+      }),
+    [queryClient, resolvedGroupId]
+  )
+  const isRefreshingCompletedTasks =
+    (completedTasksQuery.isFetching && !completedTasksQuery.isLoading) ||
+    (groupsQuery.isFetching && !groupsQuery.isLoading)
 
   function requireCsrf(session: SessionStatus | undefined) {
     const csrfToken = session?.csrf_token
@@ -129,13 +153,7 @@ export function CompletedTasksRoute() {
   }
 
   async function refreshTaskData() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', resolvedGroupId ?? 'all', 'completed'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', resolvedGroupId ?? 'all', 'open'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'completed'] }),
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'all', 'open'] })
-    ])
+    await refreshCompletedTasks()
   }
 
   function markTaskPending(taskId: string, isPending: boolean) {
@@ -221,7 +239,14 @@ export function CompletedTasksRoute() {
           : 'Review completed tasks and move them back to To-do when needed.'
       }
     >
+      <PullToRefresh isRefreshing={isRefreshingCompletedTasks} onRefresh={refreshCompletedTasks}>
       <section className="space-y-4">
+        <TaskScreenRefreshButton
+          isRefreshing={isRefreshingCompletedTasks}
+          label="Refresh completed tasks"
+          onRefresh={refreshCompletedTasks}
+        />
+
         {completedTasksQuery.isLoading ? (
           <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
             Loading completed tasks.
@@ -281,6 +306,7 @@ export function CompletedTasksRoute() {
           ))}
         </div>
       </section>
+      </PullToRefresh>
     </SessionGuard>
   )
 }

@@ -1,8 +1,14 @@
 import { useMemo, useRef, useEffect, useCallback } from 'react'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { listAllTasks, type TaskSummary } from '../lib/api'
+import {
+  refreshTaskScreenQueries,
+  TASK_SCREEN_GC_TIME_MS,
+  TASK_SCREEN_STALE_TIME_MS,
+} from '../lib/taskScreenCache'
 import { OpenTaskCard } from './OpenTaskCard'
+import { PullToRefresh, TaskScreenRefreshButton } from './TaskScreenRefresh'
 
 interface AllTasksViewProps {
   userTimezone: string | null
@@ -101,6 +107,7 @@ export function AllTasksView({
   onTaskDelete,
   busyTaskIds = [],
 }: AllTasksViewProps) {
+  const queryClient = useQueryClient()
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -109,9 +116,14 @@ export function AllTasksView({
     queryFn: ({ pageParam }) => listAllTasks('open', pageParam ?? null, PAGE_SIZE),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor,
-    // Stale-while-revalidate: keep cached data fresh for 30s
-    staleTime: 1000 * 30,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
   })
+  const refreshAllTasks = useCallback(
+    () => refreshTaskScreenQueries(queryClient, { statuses: ['open'], includeAllOpen: true }),
+    [queryClient]
+  )
+  const isRefreshingAllTasks = allTasksQuery.isFetching && !allTasksQuery.isFetchingNextPage
   const allTasks = useMemo(
     () => allTasksQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [allTasksQuery.data]
@@ -225,30 +237,56 @@ export function AllTasksView({
 
   if (allTasksQuery.isError) {
     return (
-      <div className="flex items-start gap-3 rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.4)]">
-        <svg className="w-5 h-5 shrink-0 mt-0.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <p className="font-body text-sm font-medium text-red-100 leading-relaxed">
-          Error loading tasks: {allTasksQuery.error instanceof Error ? allTasksQuery.error.message : 'Unknown error'}
-        </p>
+      <div className="space-y-3">
+        <TaskScreenRefreshButton
+          isRefreshing={isRefreshingAllTasks}
+          label="Refresh tasks"
+          onRefresh={refreshAllTasks}
+        />
+        <div className="flex items-start gap-3 rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.4)]">
+          <svg className="w-5 h-5 shrink-0 mt-0.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="font-body text-sm font-medium text-red-100 leading-relaxed">
+            Error loading tasks: {allTasksQuery.error instanceof Error ? allTasksQuery.error.message : 'Unknown error'}
+          </p>
+        </div>
       </div>
     )
   }
 
   if (allTasks.length === 0) {
     return (
-      <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
-        <p className="font-display text-2xl text-on-surface">No tasks across any group</p>
-        <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
-          Capture a voice note to create tasks, or move tasks into groups.
-        </p>
-      </div>
+      <PullToRefresh isRefreshing={isRefreshingAllTasks} onRefresh={refreshAllTasks}>
+        <div className="space-y-3">
+          <TaskScreenRefreshButton
+            isRefreshing={isRefreshingAllTasks}
+            label="Refresh tasks"
+            onRefresh={refreshAllTasks}
+          />
+          <div className="rounded-soft bg-surface-container p-6 shadow-ambient">
+            <p className="font-display text-2xl text-on-surface">No tasks across any group</p>
+            <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
+              Capture a voice note to create tasks, or move tasks into groups.
+            </p>
+          </div>
+        </div>
+      </PullToRefresh>
     )
   }
 
   return (
-    <div className="flex flex-col">
+    <PullToRefresh
+      isRefreshing={isRefreshingAllTasks}
+      onRefresh={refreshAllTasks}
+      getScrollTop={() => parentRef.current?.scrollTop ?? window.scrollY}
+    >
+    <div className="flex flex-col gap-3">
+      <TaskScreenRefreshButton
+        isRefreshing={isRefreshingAllTasks}
+        label="Refresh tasks"
+        onRefresh={refreshAllTasks}
+      />
       {/* Virtualized scroll container */}
       <div
         ref={parentRef}
@@ -333,5 +371,6 @@ export function AllTasksView({
         </div>
       )}
     </div>
+    </PullToRefresh>
   )
 }
