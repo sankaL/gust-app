@@ -4,10 +4,15 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, vi } from 'vitest'
 
 import { AppShell } from '../components/AppShell'
+import { DesktopShell } from '../components/DesktopShell'
 import { AppProviders } from '../providers'
 import { CaptureRoute } from '../routes/CaptureRoute'
 import { CompletedTasksRoute } from '../routes/CompletedTasksRoute'
-import { DesktopModeRoute } from '../routes/DesktopModeRoute'
+import { DesktopCompletedRoute } from '../routes/desktop/DesktopCompletedRoute'
+import { DesktopDashboardRoute } from '../routes/desktop/DesktopDashboardRoute'
+import { DesktopGroupDetailRoute } from '../routes/desktop/DesktopGroupDetailRoute'
+import { DesktopGroupsRoute } from '../routes/desktop/DesktopGroupsRoute'
+import { DesktopTasksRoute } from '../routes/desktop/DesktopTasksRoute'
 import { LoginRoute } from '../routes/LoginRoute'
 import { ManageGroupsRoute } from '../routes/ManageGroupsRoute'
 import { TaskDetailRoute } from '../routes/TaskDetailRoute'
@@ -73,10 +78,36 @@ function renderWithRoute(initialEntries: string[]) {
           {
             path: 'tasks/:taskId',
             element: <TaskDetailRoute />
+          }
+        ]
+      },
+      {
+        path: '/desktop',
+        element: <DesktopShell />,
+        children: [
+          {
+            index: true,
+            element: <DesktopDashboardRoute />
           },
           {
-            path: 'desktop',
-            element: <DesktopModeRoute />
+            path: 'tasks',
+            element: <DesktopTasksRoute />
+          },
+          {
+            path: 'completed',
+            element: <DesktopCompletedRoute />
+          },
+          {
+            path: 'groups',
+            element: <DesktopGroupsRoute />
+          },
+          {
+            path: 'groups/:groupId',
+            element: <DesktopGroupDetailRoute />
+          },
+          {
+            path: 'tasks/:taskId',
+            element: <TaskDetailRoute />
           }
         ]
       }
@@ -231,24 +262,29 @@ beforeEach(() => {
       }
 
       if (url.includes('/tasks?')) {
-        return jsonResponse([
-          {
-            id: 'task-1',
-            title: 'Review extraction contract',
-            status: 'open',
-            needs_review: true,
-            due_date: null,
-            reminder_at: null,
-            due_bucket: 'no_date',
-            group: {
-              id: 'inbox-1',
-              name: 'Inbox',
-              is_system: true
+        return jsonResponse({
+          items: [
+            {
+              id: 'task-1',
+              title: 'Review extraction contract',
+              status: 'open',
+              needs_review: true,
+              due_date: null,
+              reminder_at: null,
+              due_bucket: 'no_date',
+              group: {
+                id: 'inbox-1',
+                name: 'Inbox',
+                is_system: true
+              },
+              completed_at: null,
+              deleted_at: null,
+              subtask_count: 0
             },
-            completed_at: null,
-            deleted_at: null
-          }
-        ])
+          ],
+          has_more: false,
+          next_cursor: null
+        })
       }
 
       return jsonResponse({})
@@ -294,6 +330,25 @@ describe('app shell', () => {
     )
 
     renderWithRoute(['/tasks'])
+
+    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+  })
+
+  it('redirects signed-out desktop routes to /login', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        jsonResponse({
+          signed_in: false,
+          user: null,
+          timezone: null,
+          inbox_group_id: null,
+          csrf_token: null
+        })
+      )
+    )
+
+    renderWithRoute(['/desktop'])
 
     expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
   })
@@ -410,14 +465,23 @@ describe('app shell', () => {
     expect(screen.getByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
   })
 
-  it('opens the account menu and navigates to desktop mode placeholder', async () => {
+  it('opens the account menu and navigates to desktop mission control', async () => {
     renderWithRoute(['/'])
 
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
     await user.click(screen.getByRole('menuitem', { name: 'Desktop Mode' }))
 
-    expect(await screen.findByRole('heading', { name: 'Desktop Mode' })).toBeInTheDocument()
+    expect(await screen.findByText('Mission Control')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /Desktop command center/i })).toBeInTheDocument()
+  })
+
+  it('renders desktop all-tasks search state from the URL', async () => {
+    renderWithRoute(['/desktop/tasks?q=Review'])
+
+    expect(await screen.findByRole('heading', { name: 'All Open Tasks' })).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('Review')).toBeInTheDocument()
+    expect(await screen.findByText('Review extraction contract')).toBeInTheDocument()
   })
 
   it('navigates to all-group completed tasks from account menu', async () => {

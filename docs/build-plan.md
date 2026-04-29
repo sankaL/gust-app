@@ -81,6 +81,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| ADH-47 | Implement desktop mission-control workspace | DONE | 2026-04-29 | Added a protected `/desktop` shell with dashboard, weekly board, analytics, all-tasks/completed tables with URL-backed filters and sorting, group configuration, group workspaces, task date moves, desktop docs, and regression coverage. | desktop-mission-control-build-plan.md, Design, Tech, AGENTS |
 | ADH-46 | Deploy `main` commit `a0002e2` to Railway production | DONE | 2026-04-28 | GitHub Actions Railway deploy rolled out backend (`d4df72d1-fa88-4250-8664-f74420d0f8dd`), frontend (`a860876f-d932-491e-99c4-761edffe8a33`), digest-daily-cron (`dedfb04c-b4f5-445f-b788-af22a83364a9`), and digest-weekly-cron (`5572fa86-e358-4ae1-8bf4-ed61763f3be4`) from `main@a0002e2`; Railway reports all four deployments `SUCCESS`. | Runbook, AGENTS |
 | ADH-45 | Match the date picker calendar width to its dropdown field | DONE | 2026-04-28 | Updated the date picker overlay to size from the trigger width and stretch its header controls and calendar cells across the panel. | Design, AGENTS |
 | ADH-44 | Restyle the top-bar task refresh button | DONE | 2026-04-28 | Updated the shared refresh control with a dark-glass purple-accent tactile style that better matches the Gust header controls. | Design, AGENTS |

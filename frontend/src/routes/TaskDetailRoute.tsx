@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
@@ -107,7 +107,11 @@ function formatSubtaskCount(count: number) {
   return `${count} ${count === 1 ? 'subtask' : 'subtasks'}`
 }
 
-function buildReturnPath(searchParams: URLSearchParams) {
+function buildReturnPath(pathname: string, searchParams: URLSearchParams) {
+  if (pathname.startsWith('/desktop/')) {
+    return '/desktop/tasks'
+  }
+
   const params = new URLSearchParams()
   const group = searchParams.get('group')
 
@@ -142,6 +146,7 @@ function mergeSubtaskDrafts(
 export function TaskDetailRoute() {
   const { taskId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const [draft, setDraft] = useState<DraftState | null>(null)
@@ -245,7 +250,7 @@ export function TaskDetailRoute() {
     updateTaskDetailCache(queryClient, task)
   }
 
-  const returnPath = buildReturnPath(searchParams)
+  const returnPath = buildReturnPath(location.pathname, searchParams)
 
   async function returnToTasks(replace = false) {
     await navigate(returnPath, { replace })

@@ -53,15 +53,18 @@ export async function refreshTaskScreenQueries(
     }
     for (const status of statuses) {
       addQueryKey(queryKeys, ['tasks', groupId, status])
+      addQueryKey(queryKeys, ['desktop', 'tasks', groupId, status])
     }
   }
 
   if (includeAllOpen || statuses.includes('open')) {
     addQueryKey(queryKeys, ['tasks', 'all', 'open'])
+    addQueryKey(queryKeys, ['desktop', 'tasks', 'all', 'open'])
   }
 
   if (includeAllCompleted || statuses.includes('completed')) {
     addQueryKey(queryKeys, ['tasks', 'all', 'completed'])
+    addQueryKey(queryKeys, ['desktop', 'tasks', 'all', 'completed'])
   }
 
   await Promise.all(

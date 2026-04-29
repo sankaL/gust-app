@@ -66,6 +66,8 @@ class TaskSummaryResponse(BaseModel):
     group: GroupSummaryResponse
     completed_at: Optional[datetime]
     deleted_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
     subtask_count: int = 0
 
 
@@ -369,6 +371,8 @@ def _build_task_summary(item: TaskListItem) -> TaskSummaryResponse:
         ),
         completed_at=item.task.completed_at,
         deleted_at=item.task.deleted_at,
+        created_at=item.task.created_at,
+        updated_at=item.task.updated_at,
         subtask_count=item.subtask_count,
     )
 
@@ -395,6 +399,8 @@ def _build_task_detail(detail: TaskDetail, user_timezone: str) -> TaskDetailResp
         ),
         completed_at=detail.task.completed_at,
         deleted_at=detail.task.deleted_at,
+        created_at=detail.task.created_at,
+        updated_at=detail.task.updated_at,
         recurrence=_build_recurrence_response(detail.task),
         subtasks=[_build_subtask(subtask) for subtask in detail.subtasks],
     )

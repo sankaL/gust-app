@@ -75,6 +75,8 @@ export type TaskSummary = {
   group: TaskGroupRef
   completed_at: string | null
   deleted_at: string | null
+  created_at?: string
+  updated_at?: string
   subtask_count: number
 }
 
