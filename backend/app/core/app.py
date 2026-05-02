@@ -44,10 +44,13 @@ def create_app() -> FastAPI:
     )
 
     app.state.settings = settings
-    if settings.frontend_app_url:
+    allowed_origins = [settings.frontend_app_url] if settings.frontend_app_url else []
+    if settings.extra_allowed_origins:
+        allowed_origins.extend(settings.extra_allowed_origins)
+    if allowed_origins:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=[settings.frontend_app_url],
+            allow_origins=allowed_origins,
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=["Content-Type", "X-CSRF-Token"],
