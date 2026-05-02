@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
+import { useAppShellActions } from '../components/AppShellActions'
 import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
 import { PullToRefresh, TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
@@ -148,6 +149,7 @@ export function TaskDetailRoute() {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
+  const shellActions = useAppShellActions()
   const [searchParams] = useSearchParams()
   const [draft, setDraft] = useState<DraftState | null>(null)
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
@@ -225,6 +227,20 @@ export function TaskDetailRoute() {
   const isRefreshingTaskDetail =
     (taskQuery.isFetching && !taskQuery.isLoading) ||
     (groupsQuery.isFetching && !groupsQuery.isLoading)
+
+  useEffect(() => {
+    shellActions?.setTopBarAction(
+      <TaskScreenRefreshButton
+        isRefreshing={isRefreshingTaskDetail}
+        label="Refresh task"
+        onRefresh={refreshTaskData}
+      />
+    )
+
+    return () => {
+      shellActions?.setTopBarAction(null)
+    }
+  }, [isRefreshingTaskDetail, refreshTaskData, shellActions])
 
   function markSubtaskPending(subtaskId: string, isPending: boolean) {
     setPendingSubtaskIds((current) => {
@@ -590,12 +606,6 @@ export function TaskDetailRoute() {
         className="space-y-5"
         style={{ paddingBottom: 'calc(12.5rem + var(--safe-area-bottom))' }}
       >
-        <TaskScreenRefreshButton
-          isRefreshing={isRefreshingTaskDetail}
-          label="Refresh task"
-          onRefresh={refreshTaskData}
-        />
-
         {taskQuery.isError ? (
           <div className="rounded-card bg-[rgba(80,18,18,0.92)] p-6 text-sm text-red-100 shadow-[0_18px_36px_rgba(0,0,0,0.4)]">
             {buildFriendlyMessage(taskQuery.error, 'Task detail could not be loaded.')}
