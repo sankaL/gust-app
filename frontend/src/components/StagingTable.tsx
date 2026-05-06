@@ -63,7 +63,7 @@ export function StagingTable({
 
   if (isLoading) {
     return (
-      <div className="space-y-3 rounded-lg bg-surface-dim p-5">
+      <div className="space-y-3">
         <div className="space-y-2">
           <div className="h-4 w-40 animate-pulse rounded-full bg-white/10" />
           <div className="h-3 w-56 animate-pulse rounded-full bg-white/5" />
@@ -84,18 +84,18 @@ export function StagingTable({
 
   if (tasks.length === 0) {
     return (
-      <div className="bg-surface-dim rounded-lg p-6 text-center">
+      <div className="py-8 text-center">
         <p className="text-on-surface-variant text-sm">{emptyMessage}</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <div className="w-full space-y-4">
       {/* Header Section */}
       <div className="space-y-3">
         {/* Top row: Title + Bulk Actions */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-display text-on-surface truncate">
               {title} <span className="text-on-surface-variant font-body">({pendingTasks.length})</span>
@@ -112,7 +112,7 @@ export function StagingTable({
             )}
           </div>
 
-          <div className="flex flex-col gap-2 shrink-0">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0">
             <Button
               size="sm"
               variant="solid"
@@ -120,7 +120,7 @@ export function StagingTable({
                 void handleApproveAll()
               }}
               disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
-              className="w-full justify-center"
+              className="w-full justify-center sm:w-auto"
             >
               {isApprovingAll ? '...' : 'Approve All'}
             </Button>
@@ -131,7 +131,7 @@ export function StagingTable({
                 void handleDiscardAll()
               }}
               disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
-              className="text-tertiary hover:text-tertiary hover:bg-tertiary/10 w-full justify-center"
+              className="w-full justify-center text-tertiary hover:bg-tertiary/10 hover:text-tertiary sm:w-auto"
             >
               {isDiscardingAll ? '...' : 'Discard All'}
             </Button>

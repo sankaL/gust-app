@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardList, Settings2 } from 'lucide-react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
 
-import type { DesktopOutletContext } from '../../components/DesktopShell'
+import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
 import { DesktopTaskTable } from '../../components/DesktopTaskTable'
 import { useDesktopTaskActions } from '../../hooks/useDesktopTaskActions'
 import {
@@ -44,6 +44,20 @@ export function DesktopGroupDetailRoute() {
   const datedThisWeek = weeklyColumns
     .filter((column) => column.date)
     .reduce((sum, column) => sum + column.tasks.length, 0)
+  const groupDescription =
+    group?.description ||
+    'No description yet. Add one from group configuration to improve routing context.'
+  const header = useMemo(
+    () => ({
+      eyebrow: group ? 'Group workspace' : 'Groups',
+      title: group?.name ?? 'Group not found',
+      subtitle: group
+        ? groupDescription
+        : 'Choose a group from the left navigation or return to group configuration.',
+    }),
+    [group, groupDescription]
+  )
+  useDesktopHeader(header)
 
   if (!group) {
     return (
@@ -77,18 +91,7 @@ export function DesktopGroupDetailRoute() {
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-[minmax(0,1fr)_auto] gap-5 rounded-soft bg-surface-container p-5 shadow-ambient max-lg:grid-cols-1">
-        <div>
-          <p className="font-body text-[0.68rem] uppercase tracking-[0.18em] text-primary">
-            Group workspace
-          </p>
-          <h1 className="mt-1 font-display text-4xl tracking-tight text-on-surface">
-            {group.name}
-          </h1>
-          <p className="mt-2 max-w-3xl font-body text-sm leading-6 text-on-surface-variant">
-            {group.description || 'No description yet. Add one from group configuration to improve routing context.'}
-          </p>
-        </div>
+      <div className="flex justify-end">
         <Link
           to="/desktop/groups"
           className="inline-flex h-10 items-center gap-2 rounded-pill bg-surface-dim px-4 font-body text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-highest hover:text-on-surface"
@@ -96,7 +99,7 @@ export function DesktopGroupDetailRoute() {
           <Settings2 className="h-4 w-4" strokeWidth={1.8} />
           Configure
         </Link>
-      </section>
+      </div>
 
       <section className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
         <div className="rounded-soft bg-surface-container p-4 shadow-ambient">

@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useOutletContext } from 'react-router-dom'
 
-import type { DesktopOutletContext } from '../../components/DesktopShell'
+import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
 import { useNotifications } from '../../components/Notifications'
 import { ApiError, createGroup, deleteGroup, updateGroup } from '../../lib/api'
 import { refreshTaskScreenQueries } from '../../lib/taskScreenCache'
@@ -22,6 +22,15 @@ export function DesktopGroupsRoute() {
   const [newGroupDescription, setNewGroupDescription] = useState('')
   const [drafts, setDrafts] = useState<Record<string, { name: string; description: string }>>({})
   const [deleteTargets, setDeleteTargets] = useState<Record<string, string>>({})
+  const header = useMemo(
+    () => ({
+      eyebrow: 'Workflow structure',
+      title: 'Group Configuration',
+      subtitle: 'Create, rename, describe, and safely delete groups without breaking Inbox protections.',
+    }),
+    []
+  )
+  useDesktopHeader(header)
 
   function requireCsrf() {
     const csrfToken = session.csrf_token
@@ -105,26 +114,6 @@ export function DesktopGroupsRoute() {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-body text-[0.68rem] uppercase tracking-[0.18em] text-primary">
-            Workflow structure
-          </p>
-          <h1 className="mt-1 font-display text-4xl tracking-tight text-on-surface">
-            Group Configuration
-          </h1>
-          <p className="mt-2 font-body text-sm text-on-surface-variant">
-            Create, rename, describe, and safely delete groups without breaking Inbox protections.
-          </p>
-        </div>
-        <Link
-          to="/desktop/tasks"
-          className="rounded-pill bg-surface-container px-4 py-2 font-body text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface"
-        >
-          View All Tasks
-        </Link>
-      </div>
-
       <section className="grid grid-cols-[minmax(18rem,0.35fr)_minmax(0,0.65fr)] gap-5 max-xl:grid-cols-1">
         <form
           className="space-y-4 rounded-soft bg-surface-container p-5 shadow-ambient"

@@ -4,7 +4,9 @@ import { AppShell } from './components/AppShell'
 import { DesktopShell } from './components/DesktopShell'
 import { CaptureRoute } from './routes/CaptureRoute'
 import { CompletedTasksRoute } from './routes/CompletedTasksRoute'
+import { DesktopCaptureRoute } from './routes/desktop/DesktopCaptureRoute'
 import { DesktopCompletedRoute } from './routes/desktop/DesktopCompletedRoute'
+import { DesktopCreateTaskRoute } from './routes/desktop/DesktopCreateTaskRoute'
 import { DesktopDashboardRoute } from './routes/desktop/DesktopDashboardRoute'
 import { DesktopGroupDetailRoute } from './routes/desktop/DesktopGroupDetailRoute'
 import { DesktopGroupsRoute } from './routes/desktop/DesktopGroupsRoute'
@@ -58,8 +60,16 @@ export const router = createBrowserRouter([
         element: <DesktopTasksRoute />
       },
       {
+        path: 'tasks/new',
+        element: <DesktopCreateTaskRoute />
+      },
+      {
         path: 'tasks/:taskId',
         element: <TaskDetailRoute />
+      },
+      {
+        path: 'capture',
+        element: <DesktopCaptureRoute />
       },
       {
         path: 'completed',

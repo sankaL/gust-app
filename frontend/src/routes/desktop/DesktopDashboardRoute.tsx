@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { Link, useOutletContext } from 'react-router-dom'
 
-import type { DesktopOutletContext } from '../../components/DesktopShell'
+import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
 import { useDesktopTaskActions } from '../../hooks/useDesktopTaskActions'
 import {
   buildDesktopAnalytics,
@@ -22,7 +22,7 @@ import {
 } from '../../lib/desktopData'
 import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../../lib/taskScreenCache'
 
-function InsightBar({
+function MetricRow({
   icon,
   label,
   value,
@@ -35,29 +35,29 @@ function InsightBar({
   tone?: 'default' | 'warning' | 'success'
   insight: string
 }) {
+  const toneClasses = {
+    default: 'bg-primary/10 text-primary',
+    warning: 'bg-warning/15 text-warning',
+    success: 'bg-success/15 text-success',
+  }[tone]
+
   return (
-    <div className="flex items-start gap-3 rounded-soft bg-surface-container p-4 shadow-ambient">
-      <div
-        className={`mt-0.5 rounded-full p-2 ${
-          tone === 'warning'
-            ? 'bg-warning/10 text-warning'
-            : tone === 'success'
-              ? 'bg-success/10 text-success'
-              : 'bg-primary/10 text-primary'
-        }`}
-      >
+    <article className="group flex items-center gap-3 rounded-card bg-surface-container-high/55 px-3 py-2.5 transition duration-300 ease-out hover:bg-surface-container-high active:scale-[0.99]">
+      <div className={`shrink-0 rounded-pill p-2 ${toneClasses}`}>
         {icon}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <p className="font-display text-2xl tracking-tight text-on-surface">{value}</p>
-          <p className="font-body text-[0.68rem] uppercase tracking-[0.14em] text-on-surface-variant">
+          <p className="font-display text-2xl font-semibold leading-none tracking-tight text-on-surface">
+            {value}
+          </p>
+          <p className="truncate font-body text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-on-surface-variant">
             {label}
           </p>
         </div>
-        <p className="mt-1 font-body text-xs leading-5 text-on-surface-variant">{insight}</p>
+        <p className="mt-1 truncate font-body text-xs leading-4 text-on-surface-variant">{insight}</p>
       </div>
-    </div>
+    </article>
   )
 }
 
@@ -102,6 +102,15 @@ export function DesktopDashboardRoute() {
 
   const todayLabel = formatIsoDateLabel(analytics.todayIso)
   const weekRangeLabel = `${todayLabel} – ${formatIsoDateLabel(analytics.weekEndIso)}`
+  const header = useMemo(
+    () => ({
+      eyebrow: todayLabel,
+      title: 'Weekly overview',
+      subtitle: `${weekRangeLabel} · ${analytics.counts.completed} tasks completed all time`,
+    }),
+    [analytics.counts.completed, todayLabel, weekRangeLabel]
+  )
+  useDesktopHeader(header)
 
   if (openTasksQuery.isLoading || completedTasksQuery.isLoading) {
     return (
@@ -125,104 +134,86 @@ export function DesktopDashboardRoute() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="font-body text-[0.68rem] uppercase tracking-[0.18em] text-on-surface-variant">
-            {todayLabel}
-          </p>
-          <h1 className="mt-1 font-display text-3xl tracking-tight text-on-surface">
-            Weekly overview
-          </h1>
-          <p className="mt-1 font-body text-sm text-on-surface-variant">
-            {weekRangeLabel} · {analytics.counts.completed} tasks completed all time
-          </p>
-        </div>
-        <Link
-          to="/desktop/tasks"
-          className="rounded-pill bg-primary px-4 py-2 font-body text-sm font-semibold text-surface transition hover:-translate-y-0.5 active:translate-y-0"
-        >
-          Open All Tasks
-        </Link>
-      </div>
-
-      {/* Metrics overview card */}
-      <section className="rounded-soft bg-surface-container p-5 shadow-ambient">
-        <div className="mb-4 flex items-center gap-2">
-          <ListTodo className="h-4 w-4 text-primary" strokeWidth={1.8} />
-          <h2 className="font-display text-lg text-on-surface">Task overview</h2>
-        </div>
-        <div className="grid grid-cols-4 gap-4 max-2xl:grid-cols-2 max-md:grid-cols-1">
-          <InsightBar
-            icon={<Inbox className="h-4 w-4" strokeWidth={1.8} />}
-            label="Open"
-            value={analytics.counts.open}
-            insight={
-              analytics.counts.open === 0
-                ? 'All clear — nothing pending right now.'
-                : `${analytics.counts.open} task${analytics.counts.open > 1 ? 's' : ''} waiting for your attention.`
-            }
-          />
-          <InsightBar
-            icon={<AlertCircle className="h-4 w-4" strokeWidth={1.8} />}
-            label="Overdue"
-            value={analytics.counts.overdue}
-            tone={analytics.counts.overdue > 0 ? 'warning' : 'default'}
-            insight={
-              analytics.counts.overdue === 0
-                ? 'No overdue items. You are caught up.'
-                : `${analytics.counts.overdue} task${analytics.counts.overdue > 1 ? 's' : ''} past due — consider rescheduling.`
-            }
-          />
-          <InsightBar
-            icon={<Calendar className="h-4 w-4" strokeWidth={1.8} />}
-            label="Due Today"
-            value={analytics.counts.dueToday}
-            insight={
-              analytics.counts.dueToday === 0
-                ? 'Nothing due today. Enjoy the breather.'
-                : `${analytics.counts.dueToday} task${analytics.counts.dueToday > 1 ? 's' : ''} to wrap up today.`
-            }
-          />
-          <InsightBar
-            icon={<Eye className="h-4 w-4" strokeWidth={1.8} />}
-            label="This Week"
-            value={analytics.counts.dueThisWeek}
-            insight={
-              analytics.counts.dueThisWeek === 0
-                ? 'No tasks scheduled for this week.'
-                : `${analytics.counts.dueThisWeek} due before ${formatIsoDateLabel(analytics.weekEndIso)}.`
-            }
-          />
-        </div>
-      </section>
-
-      {/* Compact completion trend */}
-      <section className="rounded-soft bg-surface-container p-4 shadow-ambient">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock3 className="h-4 w-4 text-primary" strokeWidth={1.8} />
-            <h2 className="font-display text-base text-on-surface">Completion Trend</h2>
-            <span className="font-body text-xs text-on-surface-variant">
-              {analytics.counts.completed} total completed
-            </span>
+      {/* Metrics + trend side-by-side */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+        {/* Task overview — 1/4 */}
+        <section className="rounded-soft bg-surface-container p-5 shadow-ambient lg:col-span-1">
+          <div className="mb-3 flex items-center gap-2">
+            <ListTodo className="h-4 w-4 text-primary" strokeWidth={1.8} />
+            <h2 className="font-display text-base text-on-surface">Task overview</h2>
           </div>
-        </div>
-        <div className="mt-3 flex h-16 items-end gap-1.5">
-          {analytics.completionTrend.map((point) => (
-            <div key={point.date} className="flex flex-1 flex-col items-center gap-1">
-              <div
-                className="w-full rounded-t-card bg-success/60"
-                style={{ height: `${Math.max(4, (point.count / maxTrendCount) * 56)}px` }}
-                title={`${point.count} completed`}
-              />
-              <span className="font-body text-[0.6rem] text-on-surface-variant">
-                {point.label}
+          <div className="grid grid-cols-1 gap-2.5">
+            <MetricRow
+              icon={<Inbox className="h-4 w-4" strokeWidth={1.8} />}
+              label="Open"
+              value={analytics.counts.open}
+              insight={
+                analytics.counts.open === 0
+                  ? 'All clear — nothing pending right now.'
+                  : `${analytics.counts.open} task${analytics.counts.open > 1 ? 's' : ''} waiting for your attention.`
+              }
+            />
+            <MetricRow
+              icon={<AlertCircle className="h-4 w-4" strokeWidth={1.8} />}
+              label="Overdue"
+              value={analytics.counts.overdue}
+              tone={analytics.counts.overdue > 0 ? 'warning' : 'default'}
+              insight={
+                analytics.counts.overdue === 0
+                  ? 'No overdue items. You are caught up.'
+                  : `${analytics.counts.overdue} task${analytics.counts.overdue > 1 ? 's' : ''} past due — consider rescheduling.`
+              }
+            />
+            <MetricRow
+              icon={<Calendar className="h-4 w-4" strokeWidth={1.8} />}
+              label="Due Today"
+              value={analytics.counts.dueToday}
+              insight={
+                analytics.counts.dueToday === 0
+                  ? 'Nothing due today. Enjoy the breather.'
+                  : `${analytics.counts.dueToday} task${analytics.counts.dueToday > 1 ? 's' : ''} to wrap up today.`
+              }
+            />
+            <MetricRow
+              icon={<Eye className="h-4 w-4" strokeWidth={1.8} />}
+              label="This Week"
+              value={analytics.counts.dueThisWeek}
+              insight={
+                analytics.counts.dueThisWeek === 0
+                  ? 'No tasks scheduled for this week.'
+                  : `${analytics.counts.dueThisWeek} due before ${formatIsoDateLabel(analytics.weekEndIso)}.`
+              }
+            />
+          </div>
+        </section>
+
+        {/* Completion trend — 3/4 */}
+        <section className="rounded-soft bg-surface-container p-4 shadow-ambient lg:col-span-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock3 className="h-4 w-4 text-primary" strokeWidth={1.8} />
+              <h2 className="font-display text-base text-on-surface">Completion Trend</h2>
+              <span className="font-body text-xs text-on-surface-variant">
+                {analytics.counts.completed} total completed
               </span>
             </div>
-          ))}
-        </div>
-      </section>
+          </div>
+          <div className="mt-3 flex h-16 items-end gap-1.5">
+            {analytics.completionTrend.map((point) => (
+              <div key={point.date} className="flex flex-1 flex-col items-center gap-1">
+                <div
+                  className="w-full rounded-t-card bg-success/60"
+                  style={{ height: `${Math.max(4, (point.count / maxTrendCount) * 56)}px` }}
+                  title={`${point.count} completed`}
+                />
+                <span className="font-body text-[0.6rem] text-on-surface-variant">
+                  {point.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
 
       {/* Full-width Kanban board */}
       <section>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { ArrowDown, ArrowUp, CheckCircle2, RotateCcw } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -18,10 +19,12 @@ type DesktopTaskTableProps = {
   groups: GroupSummary[]
   status: 'open' | 'completed'
   lockedGroupId?: string
+  hideHeader?: boolean
   busyTaskIds?: string[]
   onComplete?: (task: TaskSummary) => void
   onReopen?: (task: TaskSummary) => void
   onMoveDueDate?: (task: TaskSummary, dueDate: string | null) => void
+  onVisibleCountChange?: (visibleCount: number, totalCount: number) => void
 }
 
 const sortLabels: Record<DesktopSortKey, string> = {
@@ -44,10 +47,12 @@ export function DesktopTaskTable({
   groups,
   status,
   lockedGroupId,
+  hideHeader = false,
   busyTaskIds = [],
   onComplete,
   onReopen,
   onMoveDueDate,
+  onVisibleCountChange,
 }: DesktopTaskTableProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = {
@@ -73,6 +78,10 @@ export function DesktopTaskTable({
   }
   const visibleTasks = sortDesktopTasks(filterDesktopTasks(tasks, filters), sort)
 
+  useEffect(() => {
+    onVisibleCountChange?.(visibleTasks.length, tasks.length)
+  }, [onVisibleCountChange, tasks.length, visibleTasks.length])
+
   function updateParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams)
     if (!value || value === EMPTY_DESKTOP_FILTERS[key as keyof typeof EMPTY_DESKTOP_FILTERS]) {
@@ -96,19 +105,15 @@ export function DesktopTaskTable({
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="font-display text-3xl tracking-tight text-on-surface">{title}</h2>
-          <p className="mt-1 font-body text-sm text-on-surface-variant">
-            {visibleTasks.length} of {tasks.length} tasks visible
-          </p>
-        </div>
-        <Link
-          to="/"
-          className="rounded-pill bg-primary px-4 py-2 font-body text-sm font-semibold text-surface transition hover:-translate-y-0.5 active:translate-y-0"
-        >
-          Capture New
-        </Link>
+      <div>
+        {hideHeader ? <div /> : (
+          <div>
+            <h2 className="font-display text-3xl tracking-tight text-on-surface">{title}</h2>
+            <p className="mt-1 font-body text-sm text-on-surface-variant">
+              {visibleTasks.length} of {tasks.length} tasks visible
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-[minmax(16rem,2fr)_repeat(3,minmax(9rem,1fr))] gap-3 rounded-soft bg-surface-container p-3 max-xl:grid-cols-2 max-md:grid-cols-1">

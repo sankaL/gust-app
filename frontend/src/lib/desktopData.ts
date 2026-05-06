@@ -228,9 +228,9 @@ export function buildDesktopAnalytics({
 }): DesktopAnalytics {
   const todayIso = getTodayIsoDate(timezone)
   const weekEndIso = addDaysIso(todayIso, 6)
-  const lastSevenDates = Array.from({ length: 7 }, (_, index) => addDaysIso(todayIso, index - 6))
+  const visibleWeekDates = Array.from({ length: 7 }, (_, index) => addDaysIso(todayIso, index))
 
-  const completionCounts = new Map(lastSevenDates.map((date) => [date, 0]))
+  const completionCounts = new Map(visibleWeekDates.map((date) => [date, 0]))
   for (const task of completedTasks) {
     const completedDate = getCompletedIsoDate(task, timezone)
     if (completedDate && completionCounts.has(completedDate)) {
@@ -238,7 +238,7 @@ export function buildDesktopAnalytics({
     }
   }
 
-  const completionTrend = lastSevenDates.map((date) => ({
+  const completionTrend = visibleWeekDates.map((date) => ({
     date,
     label: date === todayIso ? 'Today' : formatIsoDateLabel(date, { weekday: 'short' }),
     count: completionCounts.get(date) ?? 0,

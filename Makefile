@@ -10,7 +10,7 @@ DEV_SUPABASE_DIR := $(DEV_RUNTIME_DIR)/supabase
 DEV_SUPABASE_WORKDIR := $(DEV_RUNTIME_DIR)
 DOCKER_COMPOSE := docker compose --env-file $(DEV_RUNTIME_ENV)
 
-.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime supabase-start supabase-stop supabase-sync-local wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
+.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime supabase-start supabase-stop supabase-sync-local seed-dev-dashboard wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
 
 frontend-install:
 	npm --prefix frontend install
@@ -75,6 +75,9 @@ supabase-start: prepare-dev-runtime
 
 supabase-sync-local: prepare-dev-runtime
 	$(SUPABASE) db push --local --include-all --include-seed --workdir "$(DEV_SUPABASE_WORKDIR)" --yes
+
+seed-dev-dashboard: prepare-dev-runtime
+	$(DOCKER_COMPOSE) exec backend python -m app.dev.seed_dashboard
 
 app-up: prepare-dev-runtime
 	$(DOCKER_COMPOSE) up -d --build backend

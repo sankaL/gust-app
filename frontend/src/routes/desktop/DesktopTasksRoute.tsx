@@ -1,7 +1,8 @@
+import { useCallback, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router-dom'
 
-import type { DesktopOutletContext } from '../../components/DesktopShell'
+import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
 import { DesktopTaskTable } from '../../components/DesktopTaskTable'
 import { useDesktopTaskActions } from '../../hooks/useDesktopTaskActions'
 import { fetchAllDesktopTasks } from '../../lib/desktopData'
@@ -10,6 +11,7 @@ import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../../lib/tas
 export function DesktopTasksRoute() {
   const { session, groups } = useOutletContext<DesktopOutletContext>()
   const taskActions = useDesktopTaskActions(session)
+  const [visibleSummary, setVisibleSummary] = useState({ visible: 0, total: 0 })
 
   const tasksQuery = useQuery({
     queryKey: ['desktop', 'tasks', 'all', 'open'],
@@ -17,6 +19,22 @@ export function DesktopTasksRoute() {
     staleTime: TASK_SCREEN_STALE_TIME_MS,
     gcTime: TASK_SCREEN_GC_TIME_MS,
   })
+
+  const tasks = tasksQuery.data ?? []
+  const handleVisibleCountChange = useCallback((visible: number, total: number) => {
+    setVisibleSummary((current) =>
+      current.visible === visible && current.total === total ? current : { visible, total }
+    )
+  }, [])
+  const header = useMemo(
+    () => ({
+      eyebrow: 'Open tasks',
+      title: 'All Open Tasks',
+      subtitle: `${visibleSummary.visible} of ${visibleSummary.total || tasks.length} tasks visible`,
+    }),
+    [tasks.length, visibleSummary.total, visibleSummary.visible]
+  )
+  useDesktopHeader(header)
 
   if (tasksQuery.isLoading) {
     return <div className="h-96 animate-pulse rounded-soft bg-surface-container" aria-busy="true" />
@@ -34,12 +52,14 @@ export function DesktopTasksRoute() {
   return (
     <DesktopTaskTable
       title="All Open Tasks"
-      tasks={tasksQuery.data ?? []}
+      tasks={tasks}
       groups={groups}
       status="open"
+      hideHeader
       busyTaskIds={taskActions.busyTaskIds}
       onComplete={taskActions.completeTask}
       onMoveDueDate={taskActions.moveTaskDueDate}
+      onVisibleCountChange={handleVisibleCountChange}
     />
   )
 }

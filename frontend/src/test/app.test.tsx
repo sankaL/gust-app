@@ -473,15 +473,54 @@ describe('app shell', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Desktop Mode' }))
 
     expect(await screen.findByText('Mission Control')).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { name: /Desktop command center/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Weekly overview' })).toBeInTheDocument()
   })
 
   it('renders desktop all-tasks search state from the URL', async () => {
     renderWithRoute(['/desktop/tasks?q=Review'])
 
     expect(await screen.findByRole('heading', { name: 'All Open Tasks' })).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { name: 'All Open Tasks' })).toHaveLength(1)
+    expect(screen.queryByText('Desktop workspace')).not.toBeInTheDocument()
+    expect(screen.queryByText('user@example.com')).not.toBeInTheDocument()
     expect(await screen.findByDisplayValue('Review')).toBeInTheDocument()
     expect(await screen.findByText('Review extraction contract')).toBeInTheDocument()
+  })
+
+  it('renders the desktop dashboard title in the top navigation row only', async () => {
+    renderWithRoute(['/desktop'])
+
+    expect(await screen.findByRole('heading', { name: 'Weekly overview' })).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { name: 'Weekly overview' })).toHaveLength(1)
+    expect(screen.queryByText('Desktop workspace')).not.toBeInTheDocument()
+    expect(screen.queryByText('user@example.com')).not.toBeInTheDocument()
+  })
+
+  it('renders desktop group configuration header in the top navigation row only', async () => {
+    renderWithRoute(['/desktop/groups'])
+
+    expect(await screen.findByRole('heading', { name: 'Group Configuration' })).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { name: 'Group Configuration' })).toHaveLength(1)
+    expect(
+      screen.getByText(
+        'Create, rename, describe, and safely delete groups without breaking Inbox protections.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Desktop workspace')).not.toBeInTheDocument()
+  })
+
+  it('renders desktop group detail header in the top navigation row only', async () => {
+    renderWithRoute(['/desktop/groups/inbox-1'])
+
+    expect(await screen.findByRole('heading', { name: 'Inbox' })).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { name: 'Inbox' })).toHaveLength(1)
+    expect(screen.getByText('Group workspace')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'No description yet. Add one from group configuration to improve routing context.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Desktop workspace')).not.toBeInTheDocument()
   })
 
   it('navigates to all-group completed tasks from account menu', async () => {
