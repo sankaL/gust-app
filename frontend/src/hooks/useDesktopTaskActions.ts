@@ -126,6 +126,37 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
   })
 
   const moveDueDateMutation = useMutation({
+    onMutate: async ({ task, dueDate }: { task: TaskSummary; dueDate: string | null }) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['desktop', 'tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
+      ])
+      const snapshots = snapshotTaskQueries(queryClient, task.id)
+      const optimisticTask: TaskSummary = {
+        ...task,
+        due_date: dueDate,
+        reminder_at: dueDate ? task.reminder_at : null,
+        recurrence_frequency: dueDate ? task.recurrence_frequency : null,
+      }
+      applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
+        if (currentTask.id !== task.id) {
+          return currentTask
+        }
+        return statusSegment === task.status ? { ...currentTask, ...optimisticTask } : null
+      })
+      const currentDetail = queryClient.getQueryData<TaskDetail>(['task-detail', task.id])
+      if (currentDetail) {
+        updateTaskDetailCache(queryClient, {
+          ...currentDetail,
+          due_date: dueDate,
+          reminder_at: dueDate ? currentDetail.reminder_at : null,
+          recurrence: dueDate ? currentDetail.recurrence : null,
+          recurrence_frequency: dueDate ? currentDetail.recurrence_frequency : null,
+        })
+      }
+      return { snapshots }
+    },
     mutationFn: async ({ task, dueDate }: { task: TaskSummary; dueDate: string | null }) => {
       const detail = await queryClient.ensureQueryData({
         queryKey: ['task-detail', task.id],
@@ -152,7 +183,10 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
       notifySuccess('Task date updated.')
       void refreshDesktopTaskData(task)
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
       notifyError(buildFriendlyMessage(error, 'Task date could not be updated.'))
     },
   })

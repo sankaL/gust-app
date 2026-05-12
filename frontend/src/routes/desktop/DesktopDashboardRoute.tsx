@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { DragDropProvider, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/react'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -7,6 +8,7 @@ import {
   CheckCircle2,
   Clock3,
   Eye,
+  GripVertical,
   Inbox,
   ListTodo,
 } from 'lucide-react'
@@ -14,13 +16,31 @@ import { Link, useOutletContext } from 'react-router-dom'
 
 import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
 import { useDesktopTaskActions } from '../../hooks/useDesktopTaskActions'
+import type { TaskSummary } from '../../lib/api'
 import {
+  COMPLETION_TREND_RANGES,
   buildDesktopAnalytics,
   buildWeeklyBoardColumns,
   fetchAllDesktopTasks,
   formatIsoDateLabel,
+  type CompletionTrendRange,
+  type WeeklyBoardColumn,
 } from '../../lib/desktopData'
 import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../../lib/taskScreenCache'
+
+const KANBAN_TASK_TYPE = 'weekly-kanban-task'
+const OVERDUE_COLUMN_KEY = 'overdue'
+const COMPLETION_TREND_BAR_SCALE: Record<
+  CompletionTrendRange,
+  { minHeight: number; maxHeight: number; zeroHeight: number }
+> = {
+  week: { minHeight: 18, maxHeight: 98, zeroHeight: 2 },
+  month: { minHeight: 14, maxHeight: 112, zeroHeight: 2 },
+  '3m': { minHeight: 12, maxHeight: 70, zeroHeight: 2 },
+  '6m': { minHeight: 10, maxHeight: 58, zeroHeight: 2 },
+  year: { minHeight: 12, maxHeight: 64, zeroHeight: 2 },
+  ytd: { minHeight: 12, maxHeight: 68, zeroHeight: 2 },
+}
 
 function MetricRow({
   icon,
@@ -61,9 +81,113 @@ function MetricRow({
   )
 }
 
+function WeeklyKanbanColumn({
+  column,
+  children,
+}: {
+  column: WeeklyBoardColumn
+  children: React.ReactNode
+}) {
+  const canReceiveDrops = column.key !== OVERDUE_COLUMN_KEY
+  const { ref, isDropTarget } = useDroppable({
+    id: column.key,
+    type: 'weekly-kanban-column',
+    accept: canReceiveDrops ? KANBAN_TASK_TYPE : () => false,
+    collisionPriority: 1,
+    data: { columnKey: column.key },
+  })
+
+  return (
+    <div
+      ref={ref}
+      className={`min-h-80 rounded-card bg-surface-dim p-3 transition duration-200 ${
+        isDropTarget ? 'bg-surface-container-high/40 ring-1 ring-primary/70' : ''
+      }`}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-body text-sm font-semibold text-on-surface">{column.label}</h3>
+        <span className="rounded-pill bg-surface-container-high px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">
+          {column.tasks.length}
+        </span>
+      </div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  )
+}
+
+function WeeklyKanbanTaskCard({
+  task,
+  taskActions,
+}: {
+  task: TaskSummary
+  taskActions: ReturnType<typeof useDesktopTaskActions>
+}) {
+  const { ref, handleRef, isDragSource, isDragging } = useDraggable({
+    id: task.id,
+    type: KANBAN_TASK_TYPE,
+    data: { taskId: task.id },
+  })
+
+  return (
+    <article
+      ref={ref}
+      className={`rounded-card bg-surface-container p-3 transition duration-200 ${
+        isDragSource || isDragging
+          ? 'scale-[0.99] opacity-75 ring-1 ring-primary/70 shadow-ambient'
+          : 'hover:bg-surface-container-high/70'
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <button
+          ref={handleRef}
+          type="button"
+          className="mt-0.5 shrink-0 cursor-grab rounded-full p-1 text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface active:cursor-grabbing"
+          aria-label={`Drag ${task.title}`}
+          title="Drag task"
+        >
+          <GripVertical className="h-4 w-4" strokeWidth={1.8} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <Link
+            to={`/desktop/tasks/${task.id}`}
+            className="block font-body text-sm font-semibold leading-5 text-on-surface transition hover:text-primary"
+          >
+            {task.title}
+          </Link>
+          <p className="mt-1 truncate font-body text-xs text-on-surface-variant">
+            {task.group.name}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          type="date"
+          value={task.due_date ?? ''}
+          onChange={(event) =>
+            taskActions.moveTaskDueDate(task, event.target.value ? event.target.value : null)
+          }
+          className="min-w-0 flex-1 rounded-card bg-surface-dim px-2 py-1.5 font-body text-xs text-on-surface outline-none ring-1 ring-white/10 focus:ring-primary"
+          aria-label={`Move ${task.title} due date`}
+        />
+        <button
+          type="button"
+          onClick={() => taskActions.completeTask(task)}
+          disabled={taskActions.busyTaskIds.includes(task.id)}
+          className="rounded-full bg-success/20 p-1.5 text-success transition hover:bg-success/30 active:scale-[0.98] disabled:opacity-50"
+          aria-label={`Complete ${task.title}`}
+        >
+          <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
+        </button>
+      </div>
+    </article>
+  )
+}
+
 export function DesktopDashboardRoute() {
   const { session, groups } = useOutletContext<DesktopOutletContext>()
   const taskActions = useDesktopTaskActions(session)
+  const [completionTrendRange, setCompletionTrendRange] =
+    useState<CompletionTrendRange>('month')
 
   const openTasksQuery = useQuery({
     queryKey: ['desktop', 'tasks', 'all', 'open'],
@@ -98,7 +222,48 @@ export function DesktopDashboardRoute() {
     () => buildWeeklyBoardColumns(openTasks, session.timezone),
     [openTasks, session.timezone]
   )
-  const maxTrendCount = Math.max(...analytics.completionTrend.map((point) => point.count), 1)
+  const taskById = useMemo(
+    () => new Map(openTasks.map((task) => [task.id, task])),
+    [openTasks]
+  )
+  const columnByKey = useMemo(
+    () => new Map(weeklyColumns.map((column) => [column.key, column])),
+    [weeklyColumns]
+  )
+  const completionTrend = analytics.completionTrends[completionTrendRange]
+  const completionTrendScale = COMPLETION_TREND_BAR_SCALE[completionTrendRange]
+  const maxTrendCount = Math.max(...completionTrend.points.map((point) => point.count), 1)
+  const hasCompletionTrendData = completionTrend.total > 0
+  const visibleTrendLabelEvery = Math.max(1, Math.ceil(completionTrend.points.length / 8))
+
+  function handleKanbanDragEnd(event: DragEndEvent) {
+    if (event.canceled) {
+      return
+    }
+
+    const { source, target } = event.operation
+    if (!source || !target) {
+      return
+    }
+
+    const task = taskById.get(String(source.id))
+    const targetColumnKey = String(target.id)
+
+    if (!task) {
+      return
+    }
+
+    const targetColumn = columnByKey.get(targetColumnKey)
+    if (!targetColumn || targetColumn.key === OVERDUE_COLUMN_KEY) {
+      return
+    }
+
+    if (task.due_date === targetColumn.date) {
+      return
+    }
+
+    taskActions.moveTaskDueDate(task, targetColumn.date)
+  }
 
   const todayLabel = formatIsoDateLabel(analytics.todayIso)
   const weekRangeLabel = `${todayLabel} – ${formatIsoDateLabel(analytics.weekEndIso)}`
@@ -188,30 +353,95 @@ export function DesktopDashboardRoute() {
         </section>
 
         {/* Completion trend — 3/4 */}
-        <section className="rounded-soft bg-surface-container p-4 shadow-ambient lg:col-span-3">
-          <div className="flex items-center justify-between">
+        <section className="flex flex-col rounded-soft bg-surface-container p-4 shadow-ambient lg:col-span-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-primary" strokeWidth={1.8} />
               <h2 className="font-display text-base text-on-surface">Completion Trend</h2>
               <span className="font-body text-xs text-on-surface-variant">
-                {analytics.counts.completed} total completed
+                {completionTrend.total} completed
               </span>
             </div>
+            <div
+              className="flex rounded-pill bg-surface-dim p-1"
+              aria-label="Completion trend range"
+            >
+              {COMPLETION_TREND_RANGES.map((range) => {
+                const selected = range.value === completionTrendRange
+                return (
+                  <button
+                    key={range.value}
+                    type="button"
+                    onClick={() => setCompletionTrendRange(range.value)}
+                    className={`rounded-pill px-2.5 py-1 font-body text-[0.68rem] font-semibold transition ${
+                      selected
+                        ? 'bg-primary text-on-primary shadow-ambient'
+                        : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+                    }`}
+                    aria-pressed={selected}
+                  >
+                    {range.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-          <div className="mt-3 flex h-16 items-end gap-1.5">
-            {analytics.completionTrend.map((point) => (
-              <div key={point.date} className="flex flex-1 flex-col items-center gap-1">
-                <div
-                  className="w-full rounded-t-card bg-success/60"
-                  style={{ height: `${Math.max(4, (point.count / maxTrendCount) * 56)}px` }}
-                  title={`${point.count} completed`}
-                />
-                <span className="font-body text-[0.6rem] text-on-surface-variant">
-                  {point.label}
-                </span>
+          {hasCompletionTrendData ? (
+            <div className="mt-3 flex min-h-44 flex-1 flex-col rounded-card bg-surface-dim/70 px-3 pb-2.5 pt-3">
+              <div className="flex flex-1 items-end gap-2 border-b border-white/10">
+                {completionTrend.points.map((point) => (
+                  <div key={point.date} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+                    <span
+                      className={`font-body text-[0.62rem] font-semibold leading-none ${
+                        point.count > 0 ? 'text-on-surface' : 'text-transparent'
+                      }`}
+                    >
+                      {point.count > 0 ? point.count : null}
+                    </span>
+                    <div
+                      className={`w-full min-w-2 rounded-t-card transition ${
+                        point.count > 0 ? 'bg-success shadow-[0_0_18px_rgba(78,219,121,0.24)]' : 'bg-white/8'
+                      }`}
+                      style={{
+                        height:
+                          point.count > 0
+                            ? `${Math.max(
+                                completionTrendScale.minHeight,
+                                (point.count / maxTrendCount) * completionTrendScale.maxHeight
+                              )}px`
+                            : `${completionTrendScale.zeroHeight}px`,
+                      }}
+                      title={`${point.label}: ${point.count} completed`}
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+              <div className="mt-1.5 flex gap-2">
+                {completionTrend.points.map((point, index) => {
+                  const showLabel =
+                    index === 0 ||
+                    index === completionTrend.points.length - 1 ||
+                    index % visibleTrendLabelEvery === 0
+                  return (
+                    <span
+                      key={point.date}
+                      className={`min-w-0 flex-1 truncate text-center font-body text-[0.6rem] leading-4 ${
+                        showLabel ? 'text-on-surface-variant' : 'text-transparent'
+                      }`}
+                    >
+                      {showLabel ? point.label : '.'}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 flex min-h-44 flex-1 items-center justify-center rounded-card bg-surface-dim">
+              <p className="font-body text-xs text-on-surface-variant">
+                No completed tasks in this range.
+              </p>
+            </div>
+          )}
         </section>
       </div>
 
@@ -221,66 +451,31 @@ export function DesktopDashboardRoute() {
           <div>
             <h2 className="font-display text-2xl text-on-surface">Weekly Kanban</h2>
             <p className="font-body text-sm text-on-surface-variant">
-              Move dated work by changing the date, or complete it directly.
+              Drag cards across date columns, change the date directly, or complete work in place.
             </p>
           </div>
           <CalendarDays className="h-5 w-5 text-primary" strokeWidth={1.8} />
         </div>
-        <div className="grid grid-cols-[repeat(9,minmax(13rem,1fr))] gap-3 overflow-x-auto pb-2">
-          {weeklyColumns.map((column) => (
-            <div key={column.key} className="min-h-80 rounded-card bg-surface-dim p-3">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-body text-sm font-semibold text-on-surface">{column.label}</h3>
-                <span className="rounded-pill bg-surface-container-high px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">
-                  {column.tasks.length}
-                </span>
-              </div>
-              <div className="space-y-2">
+        <DragDropProvider onDragEnd={handleKanbanDragEnd}>
+          <div className="grid grid-cols-[repeat(9,minmax(13rem,1fr))] gap-3 overflow-x-auto pb-2">
+            {weeklyColumns.map((column) => (
+              <WeeklyKanbanColumn key={column.key} column={column}>
                 {column.tasks.slice(0, 12).map((task) => (
-                  <article key={task.id} className="rounded-card bg-surface-container p-3">
-                    <Link
-                      to={`/desktop/tasks/${task.id}`}
-                      className="font-body text-sm font-semibold leading-5 text-on-surface transition hover:text-primary"
-                    >
-                      {task.title}
-                    </Link>
-                    <p className="mt-1 font-body text-xs text-on-surface-variant">
-                      {task.group.name}
-                    </p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={task.due_date ?? ''}
-                        onChange={(event) =>
-                          taskActions.moveTaskDueDate(
-                            task,
-                            event.target.value ? event.target.value : null
-                          )
-                        }
-                        className="min-w-0 flex-1 rounded-card bg-surface-dim px-2 py-1.5 font-body text-xs text-on-surface outline-none ring-1 ring-white/10 focus:ring-primary"
-                        aria-label={`Move ${task.title} due date`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => taskActions.completeTask(task)}
-                        disabled={taskActions.busyTaskIds.includes(task.id)}
-                        className="rounded-full bg-success/20 p-1.5 text-success transition hover:bg-success/30 active:scale-[0.98] disabled:opacity-50"
-                        aria-label={`Complete ${task.title}`}
-                      >
-                        <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                    </div>
-                  </article>
+                  <WeeklyKanbanTaskCard
+                    key={task.id}
+                    task={task}
+                    taskActions={taskActions}
+                  />
                 ))}
                 {column.tasks.length === 0 ? (
                   <p className="rounded-card bg-surface-container/50 p-3 font-body text-xs leading-5 text-on-surface-variant">
                     Nothing scheduled here.
                   </p>
                 ) : null}
-              </div>
-            </div>
-          ))}
-        </div>
+              </WeeklyKanbanColumn>
+            ))}
+          </div>
+        </DragDropProvider>
       </section>
     </div>
   )

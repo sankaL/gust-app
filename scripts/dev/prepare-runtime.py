@@ -198,7 +198,7 @@ def render_supabase_config(
 
 
 def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
-    """Return ports, reusing existing ones only if they are still available."""
+    """Return ports, keeping an existing runtime stable across repeated starts."""
     reserved: set[int] = set()
     resolved: dict[str, int] = {}
 
@@ -206,7 +206,7 @@ def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
         existing = existing_values.get(key)
         if existing is not None:
             candidate = int(existing)
-            if candidate not in reserved and port_is_available(candidate):
+            if candidate not in reserved:
                 reserved.add(candidate)
                 resolved[key] = candidate
                 continue

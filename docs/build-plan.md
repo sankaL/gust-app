@@ -81,6 +81,9 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| BUG-01 | Stabilize Makefile-managed local Supabase startup when CLI reports running but the local Postgres port is unreachable | DONE | 2026-05-11 | Preserved generated runtime ports across repeated starts and added a Postgres readiness gate with one automatic local Supabase restart before `db push` | AGENTS, Tech |
+| ADH-55 | Add drag-and-drop desktop Kanban cards | DONE | 2026-05-11 19:14 EDT | Added dnd kit-powered drag handles, droppable weekly board columns, due-date persistence on cross-column drops, and optimistic desktop task-list cache updates while preserving date-input and complete actions. | Design, AGENTS |
+| ADH-54 | Add desktop completion trend ranges | DONE | 2026-05-11 19:08 EDT | Replaced the dashboard completion trend's forward-looking visible-week chart with selectable rolling Week, Month, 3M, 6M, Year, and YTD historical completion ranges. | Design, AGENTS |
 | ADH-53 | Seed desktop dashboard development data | DONE | 2026-05-03 | Added a Makefile-run local dev dashboard seeder for the local test account, populated current-week open and completed tasks, and aligned the desktop completion trend with the visible weekly dashboard window. | AGENTS, Design |
 | ADH-52 | Refine desktop task overview card | DONE | 2026-05-03 | Reworked the desktop dashboard task overview card with nested tonal metric tiles, a clearer header summary, hover/tactile states, and no divider lines between metrics. | Design, AGENTS |
 | ADH-51 | Flatten desktop capture review layout | DONE | 2026-05-02 22:28 EDT | Removed desktop capture-review outer card wrappers so extracted task cards are the only card surfaces, widened the review content to the full desktop workspace, and tightened responsive header/action spacing. | Design, AGENTS |

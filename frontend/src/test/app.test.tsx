@@ -489,9 +489,20 @@ describe('app shell', () => {
 
   it('renders the desktop dashboard title in the top navigation row only', async () => {
     renderWithRoute(['/desktop'])
+    const user = userEvent.setup()
 
     expect(await screen.findByRole('heading', { name: 'Weekly overview' })).toBeInTheDocument()
     expect(screen.getAllByRole('heading', { name: 'Weekly overview' })).toHaveLength(1)
+    expect(screen.getByRole('heading', { name: 'Completion Trend' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Week' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Month' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '3M' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '6M' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Year' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'YTD' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Month' }))
+    expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByText('Desktop workspace')).not.toBeInTheDocument()
     expect(screen.queryByText('user@example.com')).not.toBeInTheDocument()
   })

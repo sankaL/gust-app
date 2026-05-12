@@ -40,10 +40,17 @@ export type WeeklyBoardColumn = {
   tasks: TaskSummary[]
 }
 
+export type CompletionTrendRange = 'week' | 'month' | '3m' | '6m' | 'year' | 'ytd'
+
 export type CompletionTrendPoint = {
   date: string
   label: string
   count: number
+}
+
+export type CompletionTrend = {
+  points: CompletionTrendPoint[]
+  total: number
 }
 
 export type GroupAnalytics = {
@@ -59,7 +66,7 @@ export type DesktopAnalytics = {
   weekEndIso: string
   upcomingTasks: TaskSummary[]
   recentlyCompletedTasks: TaskSummary[]
-  completionTrend: CompletionTrendPoint[]
+  completionTrends: Record<CompletionTrendRange, CompletionTrend>
   groupAnalytics: GroupAnalytics[]
   counts: {
     open: number
@@ -74,6 +81,18 @@ export type DesktopAnalytics = {
 
 const MAX_DESKTOP_TASK_PAGES = 20
 const DESKTOP_TASK_PAGE_SIZE = 100
+
+export const COMPLETION_TREND_RANGES: Array<{
+  value: CompletionTrendRange
+  label: string
+}> = [
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+  { value: '3m', label: '3M' },
+  { value: '6m', label: '6M' },
+  { value: 'year', label: 'Year' },
+  { value: 'ytd', label: 'YTD' },
+]
 
 export const EMPTY_DESKTOP_FILTERS: DesktopTaskFilters = {
   search: '',
@@ -133,6 +152,38 @@ export function addDaysIso(isoDate: string, days: number): string {
   return date.toISOString().slice(0, 10)
 }
 
+function addMonthsIso(isoDate: string, months: number): string {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const targetMonthIndex = month - 1 + months
+  const targetYear = year + Math.floor(targetMonthIndex / 12)
+  const normalizedMonthIndex = ((targetMonthIndex % 12) + 12) % 12
+  const lastDayOfTargetMonth = new Date(
+    Date.UTC(targetYear, normalizedMonthIndex + 1, 0, 12)
+  ).getUTCDate()
+  const date = new Date(
+    Date.UTC(targetYear, normalizedMonthIndex, Math.min(day, lastDayOfTargetMonth), 12)
+  )
+  return date.toISOString().slice(0, 10)
+}
+
+function startOfMonthIso(isoDate: string): string {
+  return `${isoDate.slice(0, 8)}01`
+}
+
+function getDaysBetweenIso(startIso: string, endIso: string): number {
+  const [startYear, startMonth, startDay] = startIso.split('-').map(Number)
+  const [endYear, endMonth, endDay] = endIso.split('-').map(Number)
+  const start = Date.UTC(startYear, startMonth - 1, startDay, 12)
+  const end = Date.UTC(endYear, endMonth - 1, endDay, 12)
+  return Math.round((end - start) / 86_400_000)
+}
+
+function getMonthDistance(startMonthIso: string, endMonthIso: string): number {
+  const [startYear, startMonth] = startMonthIso.split('-').map(Number)
+  const [endYear, endMonth] = endMonthIso.split('-').map(Number)
+  return (endYear - startYear) * 12 + (endMonth - startMonth)
+}
+
 export function formatIsoDateLabel(isoDate: string, options: Intl.DateTimeFormatOptions = {}) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -176,6 +227,148 @@ export function getCompletedIsoDate(task: TaskSummary, timezone: string | null):
   const month = parts.find((part) => part.type === 'month')?.value
   const day = parts.find((part) => part.type === 'day')?.value
   return year && month && day ? `${year}-${month}-${day}` : null
+}
+
+function buildDailyCompletionTrend({
+  completedDates,
+  startIso,
+  todayIso,
+}: {
+  completedDates: string[]
+  startIso: string
+  todayIso: string
+}): CompletionTrend {
+  const dayCount = getDaysBetweenIso(startIso, todayIso) + 1
+  const dates = Array.from({ length: dayCount }, (_, index) => addDaysIso(startIso, index))
+  const counts = new Map(dates.map((date) => [date, 0]))
+
+  for (const completedDate of completedDates) {
+    if (counts.has(completedDate)) {
+      counts.set(completedDate, (counts.get(completedDate) ?? 0) + 1)
+    }
+  }
+
+  const points = dates.map((date) => ({
+    date,
+    label: date === todayIso ? 'Today' : formatIsoDateLabel(date, { weekday: 'short' }),
+    count: counts.get(date) ?? 0,
+  }))
+
+  return {
+    points,
+    total: points.reduce((sum, point) => sum + point.count, 0),
+  }
+}
+
+function buildWeeklyCompletionTrend({
+  completedDates,
+  todayIso,
+  weeks,
+}: {
+  completedDates: string[]
+  todayIso: string
+  weeks: number
+}): CompletionTrend {
+  const startIso = addDaysIso(todayIso, -((weeks * 7) - 1))
+  const buckets = Array.from({ length: weeks }, (_, index) => {
+    const start = addDaysIso(startIso, index * 7)
+    const end = index === weeks - 1 ? todayIso : addDaysIso(start, 6)
+    return { start, end, count: 0 }
+  })
+
+  for (const completedDate of completedDates) {
+    if (completedDate < startIso || completedDate > todayIso) {
+      continue
+    }
+    const bucketIndex = Math.floor(getDaysBetweenIso(startIso, completedDate) / 7)
+    const bucket = buckets[bucketIndex]
+    if (bucket) {
+      bucket.count += 1
+    }
+  }
+
+  const points = buckets.map((bucket) => ({
+    date: bucket.start,
+    label: formatIsoDateLabel(bucket.start),
+    count: bucket.count,
+  }))
+
+  return {
+    points,
+    total: points.reduce((sum, point) => sum + point.count, 0),
+  }
+}
+
+function buildMonthlyCompletionTrend({
+  completedDates,
+  todayIso,
+  startMonthIso,
+}: {
+  completedDates: string[]
+  todayIso: string
+  startMonthIso: string
+}): CompletionTrend {
+  const todayMonthIso = startOfMonthIso(todayIso)
+  const monthCount = Math.max(1, getMonthDistance(startMonthIso, todayMonthIso) + 1)
+  const months = Array.from({ length: monthCount }, (_, index) =>
+    addMonthsIso(startMonthIso, index)
+  )
+  const counts = new Map(months.map((month) => [month, 0]))
+
+  for (const completedDate of completedDates) {
+    const completedMonth = startOfMonthIso(completedDate)
+    if (completedDate <= todayIso && counts.has(completedMonth)) {
+      counts.set(completedMonth, (counts.get(completedMonth) ?? 0) + 1)
+    }
+  }
+
+  const points = months.map((month) => ({
+    date: month,
+    label: new Intl.DateTimeFormat(undefined, { month: 'short' }).format(
+      new Date(`${month}T12:00:00`)
+    ),
+    count: counts.get(month) ?? 0,
+  }))
+
+  return {
+    points,
+    total: points.reduce((sum, point) => sum + point.count, 0),
+  }
+}
+
+function buildCompletionTrends(
+  completedTasks: TaskSummary[],
+  timezone: string | null,
+  todayIso: string
+): Record<CompletionTrendRange, CompletionTrend> {
+  const completedDates = completedTasks
+    .map((task) => getCompletedIsoDate(task, timezone))
+    .filter((date): date is string => Boolean(date))
+
+  return {
+    week: buildDailyCompletionTrend({
+      completedDates,
+      startIso: addDaysIso(todayIso, -6),
+      todayIso,
+    }),
+    month: buildDailyCompletionTrend({
+      completedDates,
+      startIso: addDaysIso(todayIso, -29),
+      todayIso,
+    }),
+    '3m': buildWeeklyCompletionTrend({ completedDates, todayIso, weeks: 13 }),
+    '6m': buildWeeklyCompletionTrend({ completedDates, todayIso, weeks: 26 }),
+    year: buildMonthlyCompletionTrend({
+      completedDates,
+      todayIso,
+      startMonthIso: startOfMonthIso(addMonthsIso(todayIso, -11)),
+    }),
+    ytd: buildMonthlyCompletionTrend({
+      completedDates,
+      todayIso,
+      startMonthIso: `${todayIso.slice(0, 4)}-01-01`,
+    }),
+  }
 }
 
 export function buildWeeklyBoardColumns(
@@ -228,21 +421,7 @@ export function buildDesktopAnalytics({
 }): DesktopAnalytics {
   const todayIso = getTodayIsoDate(timezone)
   const weekEndIso = addDaysIso(todayIso, 6)
-  const visibleWeekDates = Array.from({ length: 7 }, (_, index) => addDaysIso(todayIso, index))
-
-  const completionCounts = new Map(visibleWeekDates.map((date) => [date, 0]))
-  for (const task of completedTasks) {
-    const completedDate = getCompletedIsoDate(task, timezone)
-    if (completedDate && completionCounts.has(completedDate)) {
-      completionCounts.set(completedDate, (completionCounts.get(completedDate) ?? 0) + 1)
-    }
-  }
-
-  const completionTrend = visibleWeekDates.map((date) => ({
-    date,
-    label: date === todayIso ? 'Today' : formatIsoDateLabel(date, { weekday: 'short' }),
-    count: completionCounts.get(date) ?? 0,
-  }))
+  const completionTrends = buildCompletionTrends(completedTasks, timezone, todayIso)
 
   const upcomingTasks = openTasks
     .filter((task) => task.due_date && task.due_date >= todayIso)
@@ -274,7 +453,7 @@ export function buildDesktopAnalytics({
     weekEndIso,
     upcomingTasks,
     recentlyCompletedTasks,
-    completionTrend,
+    completionTrends,
     groupAnalytics,
     counts: {
       open: openTasks.length,

@@ -10,7 +10,7 @@ DEV_SUPABASE_DIR := $(DEV_RUNTIME_DIR)/supabase
 DEV_SUPABASE_WORKDIR := $(DEV_RUNTIME_DIR)
 DOCKER_COMPOSE := docker compose --env-file $(DEV_RUNTIME_ENV)
 
-.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime supabase-start supabase-stop supabase-sync-local seed-dev-dashboard wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
+.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime wait-supabase-db supabase-start supabase-stop supabase-sync-local seed-dev-dashboard wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
 
 frontend-install:
 	npm --prefix frontend install
@@ -61,6 +61,9 @@ check: frontend-lint frontend-test frontend-build backend-lint backend-test back
 prepare-dev-runtime:
 	python3 scripts/dev/prepare-runtime.py
 
+wait-supabase-db:
+	python3 scripts/dev/wait-supabase-db.py
+
 supabase-stop:
 	@if [ -d "$(DEV_SUPABASE_DIR)" ]; then \
 		$(SUPABASE) stop --workdir "$(DEV_SUPABASE_WORKDIR)"; \
@@ -71,6 +74,15 @@ supabase-start: prepare-dev-runtime
 	. "$(DEV_RUNTIME_ENV)"; \
 	set +a; \
 	$(SUPABASE) start --workdir "$(DEV_SUPABASE_WORKDIR)"
+	@$(MAKE) wait-supabase-db || ( \
+		echo 'Supabase reported running but local Postgres is unavailable; restarting local Supabase.'; \
+		$(SUPABASE) stop --workdir "$(DEV_SUPABASE_WORKDIR)"; \
+		set -a; \
+		. "$(DEV_RUNTIME_ENV)"; \
+		set +a; \
+		$(SUPABASE) start --workdir "$(DEV_SUPABASE_WORKDIR)"; \
+		$(MAKE) wait-supabase-db \
+	)
 	$(MAKE) supabase-sync-local
 
 supabase-sync-local: prepare-dev-runtime
