@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext, useSearchParams } from 'react-router-dom'
 
 import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
 import { DesktopTaskTable } from '../../components/DesktopTaskTable'
+import { DesktopTaskDetailModal } from '../../components/DesktopTaskDetailModal'
 import { useDesktopTaskActions } from '../../hooks/useDesktopTaskActions'
 import { fetchAllDesktopTasks } from '../../lib/desktopData'
 import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../../lib/taskScreenCache'
@@ -12,6 +13,8 @@ export function DesktopTasksRoute() {
   const { session, groups } = useOutletContext<DesktopOutletContext>()
   const taskActions = useDesktopTaskActions(session)
   const [visibleSummary, setVisibleSummary] = useState({ visible: 0, total: 0 })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedTaskId = searchParams.get('task')
 
   const tasksQuery = useQuery({
     queryKey: ['desktop', 'tasks', 'all', 'open'],
@@ -36,6 +39,18 @@ export function DesktopTasksRoute() {
   )
   useDesktopHeader(header)
 
+  function openTaskPreview(taskId: string) {
+    const next = new URLSearchParams(searchParams)
+    next.set('task', taskId)
+    setSearchParams(next)
+  }
+
+  function closeTaskPreview() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('task')
+    setSearchParams(next, { replace: true })
+  }
+
   if (tasksQuery.isLoading) {
     return <div className="h-96 animate-pulse rounded-soft bg-surface-container" aria-busy="true" />
   }
@@ -50,16 +65,32 @@ export function DesktopTasksRoute() {
   }
 
   return (
-    <DesktopTaskTable
-      title="All Open Tasks"
-      tasks={tasks}
-      groups={groups}
-      status="open"
-      hideHeader
-      busyTaskIds={taskActions.busyTaskIds}
-      onComplete={taskActions.completeTask}
-      onMoveDueDate={taskActions.moveTaskDueDate}
-      onVisibleCountChange={handleVisibleCountChange}
-    />
+    <>
+      <DesktopTaskTable
+        title="All Open Tasks"
+        tasks={tasks}
+        groups={groups}
+        status="open"
+        hideHeader
+        busyTaskIds={taskActions.busyTaskIds}
+        onComplete={taskActions.completeTask}
+        onMoveDueDate={taskActions.moveTaskDueDate}
+        onTaskOpen={openTaskPreview}
+        onVisibleCountChange={handleVisibleCountChange}
+      />
+
+      <DesktopTaskDetailModal
+        taskId={selectedTaskId}
+        isOpen={Boolean(selectedTaskId)}
+        onClose={closeTaskPreview}
+        session={session}
+        groups={groups}
+        onComplete={(task) => {
+          taskActions.completeTask(task)
+          closeTaskPreview()
+        }}
+        busyTaskIds={taskActions.busyTaskIds}
+      />
+    </>
   )
 }

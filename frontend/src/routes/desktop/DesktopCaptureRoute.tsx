@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
 
-import { EditExtractedTaskModal } from '../../components/EditExtractedTaskModal'
+import { DesktopEditExtractedTaskModal } from '../../components/DesktopEditExtractedTaskModal'
 import { StagingTable } from '../../components/StagingTable'
 import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
 import { useNotifications } from '../../components/Notifications'
@@ -186,6 +186,7 @@ export function DesktopCaptureRoute() {
             title="Newly extracted tasks"
             subtext="Review and approve tasks from your latest desktop recording"
             emptyMessage="No newly captured tasks to review"
+            variant="desktop"
           />
 
           <div className="flex justify-end">
@@ -214,6 +215,7 @@ export function DesktopCaptureRoute() {
             title={hasLatestCapture ? 'Older pending tasks' : 'Pending capture tasks'}
             subtext="Extracted tasks awaiting review"
             emptyMessage="No pending tasks to review"
+            variant="desktop"
           />
         </div>
       ) : null}
@@ -228,13 +230,14 @@ export function DesktopCaptureRoute() {
       ) : null}
 
       {editModalTask && csrfToken ? (
-        <EditExtractedTaskModal
+        <DesktopEditExtractedTaskModal
           task={editModalTask}
           groups={groups}
           isOpen={Boolean(editModalTask)}
           onClose={() => setEditModalTask(null)}
           onSave={() => refreshTaskQueries(editModalTask.capture_id)}
           csrfToken={csrfToken}
+          timezone={session.timezone}
         />
       ) : null}
     </section>

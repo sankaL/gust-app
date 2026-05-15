@@ -12,9 +12,10 @@ import {
   Inbox,
   ListTodo,
 } from 'lucide-react'
-import { Link, useOutletContext } from 'react-router-dom'
+import { useOutletContext, useSearchParams } from 'react-router-dom'
 
 import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
+import { DesktopTaskDetailModal } from '../../components/DesktopTaskDetailModal'
 import { useDesktopTaskActions } from '../../hooks/useDesktopTaskActions'
 import type { TaskSummary } from '../../lib/api'
 import {
@@ -23,6 +24,8 @@ import {
   buildWeeklyBoardColumns,
   fetchAllDesktopTasks,
   formatIsoDateLabel,
+  addDaysIso,
+  getTodayIsoDate,
   type CompletionTrendRange,
   type WeeklyBoardColumn,
 } from '../../lib/desktopData'
@@ -32,14 +35,14 @@ const KANBAN_TASK_TYPE = 'weekly-kanban-task'
 const OVERDUE_COLUMN_KEY = 'overdue'
 const COMPLETION_TREND_BAR_SCALE: Record<
   CompletionTrendRange,
-  { minHeight: number; maxHeight: number; zeroHeight: number }
+  { minHeight: number; maxHeightPercent: number; zeroHeight: number }
 > = {
-  week: { minHeight: 18, maxHeight: 98, zeroHeight: 2 },
-  month: { minHeight: 14, maxHeight: 112, zeroHeight: 2 },
-  '3m': { minHeight: 12, maxHeight: 70, zeroHeight: 2 },
-  '6m': { minHeight: 10, maxHeight: 58, zeroHeight: 2 },
-  year: { minHeight: 12, maxHeight: 64, zeroHeight: 2 },
-  ytd: { minHeight: 12, maxHeight: 68, zeroHeight: 2 },
+  week: { minHeight: 18, maxHeightPercent: 82, zeroHeight: 2 },
+  month: { minHeight: 14, maxHeightPercent: 88, zeroHeight: 2 },
+  '3m': { minHeight: 12, maxHeightPercent: 58, zeroHeight: 2 },
+  '6m': { minHeight: 10, maxHeightPercent: 48, zeroHeight: 2 },
+  year: { minHeight: 12, maxHeightPercent: 54, zeroHeight: 2 },
+  ytd: { minHeight: 12, maxHeightPercent: 58, zeroHeight: 2 },
 }
 
 function MetricRow({
@@ -100,13 +103,15 @@ function WeeklyKanbanColumn({
   return (
     <div
       ref={ref}
-      className={`min-h-80 rounded-card bg-surface-dim p-3 transition duration-200 ${
+      className={`min-h-80 rounded-card bg-surface-dim p-3 transition duration-200 xl:p-2 ${
         isDropTarget ? 'bg-surface-container-high/40 ring-1 ring-primary/70' : ''
       }`}
     >
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-body text-sm font-semibold text-on-surface">{column.label}</h3>
-        <span className="rounded-pill bg-surface-container-high px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="min-w-0 truncate font-body text-sm font-semibold text-on-surface xl:text-xs">
+          {column.label}
+        </h3>
+        <span className="shrink-0 rounded-pill bg-surface-container-high px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">
           {column.tasks.length}
         </span>
       </div>
@@ -118,9 +123,11 @@ function WeeklyKanbanColumn({
 function WeeklyKanbanTaskCard({
   task,
   taskActions,
+  onOpen,
 }: {
   task: TaskSummary
   taskActions: ReturnType<typeof useDesktopTaskActions>
+  onOpen: (taskId: string) => void
 }) {
   const { ref, handleRef, isDragSource, isDragging } = useDraggable({
     id: task.id,
@@ -131,52 +138,42 @@ function WeeklyKanbanTaskCard({
   return (
     <article
       ref={ref}
-      className={`rounded-card bg-surface-container p-3 transition duration-200 ${
+      className={`rounded-card bg-surface-container px-2.5 py-2 transition duration-200 ${
         isDragSource || isDragging
           ? 'scale-[0.99] opacity-75 ring-1 ring-primary/70 shadow-ambient'
           : 'hover:bg-surface-container-high/70'
       }`}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-1.5">
         <button
           ref={handleRef}
           type="button"
-          className="mt-0.5 shrink-0 cursor-grab rounded-full p-1 text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface active:cursor-grabbing"
+          className="mt-0.5 shrink-0 cursor-grab rounded-full p-0.5 text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface active:cursor-grabbing"
           aria-label={`Drag ${task.title}`}
           title="Drag task"
         >
-          <GripVertical className="h-4 w-4" strokeWidth={1.8} />
+          <GripVertical className="h-3.5 w-3.5" strokeWidth={1.8} />
         </button>
         <div className="min-w-0 flex-1">
-          <Link
-            to={`/desktop/tasks/${task.id}`}
-            className="block font-body text-sm font-semibold leading-5 text-on-surface transition hover:text-primary"
+          <button
+            type="button"
+            onClick={() => onOpen(task.id)}
+            className="line-clamp-2 block max-w-full text-left font-body text-xs font-semibold leading-4 text-on-surface transition hover:text-primary active:scale-[0.99]"
           >
             {task.title}
-          </Link>
-          <p className="mt-1 truncate font-body text-xs text-on-surface-variant">
+          </button>
+          <p className="mt-0.5 truncate font-body text-[0.68rem] leading-4 text-on-surface-variant">
             {task.group.name}
           </p>
         </div>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          type="date"
-          value={task.due_date ?? ''}
-          onChange={(event) =>
-            taskActions.moveTaskDueDate(task, event.target.value ? event.target.value : null)
-          }
-          className="min-w-0 flex-1 rounded-card bg-surface-dim px-2 py-1.5 font-body text-xs text-on-surface outline-none ring-1 ring-white/10 focus:ring-primary"
-          aria-label={`Move ${task.title} due date`}
-        />
         <button
           type="button"
           onClick={() => taskActions.completeTask(task)}
           disabled={taskActions.busyTaskIds.includes(task.id)}
-          className="rounded-full bg-success/20 p-1.5 text-success transition hover:bg-success/30 active:scale-[0.98] disabled:opacity-50"
+          className="mt-0.5 shrink-0 rounded-full bg-success/20 p-1 text-success transition hover:bg-success/30 active:scale-[0.98] disabled:opacity-50"
           aria-label={`Complete ${task.title}`}
         >
-          <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
+          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
         </button>
       </div>
     </article>
@@ -188,6 +185,12 @@ export function DesktopDashboardRoute() {
   const taskActions = useDesktopTaskActions(session)
   const [completionTrendRange, setCompletionTrendRange] =
     useState<CompletionTrendRange>('month')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedTaskId = searchParams.get('task')
+  const completedAnalyticsStart = useMemo(
+    () => addDaysIso(getTodayIsoDate(session.timezone), -370),
+    [session.timezone]
+  )
 
   const openTasksQuery = useQuery({
     queryKey: ['desktop', 'tasks', 'all', 'open'],
@@ -197,8 +200,11 @@ export function DesktopDashboardRoute() {
   })
 
   const completedTasksQuery = useQuery({
-    queryKey: ['desktop', 'tasks', 'all', 'completed'],
-    queryFn: () => fetchAllDesktopTasks('completed'),
+    queryKey: ['desktop', 'tasks', 'all', 'completed', completedAnalyticsStart],
+    queryFn: () =>
+      fetchAllDesktopTasks('completed', null, {
+        completedStart: completedAnalyticsStart,
+      }),
     staleTime: TASK_SCREEN_STALE_TIME_MS,
     gcTime: TASK_SCREEN_GC_TIME_MS,
   })
@@ -265,6 +271,18 @@ export function DesktopDashboardRoute() {
     taskActions.moveTaskDueDate(task, targetColumn.date)
   }
 
+  function openTaskPreview(taskId: string) {
+    const next = new URLSearchParams(searchParams)
+    next.set('task', taskId)
+    setSearchParams(next)
+  }
+
+  function closeTaskPreview() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('task')
+    setSearchParams(next, { replace: true })
+  }
+
   const todayLabel = formatIsoDateLabel(analytics.todayIso)
   const weekRangeLabel = `${todayLabel} – ${formatIsoDateLabel(analytics.weekEndIso)}`
   const header = useMemo(
@@ -301,7 +319,7 @@ export function DesktopDashboardRoute() {
     <div className="space-y-6">
       {/* Metrics + trend side-by-side */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        {/* Task overview — 1/4 */}
+        {/* Task overview: 1/4 */}
         <section className="rounded-soft bg-surface-container p-5 shadow-ambient lg:col-span-1">
           <div className="mb-3 flex items-center gap-2">
             <ListTodo className="h-4 w-4 text-primary" strokeWidth={1.8} />
@@ -314,7 +332,7 @@ export function DesktopDashboardRoute() {
               value={analytics.counts.open}
               insight={
                 analytics.counts.open === 0
-                  ? 'All clear — nothing pending right now.'
+                  ? 'All clear. Nothing pending right now.'
                   : `${analytics.counts.open} task${analytics.counts.open > 1 ? 's' : ''} waiting for your attention.`
               }
             />
@@ -326,7 +344,7 @@ export function DesktopDashboardRoute() {
               insight={
                 analytics.counts.overdue === 0
                   ? 'No overdue items. You are caught up.'
-                  : `${analytics.counts.overdue} task${analytics.counts.overdue > 1 ? 's' : ''} past due — consider rescheduling.`
+                  : `${analytics.counts.overdue} task${analytics.counts.overdue > 1 ? 's' : ''} past due. Consider rescheduling.`
               }
             />
             <MetricRow
@@ -352,7 +370,7 @@ export function DesktopDashboardRoute() {
           </div>
         </section>
 
-        {/* Completion trend — 3/4 */}
+        {/* Completion trend: 3/4 */}
         <section className="flex flex-col rounded-soft bg-surface-container p-4 shadow-ambient lg:col-span-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -405,10 +423,10 @@ export function DesktopDashboardRoute() {
                       style={{
                         height:
                           point.count > 0
-                            ? `${Math.max(
-                                completionTrendScale.minHeight,
-                                (point.count / maxTrendCount) * completionTrendScale.maxHeight
-                              )}px`
+                            ? `max(${completionTrendScale.minHeight}px, ${
+                                (point.count / maxTrendCount) *
+                                completionTrendScale.maxHeightPercent
+                              }%)`
                             : `${completionTrendScale.zeroHeight}px`,
                       }}
                       title={`${point.label}: ${point.count} completed`}
@@ -451,13 +469,13 @@ export function DesktopDashboardRoute() {
           <div>
             <h2 className="font-display text-2xl text-on-surface">Weekly Kanban</h2>
             <p className="font-body text-sm text-on-surface-variant">
-              Drag cards across date columns, change the date directly, or complete work in place.
+              Drag cards across date columns or complete work in place.
             </p>
           </div>
           <CalendarDays className="h-5 w-5 text-primary" strokeWidth={1.8} />
         </div>
         <DragDropProvider onDragEnd={handleKanbanDragEnd}>
-          <div className="grid grid-cols-[repeat(9,minmax(13rem,1fr))] gap-3 overflow-x-auto pb-2">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(9,minmax(0,1fr))] xl:gap-2">
             {weeklyColumns.map((column) => (
               <WeeklyKanbanColumn key={column.key} column={column}>
                 {column.tasks.slice(0, 12).map((task) => (
@@ -465,10 +483,11 @@ export function DesktopDashboardRoute() {
                     key={task.id}
                     task={task}
                     taskActions={taskActions}
+                    onOpen={openTaskPreview}
                   />
                 ))}
                 {column.tasks.length === 0 ? (
-                  <p className="rounded-card bg-surface-container/50 p-3 font-body text-xs leading-5 text-on-surface-variant">
+                  <p className="rounded-card bg-surface-container/50 p-3 font-body text-xs leading-5 text-on-surface-variant xl:p-2 xl:text-[0.68rem]">
                     Nothing scheduled here.
                   </p>
                 ) : null}
@@ -477,6 +496,19 @@ export function DesktopDashboardRoute() {
           </div>
         </DragDropProvider>
       </section>
+
+      <DesktopTaskDetailModal
+        taskId={selectedTaskId}
+        isOpen={Boolean(selectedTaskId)}
+        onClose={closeTaskPreview}
+        session={session}
+        groups={groups}
+        onComplete={(task) => {
+          taskActions.completeTask(task)
+          closeTaskPreview()
+        }}
+        busyTaskIds={taskActions.busyTaskIds}
+      />
     </div>
   )
 }

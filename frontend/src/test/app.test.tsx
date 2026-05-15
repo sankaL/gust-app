@@ -12,6 +12,7 @@ import { DesktopCompletedRoute } from '../routes/desktop/DesktopCompletedRoute'
 import { DesktopDashboardRoute } from '../routes/desktop/DesktopDashboardRoute'
 import { DesktopGroupDetailRoute } from '../routes/desktop/DesktopGroupDetailRoute'
 import { DesktopGroupsRoute } from '../routes/desktop/DesktopGroupsRoute'
+import { DesktopTaskDetailRoute } from '../routes/desktop/DesktopTaskDetailRoute'
 import { DesktopTasksRoute } from '../routes/desktop/DesktopTasksRoute'
 import { LoginRoute } from '../routes/LoginRoute'
 import { ManageGroupsRoute } from '../routes/ManageGroupsRoute'
@@ -107,7 +108,7 @@ function renderWithRoute(initialEntries: string[]) {
           },
           {
             path: 'tasks/:taskId',
-            element: <TaskDetailRoute />
+            element: <DesktopTaskDetailRoute />
           }
         ]
       }
@@ -115,11 +116,14 @@ function renderWithRoute(initialEntries: string[]) {
     { initialEntries }
   )
 
-  return render(
-    <AppProviders>
-      <RouterProvider router={router} />
-    </AppProviders>
-  )
+  return {
+    router,
+    ...render(
+      <AppProviders>
+        <RouterProvider router={router} />
+      </AppProviders>
+    )
+  }
 }
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
@@ -235,7 +239,53 @@ beforeEach(() => {
         ])
       }
 
-      if (url.includes('/tasks?status=completed')) {
+      if (url.endsWith('/tasks/task-1')) {
+        return jsonResponse({
+          id: 'task-1',
+          title: 'Review extraction contract',
+          description: 'Check the structured output rules before rollout.',
+          status: 'open',
+          needs_review: true,
+          due_date: null,
+          reminder_at: null,
+          due_bucket: 'no_date',
+          group: {
+            id: 'inbox-1',
+            name: 'Inbox',
+            is_system: true
+          },
+          completed_at: null,
+          deleted_at: null,
+          recurrence_frequency: null,
+          recurrence: null,
+          subtasks: []
+        })
+      }
+
+      if (url.endsWith('/tasks/completed-1')) {
+        return jsonResponse({
+          id: 'completed-1',
+          title: 'Finished task',
+          description: 'Archived after completion.',
+          status: 'completed',
+          needs_review: false,
+          due_date: null,
+          reminder_at: null,
+          due_bucket: 'no_date',
+          group: {
+            id: 'inbox-1',
+            name: 'Inbox',
+            is_system: true
+          },
+          completed_at: '2026-03-26T15:00:00Z',
+          deleted_at: null,
+          recurrence_frequency: null,
+          recurrence: null,
+          subtasks: []
+        })
+      }
+
+      if (url.includes('status=completed')) {
         return jsonResponse({
           items: [
             {
@@ -487,6 +537,84 @@ describe('app shell', () => {
     expect(await screen.findByText('Review extraction contract')).toBeInTheDocument()
   })
 
+  it('renders a mobile all-tasks preview modal from URL state without leaving the task list', async () => {
+    const { router } = renderWithRoute(['/tasks?group=all&task=task-1'])
+
+    expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
+    expect(screen.getByText('Check the structured output rules before rollout.')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/tasks')
+    expect(router.state.location.search).toContain('group=all')
+    expect(router.state.location.search).toContain('task=task-1')
+  })
+
+  it('opens a mobile grouped task preview modal without leaving the selected group', async () => {
+    const { router } = renderWithRoute(['/tasks?group=inbox-1'])
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByText('Review extraction contract'))
+
+    expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/tasks')
+    expect(router.state.location.search).toContain('group=inbox-1')
+    expect(router.state.location.search).toContain('task=task-1')
+  })
+
+  it('opens a mobile completed-task preview modal without leaving completed tasks', async () => {
+    const { router } = renderWithRoute(['/tasks/completed?group=all'])
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByText('Finished task'))
+
+    expect(await screen.findByRole('dialog', { name: 'Finished task' })).toBeInTheDocument()
+    expect(screen.getByText('Archived after completion.')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/tasks/completed')
+    expect(router.state.location.search).toContain('task=completed-1')
+  })
+
+  it('opens a desktop all-tasks preview modal from table rows without leaving the table route', async () => {
+    const { router } = renderWithRoute(['/desktop/tasks?q=Review'])
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Review extraction contract' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/desktop/tasks')
+    expect(router.state.location.search).toContain('q=Review')
+    expect(router.state.location.search).toContain('task=task-1')
+  })
+
+  it('opens a desktop dashboard preview modal from weekly kanban cards', async () => {
+    const { router } = renderWithRoute(['/desktop'])
+    const user = userEvent.setup()
+
+    const taskButtons = await screen.findAllByRole('button', { name: 'Review extraction contract' })
+    expect(screen.queryByLabelText('Move Review extraction contract due date')).not.toBeInTheDocument()
+    await user.click(taskButtons[0])
+
+    expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/desktop')
+    expect(router.state.location.search).toContain('task=task-1')
+  })
+
+  it('opens a desktop group task preview modal without leaving the group workspace', async () => {
+    const { router } = renderWithRoute(['/desktop/groups/inbox-1'])
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Review extraction contract' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/desktop/groups/inbox-1')
+    expect(router.state.location.search).toContain('task=task-1')
+  })
+
+  it('renders desktop task detail routes with the desktop editor instead of the mobile detail route', async () => {
+    renderWithRoute(['/desktop/tasks/task-1'])
+
+    expect(await screen.findByRole('heading', { name: 'Task Editor' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Review extraction contract' })).toBeInTheDocument()
+    expect(screen.queryByText('Focused editing')).not.toBeInTheDocument()
+  })
+
   it('renders the desktop dashboard title in the top navigation row only', async () => {
     renderWithRoute(['/desktop'])
     const user = userEvent.setup()
@@ -525,6 +653,7 @@ describe('app shell', () => {
 
     expect(await screen.findByRole('heading', { name: 'Inbox' })).toBeInTheDocument()
     expect(screen.getAllByRole('heading', { name: 'Inbox' })).toHaveLength(1)
+    expect(screen.getByRole('link', { name: 'Configure' })).toBeInTheDocument()
     expect(screen.getByText('Group workspace')).toBeInTheDocument()
     expect(
       screen.getByText(

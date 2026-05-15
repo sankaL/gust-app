@@ -43,6 +43,7 @@ def main() -> int:
 
     port = int(raw_port)
     deadline = time.monotonic() + TIMEOUT_SECONDS
+    print(f"Waiting up to {TIMEOUT_SECONDS} seconds for Supabase Postgres on 127.0.0.1:{port}...")
     while time.monotonic() < deadline:
         if can_connect(port):
             print(f"Supabase Postgres is reachable on 127.0.0.1:{port}.")

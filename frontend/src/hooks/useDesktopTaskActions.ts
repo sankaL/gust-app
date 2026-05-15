@@ -19,7 +19,11 @@ import {
   snapshotTaskQueries,
   updateTaskDetailCache,
 } from '../lib/taskQueryCache'
-import { refreshTaskScreenQueries, TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/taskScreenCache'
+import { refreshTaskScreenQueries } from '../lib/taskScreenCache'
+import { acquireTaskMutationLock } from '../lib/taskMutationLocks'
+
+type CompleteVariables = { task: TaskSummary; releaseLock: () => void }
+type MoveDueDateVariables = { task: TaskSummary; dueDate: string | null; releaseLock: () => void }
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -39,6 +43,15 @@ function requireCsrf(session: SessionStatus | undefined) {
 export function useDesktopTaskActions(session: SessionStatus | undefined) {
   const queryClient = useQueryClient()
   const { notifyError, notifySuccess } = useNotifications()
+
+  function acquireLock(task: TaskSummary) {
+    const releaseLock = acquireTaskMutationLock(task.id)
+    if (!releaseLock) {
+      notifyError('Task is already updating.')
+      return null
+    }
+    return releaseLock
+  }
 
   function syncTaskCaches(task: TaskSummary | TaskDetail) {
     applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
@@ -64,7 +77,7 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
   }
 
   const completeMutation = useMutation({
-    onMutate: async (task: TaskSummary) => {
+    onMutate: async ({ task }: CompleteVariables) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['tasks'] }),
         queryClient.cancelQueries({ queryKey: ['groups'] }),
@@ -80,22 +93,25 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
       adjustGroupOpenCount(queryClient, task.group.id, -1)
       return { snapshots }
     },
-    mutationFn: async (task: TaskSummary) => completeTask(task.id, requireCsrf(session)),
+    mutationFn: async ({ task }: CompleteVariables) => completeTask(task.id, requireCsrf(session)),
     onSuccess: (task) => {
       syncTaskCaches(task)
       notifySuccess(`Completed ${task.title}.`)
       void refreshDesktopTaskData(task)
     },
-    onError: (error, task, context) => {
+    onError: (error, variables, context) => {
       if (context?.snapshots) {
         restoreQuerySnapshots(queryClient, context.snapshots)
       }
-      notifyError(buildFriendlyMessage(error, `Could not complete ${task.title}.`))
+      notifyError(buildFriendlyMessage(error, `Could not complete ${variables.task.title}.`))
+    },
+    onSettled: (_data, _error, variables) => {
+      variables.releaseLock()
     },
   })
 
   const reopenMutation = useMutation({
-    onMutate: async (task: TaskSummary) => {
+    onMutate: async ({ task }: CompleteVariables) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['tasks'] }),
         queryClient.cancelQueries({ queryKey: ['groups'] }),
@@ -111,22 +127,25 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
       adjustGroupOpenCount(queryClient, task.group.id, 1)
       return { snapshots }
     },
-    mutationFn: async (task: TaskSummary) => reopenTask(task.id, requireCsrf(session)),
+    mutationFn: async ({ task }: CompleteVariables) => reopenTask(task.id, requireCsrf(session)),
     onSuccess: (task) => {
       syncTaskCaches(task)
       notifySuccess(`Moved ${task.title} back to To-do.`)
       void refreshDesktopTaskData(task)
     },
-    onError: (error, task, context) => {
+    onError: (error, variables, context) => {
       if (context?.snapshots) {
         restoreQuerySnapshots(queryClient, context.snapshots)
       }
-      notifyError(buildFriendlyMessage(error, `Could not restore ${task.title}.`))
+      notifyError(buildFriendlyMessage(error, `Could not restore ${variables.task.title}.`))
+    },
+    onSettled: (_data, _error, variables) => {
+      variables.releaseLock()
     },
   })
 
   const moveDueDateMutation = useMutation({
-    onMutate: async ({ task, dueDate }: { task: TaskSummary; dueDate: string | null }) => {
+    onMutate: async ({ task, dueDate }: MoveDueDateVariables) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['tasks'] }),
         queryClient.cancelQueries({ queryKey: ['desktop', 'tasks'] }),
@@ -157,12 +176,11 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
       }
       return { snapshots }
     },
-    mutationFn: async ({ task, dueDate }: { task: TaskSummary; dueDate: string | null }) => {
-      const detail = await queryClient.ensureQueryData({
+    mutationFn: async ({ task, dueDate }: MoveDueDateVariables) => {
+      const detail = await queryClient.fetchQuery({
         queryKey: ['task-detail', task.id],
         queryFn: () => getTaskDetail(task.id),
-        staleTime: TASK_SCREEN_STALE_TIME_MS,
-        gcTime: TASK_SCREEN_GC_TIME_MS,
+        staleTime: 0,
       })
 
       return updateTask(
@@ -189,16 +207,30 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
       }
       notifyError(buildFriendlyMessage(error, 'Task date could not be updated.'))
     },
+    onSettled: (_data, _error, variables) => {
+      variables.releaseLock()
+    },
   })
 
   return {
-    completeTask: (task: TaskSummary) => completeMutation.mutate(task),
-    reopenTask: (task: TaskSummary) => reopenMutation.mutate(task),
-    moveTaskDueDate: (task: TaskSummary, dueDate: string | null) =>
-      moveDueDateMutation.mutate({ task, dueDate }),
+    completeTask: (task: TaskSummary) => {
+      const releaseLock = acquireLock(task)
+      if (!releaseLock) return
+      completeMutation.mutate({ task, releaseLock })
+    },
+    reopenTask: (task: TaskSummary) => {
+      const releaseLock = acquireLock(task)
+      if (!releaseLock) return
+      reopenMutation.mutate({ task, releaseLock })
+    },
+    moveTaskDueDate: (task: TaskSummary, dueDate: string | null) => {
+      const releaseLock = acquireLock(task)
+      if (!releaseLock) return
+      moveDueDateMutation.mutate({ task, dueDate, releaseLock })
+    },
     busyTaskIds: [
-      completeMutation.variables?.id,
-      reopenMutation.variables?.id,
+      completeMutation.variables?.task.id,
+      reopenMutation.variables?.task.id,
       moveDueDateMutation.variables?.task.id,
     ].filter(Boolean) as string[],
     isBusy:

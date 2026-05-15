@@ -30,6 +30,7 @@ class GroupResponse(BaseModel):
     is_system: bool
     system_key: Optional[str]
     open_task_count: int
+    completed_task_count: int
 
 
 class CreateGroupRequest(BaseModel):
@@ -141,4 +142,5 @@ def _build_group_response(group: GroupRecord | GroupSummaryRecord) -> GroupRespo
         is_system=group.is_system,
         system_key=group.system_key,
         open_task_count=getattr(group, "open_task_count", 0),
+        completed_task_count=getattr(group, "completed_task_count", 0),
     )

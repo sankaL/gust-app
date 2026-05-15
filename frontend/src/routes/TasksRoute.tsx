@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import {
   ApiError,
@@ -33,6 +33,7 @@ import { OpenTaskCard } from '../components/OpenTaskCard'
 import { SessionGuard } from '../components/SessionGuard'
 import { PullToRefresh, TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
 import { TaskDeleteDialog } from '../components/TaskDeleteDialog'
+import { TaskPreviewModal } from '../components/TaskPreviewModal'
 import {
   refreshTaskScreenQueries,
   TASK_SCREEN_GC_TIME_MS,
@@ -259,7 +260,6 @@ function SwipeTaskCard({ task, onOpen, onPrepareOpen, onComplete, onDelete, isBu
 }
 
 export function TasksRoute() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const shellActions = useAppShellActions()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -284,6 +284,7 @@ export function TasksRoute() {
   })
 
   const selectedGroupId = searchParams.get('group')
+  const selectedTaskId = searchParams.get('task')
   const effectiveGroupId = selectedGroupId ?? 'all'
   const isAllView = effectiveGroupId === 'all'
   const resolvedGroupId = isAllView ? null : effectiveGroupId
@@ -293,8 +294,10 @@ export function TasksRoute() {
       return
     }
 
-    setSearchParams({ group: 'all' }, { replace: true })
-  }, [selectedGroupId, sessionQuery.data, setSearchParams])
+    const next = new URLSearchParams(searchParams)
+    next.set('group', 'all')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, selectedGroupId, sessionQuery.data, setSearchParams])
 
   const tasksQuery = useQuery({
     queryKey: ['tasks', resolvedGroupId, 'open'],
@@ -350,6 +353,19 @@ export function TasksRoute() {
       staleTime: TASK_SCREEN_STALE_TIME_MS,
       gcTime: TASK_SCREEN_GC_TIME_MS,
     })
+  }
+
+  function openTaskPreview(taskId: string) {
+    prefetchTaskDetail(taskId)
+    const next = new URLSearchParams(searchParams)
+    next.set('task', taskId)
+    setSearchParams(next)
+  }
+
+  function closeTaskPreview() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('task')
+    setSearchParams(next, { replace: true })
   }
 
   function syncTaskCaches(task: TaskSummary) {
@@ -641,12 +657,7 @@ export function TasksRoute() {
         {isAllView ? (
           <AllTasksView
             userTimezone={sessionQuery.data?.timezone ?? null}
-            onTaskOpen={(taskId) =>
-              void navigate({
-                pathname: `/tasks/${taskId}`,
-                search: '?group=all'
-              })
-            }
+            onTaskOpen={openTaskPreview}
             onTaskComplete={(task) => {
               completeMutation.mutate(task)
             }}
@@ -697,12 +708,7 @@ export function TasksRoute() {
                           task={task}
                           isBusy={pendingTaskIds.includes(task.id)}
                           onPrepareOpen={prefetchTaskDetail}
-                          onOpen={(taskId) =>
-                            void navigate({
-                              pathname: `/tasks/${taskId}`,
-                              search: resolvedGroupId ? `?group=${resolvedGroupId}` : ''
-                            })
-                          }
+                          onOpen={openTaskPreview}
                           onComplete={(taskId) => {
                             const current = openTaskItems.find((item) => item.id === taskId)
                             if (current) {
@@ -779,6 +785,21 @@ export function TasksRoute() {
           deleteTaskMutation.mutate({ task: pendingDeleteTask, scope: 'series' })
         }}
         onClose={() => setPendingDeleteTask(null)}
+      />
+
+      <TaskPreviewModal
+        taskId={selectedTaskId}
+        isOpen={Boolean(selectedTaskId)}
+        onClose={closeTaskPreview}
+        onComplete={(task) => {
+          completeMutation.mutate(task)
+          closeTaskPreview()
+        }}
+        onRequestDelete={(task) => {
+          setPendingDeleteTask(task)
+          closeTaskPreview()
+        }}
+        busyTaskIds={pendingTaskIds}
       />
     </SessionGuard>
   )

@@ -52,6 +52,7 @@ class GroupRecord:
 @dataclass
 class GroupSummaryRecord(GroupRecord):
     open_task_count: int
+    completed_task_count: int
 
 
 @dataclass
@@ -223,6 +224,7 @@ def _row_to_group_summary(row: sa.Row) -> GroupSummaryRecord:
         is_system=bool(row.is_system),
         system_key=row.system_key,
         open_task_count=int(row.open_task_count),
+        completed_task_count=int(row.completed_task_count),
     )
 
 
@@ -678,12 +680,30 @@ def list_groups_with_counts(connection: Connection, *, user_id: str) -> list[Gro
         .subquery()
     )
 
+    completed_task_count = (
+        sa.select(
+            tasks.c.group_id.label("group_id"),
+            sa.func.count(tasks.c.id).label("completed_task_count"),
+        )
+        .where(
+            tasks.c.user_id == user_id,
+            tasks.c.status == "completed",
+            tasks.c.deleted_at.is_(None),
+        )
+        .group_by(tasks.c.group_id)
+        .subquery()
+    )
+
     rows = connection.execute(
         sa.select(
             groups,
             sa.func.coalesce(open_task_count.c.open_task_count, 0).label("open_task_count"),
+            sa.func.coalesce(completed_task_count.c.completed_task_count, 0).label(
+                "completed_task_count"
+            ),
         )
         .outerjoin(open_task_count, open_task_count.c.group_id == groups.c.id)
+        .outerjoin(completed_task_count, completed_task_count.c.group_id == groups.c.id)
         .where(groups.c.user_id == user_id)
         .order_by(groups.c.is_system.desc(), sa.func.lower(groups.c.name))
     ).fetchall()
@@ -729,7 +749,11 @@ def update_group(
 
 
 def delete_group(connection: Connection, *, user_id: str, group_id: str) -> None:
-    connection.execute(groups.delete().where(groups.c.id == group_id, groups.c.user_id == user_id))
+    result = connection.execute(
+        groups.delete().where(groups.c.id == group_id, groups.c.user_id == user_id)
+    )
+    if int(result.rowcount or 0) == 0:
+        raise LookupError("Group not found.")
 
 
 def create_capture(
@@ -915,6 +939,8 @@ def list_tasks(
     include_deleted: bool = False,
     limit: int = 50,
     cursor: str | None = None,
+    completed_start: datetime | None = None,
+    completed_end: datetime | None = None,
 ) -> tuple[list[TaskWithGroupRecord], bool, str | None]:
     """Returns (task rows with groups, has_more, next_cursor)."""
     conditions = [tasks.c.user_id == user_id, tasks.c.status == status]
@@ -922,6 +948,11 @@ def list_tasks(
         conditions.append(tasks.c.group_id == group_id)
     if not include_deleted:
         conditions.append(tasks.c.deleted_at.is_(None))
+    if status == "completed":
+        if completed_start is not None:
+            conditions.append(tasks.c.completed_at >= completed_start)
+        if completed_end is not None:
+            conditions.append(tasks.c.completed_at < completed_end)
 
     # Apply cursor-based pagination if provided
     if cursor:

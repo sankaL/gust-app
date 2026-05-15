@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@tanstack/react-virtual', async () => {
@@ -87,7 +88,7 @@ vi.mock('@tanstack/react-virtual', async () => {
 })
 
 import { AllTasksView } from '../components/AllTasksView'
-import { listAllTasks } from '../lib/api'
+import { listAllTasks, type TaskSummary } from '../lib/api'
 
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
@@ -106,6 +107,15 @@ type ObserverInstance = {
 
 const observerInstances: ObserverInstance[] = []
 let mockVirtualizerMeasureCallCount = 0
+const taskSummaryDefaults: Pick<
+  TaskSummary,
+  'series_id' | 'recurrence_frequency' | 'created_at' | 'updated_at'
+> = {
+  series_id: null,
+  recurrence_frequency: null,
+  created_at: '2026-05-15T12:00:00.000Z',
+  updated_at: '2026-05-15T12:00:00.000Z',
+}
 
 class MockIntersectionObserver implements IntersectionObserver {
   readonly root: Element | Document | null
@@ -172,11 +182,55 @@ afterEach(() => {
 })
 
 describe('AllTasksView', () => {
+  it('opens the selected all-tasks item through the supplied preview handler', async () => {
+    const user = userEvent.setup()
+    const onTaskOpen = vi.fn()
+    mockedListAllTasks.mockResolvedValueOnce({
+      items: [
+        {
+          ...taskSummaryDefaults,
+          id: 'task-1',
+          title: 'Review extraction contract',
+          description: null,
+          status: 'open',
+          needs_review: false,
+          due_date: null,
+          reminder_at: null,
+          due_bucket: 'no_date',
+          group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+          completed_at: null,
+          deleted_at: null,
+          subtask_count: 0,
+        },
+      ],
+      has_more: false,
+      next_cursor: null,
+    })
+
+    const client = createClient()
+
+    render(
+      <QueryClientProvider client={client}>
+        <AllTasksView
+          userTimezone="UTC"
+          onTaskOpen={onTaskOpen}
+          onTaskComplete={vi.fn()}
+          onTaskDelete={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+
+    await user.click(await screen.findByText('Review extraction contract'))
+
+    expect(onTaskOpen).toHaveBeenCalledWith('task-1')
+  })
+
   it('observes the load-more sentinel within the internal scroll container', async () => {
     mockedListAllTasks
       .mockResolvedValueOnce({
         items: [
           {
+            ...taskSummaryDefaults,
             id: 'task-1',
             title: 'Book dentist appointment',
             description: null,
@@ -245,6 +299,7 @@ describe('AllTasksView', () => {
 
   it('re-measures remaining rows after a deleted task removes an entire section', async () => {
     const todayTask = {
+      ...taskSummaryDefaults,
       id: 'task-delete-today',
       title: 'Delete from today section',
       description: null,
@@ -259,6 +314,7 @@ describe('AllTasksView', () => {
       subtask_count: 0,
     }
     const otherTask = {
+      ...taskSummaryDefaults,
       id: 'task-keep-others',
       title: 'Keep in later section',
       description: null,

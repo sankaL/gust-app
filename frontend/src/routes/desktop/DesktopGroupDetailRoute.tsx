@@ -1,22 +1,21 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardList, Settings2 } from 'lucide-react'
-import { Link, useOutletContext, useParams } from 'react-router-dom'
+import { Link, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 
 import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
 import { DesktopTaskTable } from '../../components/DesktopTaskTable'
+import { DesktopTaskDetailModal } from '../../components/DesktopTaskDetailModal'
 import { useDesktopTaskActions } from '../../hooks/useDesktopTaskActions'
-import {
-  buildWeeklyBoardColumns,
-  fetchAllDesktopTasks,
-  formatIsoDateLabel,
-} from '../../lib/desktopData'
+import { addDaysIso, fetchAllDesktopTasks, getTodayIsoDate } from '../../lib/desktopData'
 import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../../lib/taskScreenCache'
 
 export function DesktopGroupDetailRoute() {
   const { groupId } = useParams()
   const { session, groups } = useOutletContext<DesktopOutletContext>()
   const taskActions = useDesktopTaskActions(session)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedTaskId = searchParams.get('task')
   const group = groups.find((candidate) => candidate.id === groupId)
 
   const openTasksQuery = useQuery({
@@ -36,14 +35,13 @@ export function DesktopGroupDetailRoute() {
   })
 
   const openTasks = useMemo(() => openTasksQuery.data ?? [], [openTasksQuery.data])
-  const completedTasks = completedTasksQuery.data ?? []
-  const weeklyColumns = useMemo(
-    () => buildWeeklyBoardColumns(openTasks, session.timezone),
-    [openTasks, session.timezone]
-  )
-  const datedThisWeek = weeklyColumns
-    .filter((column) => column.date)
-    .reduce((sum, column) => sum + column.tasks.length, 0)
+  const completedTasks = useMemo(() => completedTasksQuery.data ?? [], [completedTasksQuery.data])
+  const allGroupTasks = useMemo(() => [...openTasks, ...completedTasks], [openTasks, completedTasks])
+  const todayIso = getTodayIsoDate(session.timezone)
+  const weekEndIso = addDaysIso(todayIso, 6)
+  const datedThisWeek = openTasks.filter(
+    (task) => task.due_date && task.due_date >= todayIso && task.due_date <= weekEndIso
+  ).length
   const groupDescription =
     group?.description ||
     'No description yet. Add one from group configuration to improve routing context.'
@@ -54,10 +52,31 @@ export function DesktopGroupDetailRoute() {
       subtitle: group
         ? groupDescription
         : 'Choose a group from the left navigation or return to group configuration.',
+      action: group ? (
+        <Link
+          to="/desktop/groups"
+          className="inline-flex h-10 items-center gap-2 rounded-pill bg-surface-dim px-4 font-body text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-highest hover:text-on-surface"
+        >
+          <Settings2 className="h-4 w-4" strokeWidth={1.8} />
+          Configure
+        </Link>
+      ) : undefined,
     }),
     [group, groupDescription]
   )
   useDesktopHeader(header)
+
+  function openTaskPreview(taskId: string) {
+    const next = new URLSearchParams(searchParams)
+    next.set('task', taskId)
+    setSearchParams(next)
+  }
+
+  function closeTaskPreview() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('task')
+    setSearchParams(next, { replace: true })
+  }
 
   if (!group) {
     return (
@@ -91,92 +110,76 @@ export function DesktopGroupDetailRoute() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
-        <Link
-          to="/desktop/groups"
-          className="inline-flex h-10 items-center gap-2 rounded-pill bg-surface-dim px-4 font-body text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-highest hover:text-on-surface"
-        >
-          <Settings2 className="h-4 w-4" strokeWidth={1.8} />
-          Configure
-        </Link>
-      </div>
-
-      <section className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
-        <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
-          <ClipboardList className="h-5 w-5 text-primary" strokeWidth={1.8} />
-          <p className="mt-3 font-display text-4xl text-on-surface">{openTasks.length}</p>
-          <p className="font-body text-sm text-on-surface-variant">Open</p>
+      <section className="grid w-full grid-cols-4 gap-3 rounded-soft bg-surface-container p-3 shadow-ambient max-xl:grid-cols-2 max-sm:grid-cols-1">
+        <div className="flex min-w-0 items-center gap-3 rounded-card bg-surface-dim/55 px-4 py-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+            <ClipboardList className="h-5 w-5 text-primary" strokeWidth={2} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-2xl leading-none text-on-surface">{openTasks.length}</p>
+            <p className="font-body text-xs font-medium uppercase tracking-wider text-on-surface-variant">Open</p>
+          </div>
         </div>
-        <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
-          <CalendarDays className="h-5 w-5 text-primary" strokeWidth={1.8} />
-          <p className="mt-3 font-display text-4xl text-on-surface">{datedThisWeek}</p>
-          <p className="font-body text-sm text-on-surface-variant">Due this week</p>
+        <div className="flex min-w-0 items-center gap-3 rounded-card bg-surface-dim/55 px-4 py-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+            <CalendarDays className="h-5 w-5 text-primary" strokeWidth={2} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-2xl leading-none text-on-surface">{datedThisWeek}</p>
+            <p className="font-body text-xs font-medium uppercase tracking-wider text-on-surface-variant">Due this week</p>
+          </div>
         </div>
-        <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
-          <CheckCircle2 className="h-5 w-5 text-success" strokeWidth={1.8} />
-          <p className="mt-3 font-display text-4xl text-on-surface">{completedTasks.length}</p>
-          <p className="font-body text-sm text-on-surface-variant">Completed</p>
+        <div className="flex min-w-0 items-center gap-3 rounded-card bg-surface-dim/55 px-4 py-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/10">
+            <CheckCircle2 className="h-5 w-5 text-success" strokeWidth={2} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-2xl leading-none text-on-surface">{completedTasks.length}</p>
+            <p className="font-body text-xs font-medium uppercase tracking-wider text-on-surface-variant">Completed</p>
+          </div>
         </div>
-        <div className="rounded-soft bg-surface-container p-4 shadow-ambient">
-          <AlertTriangle className="h-5 w-5 text-warning" strokeWidth={1.8} />
-          <p className="mt-3 font-display text-4xl text-on-surface">
-            {openTasks.filter((task) => task.needs_review).length}
-          </p>
-          <p className="font-body text-sm text-on-surface-variant">Need review</p>
-        </div>
-      </section>
-
-      <section className="rounded-soft bg-surface-container p-4 shadow-ambient">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-2xl text-on-surface">Group Week</h2>
-          <p className="font-body text-sm text-on-surface-variant">
-            {weeklyColumns[1]?.date ? formatIsoDateLabel(weeklyColumns[1].date) : ''}
-          </p>
-        </div>
-        <div className="grid grid-cols-[repeat(9,minmax(12rem,1fr))] gap-3 overflow-x-auto pb-2">
-          {weeklyColumns.map((column) => (
-            <section key={column.key} className="min-h-56 rounded-card bg-surface-dim p-3">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-body text-sm font-semibold text-on-surface">{column.label}</h3>
-                <span className="rounded-pill bg-surface-container-high px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">
-                  {column.tasks.length}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {column.tasks.slice(0, 8).map((task) => (
-                  <Link
-                    key={task.id}
-                    to={`/desktop/tasks/${task.id}`}
-                    className="block rounded-card bg-surface-container p-3 font-body text-sm font-semibold text-on-surface transition hover:bg-surface-container-high hover:text-primary"
-                  >
-                    {task.title}
-                  </Link>
-                ))}
-              </div>
-            </section>
-          ))}
+        <div className="flex min-w-0 items-center gap-3 rounded-card bg-surface-dim/55 px-4 py-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/10">
+            <AlertTriangle className="h-5 w-5 text-warning" strokeWidth={2} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-2xl leading-none text-on-surface">
+              {openTasks.filter((task) => task.needs_review).length}
+            </p>
+            <p className="font-body text-xs font-medium uppercase tracking-wider text-on-surface-variant">Need review</p>
+          </div>
         </div>
       </section>
 
       <DesktopTaskTable
-        title={`${group.name} Open Tasks`}
-        tasks={openTasks}
+        title={`${group.name} Tasks`}
+        tasks={allGroupTasks}
         groups={groups}
-        status="open"
+        status="all"
         lockedGroupId={group.id}
+        hideHeader
         busyTaskIds={taskActions.busyTaskIds}
         onComplete={taskActions.completeTask}
         onMoveDueDate={taskActions.moveTaskDueDate}
+        onReopen={taskActions.reopenTask}
+        onTaskOpen={openTaskPreview}
       />
 
-      <DesktopTaskTable
-        title={`${group.name} Completed`}
-        tasks={completedTasks}
+      <DesktopTaskDetailModal
+        taskId={selectedTaskId}
+        isOpen={Boolean(selectedTaskId)}
+        onClose={closeTaskPreview}
+        session={session}
         groups={groups}
-        status="completed"
-        lockedGroupId={group.id}
+        onComplete={(task) => {
+          taskActions.completeTask(task)
+          closeTaskPreview()
+        }}
+        onRestore={(task) => {
+          taskActions.reopenTask(task)
+          closeTaskPreview()
+        }}
         busyTaskIds={taskActions.busyTaskIds}
-        onReopen={taskActions.reopenTask}
       />
     </div>
   )

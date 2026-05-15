@@ -11,6 +11,8 @@ function completedTask(id: string, completedAt: string): TaskSummary {
     id,
     title: id,
     description: null,
+    series_id: null,
+    recurrence_frequency: null,
     status: 'completed',
     needs_review: false,
     due_date: null,
@@ -23,6 +25,8 @@ function completedTask(id: string, completedAt: string): TaskSummary {
     },
     completed_at: completedAt,
     deleted_at: null,
+    created_at: completedAt,
+    updated_at: completedAt,
     subtask_count: 0,
   }
 }

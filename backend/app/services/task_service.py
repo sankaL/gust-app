@@ -108,6 +108,8 @@ class TaskService:
         status: str = "open",
         limit: int = 50,
         cursor: str | None = None,
+        completed_start: date | None = None,
+        completed_end: date | None = None,
     ) -> PaginatedTaskList:
         with timed_stage("db.tasks.list"):
             with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
@@ -117,6 +119,19 @@ class TaskService:
                     if group is None:
                         raise GroupNotFoundError()
 
+                completed_start_at: datetime | None = None
+                completed_end_at: datetime | None = None
+                if status == "completed":
+                    zone = ZoneInfo(user_timezone)
+                    if completed_start is not None:
+                        completed_start_at = datetime.combine(
+                            completed_start, datetime.min.time(), tzinfo=zone
+                        ).astimezone(timezone.utc)
+                    if completed_end is not None:
+                        completed_end_at = datetime.combine(
+                            completed_end, datetime.min.time(), tzinfo=zone
+                        ).astimezone(timezone.utc)
+
                 task_rows, has_more, next_cursor = list_tasks(
                     connection,
                     user_id=user_id,
@@ -124,6 +139,8 @@ class TaskService:
                     status=status,
                     limit=limit,
                     cursor=cursor,
+                    completed_start=completed_start_at,
+                    completed_end=completed_end_at,
                 )
 
         items = [

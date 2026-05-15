@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BarChart3,
@@ -39,6 +39,7 @@ export type DesktopHeaderContent = {
   eyebrow: string
   title: string
   subtitle?: string
+  action?: ReactNode
 }
 
 export type DesktopOutletContext = {
@@ -415,6 +416,7 @@ export function DesktopShell() {
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {desktopHeader.action}
                 <Link
                   to="/"
                   className="hidden items-center gap-2 rounded-pill bg-surface-container px-3 py-2 font-body text-sm text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface max-lg:flex"

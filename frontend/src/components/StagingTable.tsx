@@ -14,6 +14,7 @@ interface StagingTableProps {
   title?: string
   subtext?: string
   emptyMessage?: string
+  variant?: 'mobile' | 'desktop'
 }
 
 export function StagingTable({
@@ -26,7 +27,8 @@ export function StagingTable({
   isLoading = false,
   title = 'Extracted Tasks',
   subtext,
-  emptyMessage = 'No extracted tasks to review'
+  emptyMessage = 'No extracted tasks to review',
+  variant = 'mobile'
 }: StagingTableProps) {
   const [isApprovingAll, setIsApprovingAll] = useState(false)
   const [isDiscardingAll, setIsDiscardingAll] = useState(false)
@@ -92,27 +94,22 @@ export function StagingTable({
 
   return (
     <div className="w-full space-y-4">
-      {/* Header Section */}
-      <div className="space-y-3">
-        {/* Top row: Title + Bulk Actions */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-base font-display text-on-surface truncate">
-              {title} <span className="text-on-surface-variant font-body">({pendingTasks.length})</span>
-            </h2>
-            {subtext && (
-              <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
-                {subtext}
-              </p>
-            )}
+      {/* Bulk actions */}
+      {variant === 'desktop' ? (
+        <div className="flex items-center justify-between gap-3 border-b border-outline/60 pb-3">
+          <h2 className="sr-only">
+            {title} ({pendingTasks.length})
+          </h2>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 font-body text-xs text-on-surface-variant">
+            <span>{pendingTasks.length} pending</span>
             {needsReviewCount > 0 && (
-              <p className="text-xs text-warning mt-1">
+              <span className="font-semibold text-warning">
                 {needsReviewCount} task{needsReviewCount !== 1 ? 's' : ''} need{needsReviewCount === 1 ? 's' : ''} review
-              </p>
+              </span>
             )}
           </div>
 
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:shrink-0">
             <Button
               size="sm"
               variant="solid"
@@ -137,10 +134,55 @@ export function StagingTable({
             </Button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base font-display text-on-surface truncate">
+                {title} <span className="text-on-surface-variant font-body">({pendingTasks.length})</span>
+              </h2>
+              {subtext && (
+                <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
+                  {subtext}
+                </p>
+              )}
+              {needsReviewCount > 0 && (
+                <p className="text-xs text-warning mt-1">
+                  {needsReviewCount} task{needsReviewCount !== 1 ? 's' : ''} need{needsReviewCount === 1 ? 's' : ''} review
+                </p>
+              )}
+            </div>
+
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0">
+              <Button
+                size="sm"
+                variant="solid"
+                onClick={() => {
+                  void handleApproveAll()
+                }}
+                disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
+                className="w-full justify-center sm:w-auto"
+              >
+                {isApprovingAll ? '...' : 'Approve All'}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  void handleDiscardAll()
+                }}
+                disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
+                className="w-full justify-center text-tertiary hover:bg-tertiary/10 hover:text-tertiary sm:w-auto"
+              >
+                {isDiscardingAll ? '...' : 'Discard All'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Task List */}
-      <div className="space-y-3">
+      <div className={variant === 'desktop' ? "flex flex-col gap-2" : "space-y-3"}>
         {pendingTasks.map(task => (
           <ExtractedTaskCard
             key={task.id}
@@ -148,6 +190,7 @@ export function StagingTable({
             onApprove={onApprove}
             onDiscard={onDiscard}
             onClick={onTaskClick}
+            variant={variant}
           />
         ))}
       </div>

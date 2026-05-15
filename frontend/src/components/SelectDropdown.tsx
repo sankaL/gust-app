@@ -14,6 +14,9 @@ interface SelectDropdownProps {
   onOpenChange?: (isOpen: boolean) => void
   placeholder?: string
   disabled?: boolean
+  className?: string
+  triggerClassName?: string
+  labelClassName?: string
 }
 
 export function SelectDropdown({
@@ -24,6 +27,9 @@ export function SelectDropdown({
   onOpenChange,
   placeholder = 'Select an option',
   disabled = false,
+  className = 'space-y-1.5',
+  triggerClassName = 'px-3 py-3',
+  labelClassName = 'text-sm font-medium text-on-surface-variant',
 }: SelectDropdownProps) {
   const hasLabel = label.trim().length > 0
   const [isOpen, setIsOpen] = useState(false)
@@ -219,9 +225,9 @@ export function SelectDropdown({
   ) : null
 
   return (
-    <div className="space-y-1.5">
+    <div className={className}>
       {hasLabel ? (
-        <label className="text-sm font-medium text-on-surface-variant">{label}</label>
+        <label className={labelClassName}>{label}</label>
       ) : null}
       <div ref={containerRef} className="relative">
         <button
@@ -237,8 +243,9 @@ export function SelectDropdown({
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           className={`
-            w-full flex items-center justify-between px-3 py-3 rounded-card transition-all
+            w-full flex items-center justify-between rounded-card transition-all
             bg-surface-dim text-on-surface text-left outline-none text-sm
+            ${triggerClassName}
             ${disabled
               ? 'cursor-not-allowed opacity-50'
               : 'cursor-pointer hover:bg-surface-container-highest focus:ring-1 focus:ring-primary'

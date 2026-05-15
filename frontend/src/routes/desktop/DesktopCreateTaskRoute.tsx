@@ -6,6 +6,7 @@ import { TaskForm } from '../../components/TaskForm'
 import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
 import { useNotifications } from '../../components/Notifications'
 import { ApiError, createTask, type TaskRecurrence } from '../../lib/api'
+import { dateTimeLocalToIso } from '../../lib/dateTime'
 
 type TaskFormData = {
   title: string
@@ -53,7 +54,7 @@ export function DesktopCreateTaskRoute() {
           description: data.description || null,
           group_id: data.groupId,
           due_date: data.dueDate || null,
-          reminder_at: data.reminderAt ? new Date(data.reminderAt).toISOString() : null,
+          reminder_at: dateTimeLocalToIso(data.reminderAt, session.timezone),
           recurrence: data.recurrence,
         },
         csrfToken

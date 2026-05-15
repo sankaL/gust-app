@@ -107,15 +107,29 @@ export const EMPTY_DESKTOP_FILTERS: DesktopTaskFilters = {
 
 export async function fetchAllDesktopTasks(
   status: DesktopTaskStatus,
-  groupId: string | null = null
+  groupId: string | null = null,
+  options: { completedStart?: string | null; completedEnd?: string | null } = {}
 ): Promise<TaskSummary[]> {
   const items: TaskSummary[] = []
   let cursor: string | null = null
 
   for (let page = 0; page < MAX_DESKTOP_TASK_PAGES; page += 1) {
     const response: PaginatedTasksResponse = groupId
-      ? await listTasks(groupId, status, cursor, DESKTOP_TASK_PAGE_SIZE)
-      : await listAllTasks(status, cursor, DESKTOP_TASK_PAGE_SIZE)
+      ? await listTasks(
+          groupId,
+          status,
+          cursor,
+          DESKTOP_TASK_PAGE_SIZE,
+          options.completedStart ?? null,
+          options.completedEnd ?? null
+        )
+      : await listAllTasks(
+          status,
+          cursor,
+          DESKTOP_TASK_PAGE_SIZE,
+          options.completedStart ?? null,
+          options.completedEnd ?? null
+        )
     items.push(...response.items)
 
     if (!response.has_more || !response.next_cursor) {
@@ -434,13 +448,39 @@ export function buildDesktopAnalytics({
     )
     .slice(0, 8)
 
+  const openByGroupId = new Map<string, TaskSummary[]>()
+  const completedByGroupId = new Map<string, number>()
+  let overdueCount = 0
+  let dueTodayCount = 0
+  let dueThisWeekCount = 0
+  let noDateCount = 0
+  let needsReviewCount = 0
+
+  for (const task of openTasks) {
+    const groupTasks = openByGroupId.get(task.group.id) ?? []
+    groupTasks.push(task)
+    openByGroupId.set(task.group.id, groupTasks)
+
+    if (!task.due_date) {
+      noDateCount += 1
+    } else {
+      if (task.due_date < todayIso) overdueCount += 1
+      if (task.due_date === todayIso) dueTodayCount += 1
+      if (task.due_date >= todayIso && task.due_date <= weekEndIso) dueThisWeekCount += 1
+    }
+    if (task.needs_review) needsReviewCount += 1
+  }
+
+  for (const task of completedTasks) {
+    completedByGroupId.set(task.group.id, (completedByGroupId.get(task.group.id) ?? 0) + 1)
+  }
+
   const groupAnalytics = groups.map((group) => {
-    const groupOpen = openTasks.filter((task) => task.group.id === group.id)
-    const groupCompleted = completedTasks.filter((task) => task.group.id === group.id)
+    const groupOpen = openByGroupId.get(group.id) ?? []
     return {
       group,
       openCount: groupOpen.length,
-      completedCount: groupCompleted.length,
+      completedCount: completedByGroupId.get(group.id) ?? 0,
       overdueCount: groupOpen.filter((task) => task.due_date && task.due_date < todayIso).length,
       dueThisWeekCount: groupOpen.filter(
         (task) => task.due_date && task.due_date >= todayIso && task.due_date <= weekEndIso
@@ -458,13 +498,11 @@ export function buildDesktopAnalytics({
     counts: {
       open: openTasks.length,
       completed: completedTasks.length,
-      overdue: openTasks.filter((task) => task.due_date && task.due_date < todayIso).length,
-      dueToday: openTasks.filter((task) => task.due_date === todayIso).length,
-      dueThisWeek: openTasks.filter(
-        (task) => task.due_date && task.due_date >= todayIso && task.due_date <= weekEndIso
-      ).length,
-      noDate: openTasks.filter((task) => !task.due_date).length,
-      needsReview: openTasks.filter((task) => task.needs_review).length,
+      overdue: overdueCount,
+      dueToday: dueTodayCount,
+      dueThisWeek: dueThisWeekCount,
+      noDate: noDateCount,
+      needsReview: needsReviewCount,
     },
   }
 }

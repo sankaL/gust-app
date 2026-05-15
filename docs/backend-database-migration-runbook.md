@@ -221,6 +221,19 @@ Deployment implication:
 
 - environments must apply `0014_task_list_index` before relying on the optimized task-list pagination path in production
 
+## Phase 15 Revision (Completed Task Analytics Index)
+
+Phase 15 introduces `0015_completed_tasks_index` as the required application revision.
+
+That revision establishes:
+
+- the composite partial completed-task analytics index on `tasks(user_id, status, completed_at DESC, id DESC) WHERE deleted_at IS NULL AND completed_at IS NOT NULL`
+- the migration floor required by date-bounded completed-task list queries used by desktop dashboard analytics
+
+Deployment implication:
+
+- environments must apply `0015_completed_tasks_index` before relying on the optimized completed-task analytics range path in production
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -281,7 +294,7 @@ Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
 - Production Railway backend deploys fail closed if `APP_ENV=production` and `MIGRATION_DATABASE_URL` is missing.
-- The required revision configured for the backend matches `0014_task_list_index` or the current deployed head.
+- The required revision configured for the backend matches `0015_completed_tasks_index` or the current deployed head.
 - Backend startup revision check passes.
 - `scripts/prod/check-postgres-rls.py` passes against the runtime `DATABASE_URL`.
 - The current Postgres runtime role reports `rolbypassrls = false`.

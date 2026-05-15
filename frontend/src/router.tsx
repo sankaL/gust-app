@@ -10,6 +10,7 @@ import { DesktopCreateTaskRoute } from './routes/desktop/DesktopCreateTaskRoute'
 import { DesktopDashboardRoute } from './routes/desktop/DesktopDashboardRoute'
 import { DesktopGroupDetailRoute } from './routes/desktop/DesktopGroupDetailRoute'
 import { DesktopGroupsRoute } from './routes/desktop/DesktopGroupsRoute'
+import { DesktopTaskDetailRoute } from './routes/desktop/DesktopTaskDetailRoute'
 import { DesktopTasksRoute } from './routes/desktop/DesktopTasksRoute'
 import { LoginRoute } from './routes/LoginRoute'
 import { ManageGroupsRoute } from './routes/ManageGroupsRoute'
@@ -65,7 +66,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'tasks/:taskId',
-        element: <TaskDetailRoute />
+        element: <DesktopTaskDetailRoute />
       },
       {
         path: 'capture',
