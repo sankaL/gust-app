@@ -39,6 +39,7 @@ export type GroupSummary = {
   is_system: boolean
   system_key: string | null
   open_task_count: number
+  completed_task_count: number
 }
 
 export type TaskGroupRef = {
@@ -65,8 +66,8 @@ export type TaskSummary = {
   id: string
   title: string
   description: string | null
-  series_id?: string | null
-  recurrence_frequency?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
+  series_id: string | null
+  recurrence_frequency: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
   status: 'open' | 'completed'
   needs_review: boolean
   due_date: string | null
@@ -75,6 +76,8 @@ export type TaskSummary = {
   group: TaskGroupRef
   completed_at: string | null
   deleted_at: string | null
+  created_at: string
+  updated_at: string
   subtask_count: number
 }
 
@@ -293,7 +296,9 @@ export function listTasks(
   groupId: string,
   statusValue: 'open' | 'completed' = 'open',
   cursor: string | null = null,
-  limit: number = 50
+  limit: number = 50,
+  completedStart: string | null = null,
+  completedEnd: string | null = null
 ): Promise<PaginatedTasksResponse> {
   const params = new URLSearchParams({
     group_id: groupId,
@@ -303,13 +308,21 @@ export function listTasks(
   if (cursor) {
     params.set('cursor', cursor)
   }
+  if (completedStart) {
+    params.set('completed_start', completedStart)
+  }
+  if (completedEnd) {
+    params.set('completed_end', completedEnd)
+  }
   return apiRequest<PaginatedTasksResponse>(`/tasks?${params.toString()}`)
 }
 
 export function listAllTasks(
   statusValue: 'open' | 'completed' = 'open',
   cursor: string | null = null,
-  limit: number = 50
+  limit: number = 50,
+  completedStart: string | null = null,
+  completedEnd: string | null = null
 ): Promise<PaginatedTasksResponse> {
   const params = new URLSearchParams({
     status: statusValue,
@@ -317,6 +330,12 @@ export function listAllTasks(
   })
   if (cursor) {
     params.set('cursor', cursor)
+  }
+  if (completedStart) {
+    params.set('completed_start', completedStart)
+  }
+  if (completedEnd) {
+    params.set('completed_end', completedEnd)
   }
   return apiRequest<PaginatedTasksResponse>(`/tasks?${params.toString()}`)
 }

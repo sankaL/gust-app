@@ -222,3 +222,7 @@ __marimo__/
 .deployment-keys
 
 .env.prod
+
+# skills
+.opencode
+.opencode/*

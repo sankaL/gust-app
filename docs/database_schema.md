@@ -409,6 +409,7 @@ The initial migration set should include indexes for:
 - `tasks (user_id, due_date)`
 - `tasks (series_id, status)` for recurrence checks
 - `tasks (user_id, status, created_at desc, id desc)` partial on `deleted_at is null` for cursor pagination
+- `tasks (user_id, status, completed_at desc, id desc)` partial on `deleted_at is null and completed_at is not null` for completed-task analytics ranges
 - `subtasks (task_id)`
 - `captures (user_id, created_at desc)`
 - `captures (expires_at)` for retention cleanup

@@ -562,7 +562,7 @@ describe('tasks flow', () => {
     expect(await screen.findByText('Personal only task')).toBeInTheDocument()
   })
 
-  it('keeps task cards collapsed by default, expands inline, and still opens detail on body click', async () => {
+  it('keeps task cards collapsed by default, expands inline from the chevron, and opens preview on body click', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
       const method = init?.method ?? 'GET'
@@ -633,7 +633,7 @@ describe('tasks flow', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    renderTaskRoute(['/tasks?group=ops-1'])
+    const { router } = renderTaskRoute(['/tasks?group=ops-1'])
     const user = userEvent.setup()
 
     expect(await screen.findByText('Review extraction contract')).toBeInTheDocument()
@@ -645,7 +645,7 @@ describe('tasks flow', () => {
     // Note: Ops Desk now appears in the GroupTabs dropdown, so we check it's not in the task card context
     expect(screen.queryByText(/Reminder:/i)).not.toBeInTheDocument()
 
-    await user.click(screen.getByText('Review extraction contract'))
+    await user.click(screen.getByRole('button', { name: 'Expand Review extraction contract' }))
 
     expect(screen.getByText('Compare the new capture layout against the old hierarchy.')).toBeInTheDocument()
     // Expanded state shows full subtask label
@@ -658,7 +658,9 @@ describe('tasks flow', () => {
 
     await user.click(screen.getByText('Review extraction contract'))
 
-    expect(await screen.findByRole('button', { name: 'Save and return' })).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/tasks')
+    expect(router.state.location.search).toContain('task=task-1')
   })
 
   it('renders overdue, today, and tomorrow due badges accurately', async () => {

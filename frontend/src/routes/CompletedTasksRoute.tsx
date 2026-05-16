@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 
 import {
   ApiError,
+  getTaskDetail,
   getSessionStatus,
   listAllTasks,
   listGroups,
@@ -23,6 +24,7 @@ import {
 import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
 import { PullToRefresh, TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
+import { TaskPreviewModal } from '../components/TaskPreviewModal'
 import {
   refreshTaskScreenQueries,
   TASK_SCREEN_GC_TIME_MS,
@@ -106,6 +108,7 @@ export function CompletedTasksRoute() {
   })
 
   const selectedGroupId = searchParams.get('group')
+  const selectedTaskId = searchParams.get('task')
   const isAllGroupsView = selectedGroupId === 'all'
   const resolvedGroupId = isAllGroupsView
     ? null
@@ -117,8 +120,10 @@ export function CompletedTasksRoute() {
     }
 
     const nextGroupId = sessionQuery.data.inbox_group_id ?? groupsQuery.data[0].id
-    setSearchParams({ group: nextGroupId }, { replace: true })
-  }, [groupsQuery.data, selectedGroupId, sessionQuery.data, setSearchParams])
+    const next = new URLSearchParams(searchParams)
+    next.set('group', nextGroupId)
+    setSearchParams(next, { replace: true })
+  }, [groupsQuery.data, searchParams, selectedGroupId, sessionQuery.data, setSearchParams])
 
   const completedTasksQuery = useQuery({
     queryKey: ['tasks', isAllGroupsView ? 'all' : resolvedGroupId, 'completed'],
@@ -163,6 +168,28 @@ export function CompletedTasksRoute() {
       }
       return current.filter((candidate) => candidate !== taskId)
     })
+  }
+
+  function prefetchTaskDetail(taskId: string) {
+    void queryClient.prefetchQuery({
+      queryKey: ['task-detail', taskId],
+      queryFn: () => getTaskDetail(taskId),
+      staleTime: TASK_SCREEN_STALE_TIME_MS,
+      gcTime: TASK_SCREEN_GC_TIME_MS,
+    })
+  }
+
+  function openTaskPreview(taskId: string) {
+    prefetchTaskDetail(taskId)
+    const next = new URLSearchParams(searchParams)
+    next.set('task', taskId)
+    setSearchParams(next)
+  }
+
+  function closeTaskPreview() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('task')
+    setSearchParams(next, { replace: true })
   }
 
   const reopenMutation = useMutation({
@@ -264,7 +291,19 @@ export function CompletedTasksRoute() {
 
         <div className="space-y-3">
           {visibleCompletedTasks.map((task) => (
-            <article key={task.id} className="rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4">
+            <article
+              key={task.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => openTaskPreview(task.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  openTaskPreview(task.id)
+                }
+              }}
+              className="rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4 transition hover:bg-surface-container-highest/80 active:scale-[0.99]"
+            >
               <div className="flex items-stretch justify-between gap-4">
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                   <div className="flex flex-col gap-1.5 align-top">
@@ -293,7 +332,10 @@ export function CompletedTasksRoute() {
                   <div className="flex items-center gap-3 shrink-0">
                     <button
                       type="button"
-                      onClick={() => reopenMutation.mutate(task)}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        reopenMutation.mutate(task)
+                      }}
                       disabled={pendingTaskIds.includes(task.id)}
                       className="rounded-pill bg-surface-dim px-3 py-1.5 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
                     >
@@ -307,6 +349,17 @@ export function CompletedTasksRoute() {
         </div>
       </section>
       </PullToRefresh>
+
+      <TaskPreviewModal
+        taskId={selectedTaskId}
+        isOpen={Boolean(selectedTaskId)}
+        onClose={closeTaskPreview}
+        onRestore={(task) => {
+          reopenMutation.mutate(task)
+          closeTaskPreview()
+        }}
+        busyTaskIds={pendingTaskIds}
+      />
     </SessionGuard>
   )
 }

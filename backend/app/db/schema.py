@@ -309,6 +309,15 @@ sa.Index("ix_tasks_user_status_group", tasks.c.user_id, tasks.c.status, tasks.c.
 sa.Index("ix_tasks_user_needs_review", tasks.c.user_id, tasks.c.needs_review)
 sa.Index("ix_tasks_user_due_date", tasks.c.user_id, tasks.c.due_date)
 sa.Index("ix_tasks_series_status", tasks.c.series_id, tasks.c.status)
+sa.Index(
+    "idx_tasks_completed_analytics",
+    tasks.c.user_id,
+    tasks.c.status,
+    tasks.c.completed_at.desc(),
+    tasks.c.id.desc(),
+    postgresql_where=sa.and_(tasks.c.deleted_at.is_(None), tasks.c.completed_at.is_not(None)),
+    sqlite_where=sa.and_(tasks.c.deleted_at.is_(None), tasks.c.completed_at.is_not(None)),
+)
 sa.Index("ix_subtasks_task_id", subtasks.c.task_id)
 sa.Index("ix_captures_user_created_at", captures.c.user_id, captures.c.created_at.desc())
 sa.Index("ix_captures_expires_at", captures.c.expires_at)

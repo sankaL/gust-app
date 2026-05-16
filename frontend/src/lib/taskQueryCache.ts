@@ -14,6 +14,13 @@ type QuerySnapshot = {
   data: unknown
 }
 
+function getTaskListQueries(queryClient: QueryClient) {
+  return [
+    ...queryClient.getQueriesData<TaskListData>({ queryKey: ['tasks'] }),
+    ...queryClient.getQueriesData<TaskListData>({ queryKey: ['desktop', 'tasks'] }),
+  ]
+}
+
 function isPaginatedResponse(value: unknown): value is PaginatedTasksResponse {
   return Boolean(
     value &&
@@ -61,15 +68,19 @@ function mapTaskListData(
 }
 
 function getTaskStatusSegment(queryKey: QueryKey): string | null {
-  const status = queryKey[2]
+  const status = queryKey[0] === 'desktop' ? queryKey[3] : queryKey[2]
   return typeof status === 'string' ? status : null
+}
+
+function getTaskScopeSegment(queryKey: QueryKey): unknown {
+  return queryKey[0] === 'desktop' ? queryKey[2] : queryKey[1]
 }
 
 export function getTaskSummaryFromCache(
   queryClient: QueryClient,
   taskId: string
 ): TaskSummary | null {
-  const taskQueries = queryClient.getQueriesData<TaskListData>({ queryKey: ['tasks'] })
+  const taskQueries = getTaskListQueries(queryClient)
 
   for (const [, data] of taskQueries) {
     const items = flattenTaskListData(data)
@@ -110,6 +121,9 @@ export function snapshotTaskQueries(
   for (const [queryKey, data] of queryClient.getQueriesData({ queryKey: ['tasks'] })) {
     snapshots.push({ queryKey, data })
   }
+  for (const [queryKey, data] of queryClient.getQueriesData({ queryKey: ['desktop', 'tasks'] })) {
+    snapshots.push({ queryKey, data })
+  }
   for (const [queryKey, data] of queryClient.getQueriesData({ queryKey: ['groups'] })) {
     snapshots.push({ queryKey, data })
   }
@@ -145,19 +159,7 @@ export function updateTaskDetailCache(queryClient: QueryClient, task: TaskDetail
       return task
     }
 
-    return {
-      ...task,
-      recurrence:
-        task.recurrence_frequency != null
-          ? {
-              frequency: task.recurrence_frequency,
-              weekday: null,
-              day_of_month: null,
-              month: null,
-            }
-          : null,
-      subtasks: current?.subtasks ?? [],
-    }
+    return current
   })
 }
 
@@ -165,7 +167,7 @@ export function applyTaskListMutation(
   queryClient: QueryClient,
   updater: (task: TaskSummary, statusSegment: string | null, queryKey: QueryKey) => TaskSummary | null
 ): void {
-  for (const [queryKey, data] of queryClient.getQueriesData<TaskListData>({ queryKey: ['tasks'] })) {
+  for (const [queryKey, data] of getTaskListQueries(queryClient)) {
     queryClient.setQueryData(queryKey, (current: TaskListData | undefined) =>
       mapTaskListData(current ?? data ?? undefined, (items) =>
         items.flatMap((task) => {
@@ -182,13 +184,13 @@ export function prependTaskToMatchingLists(
   task: TaskSummary,
   statusValue: 'open' | 'completed'
 ): void {
-  for (const [queryKey, data] of queryClient.getQueriesData<TaskListData>({ queryKey: ['tasks'] })) {
+  for (const [queryKey, data] of getTaskListQueries(queryClient)) {
     const statusSegment = getTaskStatusSegment(queryKey)
     if (statusSegment !== statusValue) {
       continue
     }
 
-    const scope = queryKey[1]
+    const scope = getTaskScopeSegment(queryKey)
     const isAllScope = scope === 'all'
     const isMatchingGroup = scope === task.group.id
     if (!isAllScope && !isMatchingGroup) {

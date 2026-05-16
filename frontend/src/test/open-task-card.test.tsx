@@ -5,6 +5,50 @@ import { describe, expect, it, vi } from 'vitest'
 import { OpenTaskCard } from '../components/OpenTaskCard'
 
 describe('open task card metadata layout', () => {
+  it('opens the task on the first card body click while the chevron controls expansion', async () => {
+    const user = userEvent.setup()
+    const onOpen = vi.fn()
+
+    render(
+      <OpenTaskCard
+        task={{
+          id: 'task-1',
+          title: 'Check on Loku Caters orders page',
+          description: 'Review the current implementation of actions on the orders page.',
+          series_id: null,
+          status: 'open',
+          needs_review: false,
+          due_date: '2026-04-03',
+          reminder_at: '2026-03-29T13:00:00Z',
+          due_bucket: 'due_soon',
+          recurrence_frequency: 'weekly',
+          group: { id: 'group-1', name: 'Operations', is_system: false },
+          completed_at: null,
+          deleted_at: null,
+          created_at: '2026-05-15T12:00:00.000Z',
+          updated_at: '2026-05-15T12:00:00.000Z',
+          subtask_count: 2
+        }}
+        onOpen={onOpen}
+        onComplete={vi.fn()}
+        onDelete={vi.fn()}
+        isBusy={false}
+      />
+    )
+
+    const cardButton = screen.getByText('Check on Loku Caters orders page').closest('[role="button"]')
+    if (!cardButton) {
+      throw new Error('Expected task card button')
+    }
+
+    await user.click(cardButton)
+    expect(onOpen).toHaveBeenCalledWith('task-1')
+
+    await user.click(screen.getByRole('button', { name: 'Expand Check on Loku Caters orders page' }))
+    expect(screen.getByText('Review the current implementation of actions on the orders page.')).toBeInTheDocument()
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps collapsed metadata on a single line when the group badge is visible', () => {
     const groupName = 'Operations and Long-Running Cross-Team Planning Group'
 
@@ -14,6 +58,7 @@ describe('open task card metadata layout', () => {
           id: 'task-1',
           title: 'Check on Loku Caters orders page',
           description: 'Review the current implementation of actions on the orders page.',
+          series_id: null,
           status: 'open',
           needs_review: false,
           due_date: '2026-04-03',
@@ -23,6 +68,8 @@ describe('open task card metadata layout', () => {
           group: { id: 'group-1', name: groupName, is_system: false },
           completed_at: null,
           deleted_at: null,
+          created_at: '2026-05-15T12:00:00.000Z',
+          updated_at: '2026-05-15T12:00:00.000Z',
           subtask_count: 12
         }}
         onOpen={vi.fn()}
@@ -60,6 +107,7 @@ describe('open task card metadata layout', () => {
           id: 'task-1',
           title: 'Check on Loku Caters orders page',
           description: 'Review the current implementation of actions on the orders page.',
+          series_id: null,
           status: 'open',
           needs_review: false,
           due_date: '2026-04-03',
@@ -69,6 +117,8 @@ describe('open task card metadata layout', () => {
           group: { id: 'group-1', name: groupName, is_system: false },
           completed_at: null,
           deleted_at: null,
+          created_at: '2026-05-15T12:00:00.000Z',
+          updated_at: '2026-05-15T12:00:00.000Z',
           subtask_count: 12
         }}
         onOpen={vi.fn()}

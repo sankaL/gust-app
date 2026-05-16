@@ -151,7 +151,10 @@ class GroupService:
                 source_group_id=group_id,
                 destination_group_id=destination_group_id,
             )
-            delete_group(connection, user_id=user_id, group_id=group_id)
+            try:
+                delete_group(connection, user_id=user_id, group_id=group_id)
+            except LookupError as exc:
+                raise GroupNotFoundError() from exc
 
     def _map_group_conflict(self, exc: sa.exc.IntegrityError) -> ConflictError:
         message = str(exc.orig) if exc.orig is not None else str(exc)

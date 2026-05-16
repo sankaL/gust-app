@@ -1,9 +1,17 @@
 import { createBrowserRouter } from 'react-router-dom'
 
 import { AppShell } from './components/AppShell'
+import { DesktopShell } from './components/DesktopShell'
 import { CaptureRoute } from './routes/CaptureRoute'
 import { CompletedTasksRoute } from './routes/CompletedTasksRoute'
-import { DesktopModeRoute } from './routes/DesktopModeRoute'
+import { DesktopCaptureRoute } from './routes/desktop/DesktopCaptureRoute'
+import { DesktopCompletedRoute } from './routes/desktop/DesktopCompletedRoute'
+import { DesktopCreateTaskRoute } from './routes/desktop/DesktopCreateTaskRoute'
+import { DesktopDashboardRoute } from './routes/desktop/DesktopDashboardRoute'
+import { DesktopGroupDetailRoute } from './routes/desktop/DesktopGroupDetailRoute'
+import { DesktopGroupsRoute } from './routes/desktop/DesktopGroupsRoute'
+import { DesktopTaskDetailRoute } from './routes/desktop/DesktopTaskDetailRoute'
+import { DesktopTasksRoute } from './routes/desktop/DesktopTasksRoute'
 import { LoginRoute } from './routes/LoginRoute'
 import { ManageGroupsRoute } from './routes/ManageGroupsRoute'
 import { TaskDetailRoute } from './routes/TaskDetailRoute'
@@ -37,10 +45,44 @@ export const router = createBrowserRouter([
       {
         path: 'tasks/:taskId',
         element: <TaskDetailRoute />
+      }
+    ]
+  },
+  {
+    path: '/desktop',
+    element: <DesktopShell />,
+    children: [
+      {
+        index: true,
+        element: <DesktopDashboardRoute />
       },
       {
-        path: 'desktop',
-        element: <DesktopModeRoute />
+        path: 'tasks',
+        element: <DesktopTasksRoute />
+      },
+      {
+        path: 'tasks/new',
+        element: <DesktopCreateTaskRoute />
+      },
+      {
+        path: 'tasks/:taskId',
+        element: <DesktopTaskDetailRoute />
+      },
+      {
+        path: 'capture',
+        element: <DesktopCaptureRoute />
+      },
+      {
+        path: 'completed',
+        element: <DesktopCompletedRoute />
+      },
+      {
+        path: 'groups',
+        element: <DesktopGroupsRoute />
+      },
+      {
+        path: 'groups/:groupId',
+        element: <DesktopGroupDetailRoute />
       }
     ]
   }

@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-04-29 00:00:00 EDT
+
+- Added `/desktop` as an explicit desktop mission-control route instead of auto-redirecting large screens, preserving the capture-first mobile launch contract at `/`.
+- Split desktop layout into a dedicated `DesktopShell` rather than stretching the mobile `AppShell`, because the desktop experience needs persistent left navigation, denser task surfaces, and group drill-downs without compromising mobile ergonomics.
+- Kept first-pass desktop analytics client-derived from existing user-scoped task/group endpoints, deferring backend analytics/search/filter endpoints until data volume proves they are necessary.
+
 ## 2026-04-03 02:06:00 EDT
 
 - Optimized task loading performance across the full stack to address 2+ second load times with 10+ tasks.

@@ -143,13 +143,8 @@ const OpenTaskCardInner = function OpenTaskCardInner({
       return
     }
 
-    if (isExpanded) {
-      onOpen(task.id)
-      return
-    }
-
     onPrepareOpen?.(task.id)
-    setIsExpanded(true)
+    onOpen(task.id)
   }
 
   return (
