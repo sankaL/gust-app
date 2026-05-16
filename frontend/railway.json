@@ -2,7 +2,8 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile.railway"
+    "dockerfilePath": "Dockerfile.railway",
+    "buildContext": "frontend"
   },
   "deploy": {
     "startCommand": "sh -lc 'serve -s dist -l tcp://0.0.0.0:${PORT:-4173}'",
