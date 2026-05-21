@@ -63,9 +63,11 @@ function buildExtractedTask({
     recurrence_frequency: null,
     recurrence_weekday: null,
     recurrence_day_of_month: null,
+    recurrence_month: null,
     top_confidence: 0.92,
     needs_review: false,
     status: 'pending' as 'pending' | 'approved' | 'discarded',
+    subtask_titles: [],
     created_at: '2026-03-24T10:00:00Z',
     updated_at: '2026-03-24T10:00:00Z'
   }

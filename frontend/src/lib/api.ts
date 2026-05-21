@@ -104,6 +104,7 @@ export type ExtractedTask = {
   top_confidence: number
   needs_review: boolean
   status: 'pending' | 'approved' | 'discarded'
+  subtask_titles: string[]
   created_at: string
   updated_at: string
 }
@@ -573,6 +574,7 @@ export type ExtractedTaskUpdates = {
   recurrence_weekday?: number | null
   recurrence_day_of_month?: number | null
   recurrence_month?: number | null
+  subtask_titles?: string[] | null
 }
 
 export function updateExtractedTask(

@@ -62,7 +62,10 @@ const primaryNavigation = [
   { to: '/desktop/groups', label: 'Groups', icon: Settings2, end: true },
 ]
 
-const accountNavigation = primaryNavigation.filter((item) => item.to !== '/desktop/groups')
+const accountNavigation = [
+  ...primaryNavigation.filter((item) => item.to !== '/desktop/groups'),
+  { to: '/', label: 'Mobile Mode', icon: Smartphone, end: true },
+]
 
 function buildLoginPath(pathname: string, search: string, authError?: string) {
   const nextPath = `${pathname}${search}`
@@ -380,13 +383,6 @@ export function DesktopShell() {
           </div>
 
           <div className="mt-5 space-y-2">
-            <Link
-              to="/tasks"
-              className="flex items-center justify-center gap-2 rounded-pill bg-primary px-4 py-2.5 font-body text-sm font-semibold text-surface transition duration-200 hover:-translate-y-0.5 active:translate-y-0"
-            >
-              <Smartphone className="h-4 w-4" strokeWidth={2} />
-              Mobile Tasks
-            </Link>
             <button
               type="button"
               onClick={() => logoutMutation.mutate()}

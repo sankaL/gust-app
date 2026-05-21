@@ -800,6 +800,8 @@ export function TasksRoute() {
           closeTaskPreview()
         }}
         busyTaskIds={pendingTaskIds}
+        session={sessionQuery.data}
+        groups={groupsQuery.data ?? []}
       />
     </SessionGuard>
   )

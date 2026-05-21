@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import { ExtractedTask, GroupSummary, createTask, updateExtractedTask } from '../lib/api'
 import type { ExtractedTaskUpdates, TaskRecurrence } from '../lib/api'
 import { TaskForm } from './TaskForm'
@@ -20,6 +21,7 @@ interface TaskFormData {
   dueDate: string
   reminderAt: string
   recurrence: TaskRecurrence | null
+  subtaskTitles?: string[]
 }
 
 function toDateTimeLocalValue(value: string | null | undefined): string {
@@ -53,6 +55,7 @@ export function EditExtractedTaskModal({
   const initialReminderAt = isCreateMode
     ? ''
     : (task.reminder_at ? toDateTimeLocalValue(task.reminder_at) : '')
+  const initialSubtaskTitles = isCreateMode ? [] : (task.subtask_titles ?? [])
   const initialRecurrence: TaskRecurrence | null = isCreateMode
     ? null
     : task.recurrence_frequency
@@ -158,6 +161,15 @@ export function EditExtractedTaskModal({
           }
         }
 
+        const currentSubtaskTitles = task.subtask_titles ?? []
+        const nextSubtaskTitles = data.subtaskTitles?.map((title) => title.trim()).filter(Boolean) ?? []
+        const subtasksChanged =
+          nextSubtaskTitles.length !== currentSubtaskTitles.length ||
+          nextSubtaskTitles.some((title, index) => title !== currentSubtaskTitles[index])
+        if (subtasksChanged) {
+          cleanUpdates.subtask_titles = nextSubtaskTitles
+        }
+
         if (Object.keys(cleanUpdates).length > 0) {
           await updateExtractedTask(task.capture_id, task.id, cleanUpdates, csrfToken)
           await onSave(task.id, cleanUpdates)
@@ -179,53 +191,64 @@ export function EditExtractedTaskModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/65 p-3 backdrop-blur-md sm:items-center sm:p-5"
       onClick={handleBackdropClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-extracted-task-title"
     >
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[1.7rem] bg-surface-container-high shadow-[0_24px_60px_rgba(0,0,0,0.48)]">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-outline/20 p-4">
-          <h2 className="font-display text-lg font-semibold text-on-surface">
-            {isCreateMode ? 'Add Task' : 'Edit Task'}
-          </h2>
-          <button
-            onClick={onClose}
-            disabled={isSaving}
-            className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:opacity-50"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+      <div className="max-h-[92dvh] w-full max-w-2xl overflow-hidden rounded-[1.7rem] bg-[radial-gradient(circle_at_top_left,_rgba(186,158,255,0.18),_rgba(32,32,31,0.98)_42%,_rgba(14,14,14,1)_100%)] shadow-[0_28px_80px_rgba(0,0,0,0.62)]">
+        <div className="flex max-h-[92dvh] flex-col">
+          <div className="flex items-start justify-between gap-4 p-5 pb-3 sm:p-6 sm:pb-4">
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-pill bg-white/6 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                  {isCreateMode ? 'New task' : 'Task review'}
+                </span>
+                {!isCreateMode ? (
+                  <span className="max-w-[12rem] truncate rounded-pill bg-surface-container-high px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                    {task.group_name ?? 'Inbox'}
+                  </span>
+                ) : null}
+              </div>
+              <h2
+                id="edit-extracted-task-title"
+                className="font-display text-2xl leading-tight text-on-surface sm:text-3xl"
+              >
+                {isCreateMode ? 'Add Task' : 'Edit Task'}
+              </h2>
+            </div>
+            <button
+              onClick={onClose}
+              disabled={isSaving}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/8 text-on-surface-variant transition hover:bg-white/12 hover:text-on-surface active:scale-[0.98] disabled:opacity-50"
+              aria-label="Close edit task"
             >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </div>
 
-        {/* Content */}
-        <div className="p-4">
-          <TaskForm
-            key={isCreateMode ? 'create-task-form' : task.id}
-            mode={isCreateMode ? 'create' : 'edit'}
-            initialTitle={initialTitle}
-            initialDescription={initialDescription}
-            initialGroupId={initialGroupId}
-            initialDueDate={initialDueDate}
-            initialReminderAt={initialReminderAt}
-            initialRecurrence={initialRecurrence}
-            groups={groups}
-            defaultGroupId={defaultGroupId}
-            onSave={handleSave}
-            onCancel={onClose}
-            isSaving={isSaving}
-            error={error}
-            onErrorChange={setError}
-          />
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-6">
+            <TaskForm
+              key={isCreateMode ? 'create-task-form' : task.id}
+              mode={isCreateMode ? 'create' : 'edit'}
+              initialTitle={initialTitle}
+              initialDescription={initialDescription}
+              initialGroupId={initialGroupId}
+              initialDueDate={initialDueDate}
+              initialReminderAt={initialReminderAt}
+              initialRecurrence={initialRecurrence}
+              initialSubtaskTitles={initialSubtaskTitles}
+              showSubtasks={!isCreateMode}
+              groups={groups}
+              defaultGroupId={defaultGroupId}
+              onSave={handleSave}
+              onCancel={onClose}
+              isSaving={isSaving}
+              error={error}
+              onErrorChange={setError}
+            />
+          </div>
         </div>
       </div>
     </div>

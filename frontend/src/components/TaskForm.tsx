@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Trash2 } from 'lucide-react'
 import type { TaskRecurrence } from '../lib/api'
 import { TaskFormFields } from './TaskFormFields'
 
@@ -14,6 +15,7 @@ interface TaskFormData {
   dueDate: string
   reminderAt: string
   recurrence: TaskRecurrence | null
+  subtaskTitles?: string[]
 }
 
 interface TaskFormProps {
@@ -24,6 +26,8 @@ interface TaskFormProps {
   initialDueDate?: string
   initialReminderAt?: string
   initialRecurrence?: TaskRecurrence | null
+  initialSubtaskTitles?: string[]
+  showSubtasks?: boolean
   groups: GroupSummary[]
   defaultGroupId?: string
   onSave: (data: TaskFormData) => Promise<void> | void
@@ -49,6 +53,8 @@ export function TaskForm({
   initialDueDate = '',
   initialReminderAt = '',
   initialRecurrence = null,
+  initialSubtaskTitles = [],
+  showSubtasks = false,
   groups,
   defaultGroupId,
   onSave,
@@ -66,6 +72,8 @@ export function TaskForm({
   const [dueDate, setDueDate] = useState(initialDueDate)
   const [reminderAt, setReminderAt] = useState(toDateTimeLocalValue(initialReminderAt))
   const [recurrence, setRecurrence] = useState<TaskRecurrence | null>(initialRecurrence)
+  const [subtaskTitles, setSubtaskTitles] = useState<string[]>(initialSubtaskTitles)
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [internalError, setInternalError] = useState<string | null>(null)
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false)
 
@@ -83,6 +91,18 @@ export function TaskForm({
       setGroupId(defaultGroupIdFinal)
     }
   }, [defaultGroupIdFinal, groupId, isCreateMode])
+
+  useEffect(() => {
+    setSubtaskTitles(initialSubtaskTitles)
+    setNewSubtaskTitle('')
+  }, [initialSubtaskTitles])
+
+  function addSubtaskDraft() {
+    const title = newSubtaskTitle.trim()
+    if (!title) return
+    setSubtaskTitles((current) => [...current, title])
+    setNewSubtaskTitle('')
+  }
 
   const handleSubmit = async () => {
     setInternalError(null)
@@ -140,6 +160,7 @@ export function TaskForm({
       dueDate,
       reminderAt,
       recurrence,
+      subtaskTitles: showSubtasks ? subtaskTitles.map((subtask) => subtask.trim()).filter(Boolean) : undefined,
     })
   }
 
@@ -170,6 +191,82 @@ export function TaskForm({
         onRecurrenceChange={setRecurrence}
         onGroupDropdownOpenChange={setIsGroupDropdownOpen}
       />
+
+      {showSubtasks ? (
+        <section className="rounded-card bg-surface-container/75 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-display text-lg text-on-surface">Subtasks</p>
+              <p className="mt-1 font-body text-xs text-on-surface-variant">
+                {subtaskTitles.length} {subtaskTitles.length === 1 ? 'subtask' : 'subtasks'}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {subtaskTitles.length === 0 ? (
+              <div className="rounded-card bg-surface-dim px-4 py-4 text-sm text-on-surface-variant">
+                No subtasks yet.
+              </div>
+            ) : (
+              subtaskTitles.map((subtaskTitle, index) => (
+                <div key={`${subtaskTitle}-${index}`} className="flex items-center gap-2 rounded-card bg-surface-dim p-2">
+                  <input
+                    value={subtaskTitle}
+                    onChange={(event) =>
+                      setSubtaskTitles((current) =>
+                        current.map((title, candidateIndex) =>
+                          candidateIndex === index ? event.target.value : title
+                        )
+                      )
+                    }
+                    className="min-w-0 flex-1 rounded-card bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:bg-surface-container-high"
+                    aria-label={`Subtask ${subtaskTitle || index + 1}`}
+                    disabled={isSaving}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSubtaskTitles((current) =>
+                        current.filter((_title, candidateIndex) => candidateIndex !== index)
+                      )
+                    }
+                    disabled={isSaving}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-tertiary/10 hover:text-tertiary disabled:opacity-50"
+                    aria-label={`Delete ${subtaskTitle || `subtask ${index + 1}`}`}
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-3 flex gap-2">
+            <input
+              value={newSubtaskTitle}
+              onChange={(event) => setNewSubtaskTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && newSubtaskTitle.trim()) {
+                  event.preventDefault()
+                  addSubtaskDraft()
+                }
+              }}
+              placeholder="Add a subtask..."
+              className="min-w-0 flex-1 rounded-card border border-dashed border-outline/30 bg-surface-dim px-3 py-3 text-sm text-on-surface outline-none focus:border-primary"
+              disabled={isSaving}
+            />
+            <button
+              type="button"
+              onClick={addSubtaskDraft}
+              disabled={!newSubtaskTitle.trim() || isSaving}
+              className="rounded-pill bg-primary px-4 py-2 text-sm font-semibold text-surface disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {/* Action Buttons (for standalone mode) */}
       {onCancel && (

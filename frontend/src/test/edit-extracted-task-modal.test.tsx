@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DesktopEditExtractedTaskModal } from '../components/DesktopEditExtractedTaskModal'
+import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { updateExtractedTask, type ExtractedTask, type GroupSummary } from '../lib/api'
 
 vi.mock('../lib/api', async () => {
@@ -32,7 +32,7 @@ function buildExtractedTask(overrides: Partial<ExtractedTask> = {}): ExtractedTa
     id: 'extracted-1',
     capture_id: 'capture-1',
     title: 'Clean the vents',
-    description: '[dev-seed:desktop-dashboard]',
+    description: null,
     group_id: 'inbox-1',
     group_name: 'Inbox',
     due_date: null,
@@ -44,7 +44,7 @@ function buildExtractedTask(overrides: Partial<ExtractedTask> = {}): ExtractedTa
     top_confidence: 0.94,
     needs_review: false,
     status: 'pending',
-    subtask_titles: [],
+    subtask_titles: ['Remove lint screen'],
     created_at: '2026-05-15T12:00:00Z',
     updated_at: '2026-05-15T12:00:00Z',
     ...overrides,
@@ -55,44 +55,10 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('DesktopEditExtractedTaskModal', () => {
-  it('renders a desktop-specific extracted task editor and saves updates', async () => {
+describe('EditExtractedTaskModal', () => {
+  it('renders, adds, and deletes captured subtasks in the mobile editor', async () => {
     const user = userEvent.setup()
     const task = buildExtractedTask()
-    const onSave = vi.fn().mockResolvedValue(undefined)
-    mockedUpdateExtractedTask.mockResolvedValue({ ...task, title: 'Clean the dryer vents' })
-
-    render(
-      <DesktopEditExtractedTaskModal
-        task={task}
-        groups={groups}
-        isOpen
-        onClose={vi.fn()}
-        onSave={onSave}
-        csrfToken="csrf-token"
-      />
-    )
-
-    expect(screen.getByRole('dialog', { name: 'Edit Task' })).toBeInTheDocument()
-    expect(screen.getByText('Extracted task')).toBeInTheDocument()
-
-    const titleInput = screen.getByRole('textbox', { name: 'Task title' })
-    await user.clear(titleInput)
-    await user.type(titleInput, 'Clean the dryer vents')
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    expect(mockedUpdateExtractedTask).toHaveBeenCalledWith(
-      'capture-1',
-      'extracted-1',
-      { title: 'Clean the dryer vents' },
-      'csrf-token'
-    )
-    expect(onSave).toHaveBeenCalledWith('extracted-1', { title: 'Clean the dryer vents' })
-  })
-
-  it('adds and deletes extracted subtask titles before saving', async () => {
-    const user = userEvent.setup()
-    const task = buildExtractedTask({ subtask_titles: ['Remove lint screen'] })
     const onSave = vi.fn().mockResolvedValue(undefined)
     mockedUpdateExtractedTask.mockResolvedValue({
       ...task,
@@ -100,7 +66,7 @@ describe('DesktopEditExtractedTaskModal', () => {
     })
 
     render(
-      <DesktopEditExtractedTaskModal
+      <EditExtractedTaskModal
         task={task}
         groups={groups}
         isOpen
@@ -110,10 +76,12 @@ describe('DesktopEditExtractedTaskModal', () => {
       />
     )
 
+    expect(screen.getByText('Subtasks')).toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: 'Delete Remove lint screen' }))
     await user.type(screen.getByPlaceholderText('Add a subtask...'), 'Confirm outside vent airflow')
     await user.click(screen.getByRole('button', { name: 'Add' }))
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
 
     expect(mockedUpdateExtractedTask).toHaveBeenCalledWith(
       'capture-1',

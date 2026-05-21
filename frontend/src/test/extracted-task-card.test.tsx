@@ -23,6 +23,7 @@ describe('extracted task card', () => {
           top_confidence: 0.92,
           needs_review: false,
           status: 'pending',
+          subtask_titles: [],
           created_at: '2026-03-24T10:00:00Z',
           updated_at: '2026-03-24T10:00:00Z'
         }}

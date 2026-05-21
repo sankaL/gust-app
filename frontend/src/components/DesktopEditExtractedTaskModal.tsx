@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Save, X } from 'lucide-react'
+import { Save, Trash2, X } from 'lucide-react'
 
 import {
   updateExtractedTask,
@@ -29,6 +29,7 @@ type DraftState = {
   dueDate: string
   reminderAt: string
   recurrence: TaskRecurrence | null
+  subtaskTitles: string[]
 }
 
 const RECURRENCE_OPTIONS = [
@@ -77,6 +78,7 @@ function buildDraft(task: ExtractedTask, timezone: string | null | undefined): D
     groupId: task.group_id,
     dueDate: task.due_date ? task.due_date.split('T')[0] : '',
     reminderAt: toDateTimeLocalValue(task.reminder_at, timezone),
+    subtaskTitles: task.subtask_titles ?? [],
     recurrence: isTaskRecurrenceFrequency(task.recurrence_frequency)
       ? {
           frequency: task.recurrence_frequency,
@@ -129,6 +131,12 @@ function buildUpdates(
   if (draft.title !== task.title) updates.title = draft.title
   if ((draft.description || null) !== task.description) updates.description = draft.description || null
   if (draft.groupId !== task.group_id) updates.group_id = draft.groupId
+  const currentSubtaskTitles = task.subtask_titles ?? []
+  const nextSubtaskTitles = draft.subtaskTitles.map((title) => title.trim()).filter(Boolean)
+  const subtasksChanged =
+    nextSubtaskTitles.length !== currentSubtaskTitles.length ||
+    nextSubtaskTitles.some((title, index) => title !== currentSubtaskTitles[index])
+  if (subtasksChanged) updates.subtask_titles = nextSubtaskTitles
 
   const initialDueDate = task.due_date ? task.due_date.split('T')[0] : ''
   if (draft.dueDate !== initialDueDate) updates.due_date = draft.dueDate || null
@@ -192,9 +200,11 @@ export function DesktopEditExtractedTaskModal({
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false)
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
 
   useEffect(() => {
     setDraft(task ? buildDraft(task, timezone) : null)
+    setNewSubtaskTitle('')
     setError(null)
     setIsGroupDropdownOpen(false)
   }, [task, timezone])
@@ -212,6 +222,13 @@ export function DesktopEditExtractedTaskModal({
 
   function updateDraft(updater: (current: DraftState) => DraftState) {
     setDraft((current) => (current ? updater(current) : current))
+  }
+
+  function addSubtaskDraft() {
+    const title = newSubtaskTitle.trim()
+    if (!title) return
+    updateDraft((current) => ({ ...current, subtaskTitles: [...current.subtaskTitles, title] }))
+    setNewSubtaskTitle('')
   }
 
   async function handleSave() {
@@ -474,6 +491,84 @@ export function DesktopEditExtractedTaskModal({
                   </div>
                 </div>
               </div>
+
+              <section className="rounded-card bg-surface/35 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">
+                      Subtasks
+                    </p>
+                    <p className="mt-1 font-body text-xs text-on-surface-variant">
+                      {draft.subtaskTitles.length} {draft.subtaskTitles.length === 1 ? 'subtask' : 'subtasks'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 divide-y divide-white/10 rounded-card bg-surface-dim">
+                  {draft.subtaskTitles.length === 0 ? (
+                    <p className="px-4 py-5 font-body text-sm text-on-surface-variant">No subtasks yet.</p>
+                  ) : (
+                    draft.subtaskTitles.map((subtaskTitle, index) => (
+                      <div key={`${subtaskTitle}-${index}`} className="flex items-center gap-3 px-3 py-2">
+                        <input
+                          value={subtaskTitle}
+                          onChange={(event) =>
+                            updateDraft((current) => ({
+                              ...current,
+                              subtaskTitles: current.subtaskTitles.map((title, candidateIndex) =>
+                                candidateIndex === index ? event.target.value : title
+                              ),
+                            }))
+                          }
+                          className="min-w-0 flex-1 bg-transparent py-2 font-body text-sm text-on-surface outline-none"
+                          aria-label={`Subtask ${subtaskTitle || index + 1}`}
+                          disabled={isSaving}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateDraft((current) => ({
+                              ...current,
+                              subtaskTitles: current.subtaskTitles.filter(
+                                (_title, candidateIndex) => candidateIndex !== index
+                              ),
+                            }))
+                          }
+                          disabled={isSaving}
+                          className="rounded-full p-2 text-on-surface-variant transition hover:bg-tertiary/10 hover:text-tertiary disabled:opacity-50"
+                          aria-label={`Delete ${subtaskTitle || `subtask ${index + 1}`}`}
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={newSubtaskTitle}
+                    onChange={(event) => setNewSubtaskTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && newSubtaskTitle.trim()) {
+                        event.preventDefault()
+                        addSubtaskDraft()
+                      }
+                    }}
+                    placeholder="Add a subtask..."
+                    className="min-w-0 flex-1 rounded-card border border-dashed border-outline/30 bg-surface-dim px-3 py-3 text-sm text-on-surface outline-none focus:border-primary"
+                    disabled={isSaving}
+                  />
+                  <button
+                    type="button"
+                    onClick={addSubtaskDraft}
+                    disabled={!newSubtaskTitle.trim() || isSaving}
+                    className="rounded-pill bg-primary px-4 py-2 text-sm font-semibold text-surface disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+              </section>
             </section>
           </div>
         </div>

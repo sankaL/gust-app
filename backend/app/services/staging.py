@@ -372,6 +372,7 @@ class StagingService:
             "recurrence_weekday",
             "recurrence_day_of_month",
             "recurrence_month",
+            "subtask_titles",
         }
         unknown_fields = set(updates.keys()) - allowed_update_fields
         if unknown_fields:
@@ -416,6 +417,29 @@ class StagingService:
                 if group is None:
                     raise GroupNotFoundError("Destination group could not be found.")
                 values["group_name"] = group.name
+
+            if "subtask_titles" in values:
+                subtask_titles = values["subtask_titles"]
+                if subtask_titles is None:
+                    values["subtask_titles"] = []
+                elif not isinstance(subtask_titles, list):
+                    raise InvalidTaskError("subtask_titles must be a list.")
+                else:
+                    normalized_titles: list[str] = []
+                    for title in subtask_titles:
+                        if not isinstance(title, str):
+                            raise InvalidTaskError("Subtask title must be a string.")
+                        try:
+                            normalized_titles.append(
+                                validate_plain_text(
+                                    title,
+                                    field_name="Subtask title",
+                                    max_length=MAX_TITLE_CHARS,
+                                )
+                            )
+                        except ValueError as exc:
+                            raise InvalidTaskError(str(exc)) from exc
+                    values["subtask_titles"] = normalized_titles
 
             # If due_date is explicitly cleared, also clear reminders unless the caller
             # explicitly provided reminder_at.

@@ -359,6 +359,8 @@ export function CompletedTasksRoute() {
           closeTaskPreview()
         }}
         busyTaskIds={pendingTaskIds}
+        session={sessionQuery.data}
+        groups={groupsQuery.data ?? []}
       />
     </SessionGuard>
   )
