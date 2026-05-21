@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ApiError,
   createSubtask,
+  deleteSubtask,
   getTaskDetail,
   updateTask,
   type GroupSummary,
@@ -266,7 +267,8 @@ export function TaskPreviewModal({
       }
       return { snapshots }
     },
-    mutationFn: async (_release: () => void) => {
+    mutationFn: async (release: () => void) => {
+      void release
       if (!taskId || !draft) {
         throw new Error('Task preview is not ready.')
       }
@@ -339,7 +341,8 @@ export function TaskPreviewModal({
       )
       return { snapshots }
     },
-    mutationFn: async (_release: () => void) => {
+    mutationFn: async (release: () => void) => {
+      void release
       if (!taskId || !newSubtaskTitle.trim()) {
         throw new Error('Subtask title is required.')
       }
@@ -362,8 +365,60 @@ export function TaskPreviewModal({
     },
   })
 
+  const deleteSubtaskMutation = useMutation({
+    onMutate: async ({ subtaskId }: { subtaskId: string; release: () => void }) => {
+      if (!taskId || !task) {
+        return {}
+      }
+
+      setSaveError(null)
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['task-detail', taskId] }),
+      ])
+
+      const snapshots = snapshotTaskQueries(queryClient, taskId)
+      const optimisticTask: TaskDetail = {
+        ...task,
+        subtasks: task.subtasks.filter((subtask) => subtask.id !== subtaskId),
+        subtask_count: Math.max(0, task.subtask_count - 1),
+      }
+
+      updateTaskDetailCache(queryClient, optimisticTask)
+      applyTaskListMutation(queryClient, (currentTask) =>
+        currentTask.id === taskId
+          ? { ...currentTask, subtask_count: Math.max(0, currentTask.subtask_count - 1) }
+          : currentTask
+      )
+      return { snapshots }
+    },
+    mutationFn: async ({ subtaskId }: { subtaskId: string; release: () => void }) => {
+      if (!taskId) {
+        throw new Error('Task preview is not ready.')
+      }
+
+      return deleteSubtask(taskId, subtaskId, requireCsrf(session))
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] })
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    },
+    onError: (error, _variables, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
+      setSaveError(buildFriendlyMessage(error, 'Subtask could not be deleted.'))
+    },
+    onSettled: (_data, _error, variables) => {
+      variables?.release?.()
+    },
+  })
+
   const isLocalMutationPending =
-    isLocalMutationLocked || saveTaskMutation.isPending || createSubtaskMutation.isPending
+    isLocalMutationLocked ||
+    saveTaskMutation.isPending ||
+    createSubtaskMutation.isPending ||
+    deleteSubtaskMutation.isPending
   const isBusy = (task ? busyTaskIds.includes(task.id) : false) || isLocalMutationPending
 
   function confirmDiscardDraft() {
@@ -424,6 +479,20 @@ export function TaskPreviewModal({
     }
 
     createSubtaskMutation.mutate(release)
+  }
+
+  function requestDeleteSubtask(subtaskId: string) {
+    if (isBusy) {
+      return
+    }
+
+    const release = acquireLocalMutationLock()
+    if (!release) {
+      setSaveError('Task is already updating.')
+      return
+    }
+
+    deleteSubtaskMutation.mutate({ subtaskId, release })
   }
 
   useEffect(() => {
@@ -687,6 +756,17 @@ export function TaskPreviewModal({
                           >
                             {subtask.title}
                           </p>
+                          {isEditable ? (
+                            <button
+                              type="button"
+                              onClick={() => requestDeleteSubtask(subtask.id)}
+                              disabled={isBusy}
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-tertiary/10 hover:text-tertiary disabled:opacity-50"
+                              aria-label={`Delete ${subtask.title}`}
+                            >
+                              <Trash2 className="h-4 w-4" strokeWidth={2} />
+                            </button>
+                          ) : null}
                         </div>
                       ))
                     )}

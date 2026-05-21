@@ -21,6 +21,7 @@ interface TaskFormData {
   dueDate: string
   reminderAt: string
   recurrence: TaskRecurrence | null
+  subtaskTitles?: string[]
 }
 
 function toDateTimeLocalValue(value: string | null | undefined): string {
@@ -54,6 +55,7 @@ export function EditExtractedTaskModal({
   const initialReminderAt = isCreateMode
     ? ''
     : (task.reminder_at ? toDateTimeLocalValue(task.reminder_at) : '')
+  const initialSubtaskTitles = isCreateMode ? [] : (task.subtask_titles ?? [])
   const initialRecurrence: TaskRecurrence | null = isCreateMode
     ? null
     : task.recurrence_frequency
@@ -159,6 +161,15 @@ export function EditExtractedTaskModal({
           }
         }
 
+        const currentSubtaskTitles = task.subtask_titles ?? []
+        const nextSubtaskTitles = data.subtaskTitles?.map((title) => title.trim()).filter(Boolean) ?? []
+        const subtasksChanged =
+          nextSubtaskTitles.length !== currentSubtaskTitles.length ||
+          nextSubtaskTitles.some((title, index) => title !== currentSubtaskTitles[index])
+        if (subtasksChanged) {
+          cleanUpdates.subtask_titles = nextSubtaskTitles
+        }
+
         if (Object.keys(cleanUpdates).length > 0) {
           await updateExtractedTask(task.capture_id, task.id, cleanUpdates, csrfToken)
           await onSave(task.id, cleanUpdates)
@@ -227,6 +238,8 @@ export function EditExtractedTaskModal({
               initialDueDate={initialDueDate}
               initialReminderAt={initialReminderAt}
               initialRecurrence={initialRecurrence}
+              initialSubtaskTitles={initialSubtaskTitles}
+              showSubtasks={!isCreateMode}
               groups={groups}
               defaultGroupId={defaultGroupId}
               onSave={handleSave}

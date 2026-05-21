@@ -126,6 +126,7 @@ class UpdateExtractedTaskRequest(BaseModel):
     recurrence_weekday: Optional[int] = None  # 0-6 for weekly
     recurrence_day_of_month: Optional[int] = None  # 1-31 for monthly
     recurrence_month: Optional[int] = None  # 1-12 for yearly
+    subtask_titles: Optional[list[str]] = None
 
     @field_validator("title")
     @classmethod
@@ -133,6 +134,16 @@ class UpdateExtractedTaskRequest(BaseModel):
         if value is None:
             return None
         return validate_plain_text(value, field_name="Title", max_length=MAX_TITLE_CHARS)
+
+    @field_validator("subtask_titles")
+    @classmethod
+    def _validate_subtask_titles(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return None
+        return [
+            validate_plain_text(title, field_name="Subtask title", max_length=MAX_TITLE_CHARS)
+            for title in value
+        ]
 
     @field_validator("description")
     @classmethod

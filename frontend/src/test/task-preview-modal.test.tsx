@@ -6,17 +6,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 
 import { TaskPreviewModal } from '../components/TaskPreviewModal'
-import { getTaskDetail, type TaskDetail } from '../lib/api'
+import { deleteSubtask, getTaskDetail, type TaskDetail } from '../lib/api'
 
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
   return {
     ...actual,
+    deleteSubtask: vi.fn(),
     getTaskDetail: vi.fn(),
   }
 })
 
 const mockedGetTaskDetail = vi.mocked(getTaskDetail)
+const mockedDeleteSubtask = vi.mocked(deleteSubtask)
 
 function createClient() {
   return new QueryClient({
@@ -178,5 +180,36 @@ describe('TaskPreviewModal', () => {
 
     expect(await screen.findByRole('button', { name: 'Restore' })).toBeInTheDocument()
     expect(screen.getByText('No subtasks yet.')).toBeInTheDocument()
+  })
+
+  it('deletes subtasks from the editable task preview modal', async () => {
+    const user = userEvent.setup()
+    mockedGetTaskDetail.mockResolvedValue(buildTask())
+    mockedDeleteSubtask.mockResolvedValue({ deleted: true })
+
+    renderModal({
+      session: {
+        signed_in: true,
+        user: { id: 'user-1', email: 'user@example.com', display_name: null },
+        timezone: 'America/Toronto',
+        inbox_group_id: 'inbox-1',
+        csrf_token: 'csrf-token',
+      },
+      groups: [
+        {
+          id: 'inbox-1',
+          name: 'Inbox',
+          description: null,
+          is_system: true,
+          system_key: 'inbox',
+          open_task_count: 1,
+          completed_task_count: 0,
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Check retry contract' }))
+
+    expect(mockedDeleteSubtask).toHaveBeenCalledWith('task-1', 'subtask-1', 'csrf-token')
   })
 })
