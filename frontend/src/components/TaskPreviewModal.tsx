@@ -1,12 +1,41 @@
-import { useEffect } from 'react'
-import { RotateCcw, Trash2, X, CheckCircle2 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { RotateCcw, Save, Trash2, X, CheckCircle2 } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { ApiError, getTaskDetail, type TaskDetail } from '../lib/api'
+import {
+  ApiError,
+  createSubtask,
+  getTaskDetail,
+  updateTask,
+  type GroupSummary,
+  type SessionStatus,
+  type TaskDetail,
+  type TaskRecurrence,
+} from '../lib/api'
+import {
+  adjustGroupOpenCount,
+  applyTaskListMutation,
+  prependTaskToMatchingLists,
+  restoreQuerySnapshots,
+  snapshotTaskQueries,
+  updateTaskDetailCache,
+} from '../lib/taskQueryCache'
 import {
   TASK_SCREEN_GC_TIME_MS,
   TASK_SCREEN_STALE_TIME_MS,
 } from '../lib/taskScreenCache'
+import { dateTimeLocalToIso, toDateTimeLocalValue } from '../lib/dateTime'
+import { DatePicker } from './DatePicker'
+import { SelectDropdown } from './SelectDropdown'
+
+type DraftState = {
+  title: string
+  description: string
+  groupId: string
+  dueDate: string
+  reminderAt: string
+  recurrence: TaskRecurrence | null
+}
 
 type TaskPreviewModalProps = {
   taskId: string | null
@@ -16,7 +45,17 @@ type TaskPreviewModalProps = {
   onRestore?: (task: TaskDetail) => void
   onRequestDelete?: (task: TaskDetail) => void
   busyTaskIds?: string[]
+  session?: SessionStatus
+  groups?: GroupSummary[]
 }
+
+const RECURRENCE_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+] as const
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -84,6 +123,57 @@ function MetadataTile({ label, value }: { label: string; value: string }) {
   )
 }
 
+function buildDraftState(task: TaskDetail, timezone: string | null | undefined): DraftState {
+  return {
+    title: task.title,
+    description: task.description ?? '',
+    groupId: task.group.id,
+    dueDate: task.due_date ?? '',
+    reminderAt: toDateTimeLocalValue(task.reminder_at, timezone),
+    recurrence: task.recurrence,
+  }
+}
+
+function recurrenceForDueDate(
+  frequency: TaskRecurrence['frequency'],
+  dueDate: string
+): TaskRecurrence {
+  const localDate = dueDate ? new Date(`${dueDate}T12:00:00`) : null
+  if (frequency === 'weekly') {
+    return {
+      frequency,
+      weekday: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getDay() : null,
+      day_of_month: null,
+      month: null,
+    }
+  }
+  if (frequency === 'monthly') {
+    return {
+      frequency,
+      weekday: null,
+      day_of_month: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getDate() : null,
+      month: null,
+    }
+  }
+  if (frequency === 'yearly') {
+    return {
+      frequency,
+      weekday: null,
+      day_of_month: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getDate() : null,
+      month: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getMonth() + 1 : null,
+    }
+  }
+  return { frequency, weekday: null, day_of_month: null, month: null }
+}
+
+function requireCsrf(session: SessionStatus | undefined) {
+  const csrfToken = session?.csrf_token
+  if (!csrfToken) {
+    throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
+  }
+  return csrfToken
+}
+
 export function TaskPreviewModal({
   taskId,
   isOpen,
@@ -92,7 +182,18 @@ export function TaskPreviewModal({
   onRestore,
   onRequestDelete,
   busyTaskIds = [],
+  session,
+  groups = [],
 }: TaskPreviewModalProps) {
+  const queryClient = useQueryClient()
+  const [draft, setDraft] = useState<DraftState | null>(null)
+  const [draftTaskId, setDraftTaskId] = useState<string | null>(null)
+  const [isDraftDirty, setIsDraftDirty] = useState(false)
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [isLocalMutationLocked, setIsLocalMutationLocked] = useState(false)
+  const localMutationLockRef = useRef(false)
+
   const taskQuery = useQuery({
     queryKey: ['task-detail', taskId],
     queryFn: () => getTaskDetail(taskId as string),
@@ -101,6 +202,252 @@ export function TaskPreviewModal({
     gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
+  const task = taskQuery.data
+  const completedLabel = task ? formatDateTime(task.completed_at) : null
+  const reminderLabel = task ? formatDateTime(task.reminder_at) : null
+  const isEditable = Boolean(task && draft && session && groups.length > 0)
+
+  const acquireLocalMutationLock = useCallback(() => {
+    if (localMutationLockRef.current) {
+      return null
+    }
+
+    localMutationLockRef.current = true
+    setIsLocalMutationLocked(true)
+
+    return () => {
+      localMutationLockRef.current = false
+      setIsLocalMutationLocked(false)
+    }
+  }, [])
+
+  function updateDraft(updater: (current: DraftState) => DraftState) {
+    setIsDraftDirty(true)
+    setDraft((current) => (current ? updater(current) : current))
+  }
+
+  const saveTaskMutation = useMutation({
+    onMutate: async () => {
+      if (!taskId || !draft || !task) {
+        return {}
+      }
+
+      setSaveError(null)
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['groups'] }),
+        queryClient.cancelQueries({ queryKey: ['task-detail', taskId] }),
+      ])
+
+      const snapshots = snapshotTaskQueries(queryClient, taskId)
+      const optimisticTask: TaskDetail = {
+        ...task,
+        title: draft.title,
+        description: draft.description || null,
+        group: groups.find((group) => group.id === draft.groupId) ?? task.group,
+        due_date: draft.dueDate || null,
+        reminder_at: dateTimeLocalToIso(draft.reminderAt, session?.timezone),
+        recurrence: draft.recurrence,
+        recurrence_frequency: draft.recurrence?.frequency ?? null,
+        needs_review: draft.groupId !== task.group.id ? false : task.needs_review,
+      }
+
+      applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
+        if (currentTask.id !== optimisticTask.id) {
+          return currentTask
+        }
+        return statusSegment === optimisticTask.status ? { ...currentTask, ...optimisticTask } : null
+      })
+      prependTaskToMatchingLists(queryClient, optimisticTask, optimisticTask.status)
+      updateTaskDetailCache(queryClient, optimisticTask)
+      if (task.group.id !== optimisticTask.group.id && task.status === 'open') {
+        adjustGroupOpenCount(queryClient, task.group.id, -1)
+        adjustGroupOpenCount(queryClient, optimisticTask.group.id, 1)
+      }
+      return { snapshots }
+    },
+    mutationFn: async (_release: () => void) => {
+      if (!taskId || !draft) {
+        throw new Error('Task preview is not ready.')
+      }
+
+      return updateTask(
+        taskId,
+        {
+          title: draft.title.trim(),
+          description: draft.description.trim() || null,
+          group_id: draft.groupId,
+          due_date: draft.dueDate || null,
+          reminder_at: dateTimeLocalToIso(draft.reminderAt, session?.timezone),
+          recurrence: draft.recurrence,
+        },
+        requireCsrf(session)
+      )
+    },
+    onSuccess: (updatedTask) => {
+      setDraft(buildDraftState(updatedTask, session?.timezone))
+      setDraftTaskId(updatedTask.id)
+      setIsDraftDirty(false)
+      updateTaskDetailCache(queryClient, updatedTask)
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['groups'] })
+    },
+    onError: (error, _variables, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
+      setSaveError(buildFriendlyMessage(error, 'Task changes could not be saved.'))
+    },
+    onSettled: (_data, _error, release) => {
+      release?.()
+    },
+  })
+
+  const createSubtaskMutation = useMutation({
+    onMutate: async () => {
+      if (!taskId || !task || !newSubtaskTitle.trim()) {
+        return {}
+      }
+
+      setSaveError(null)
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['tasks'] }),
+        queryClient.cancelQueries({ queryKey: ['task-detail', taskId] }),
+      ])
+
+      const snapshots = snapshotTaskQueries(queryClient, taskId)
+      const optimisticId = `optimistic-${Date.now()}`
+      const optimisticTask: TaskDetail = {
+        ...task,
+        subtasks: [
+          ...task.subtasks,
+          {
+            id: optimisticId,
+            title: newSubtaskTitle.trim(),
+            is_completed: false,
+            completed_at: null,
+          },
+        ],
+        subtask_count: task.subtask_count + 1,
+      }
+
+      updateTaskDetailCache(queryClient, optimisticTask)
+      applyTaskListMutation(queryClient, (currentTask) =>
+        currentTask.id === taskId
+          ? { ...currentTask, subtask_count: currentTask.subtask_count + 1 }
+          : currentTask
+      )
+      return { snapshots }
+    },
+    mutationFn: async (_release: () => void) => {
+      if (!taskId || !newSubtaskTitle.trim()) {
+        throw new Error('Subtask title is required.')
+      }
+
+      return createSubtask(taskId, newSubtaskTitle.trim(), requireCsrf(session))
+    },
+    onSuccess: () => {
+      setNewSubtaskTitle('')
+      void queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] })
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    },
+    onError: (error, _variables, context) => {
+      if (context?.snapshots) {
+        restoreQuerySnapshots(queryClient, context.snapshots)
+      }
+      setSaveError(buildFriendlyMessage(error, 'Subtask could not be added.'))
+    },
+    onSettled: (_data, _error, release) => {
+      release?.()
+    },
+  })
+
+  const isLocalMutationPending =
+    isLocalMutationLocked || saveTaskMutation.isPending || createSubtaskMutation.isPending
+  const isBusy = (task ? busyTaskIds.includes(task.id) : false) || isLocalMutationPending
+
+  function confirmDiscardDraft() {
+    if (!isDraftDirty) {
+      return true
+    }
+
+    return window.confirm('Discard unsaved task changes?')
+  }
+
+  const requestClose = useCallback(() => {
+    if (isLocalMutationPending) {
+      return
+    }
+
+    if (!confirmDiscardDraft()) {
+      return
+    }
+
+    onClose()
+  }, [isDraftDirty, isLocalMutationPending, onClose])
+
+  function runTaskAction(action: () => void) {
+    if (isBusy) {
+      return
+    }
+
+    if (!confirmDiscardDraft()) {
+      return
+    }
+
+    action()
+  }
+
+  function requestSaveTask() {
+    if (isBusy || !draft?.title.trim()) {
+      return
+    }
+
+    const release = acquireLocalMutationLock()
+    if (!release) {
+      setSaveError('Task is already updating.')
+      return
+    }
+
+    saveTaskMutation.mutate(release)
+  }
+
+  function requestCreateSubtask() {
+    if (isBusy || !newSubtaskTitle.trim()) {
+      return
+    }
+
+    const release = acquireLocalMutationLock()
+    if (!release) {
+      setSaveError('Task is already updating.')
+      return
+    }
+
+    createSubtaskMutation.mutate(release)
+  }
+
+  useEffect(() => {
+    if (!isOpen) {
+      setDraft(null)
+      setDraftTaskId(null)
+      setIsDraftDirty(false)
+      setNewSubtaskTitle('')
+      setSaveError(null)
+      return
+    }
+
+    if (!task) {
+      return
+    }
+
+    if (draftTaskId !== task.id || !isDraftDirty) {
+      setDraft(buildDraftState(task, session?.timezone))
+      setDraftTaskId(task.id)
+      setIsDraftDirty(false)
+      setSaveError(null)
+    }
+  }, [draftTaskId, isDraftDirty, isOpen, session?.timezone, task])
+
   useEffect(() => {
     if (!isOpen) {
       return undefined
@@ -108,22 +455,17 @@ export function TaskPreviewModal({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose()
+        requestClose()
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, requestClose])
 
   if (!isOpen || !taskId) {
     return null
   }
-
-  const task = taskQuery.data
-  const isBusy = task ? busyTaskIds.includes(task.id) : false
-  const completedLabel = task ? formatDateTime(task.completed_at) : null
-  const reminderLabel = task ? formatDateTime(task.reminder_at) : null
 
   return (
     <div
@@ -133,13 +475,13 @@ export function TaskPreviewModal({
       aria-labelledby="task-preview-title"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
-          onClose()
+          requestClose()
         }
       }}
     >
       <div className="max-h-[92dvh] w-full max-w-2xl overflow-hidden rounded-[1.7rem] bg-[radial-gradient(circle_at_top_left,_rgba(186,158,255,0.18),_rgba(32,32,31,0.98)_42%,_rgba(14,14,14,1)_100%)] shadow-[0_28px_80px_rgba(0,0,0,0.62)]">
         <div className="flex max-h-[92dvh] flex-col">
-          <div className="flex items-start justify-between gap-4 p-5 pb-3 sm:p-6 sm:pb-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 p-5 pb-3 sm:p-6 sm:pb-4">
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-pill bg-white/6 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
@@ -161,16 +503,28 @@ export function TaskPreviewModal({
                   </>
                 ) : null}
               </div>
-              <h2
-                id="task-preview-title"
-                className="font-display text-2xl leading-tight text-on-surface sm:text-3xl"
-              >
-                {task?.title ?? 'Loading task'}
-              </h2>
+              {isEditable && draft ? (
+                <textarea
+                  id="task-preview-title"
+                  value={draft.title}
+                  onChange={(event) => updateDraft((current) => ({ ...current, title: event.target.value }))}
+                  rows={2}
+                  className="w-full resize-none rounded-xl bg-white/5 px-3 py-2 font-display text-2xl leading-tight text-on-surface outline-none ring-1 ring-white/10 transition focus:bg-surface-container focus:ring-primary sm:text-3xl"
+                  aria-label="Task title"
+                  disabled={isBusy}
+                />
+              ) : (
+                <h2
+                  id="task-preview-title"
+                  className="font-display text-2xl leading-tight text-on-surface sm:text-3xl"
+                >
+                  {task?.title ?? 'Loading task'}
+                </h2>
+              )}
             </div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/8 text-on-surface-variant transition hover:bg-white/12 hover:text-on-surface active:scale-[0.98]"
               aria-label="Close task preview"
             >
@@ -194,26 +548,106 @@ export function TaskPreviewModal({
               </div>
             ) : task ? (
               <div className="space-y-4">
-                <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-                  <MetadataTile label="Due date" value={formatDate(task.due_date)} />
-                  <MetadataTile label="Reminder" value={reminderLabel ?? 'No reminder'} />
-                  <MetadataTile label="Recurrence" value={formatRecurrence(task)} />
-                  {completedLabel ? (
-                    <MetadataTile label="Completed" value={completedLabel} />
-                  ) : (
-                    <MetadataTile label="Subtasks" value={formatSubtaskCount(task.subtasks.length)} />
-                  )}
-                </div>
+                {isEditable && draft ? (
+                  <div className="space-y-3 rounded-[1.25rem] bg-surface/35 p-3">
+                    <SelectDropdown
+                      label="Group"
+                      options={groups.map((group) => ({ value: group.id, label: group.name }))}
+                      value={draft.groupId}
+                      onChange={(value) => updateDraft((current) => ({ ...current, groupId: String(value) }))}
+                      disabled={isBusy}
+                    />
+                    <DatePicker
+                      value={draft.dueDate || null}
+                      onChange={(value) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          dueDate: value ?? '',
+                          reminderAt: value ? current.reminderAt : '',
+                          recurrence: value ? current.recurrence : null,
+                        }))
+                      }
+                      mode="date"
+                      disabled={isBusy}
+                      placeholder="Select due date"
+                    />
+                    <DatePicker
+                      value={draft.reminderAt || null}
+                      onChange={(value) => updateDraft((current) => ({ ...current, reminderAt: value }))}
+                      mode="datetime"
+                      disabled={!draft.dueDate || isBusy}
+                      placeholder={draft.dueDate ? 'Select reminder' : 'Set a due date first'}
+                    />
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {RECURRENCE_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          disabled={!draft.dueDate || isBusy}
+                          onClick={() =>
+                            updateDraft((current) => ({
+                              ...current,
+                              recurrence:
+                                option.value === 'none'
+                                  ? null
+                                  : recurrenceForDueDate(option.value, current.dueDate),
+                            }))
+                          }
+                          className={[
+                            'min-h-10 rounded-xl px-2 text-[0.7rem] font-semibold transition',
+                            (draft.recurrence?.frequency ?? 'none') === option.value
+                              ? 'bg-primary text-surface'
+                              : 'bg-surface-dim text-on-surface-variant',
+                            !draft.dueDate ? 'opacity-50' : '',
+                          ].join(' ')}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                    <MetadataTile label="Due date" value={formatDate(task.due_date)} />
+                    <MetadataTile label="Reminder" value={reminderLabel ?? 'No reminder'} />
+                    <MetadataTile label="Recurrence" value={formatRecurrence(task)} />
+                    {completedLabel ? (
+                      <MetadataTile label="Completed" value={completedLabel} />
+                    ) : (
+                      <MetadataTile label="Subtasks" value={formatSubtaskCount(task.subtasks.length)} />
+                    )}
+                  </div>
+                )}
 
                 <section className="rounded-[1.25rem] bg-surface/45 p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
                   <p className="text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-on-surface-variant">
                     Context
                   </p>
-                  <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
-                    {task.description ||
-                      'No description yet. Open the full page to add more context before acting on this task.'}
-                  </p>
+                  {isEditable && draft ? (
+                    <textarea
+                      value={draft.description}
+                      onChange={(event) =>
+                        updateDraft((current) => ({ ...current, description: event.target.value }))
+                      }
+                      rows={4}
+                      className="mt-3 w-full resize-none rounded-xl bg-black/20 px-3 py-3 font-body text-sm leading-6 text-on-surface outline-none ring-1 ring-white/10 transition placeholder:text-on-surface-variant/45 focus:bg-surface-container focus:ring-primary"
+                      placeholder="Add context that helps you act on this later"
+                      aria-label="Task description"
+                      disabled={isBusy}
+                    />
+                  ) : (
+                    <p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">
+                      {task.description ||
+                        'No description yet. Open the full page to add more context before acting on this task.'}
+                    </p>
+                  )}
                 </section>
+
+                {saveError ? (
+                  <p className="rounded-xl bg-error/15 px-3 py-2 font-body text-sm text-error">
+                    {saveError}
+                  </p>
+                ) : null}
 
                 <section className="rounded-[1.25rem] bg-surface-container/90 p-4 shadow-ambient">
                   <div className="flex items-center justify-between gap-3">
@@ -257,56 +691,96 @@ export function TaskPreviewModal({
                       ))
                     )}
                   </div>
+
+                  {isEditable ? (
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        value={newSubtaskTitle}
+                        onChange={(event) => setNewSubtaskTitle(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && newSubtaskTitle.trim()) {
+                            requestCreateSubtask()
+                          }
+                        }}
+                        className="min-w-0 flex-1 rounded-card border border-dashed border-outline/30 bg-surface-dim px-3 py-3 text-sm text-on-surface outline-none transition placeholder:text-on-surface-variant/45 focus:border-primary"
+                        placeholder="Add a subtask..."
+                        aria-label="New subtask title"
+                        disabled={isBusy}
+                      />
+                      <button
+                        type="button"
+                        onClick={requestCreateSubtask}
+                        disabled={!newSubtaskTitle.trim() || isBusy}
+                        className="rounded-pill bg-primary px-4 py-2 text-sm font-semibold text-surface transition hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ) : null}
                 </section>
               </div>
             ) : null}
           </div>
 
           <div className="border-t border-white/10 bg-[rgba(20,20,20,0.86)] p-3 backdrop-blur-xl sm:p-4">
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={onClose}
-                className="rounded-pill bg-white/5 px-4 py-3 text-sm font-medium text-on-surface transition hover:bg-white/10 active:scale-[0.98]"
+                onClick={requestClose}
+                className="min-h-11 min-w-0 flex-1 rounded-pill bg-white/5 px-4 py-2.5 text-sm font-medium text-on-surface transition hover:bg-white/10 active:scale-[0.98]"
               >
                 Close
               </button>
 
-              {task?.status === 'open' && onComplete ? (
-                <button
-                  type="button"
-                  onClick={() => onComplete(task)}
-                  disabled={isBusy}
-                  className="inline-flex items-center justify-center gap-2 rounded-pill bg-success/20 px-4 py-3 text-sm font-semibold text-success transition hover:bg-success/30 active:scale-[0.98] disabled:opacity-50"
-                >
-                  <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
-                  Complete
-                </button>
-              ) : null}
+              <div className="ml-auto flex shrink-0 items-center justify-end gap-1.5">
+                {task?.status === 'open' && onComplete ? (
+                  <button
+                    type="button"
+                    onClick={() => runTaskAction(() => onComplete(task))}
+                    disabled={isBusy}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-success/20 text-success transition hover:bg-success/30 active:scale-[0.98] disabled:opacity-50"
+                    aria-label="Complete"
+                  >
+                    <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                ) : null}
 
-              {task?.status === 'completed' && onRestore ? (
-                <button
-                  type="button"
-                  onClick={() => onRestore(task)}
-                  disabled={isBusy}
-                  className="inline-flex items-center justify-center gap-2 rounded-pill bg-surface-container-high px-4 py-3 text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-highest hover:text-on-surface active:scale-[0.98] disabled:opacity-50"
-                >
-                  <RotateCcw className="h-4 w-4" strokeWidth={2} />
-                  Restore
-                </button>
-              ) : null}
+                {task?.status === 'completed' && onRestore ? (
+                  <button
+                    type="button"
+                    onClick={() => runTaskAction(() => onRestore(task))}
+                    disabled={isBusy}
+                    className="inline-flex items-center justify-center gap-2 rounded-pill bg-surface-container-high px-4 py-3 text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-highest hover:text-on-surface active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <RotateCcw className="h-4 w-4" strokeWidth={2} />
+                    Restore
+                  </button>
+                ) : null}
 
-              {task && onRequestDelete ? (
-                <button
-                  type="button"
-                  onClick={() => onRequestDelete(task)}
-                  disabled={isBusy}
-                  className="inline-flex items-center justify-center gap-2 rounded-pill border border-tertiary/35 bg-tertiary/10 px-4 py-3 text-sm font-semibold text-tertiary transition hover:bg-tertiary/15 active:scale-[0.98] disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" strokeWidth={2} />
-                  Delete
-                </button>
-              ) : null}
+                {task && onRequestDelete ? (
+                  <button
+                    type="button"
+                    onClick={() => runTaskAction(() => onRequestDelete(task))}
+                    disabled={isBusy}
+                    className="inline-flex h-11 w-9 shrink-0 items-center justify-center text-tertiary transition hover:text-tertiary/80 active:scale-[0.98] disabled:opacity-50"
+                    aria-label="Delete task"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                ) : null}
+
+                {isEditable && draft ? (
+                  <button
+                    type="button"
+                    onClick={requestSaveTask}
+                    disabled={isBusy || !draft.title.trim()}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-surface transition hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
+                    aria-label="Save changes"
+                  >
+                    <Save className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

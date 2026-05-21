@@ -526,6 +526,18 @@ describe('app shell', () => {
     expect(await screen.findByRole('heading', { name: 'Weekly overview' })).toBeInTheDocument()
   })
 
+  it('opens the desktop account menu and navigates to mobile mode', async () => {
+    renderWithRoute(['/desktop'])
+
+    expect(screen.queryByRole('link', { name: 'Mobile Tasks' })).not.toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Mobile Mode' }))
+
+    expect(await screen.findByText('Tap to record')).toBeInTheDocument()
+  })
+
   it('renders desktop all-tasks search state from the URL', async () => {
     renderWithRoute(['/desktop/tasks?q=Review'])
 
