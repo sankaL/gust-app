@@ -4,6 +4,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { ApiError, getSessionStatus, logoutSession } from '../lib/api'
+import { markDeviceRedirectOverride, useDeviceRedirect } from '../hooks/useDeviceRedirect'
 import { AppShellActionsContext } from './AppShellActions'
 import { Button } from './Button'
 import { Card } from './Card'
@@ -56,6 +57,7 @@ function buildLoginPath(pathname: string, search: string, authError?: string) {
 }
 
 export function AppShell() {
+  useDeviceRedirect()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
@@ -227,6 +229,7 @@ export function AppShell() {
 
   function openDesktopMode() {
     setIsAccountMenuOpen(false)
+    markDeviceRedirectOverride()
     void navigate('/desktop')
   }
 

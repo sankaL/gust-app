@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { Card } from './Card'
 
-const mobileUserAgentPattern = /android|iphone|ipad|ipod/i
+import { isMobilePhoneDevice } from '../lib/device'
 
 function matchesMedia(query: string) {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -10,18 +10,6 @@ function matchesMedia(query: string) {
   }
 
   return Boolean(window.matchMedia(query)?.matches)
-}
-
-function isCoarsePointerDevice() {
-  if (matchesMedia('(pointer: coarse)')) {
-    return true
-  }
-
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  return mobileUserAgentPattern.test(window.navigator.userAgent)
 }
 
 function isLandscapeOrientation() {
@@ -37,7 +25,7 @@ function isLandscapeOrientation() {
 }
 
 function shouldShowPortraitGuard() {
-  return isCoarsePointerDevice() && isLandscapeOrientation()
+  return isMobilePhoneDevice() && isLandscapeOrientation()
 }
 
 async function tryLockPortraitOrientation() {

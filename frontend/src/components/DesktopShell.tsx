@@ -34,6 +34,7 @@ import {
 } from '../lib/api'
 import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/taskScreenCache'
 import { useNotifications } from './Notifications'
+import { markDeviceRedirectOverride, useDeviceRedirect } from '../hooks/useDeviceRedirect'
 
 export type DesktopHeaderContent = {
   eyebrow: string
@@ -129,6 +130,7 @@ export function useDesktopHeader(header: DesktopHeaderContent) {
 }
 
 export function DesktopShell() {
+  useDeviceRedirect()
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -415,6 +417,7 @@ export function DesktopShell() {
                 {desktopHeader.action}
                 <Link
                   to="/"
+                  onClick={markDeviceRedirectOverride}
                   className="hidden items-center gap-2 rounded-pill bg-surface-container px-3 py-2 font-body text-sm text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface max-lg:flex"
                 >
                   <Mic className="h-4 w-4" strokeWidth={1.8} />
@@ -460,7 +463,12 @@ export function DesktopShell() {
                               to={item.to}
                               end={item.end}
                               role="menuitem"
-                              onClick={() => setIsAccountMenuOpen(false)}
+                              onClick={() => {
+                                if (item.to === '/') {
+                                  markDeviceRedirectOverride()
+                                }
+                                setIsAccountMenuOpen(false)
+                              }}
                               className={({ isActive }) =>
                                 [
                                   'flex w-full items-center gap-3 px-3 py-2 text-left font-body text-sm transition-colors hover:bg-surface-container-highest',
