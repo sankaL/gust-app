@@ -10,21 +10,21 @@ const EMAIL_NOT_ALLOWED_MESSAGE =
 
 function resolveNextPath(nextPath: string | null): string {
   if (!nextPath) {
-    return '/'
+    return '/capture'
   }
 
   let normalizedPath: string
   try {
     normalizedPath = decodeURIComponent(nextPath)
   } catch {
-    return '/'
+    return '/capture'
   }
 
   if (!normalizedPath.startsWith('/')) {
-    return '/'
+    return '/capture'
   }
   if (normalizedPath.startsWith('//')) {
-    return '/'
+    return '/capture'
   }
   return normalizedPath
 }

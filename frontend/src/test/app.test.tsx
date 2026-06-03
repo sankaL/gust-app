@@ -6,6 +6,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { AppShell } from '../components/AppShell'
 import { DesktopShell } from '../components/DesktopShell'
 import { AppProviders } from '../providers'
+import { DEVICE_REDIRECT_OVERRIDE_KEY } from '../hooks/useDeviceRedirect'
 import { CaptureRoute } from '../routes/CaptureRoute'
 import { CompletedTasksRoute } from '../routes/CompletedTasksRoute'
 import { DesktopCompletedRoute } from '../routes/desktop/DesktopCompletedRoute'
@@ -14,6 +15,7 @@ import { DesktopGroupDetailRoute } from '../routes/desktop/DesktopGroupDetailRou
 import { DesktopGroupsRoute } from '../routes/desktop/DesktopGroupsRoute'
 import { DesktopTaskDetailRoute } from '../routes/desktop/DesktopTaskDetailRoute'
 import { DesktopTasksRoute } from '../routes/desktop/DesktopTasksRoute'
+import { LandingRoute } from '../routes/LandingRoute'
 import { LoginRoute } from '../routes/LoginRoute'
 import { ManageGroupsRoute } from '../routes/ManageGroupsRoute'
 import { TaskDetailRoute } from '../routes/TaskDetailRoute'
@@ -50,8 +52,18 @@ vi.mock('virtual:pwa-register/react', async () => {
 })
 
 function renderWithRoute(initialEntries: string[]) {
+  const entry = initialEntries[0] ?? '/'
+  sessionStorage.clear()
+  if (entry.startsWith('/capture') || entry.startsWith('/tasks') || entry.startsWith('/login')) {
+    sessionStorage.setItem(DEVICE_REDIRECT_OVERRIDE_KEY, 'true')
+  }
+
   const router = createMemoryRouter(
     [
+      {
+        path: '/',
+        element: <LandingRoute />
+      },
       {
         path: '/login',
         element: <LoginRoute />
@@ -61,7 +73,7 @@ function renderWithRoute(initialEntries: string[]) {
         element: <AppShell />,
         children: [
           {
-            index: true,
+            path: 'capture',
             element: <CaptureRoute />
           },
           {
@@ -185,6 +197,7 @@ function setUserAgent(value: string) {
 }
 
 beforeEach(() => {
+  sessionStorage.clear()
   mockNeedRefresh = false
   mockOfflineReady = false
   updateServiceWorkerMock.mockReset()
@@ -348,8 +361,40 @@ afterEach(() => {
 })
 
 describe('app shell', () => {
-  it('renders the capture route by default', async () => {
+  it('renders the public landing page on /', async () => {
     renderWithRoute(['/'])
+
+    expect(await screen.findByText('Speak it once,')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Log in to Gust' })).toHaveAttribute('href', '/login')
+    expect(screen.getByRole('link', { name: 'Request access to Gust' })).toHaveAttribute(
+      'href',
+      'mailto:admingust@gmail.com'
+    )
+    expect(screen.queryByRole('button', { name: 'Open account menu' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Tap to record')).not.toBeInTheDocument()
+  })
+
+  it('renders the public landing page when signed out', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        jsonResponse({
+          signed_in: false,
+          user: null,
+          timezone: null,
+          inbox_group_id: null,
+          csrf_token: null
+        })
+      )
+    )
+    renderWithRoute(['/'])
+
+    expect(await screen.findByText('Speak it once,')).toBeInTheDocument()
+    expect(screen.queryByText('Verifying your account before loading Gust.')).not.toBeInTheDocument()
+  })
+
+  it('renders the capture route on /capture', async () => {
+    renderWithRoute(['/capture'])
 
     expect(await screen.findByText('Tap to record')).toBeInTheDocument()
   })
@@ -360,7 +405,7 @@ describe('app shell', () => {
     )
     setMatchMedia({ coarsePointer: true, landscape: true })
 
-    renderWithRoute(['/'])
+    renderWithRoute(['/capture'])
 
     expect(await screen.findByRole('heading', { name: 'Rotate your device upright' })).toBeInTheDocument()
   })
@@ -380,6 +425,25 @@ describe('app shell', () => {
     )
 
     renderWithRoute(['/tasks'])
+
+    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+  })
+
+  it('redirects signed-out /capture to /login', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        jsonResponse({
+          signed_in: false,
+          user: null,
+          timezone: null,
+          inbox_group_id: null,
+          csrf_token: null
+        })
+      )
+    )
+
+    renderWithRoute(['/capture'])
 
     expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
   })
@@ -424,6 +488,14 @@ describe('app shell', () => {
     expect(
       screen.getByRole('button', { name: 'Continue with Local Test Account' })
     ).toBeInTheDocument()
+  })
+
+  it('redirects signed-in users from /login to /capture by default', async () => {
+    const { router } = renderWithRoute(['/login'])
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/capture')
+    })
   })
 
   it('shows Google-only sign-in on /login outside dev mode', async () => {
@@ -516,7 +588,7 @@ describe('app shell', () => {
   })
 
   it('opens the account menu and navigates to desktop mission control', async () => {
-    renderWithRoute(['/'])
+    renderWithRoute(['/capture'])
 
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
@@ -559,11 +631,8 @@ describe('app shell', () => {
     expect(router.state.location.search).toContain('task=task-1')
   })
 
-  it('opens a mobile grouped task preview modal without leaving the selected group', async () => {
-    const { router } = renderWithRoute(['/tasks?group=inbox-1'])
-    const user = userEvent.setup()
-
-    await user.click(await screen.findByText('Review extraction contract'))
+  it('renders a mobile grouped task preview modal from URL state without leaving the selected group', async () => {
+    const { router } = renderWithRoute(['/tasks?group=inbox-1&task=task-1'])
 
     expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/tasks')
@@ -571,11 +640,8 @@ describe('app shell', () => {
     expect(router.state.location.search).toContain('task=task-1')
   })
 
-  it('opens a mobile completed-task preview modal without leaving completed tasks', async () => {
-    const { router } = renderWithRoute(['/tasks/completed?group=all'])
-    const user = userEvent.setup()
-
-    await user.click(await screen.findByText('Finished task'))
+  it('renders a mobile completed-task preview modal from URL state without leaving completed tasks', async () => {
+    const { router } = renderWithRoute(['/tasks/completed?group=all&task=completed-1'])
 
     expect(await screen.findByRole('dialog', { name: 'Finished task' })).toBeInTheDocument()
     expect(screen.getByText('Archived after completion.')).toBeInTheDocument()
@@ -717,7 +783,7 @@ describe('app shell', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    renderWithRoute(['/'])
+    renderWithRoute(['/capture'])
 
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
@@ -770,7 +836,7 @@ describe('app shell', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    renderWithRoute(['/'])
+    renderWithRoute(['/capture'])
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
     await user.click(screen.getByRole('menuitem', { name: 'Logout' }))
@@ -976,7 +1042,7 @@ describe('app shell', () => {
     const prompt = vi.fn().mockResolvedValue(undefined)
     const userChoice = Promise.resolve({ outcome: 'accepted' as const, platform: 'web' })
 
-    renderWithRoute(['/'])
+    renderWithRoute(['/capture'])
 
     const installEvent = new Event('beforeinstallprompt') as BeforeInstallPromptEvent
     Object.assign(installEvent, { prompt, userChoice })
@@ -991,7 +1057,7 @@ describe('app shell', () => {
   })
 
   it('hides the install CTA after the appinstalled event fires', async () => {
-    renderWithRoute(['/'])
+    renderWithRoute(['/capture'])
 
     const installEvent = new Event('beforeinstallprompt') as BeforeInstallPromptEvent
     Object.assign(installEvent, {
@@ -1017,7 +1083,7 @@ describe('app shell', () => {
     const user = userEvent.setup()
     setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')
 
-    renderWithRoute(['/'])
+    renderWithRoute(['/capture'])
 
     const installButton = await screen.findByRole('button', {
       name: 'Show iPhone install instructions'
@@ -1031,7 +1097,7 @@ describe('app shell', () => {
     const user = userEvent.setup()
     mockNeedRefresh = true
 
-    renderWithRoute(['/'])
+    renderWithRoute(['/capture'])
 
     expect(await screen.findByText('Update ready')).toBeInTheDocument()
 

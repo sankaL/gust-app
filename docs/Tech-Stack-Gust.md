@@ -1,7 +1,7 @@
 # Tech Stack: Gust
 
-**Version:** 2.3  
-**Last Updated:** 2026-03-28  
+**Version:** 2.4  
+**Last Updated:** 2026-06-03  
 **Domain:** gustapp.ca
 
 ## Purpose
@@ -24,7 +24,7 @@ The frontend talks only to the backend API. It does not call the database, trans
 | Layer | Choice | Why |
 |---|---|---|
 | Frontend app | React + TypeScript + Vite | Stable SPA stack with good mobile PWA support |
-| Routing | React Router | Small, familiar routing layer for a two-screen app |
+| Routing | React Router | Small, familiar routing layer for a public landing page plus protected mobile and desktop shells |
 | Server state | TanStack Query | Reliable fetch/mutation state, retries, and cache invalidation |
 | Styling | Tailwind CSS + CSS variables | Fast implementation with a tokenized visual system |
 | PWA | `vite-plugin-pwa` | Manifest + service worker support in the Vite ecosystem |
@@ -66,6 +66,10 @@ The frontend is a React SPA written in TypeScript.
 
 Responsibilities:
 
+- Public landing page at `/`
+- Dedicated login entry at `/login`
+- Protected mobile app shell rooted at `/capture`
+- Protected desktop workspace rooted at `/desktop`
 - Authentication entry and session-aware routing
 - Protected app-shell redirect to `/login` when signed out
 - Voice capture via browser APIs
@@ -76,6 +80,26 @@ Responsibilities:
 - Completed-task rendering with legacy duplicate suppression for known historical recurrence regressions
 - Group management
 - PWA install experience
+
+### Route Contract
+
+Committed frontend routes:
+
+- `/` is a public landing page with no auth requirement.
+- `/login` is the dedicated auth entry and defaults successful sign-in to `/capture`.
+- `/capture`, `/tasks`, `/tasks/completed`, `/tasks/groups`, and `/tasks/:taskId` are protected mobile-app routes under `AppShell`.
+- `/desktop` and its child routes are protected desktop workspace routes under `DesktopShell`.
+
+Responsive entry behavior:
+
+- desktop and iPad-class devices default from `/capture` to `/desktop` on initial visit
+- phone-class devices default from `/desktop` to `/capture` on initial visit
+- session-scoped override state prevents redirect loops when a user explicitly switches surfaces
+
+Landing-page implementation contract:
+
+- the cinematic public route lives outside the protected app shell
+- GSAP + `ScrollTrigger` may drive the landing motion, but content must remain readable when the animation timeline is unavailable
 
 ### State Model
 
@@ -117,6 +141,8 @@ Use `vite-plugin-pwa` to generate and register the service worker and manifest.
 
 PWA scope for v1:
 
+- manifest `scope` remains `/`
+- manifest `start_url` is `/capture`
 - installable on iOS and Android
 - offline app shell only
 - no offline writes

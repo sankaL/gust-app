@@ -2,10 +2,14 @@ import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { isMobilePhoneDevice } from '../lib/device'
 
-const DEVICE_REDIRECT_OVERRIDE_KEY = 'gust_device_redirected'
+export const DEVICE_REDIRECT_OVERRIDE_KEY = 'gust_device_redirected'
 
 export function markDeviceRedirectOverride() {
-  sessionStorage.setItem(DEVICE_REDIRECT_OVERRIDE_KEY, 'true')
+  try {
+    sessionStorage.setItem(DEVICE_REDIRECT_OVERRIDE_KEY, 'true')
+  } catch {
+    /* storage unavailable; redirect will still complete because the navigate call sits after this */
+  }
 }
 
 export function useDeviceRedirect() {
@@ -26,7 +30,7 @@ export function useDeviceRedirect() {
       void navigate('/desktop', { replace: true })
     } else if (isPhone && isDesktopPath) {
       markDeviceRedirectOverride()
-      void navigate('/', { replace: true })
+      void navigate('/capture', { replace: true })
     }
   }, [navigate, location.pathname])
 }

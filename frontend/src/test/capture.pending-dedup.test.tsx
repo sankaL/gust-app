@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppProviders } from '../providers'
 import { AppShell } from '../components/AppShell'
 import { CaptureRoute } from '../routes/CaptureRoute'
+import { DEVICE_REDIRECT_OVERRIDE_KEY } from '../hooks/useDeviceRedirect'
 
 type ExtractedTaskFixture = {
   id: string
@@ -74,15 +75,18 @@ function buildExtractedTask({
 }
 
 function renderCaptureRoute() {
+  sessionStorage.clear()
+  sessionStorage.setItem(DEVICE_REDIRECT_OVERRIDE_KEY, 'true')
+
   const router = createMemoryRouter(
     [
       {
         path: '/',
         element: <AppShell />,
-        children: [{ index: true, element: <CaptureRoute /> }]
+        children: [{ path: 'capture', element: <CaptureRoute /> }]
       }
     ],
-    { initialEntries: ['/'] }
+    { initialEntries: ['/capture'] }
   )
 
   return render(

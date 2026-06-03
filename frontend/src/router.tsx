@@ -1,7 +1,12 @@
+import { lazy, Suspense } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 
 import { AppShell } from './components/AppShell'
 import { DesktopShell } from './components/DesktopShell'
+// LandingRoute is lazy-loaded so GSAP is not bundled into the main chunk
+const LandingRoute = lazy(() =>
+  import('./routes/LandingRoute').then((m) => ({ default: m.LandingRoute }))
+)
 import { CaptureRoute } from './routes/CaptureRoute'
 import { CompletedTasksRoute } from './routes/CompletedTasksRoute'
 import { DesktopCaptureRoute } from './routes/desktop/DesktopCaptureRoute'
@@ -19,6 +24,11 @@ import { TasksRoute } from './routes/TasksRoute'
 
 export const router = createBrowserRouter([
   {
+    path: '/',
+    // Suspense fallback is null — the landing page controls its own visual state via GSAP
+    element: <Suspense fallback={null}><LandingRoute /></Suspense>,
+  },
+  {
     path: '/login',
     element: <LoginRoute />
   },
@@ -27,7 +37,7 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       {
-        index: true,
+        path: 'capture',
         element: <CaptureRoute />
       },
       {
