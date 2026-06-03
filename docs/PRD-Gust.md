@@ -1,7 +1,7 @@
 # PRD: Gust
 
-**Version:** 2.0  
-**Last Updated:** 2026-03-27  
+**Version:** 2.1  
+**Last Updated:** 2026-06-03  
 **Domain:** gustapp.ca
 
 ## Product Summary
@@ -48,9 +48,23 @@ An individual user who thinks out loud, captures tasks on the go, and wants the 
 
 ## V1 Scope
 
+### 0. Public Entry
+
+The root route `/` is a public landing page for Gust.
+
+It must:
+
+- explain Gust's voice-first value clearly
+- offer a `Request access` CTA for private access onboarding
+- offer a `Log in` CTA to the authenticated product
+
+The protected mobile app entry lives at `/capture`.
+Successful login redirects and installed PWA launches should land on `/capture`.
+
 ### 1. Capture
 
-The Capture screen is the default screen on launch.
+The Capture screen is the default authenticated screen on launch.
+The public website entry remains `/`, while the protected mobile app entry is `/capture`.
 
 It supports two input modes:
 
@@ -94,7 +108,7 @@ Group management is reached from the Tasks area and is not a primary navigation 
 
 Users sign in with Google. During private access, only explicitly allowlisted email addresses may create or restore a Gust session. All application data is scoped per user.
 Authentication uses a dedicated `/login` screen and redirects signed-out access away from protected task/capture routes.
-The authenticated shell includes a top-right account avatar menu with entries for `Completed Tasks`, `Desktop Mode` (placeholder), and `Logout`.
+The authenticated shell includes a top-right account avatar menu with entries for `Completed Tasks`, `Desktop Mode`, and `Logout`.
 
 ### 5. Email Digests
 
@@ -108,6 +122,7 @@ No other reminder or digest email type is sent from this flow.
 ### 6. Installable PWA
 
 The app is installable on iPhone Safari and Android Chrome and behaves like a fullscreen app when launched from the home screen.
+The PWA scope remains `/`, but its launch entry (`start_url`) must be `/capture` so installed Gust opens directly into authenticated capture.
 
 ## Core User Flows
 
@@ -153,6 +168,15 @@ The app is installable on iPhone Safari and Android Chrome and behaves like a fu
 4. If a user's digest has no items for that period, the send is skipped.
 
 ## Page Requirements
+
+### Landing
+
+Required behavior:
+
+- `/` is public and never mounts the protected app shell
+- primary CTA is `Request access`
+- secondary CTA is `Log in`
+- the page should preserve Gust branding while keeping the cinematic sample typography and motion style
 
 ### Capture
 

@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell'
 import { DesktopShell } from './components/DesktopShell'
 import { CaptureRoute } from './routes/CaptureRoute'
 import { CompletedTasksRoute } from './routes/CompletedTasksRoute'
+import { LandingRoute } from './routes/LandingRoute'
 import { DesktopCaptureRoute } from './routes/desktop/DesktopCaptureRoute'
 import { DesktopCompletedRoute } from './routes/desktop/DesktopCompletedRoute'
 import { DesktopCreateTaskRoute } from './routes/desktop/DesktopCreateTaskRoute'
@@ -19,6 +20,10 @@ import { TasksRoute } from './routes/TasksRoute'
 
 export const router = createBrowserRouter([
   {
+    path: '/',
+    element: <LandingRoute />
+  },
+  {
     path: '/login',
     element: <LoginRoute />
   },
@@ -27,7 +32,7 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       {
-        index: true,
+        path: 'capture',
         element: <CaptureRoute />
       },
       {

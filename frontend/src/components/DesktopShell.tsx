@@ -65,7 +65,7 @@ const primaryNavigation = [
 
 const accountNavigation = [
   ...primaryNavigation.filter((item) => item.to !== '/desktop/groups'),
-  { to: '/', label: 'Mobile Mode', icon: Smartphone, end: true },
+  { to: '/capture', label: 'Mobile Mode', icon: Smartphone, end: true },
 ]
 
 function buildLoginPath(pathname: string, search: string, authError?: string) {
@@ -416,7 +416,7 @@ export function DesktopShell() {
               <div className="flex shrink-0 items-center gap-2">
                 {desktopHeader.action}
                 <Link
-                  to="/"
+                  to="/capture"
                   onClick={markDeviceRedirectOverride}
                   className="hidden items-center gap-2 rounded-pill bg-surface-container px-3 py-2 font-body text-sm text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface max-lg:flex"
                 >
@@ -464,7 +464,7 @@ export function DesktopShell() {
                               end={item.end}
                               role="menuitem"
                               onClick={() => {
-                                if (item.to === '/') {
+                                if (item.to === '/capture') {
                                   markDeviceRedirectOverride()
                                 }
                                 setIsAccountMenuOpen(false)

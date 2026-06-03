@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-06-03 17:19:00 EDT
+
+- Reassigned route ownership so `/` is now a public landing page, `/capture` is the protected mobile app entry, `/login` remains the auth screen, and `/desktop` remains the protected desktop shell.
+- Kept the PWA scope at `/` but changed `start_url` to `/capture`, so installed Gust still launches directly into capture while the website root can serve public marketing content.
+- Implemented the landing experience as a dedicated route with GSAP/`ScrollTrigger` instead of reusing `AppShell`, keeping cinematic public-page behavior separate from session-gated product flows and allowing reduced-capability environments to render usable static content.
+
 ## 2026-04-29 00:00:00 EDT
 
 - Added `/desktop` as an explicit desktop mission-control route instead of auto-redirecting large screens, preserving the capture-first mobile launch contract at `/`.

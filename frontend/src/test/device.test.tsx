@@ -5,6 +5,8 @@ import { isMobilePhoneDevice } from '../lib/device'
 import { AppProviders } from '../providers'
 import { AppShell } from '../components/AppShell'
 import { DesktopShell } from '../components/DesktopShell'
+import { LandingRoute } from '../routes/LandingRoute'
+import { DEVICE_REDIRECT_OVERRIDE_KEY } from '../hooks/useDeviceRedirect'
 
 const defaultUserAgent = window.navigator.userAgent
 const defaultPlatform = window.navigator.platform
@@ -147,9 +149,13 @@ describe('Device-specific routing redirection', () => {
       [
         {
           path: '/',
+          element: <LandingRoute />
+        },
+        {
+          path: '/',
           element: <AppShell />,
           children: [
-            { index: true, element: <div data-testid="mobile-capture">Mobile Capture</div> }
+            { path: 'capture', element: <div data-testid="mobile-capture">Mobile Capture</div> }
           ]
         },
         {
@@ -173,7 +179,7 @@ describe('Device-specific routing redirection', () => {
     }
   }
 
-  it('redirects desktop/iPad users from mobile / to /desktop on initial visit', async () => {
+  it('keeps the public landing page at / for desktop visitors', async () => {
     setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'MacIntel',
@@ -182,13 +188,27 @@ describe('Device-specific routing redirection', () => {
 
     const { router } = renderRoutes(['/'])
 
+    expect(await screen.findByRole('heading', { name: 'Speak it once,' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
+    expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBeNull()
+  })
+
+  it('redirects desktop/iPad users from /capture to /desktop on initial visit', async () => {
+    setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'MacIntel',
+      0
+    )
+
+    const { router } = renderRoutes(['/capture'])
+
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/desktop')
     })
-    expect(sessionStorage.getItem('gust_device_redirected')).toBe('true')
+    expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBe('true')
   })
 
-  it('redirects mobile phone users from /desktop to / on initial visit', async () => {
+  it('redirects mobile phone users from /desktop to /capture on initial visit', async () => {
     setUserAgent(
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       'iPhone',
@@ -198,26 +218,26 @@ describe('Device-specific routing redirection', () => {
     const { router } = renderRoutes(['/desktop'])
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/')
+      expect(router.state.location.pathname).toBe('/capture')
     })
-    expect(sessionStorage.getItem('gust_device_redirected')).toBe('true')
+    expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBe('true')
   })
 
-  it('does NOT redirect a desktop user visiting / if they already have the gust_device_redirected flag set', async () => {
+  it('does NOT redirect a desktop user visiting /capture if they already have the gust_device_redirected flag set', async () => {
     setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'MacIntel',
       0
     )
-    sessionStorage.setItem('gust_device_redirected', 'true')
+    sessionStorage.setItem(DEVICE_REDIRECT_OVERRIDE_KEY, 'true')
 
-    const { router } = renderRoutes(['/'])
+    const { router } = renderRoutes(['/capture'])
 
     // Wait a brief moment to ensure no redirect happens
     await act(async () => {
       await new Promise((r) => setTimeout(r, 100))
     })
-    expect(router.state.location.pathname).toBe('/')
+    expect(router.state.location.pathname).toBe('/capture')
   })
 
   it('keeps desktop users in mobile mode after using the desktop capture shortcut', async () => {
@@ -230,13 +250,26 @@ describe('Device-specific routing redirection', () => {
     const { router } = renderRoutes(['/desktop'])
 
     const mobileCaptureLink = await screen.findByRole('link', { name: /^capture$/i })
-    expect(sessionStorage.getItem('gust_device_redirected')).toBeNull()
+    expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBeNull()
 
     fireEvent.click(mobileCaptureLink)
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/')
+      expect(router.state.location.pathname).toBe('/capture')
     })
-    expect(sessionStorage.getItem('gust_device_redirected')).toBe('true')
+    expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBe('true')
+  })
+
+  it('keeps the public landing page at / for mobile phone visitors', async () => {
+    setUserAgent(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      'iPhone',
+      5
+    )
+
+    const { router } = renderRoutes(['/'])
+
+    expect(await screen.findByRole('heading', { name: 'Speak it once,' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
   })
 })

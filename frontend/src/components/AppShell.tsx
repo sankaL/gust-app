@@ -12,7 +12,7 @@ import { useNotifications } from './Notifications'
 import { PortraitOrientationGuard } from './PortraitOrientationGuard'
 
 const navigation = [
-  { to: '/', label: 'Capture', end: true },
+  { to: '/capture', label: 'Capture', end: true },
   { to: '/tasks', label: 'Tasks', end: true },
   { to: '/tasks/groups', label: 'Groups', end: false }
 ]
@@ -239,7 +239,7 @@ export function AppShell() {
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-4 pt-3">
         <header className="safe-area-sticky-top sticky z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3">
-            <Link to="/" className="flex items-center gap-2">
+            <Link to="/capture" className="flex items-center gap-2">
               <img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-6 w-6" />
               <h1 className="font-display text-2xl leading-none text-on-surface">Gust</h1>
             </Link>
