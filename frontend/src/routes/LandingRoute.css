@@ -1,0 +1,194 @@
+/* Landing page cinematic styles — processed by PostCSS/Tailwind */
+
+.gust-film-grain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23noiseFilter)"/></svg>');
+}
+
+.gust-bg-grid-theme {
+  background-size: 60px 60px;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--color-on-surface) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--color-on-surface) 5%, transparent) 1px, transparent 1px);
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+}
+
+.gust-text-3d-matte {
+  color: var(--color-on-surface);
+  text-shadow:
+    0 10px 30px color-mix(in srgb, var(--color-on-surface) 20%, transparent),
+    0 2px 4px color-mix(in srgb, var(--color-on-surface) 10%, transparent);
+}
+
+.gust-text-silver-matte {
+  background: linear-gradient(180deg, var(--color-on-surface) 0%, color-mix(in srgb, var(--color-primary) 28%, var(--color-on-surface-variant)) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  transform: translateZ(0);
+  filter:
+    drop-shadow(0px 10px 20px color-mix(in srgb, var(--color-primary) 18%, transparent))
+    drop-shadow(0px 2px 4px color-mix(in srgb, var(--color-on-surface) 10%, transparent));
+}
+
+.gust-text-card-silver-matte {
+  background: linear-gradient(180deg, #ffffff 0%, #b9b8c5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  transform: translateZ(0);
+  filter:
+    drop-shadow(0px 12px 24px rgba(0, 0, 0, 0.8))
+    drop-shadow(0px 4px 8px rgba(0, 0, 0, 0.6));
+}
+
+.gust-premium-depth-card {
+  background: linear-gradient(145deg, #2b1954 0%, #14111f 45%, #09090c 100%);
+  box-shadow:
+    0 40px 100px -20px rgba(0, 0, 0, 0.9),
+    0 20px 40px -20px rgba(0, 0, 0, 0.8),
+    inset 0 1px 2px rgba(255, 255, 255, 0.18),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+}
+
+.gust-card-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 50;
+  background: radial-gradient(800px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(186,158,255,0.08) 0%, transparent 40%);
+  mix-blend-mode: screen;
+  transition: opacity 0.3s ease;
+}
+
+.gust-iphone-bezel {
+  background-color: #111;
+  box-shadow:
+    inset 0 0 0 2px #52525b,
+    inset 0 0 0 7px #000,
+    0 40px 80px -15px rgba(0,0,0,0.9),
+    0 15px 25px -5px rgba(0,0,0,0.7);
+  transform-style: preserve-3d;
+}
+
+.gust-hardware-btn {
+  background: linear-gradient(90deg, #404040 0%, #171717 100%);
+  box-shadow:
+    -2px 0 5px rgba(0,0,0,0.8),
+    inset -1px 0 1px rgba(255,255,255,0.15),
+    inset 1px 0 2px rgba(0,0,0,0.8);
+  border-left: 1px solid rgba(255,255,255,0.05);
+}
+
+.gust-screen-glare {
+  background: linear-gradient(110deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 45%);
+}
+
+.gust-widget-depth {
+  background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 100%);
+  box-shadow:
+    0 10px 20px rgba(0,0,0,0.3),
+    inset 0 1px 1px rgba(255,255,255,0.05),
+    inset 0 -1px 1px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.gust-floating-ui-badge {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.01) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 25px 50px -12px rgba(0, 0, 0, 0.8),
+    inset 0 1px 1px rgba(255,255,255,0.2),
+    inset 0 -1px 1px rgba(0,0,0,0.5);
+}
+
+.gust-btn-modern-light,
+.gust-btn-modern-dark {
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.gust-btn-modern-light {
+  background: linear-gradient(180deg, #FFFFFF 0%, #EEE6FF 100%);
+  color: #09090c;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.1), 0 12px 24px -4px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,1), inset 0 -3px 6px rgba(0,0,0,0.06);
+}
+
+.gust-btn-modern-light:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 6px 12px -2px rgba(0,0,0,0.15), 0 20px 32px -6px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,1), inset 0 -3px 6px rgba(0,0,0,0.06);
+}
+
+.gust-btn-modern-light:active {
+  transform: translateY(1px);
+  background: linear-gradient(180deg, #EFE9FF 0%, #E2D6FF 100%);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.1), inset 0 3px 6px rgba(0,0,0,0.1), inset 0 0 0 1px rgba(0,0,0,0.02);
+}
+
+.gust-btn-modern-dark {
+  background: linear-gradient(180deg, #30214a 0%, #171321 100%);
+  color: #FFFFFF;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 2px 4px rgba(0,0,0,0.6), 0 12px 24px -4px rgba(0,0,0,0.9), inset 0 1px 1px rgba(255,255,255,0.15), inset 0 -3px 6px rgba(0,0,0,0.8);
+}
+
+.gust-btn-modern-dark:hover {
+  transform: translateY(-3px);
+  background: linear-gradient(180deg, #422d67 0%, #221a34 100%);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.15), 0 6px 12px -2px rgba(0,0,0,0.7), 0 20px 32px -6px rgba(0,0,0,1), inset 0 1px 1px rgba(255,255,255,0.2), inset 0 -3px 6px rgba(0,0,0,0.8);
+}
+
+.gust-btn-modern-dark:active {
+  transform: translateY(1px);
+  background: #18141f;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.05), inset 0 3px 8px rgba(0,0,0,0.9), inset 0 0 0 1px rgba(0,0,0,0.5);
+}
+
+.gust-mic-pulse-ring {
+  animation: gustMicPulse 1.8s ease-in-out infinite;
+}
+
+.gust-mic-pulse-ring-delay {
+  animation-delay: 0.35s;
+}
+
+@keyframes gustMicPulse {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.12;
+  }
+  55% {
+    transform: scale(1.08);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+
+.gust-scroll-cue-dot {
+  animation: gustScrollCueBounce 1.8s ease-in-out infinite;
+}
+
+@keyframes gustScrollCueBounce {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(10px);
+    opacity: 1;
+  }
+}

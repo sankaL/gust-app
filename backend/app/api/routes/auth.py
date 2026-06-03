@@ -151,7 +151,11 @@ async def auth_callback(
     if session_context is None:
         raise AuthRequiredError("Authenticated user could not be resolved locally.")
 
-    response = RedirectResponse(url=settings.frontend_app_url or "/", status_code=302)
+    _frontend = (settings.frontend_app_url or "").rstrip("/")
+    response = RedirectResponse(
+        url=f"{_frontend}/capture" if _frontend else "/capture",
+        status_code=302,
+    )
     clear_oauth_code_verifier_cookie(response, settings)
     set_session_cookies(response, settings, session.tokens)
     ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))

@@ -50,9 +50,15 @@ async function tryLockPortraitOrientation() {
 
 export function PortraitOrientationGuard() {
   const [showGuard, setShowGuard] = useState(() => shouldShowPortraitGuard())
+  // In-memory dismiss: reactivates if the user navigates away and back while
+  // still in landscape. Dismissed state resets automatically on portrait rotation.
+  const [dismissed, setDismissed] = useState(false)
 
   const syncGuard = useCallback(() => {
-    setShowGuard(shouldShowPortraitGuard())
+    const shouldShow = shouldShowPortraitGuard()
+    setShowGuard(shouldShow)
+    // Auto-reset dismiss when the user rotates back to portrait
+    if (!shouldShow) setDismissed(false)
   }, [])
 
   useEffect(() => {
@@ -68,7 +74,7 @@ export function PortraitOrientationGuard() {
     }
   }, [syncGuard])
 
-  if (!showGuard) {
+  if (!showGuard || dismissed) {
     return null
   }
 
@@ -84,8 +90,16 @@ export function PortraitOrientationGuard() {
             Gust is optimized for portrait capture. Turn your device back to continue using
             the app.
           </p>
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 font-body text-sm font-medium text-on-surface-variant transition-colors hover:bg-white/10 active:bg-white/[0.03]"
+          >
+            Continue anyway
+          </button>
         </div>
       </Card>
     </div>
   )
 }
+
