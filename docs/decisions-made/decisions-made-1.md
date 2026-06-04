@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-06-04 12:23:40 EDT
+
+- Changed the PWA `start_url` from `/capture` to `/` so installed, remembered, or shortcut-style app launches land on the public Gust entry before any protected-route auth redirect.
+- Kept `/capture` as the authenticated mobile product entry once a user intentionally enters the app, but stopped using it as the manifest launch URL because signed-out browser state made normal site visits look like an automatic login redirect.
+- Preserved fail-closed rendering for a missing request-access email while fixing the Railway build path to expose `VITE_ADMIN_EMAIL` to Vite, so production can render the configured mail link without hardcoding the address into source.
+
 ## 2026-06-03 17:19:00 EDT
 
 - Reassigned route ownership so `/` is now a public landing page, `/capture` is the protected mobile app entry, `/login` remains the auth screen, and `/desktop` remains the protected desktop shell.

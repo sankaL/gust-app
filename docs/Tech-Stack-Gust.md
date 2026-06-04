@@ -142,7 +142,7 @@ Use `vite-plugin-pwa` to generate and register the service worker and manifest.
 PWA scope for v1:
 
 - manifest `scope` remains `/`
-- manifest `start_url` is `/capture`
+- manifest `start_url` is `/`
 - installable on iOS and Android
 - offline app shell only
 - no offline writes

@@ -23,7 +23,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
-        start_url: '/capture',
+        start_url: '/',
         icons: [
           {
             src: '/icons/icon-192.png',
