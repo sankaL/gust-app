@@ -2,7 +2,12 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 const SRC_ROOT = path.resolve(import.meta.dirname, '..')
-const ALLOWED_ENV_KEYS = new Set(['VITE_API_BASE_URL', 'VITE_GUST_DEV_MODE'])
+const ALLOWED_ENV_KEYS = new Set([
+  'MODE',
+  'VITE_ADMIN_EMAIL',
+  'VITE_API_BASE_URL',
+  'VITE_GUST_DEV_MODE'
+])
 const FORBIDDEN_ENV_PREFIXES = ['VITE_SUPABASE', 'VITE_OPENROUTER', 'VITE_MISTRAL', 'VITE_RESEND']
 
 function collectSourceFiles(directory: string): string[] {

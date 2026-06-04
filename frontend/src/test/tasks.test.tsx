@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppShell } from '../components/AppShell'
 import { NotificationsProvider } from '../components/Notifications'
+import { DEVICE_REDIRECT_OVERRIDE_KEY } from '../hooks/useDeviceRedirect'
 import { CompletedTasksRoute } from '../routes/CompletedTasksRoute'
 import { AppProviders } from '../providers'
 import { ManageGroupsRoute } from '../routes/ManageGroupsRoute'
@@ -33,6 +34,8 @@ function requestUrl(input: RequestInfo | URL) {
 }
 
 function renderTaskRoute(initialEntries: string[]) {
+  sessionStorage.setItem(DEVICE_REDIRECT_OVERRIDE_KEY, 'true')
+
   const router = createMemoryRouter(
     [
       {
@@ -72,6 +75,8 @@ function renderTaskRoute(initialEntries: string[]) {
 }
 
 function renderTaskRouteWithClient(initialEntries: string[], client: QueryClient) {
+  sessionStorage.setItem(DEVICE_REDIRECT_OVERRIDE_KEY, 'true')
+
   const router = createMemoryRouter(
     [
       {
@@ -656,9 +661,17 @@ describe('tasks flow', () => {
     expect(screen.getByRole('button', { name: 'Delete Review extraction contract' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save and return' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByText('Review extraction contract'))
+    await user.click(
+      screen.getByRole('button', {
+        name: /Review extraction contract.*Compare the new capture layout against the old hierarchy/s
+      })
+    )
 
-    expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(router.state.location.search).toContain('task=task-1')
+    })
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByLabelText('Task title')).toHaveValue('Review extraction contract')
     expect(router.state.location.pathname).toBe('/tasks')
     expect(router.state.location.search).toContain('task=task-1')
   })

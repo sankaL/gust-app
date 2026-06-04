@@ -362,16 +362,25 @@ afterEach(() => {
 
 describe('app shell', () => {
   it('renders the public landing page on /', async () => {
+    vi.stubEnv('VITE_ADMIN_EMAIL', 'admingust@example.com')
     renderWithRoute(['/'])
 
     expect(await screen.findByText('Speak it once,')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Log in to Gust' })).toHaveAttribute('href', '/login')
-    expect(screen.getByRole('link', { name: 'Request access to Gust' })).toHaveAttribute(
-      'href',
-      'mailto:admingust@gmail.com'
-    )
+    const requestAccessLinks = screen.getAllByRole('link', { name: 'Request access to Gust' })
+    expect(requestAccessLinks).toHaveLength(2)
+    expect(requestAccessLinks[0]).toHaveAttribute('href', 'mailto:admingust@example.com')
     expect(screen.queryByRole('button', { name: 'Open account menu' })).not.toBeInTheDocument()
     expect(screen.queryByText('Tap to record')).not.toBeInTheDocument()
+  })
+
+  it('fails closed on the landing page when the admin email is missing', async () => {
+    vi.stubEnv('VITE_ADMIN_EMAIL', '')
+    renderWithRoute(['/'])
+
+    expect(await screen.findByText('Speak it once,')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Request access to Gust' })).not.toBeInTheDocument()
+    expect(screen.getAllByLabelText('Request access unavailable')).toHaveLength(2)
   })
 
   it('renders the public landing page when signed out', async () => {
@@ -391,6 +400,30 @@ describe('app shell', () => {
 
     expect(await screen.findByText('Speak it once,')).toBeInTheDocument()
     expect(screen.queryByText('Verifying your account before loading Gust.')).not.toBeInTheDocument()
+  })
+
+  it('navigates from the landing login CTA to the login route', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        jsonResponse({
+          signed_in: false,
+          user: null,
+          timezone: null,
+          inbox_group_id: null,
+          csrf_token: null
+        })
+      )
+    )
+    const user = userEvent.setup()
+    const { router } = renderWithRoute(['/'])
+
+    await user.click(await screen.findByRole('link', { name: 'Log in to Gust' }))
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/login')
+    })
+    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
   })
 
   it('renders the capture route on /capture', async () => {
