@@ -1,13 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { Check, X } from 'lucide-react'
 import './LandingRoute.css'
 
 
 
 const METRIC_VALUE = 3
-const GUST_ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL ?? ''
 
 function shouldRunCinematicTimeline() {
   if (typeof window === 'undefined') {
@@ -25,14 +25,20 @@ function shouldRunCinematicTimeline() {
   return !window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
+function getAdminEmail() {
+  return import.meta.env.VITE_ADMIN_EMAIL?.trim() ?? ''
+}
+
 export function LandingRoute() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mainCardRef = useRef<HTMLDivElement>(null)
   const mockupRef = useRef<HTMLDivElement>(null)
   const counterRef = useRef<HTMLSpanElement>(null)
   const requestRef = useRef<number | null>(null)
+  const adminEmail = getAdminEmail()
+  const hasAdminEmail = adminEmail.length > 0
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!shouldRunCinematicTimeline()) {
       return
     }
@@ -246,13 +252,25 @@ export function LandingRoute() {
           leave organized.
         </h1>
         <div className="gust-entry-actions mt-6 flex w-[min(92vw,34rem)] flex-col gap-4 px-4 sm:mt-8 sm:flex-row sm:px-0">
-          <a
-            href={`mailto:${GUST_ADMIN_EMAIL}`}
-            aria-label="Request access to Gust"
-            className="gust-btn-modern-light flex flex-1 items-center justify-center gap-3 rounded-[1.15rem] px-6 py-3.5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface"
-          >
-            <span className="font-display text-lg font-bold leading-none tracking-tight">Request access</span>
-          </a>
+          {hasAdminEmail ? (
+            <a
+              href={`mailto:${adminEmail}`}
+              aria-label="Request access to Gust"
+              className="gust-btn-modern-light flex flex-1 items-center justify-center gap-3 rounded-[1.15rem] px-6 py-3.5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface"
+            >
+              <span className="font-display text-lg font-bold leading-none tracking-tight">Request access</span>
+            </a>
+          ) : (
+            <div
+              aria-label="Request access unavailable"
+              aria-disabled="true"
+              className="gust-btn-modern-light flex flex-1 items-center justify-center gap-3 rounded-[1.15rem] px-6 py-3.5 opacity-60"
+            >
+              <span className="font-display text-lg font-bold leading-none tracking-tight">
+                Access unavailable
+              </span>
+            </div>
+          )}
           <Link
             to="/login"
             className="gust-btn-modern-dark flex flex-1 items-center justify-center gap-3 rounded-[1.15rem] px-6 py-3.5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface"
@@ -281,11 +299,12 @@ export function LandingRoute() {
           moving.
         </p>
         <div className="flex flex-col gap-6 sm:flex-row">
-          <a
-            href={`mailto:${GUST_ADMIN_EMAIL}`}
-            aria-label="Request access to Gust"
-            className="gust-btn-modern-light flex items-center justify-center gap-3 rounded-[1.25rem] px-8 py-4 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface"
-          >
+          {hasAdminEmail ? (
+            <a
+              href={`mailto:${adminEmail}`}
+              aria-label="Request access to Gust"
+              className="gust-btn-modern-light flex items-center justify-center gap-3 rounded-[1.25rem] px-8 py-4 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface"
+            >
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]">
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 8l7.2 4.8a1.5 1.5 0 001.6 0L20 8m-14 9h12a2 2 0 002-2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
@@ -299,7 +318,28 @@ export function LandingRoute() {
                 Request access
               </div>
             </div>
-          </a>
+            </a>
+          ) : (
+            <div
+              aria-label="Request access unavailable"
+              aria-disabled="true"
+              className="gust-btn-modern-light flex items-center justify-center gap-3 rounded-[1.25rem] px-8 py-4 opacity-60"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]">
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 8l7.2 4.8a1.5 1.5 0 001.6 0L20 8m-14 9h12a2 2 0 002 2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                </svg>
+              </span>
+              <div className="text-left">
+                <div className="font-body text-[10px] font-bold uppercase tracking-[0.22em] text-black/50">
+                  Private beta
+                </div>
+                <div className="font-display text-xl font-bold leading-none tracking-tight">
+                  Access unavailable
+                </div>
+              </div>
+            </div>
+          )}
 
           <Link
             to="/login"
@@ -330,15 +370,15 @@ export function LandingRoute() {
         >
           <div className="gust-card-sheen" aria-hidden="true" />
 
-          <div className="relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col items-center justify-evenly px-4 py-6 lg:grid lg:grid-cols-3 lg:gap-8 lg:px-12 lg:py-0">
+          <div className="relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col items-center justify-center gap-6 px-4 py-8 sm:gap-8 md:gap-10 lg:grid lg:grid-cols-3 lg:gap-8 lg:px-12 lg:py-0">
             <div className="gust-card-right-text order-1 z-20 flex w-full justify-center lg:order-3 lg:justify-end">
-              <h2 className="gust-text-card-silver-matte font-display text-6xl font-black uppercase tracking-tighter md:text-[6rem] lg:text-[8rem]">
+              <h2 className="gust-text-card-silver-matte font-display text-5xl font-black uppercase tracking-tighter sm:text-6xl md:text-[6rem] lg:text-[8rem]">
                 Gust
               </h2>
             </div>
 
             <div
-              className="gust-mockup-scroll-wrapper order-2 relative z-10 flex h-[430px] w-full items-center justify-center lg:order-2 lg:h-[640px]"
+              className="gust-mockup-scroll-wrapper order-2 relative z-10 flex h-[390px] w-full items-center justify-center sm:h-[430px] lg:order-2 lg:h-[640px]"
               style={{ perspective: '1000px' }}
             >
               <div className="relative flex h-full w-full items-center justify-center scale-[0.65] md:scale-[0.82] lg:scale-100">
@@ -394,39 +434,63 @@ export function LandingRoute() {
                             Tasks parsed
                           </span>
                         </div>
-                        <div className="w-full space-y-2">
-                          <div className="gust-extraction-chip gust-widget-depth flex items-center rounded-2xl p-2.5">
-                            <div className="mr-2.5 flex h-8 w-8 items-center justify-center rounded-xl border border-primary/25 bg-gradient-to-br from-primary/25 to-primary/5 shadow-inner">
+                        <div className="w-full overflow-hidden rounded-xl bg-black/10">
+                          <div className="gust-extraction-chip flex min-h-10 items-center px-2.5 py-2">
+                            <div className="mr-2.5 flex h-6 w-6 items-center justify-center rounded-md bg-primary/[0.06]">
                               <svg className="h-3.5 w-3.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z" />
                               </svg>
                             </div>
-                            <div className="flex-1">
+                            <div className="min-w-0 flex-1">
                               <p className="font-body text-[10px] font-semibold text-white">Call mom</p>
                               <p className="font-body text-[9px] text-white/40">Personal task extracted</p>
                             </div>
+                            <div className="ml-2 flex items-center gap-1">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success/[0.08] text-success" aria-label="Approve Call mom">
+                                <Check className="h-3.5 w-3.5" strokeWidth={2.4} />
+                              </span>
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.03] text-white/45" aria-label="Deny Call mom">
+                                <X className="h-3.5 w-3.5" strokeWidth={2.2} />
+                              </span>
+                            </div>
                           </div>
-                          <div className="gust-extraction-chip gust-widget-depth flex items-center rounded-2xl p-2.5">
-                            <div className="mr-2.5 flex h-8 w-8 items-center justify-center rounded-xl border border-secondary/25 bg-gradient-to-br from-secondary/20 to-secondary/5 shadow-inner">
+                          <div className="gust-extraction-chip flex min-h-10 items-center px-2.5 py-2">
+                            <div className="mr-2.5 flex h-6 w-6 items-center justify-center rounded-md bg-secondary/[0.06]">
                               <svg className="h-3.5 w-3.5 text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M7 4v16m10-9a3 3 0 11-6 0 3 3 0 016 0z" />
                               </svg>
                             </div>
-                            <div className="flex-1">
+                            <div className="min-w-0 flex-1">
                               <p className="font-body text-[10px] font-semibold text-white">Send invoice</p>
                               <p className="font-body text-[9px] text-white/40">Due today, ready to route</p>
                             </div>
+                            <div className="ml-2 flex items-center gap-1">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success/[0.08] text-success" aria-label="Approve Send invoice">
+                                <Check className="h-3.5 w-3.5" strokeWidth={2.4} />
+                              </span>
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.03] text-white/45" aria-label="Deny Send invoice">
+                                <X className="h-3.5 w-3.5" strokeWidth={2.2} />
+                              </span>
+                            </div>
                           </div>
-                          <div className="gust-extraction-chip gust-widget-depth flex items-center rounded-2xl p-2.5">
-                            <div className="mr-2.5 flex h-8 w-8 items-center justify-center rounded-xl border border-tertiary/25 bg-gradient-to-br from-tertiary/20 to-tertiary/5 shadow-inner">
+                          <div className="gust-extraction-chip flex min-h-10 items-center px-2.5 py-2">
+                            <div className="mr-2.5 flex h-6 w-6 items-center justify-center rounded-md bg-tertiary/[0.06]">
                               <svg className="h-3.5 w-3.5 text-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4-4 3 3 7-7" />
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M20 8v6h-6" />
                               </svg>
                             </div>
-                            <div className="flex-1">
+                            <div className="min-w-0 flex-1">
                               <p className="font-body text-[10px] font-semibold text-white">Buy groceries</p>
                               <p className="font-body text-[9px] text-white/40">Inbox item, reminders added</p>
+                            </div>
+                            <div className="ml-2 flex items-center gap-1">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success/[0.08] text-success" aria-label="Approve Buy groceries">
+                                <Check className="h-3.5 w-3.5" strokeWidth={2.4} />
+                              </span>
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.03] text-white/45" aria-label="Deny Buy groceries">
+                                <X className="h-3.5 w-3.5" strokeWidth={2.2} />
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -495,10 +559,10 @@ export function LandingRoute() {
             </div>
 
             <div className="gust-card-left-text order-3 z-20 flex w-full flex-col justify-center px-4 text-center lg:order-1 lg:px-0 lg:text-left">
-              <h3 className="font-display text-2xl font-bold tracking-tight text-white md:text-3xl lg:mb-5 lg:text-4xl">
+              <h3 className="font-display text-xl font-bold tracking-tight text-white sm:text-2xl md:text-3xl lg:mb-5 lg:text-4xl">
                 Voice-first task capture.
               </h3>
-              <p className="mx-auto hidden max-w-sm font-body text-sm leading-relaxed text-white/68 md:block md:text-base lg:mx-0 lg:max-w-none lg:text-lg">
+              <p className="mx-auto mt-3 max-w-[20rem] font-body text-sm leading-relaxed text-white/68 md:text-base lg:mx-0 lg:mt-0 lg:max-w-none lg:text-lg">
                 Gust turns messy thoughts into structured tasks with groups, due dates, reminders,
                 and review when confidence is low.
               </p>
