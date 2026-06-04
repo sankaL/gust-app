@@ -122,7 +122,7 @@ No other reminder or digest email type is sent from this flow.
 ### 6. Installable PWA
 
 The app is installable on iPhone Safari and Android Chrome and behaves like a fullscreen app when launched from the home screen.
-The PWA scope remains `/`, but its launch entry (`start_url`) must be `/capture` so installed Gust opens directly into authenticated capture.
+The PWA scope remains `/`, and its launch entry (`start_url`) is `/` so installed or remembered launches show the public landing page before protected capture/auth routes.
 
 ## Core User Flows
 
