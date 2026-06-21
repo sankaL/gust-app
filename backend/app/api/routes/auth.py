@@ -130,9 +130,11 @@ async def auth_callback(
             code_verifier=code_verifier,
         )
     except AuthEmailNotAllowedError:
+        # The provider rejected this sign-in before returning a refresh token, so there is
+        # no provider session to revoke here. Cookies are still cleared below.
         return _build_blocked_auth_redirect_response(
             settings=settings,
-            response_url=_build_login_redirect_url(settings, auth_error="email_not_allowed"),
+            response_url=_build_landing_redirect_url(settings, auth_error="email_not_allowed"),
         )
 
     with user_connection_scope(
@@ -143,7 +145,7 @@ async def auth_callback(
             await _best_effort_revoke_refresh_token(auth_service, session.tokens.refresh_token)
             return _build_blocked_auth_redirect_response(
                 settings=settings,
-                response_url=_build_login_redirect_url(settings, auth_error="email_not_allowed"),
+                response_url=_build_landing_redirect_url(settings, auth_error="email_not_allowed"),
             )
         _bootstrap_user_session(connection, session)
         session_context = get_session_context(connection, session.identity.user_id)
@@ -286,9 +288,9 @@ def _bootstrap_user_session(connection, session: AuthenticatedSession) -> None:
     ensure_inbox_group(connection, user_id=session.identity.user_id)
 
 
-def _build_login_redirect_url(settings: Settings, *, auth_error: str | None = None) -> str:
+def _build_landing_redirect_url(settings: Settings, *, auth_error: str | None = None) -> str:
     frontend_app_url = (settings.frontend_app_url or "").rstrip("/")
-    base_url = f"{frontend_app_url}/login" if frontend_app_url else "/login"
+    base_url = frontend_app_url or "/"
 
     if auth_error is None:
         return base_url

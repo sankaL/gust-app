@@ -156,6 +156,16 @@ def _disallow_email(client: TestClient, email: str) -> None:
         )
 
 
+def _assert_cookie_cleared(response, cookie_name: str) -> None:
+    matching_headers = [
+        header
+        for header in response.headers.get_list("set-cookie")
+        if header.startswith(f"{cookie_name}=")
+    ]
+    assert matching_headers, f"Missing Set-Cookie clearing header for {cookie_name}"
+    assert all("Max-Age=0" in header for header in matching_headers)
+
+
 def test_get_session_returns_signed_out_without_cookies(client: TestClient) -> None:
     response = client.get("/auth/session", headers={"Origin": "http://frontend.test"})
 
@@ -206,7 +216,7 @@ def test_callback_bootstraps_user_session_and_inbox(app: FastAPI, client: TestCl
     response = client.get("/auth/session/callback?code=valid-code")
 
     assert response.status_code == 302
-    assert response.headers["location"] == "http://frontend.test"
+    assert response.headers["location"] == "http://frontend.test/capture"
     assert ACCESS_TOKEN_COOKIE in response.headers["set-cookie"]
     assert REFRESH_TOKEN_COOKIE in response.headers["set-cookie"]
     assert CSRF_COOKIE in response.headers["set-cookie"]
@@ -467,7 +477,7 @@ def test_refresh_token_restores_session_when_access_cookie_has_expired(
     assert ACCESS_TOKEN_COOKIE in response.headers["set-cookie"]
 
 
-def test_callback_redirects_blocked_email_to_login(app: FastAPI, client: TestClient) -> None:
+def test_callback_redirects_blocked_email_to_landing(app: FastAPI, client: TestClient) -> None:
     _override_auth_service(app, FakeAuthService())
     _disallow_email(client, "user@example.com")
     client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
@@ -475,7 +485,11 @@ def test_callback_redirects_blocked_email_to_login(app: FastAPI, client: TestCli
     response = client.get("/auth/session/callback?code=valid-code")
 
     assert response.status_code == 302
-    assert response.headers["location"] == "http://frontend.test/login?auth_error=email_not_allowed"
+    assert response.headers["location"] == "http://frontend.test?auth_error=email_not_allowed"
+    _assert_cookie_cleared(response, ACCESS_TOKEN_COOKIE)
+    _assert_cookie_cleared(response, REFRESH_TOKEN_COOKIE)
+    _assert_cookie_cleared(response, CSRF_COOKIE)
+    _assert_cookie_cleared(response, OAUTH_CODE_VERIFIER_COOKIE)
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         context = get_session_context(connection, "11111111-1111-1111-1111-111111111111")

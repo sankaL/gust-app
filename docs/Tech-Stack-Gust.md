@@ -66,7 +66,7 @@ The frontend is a React SPA written in TypeScript.
 
 Responsibilities:
 
-- Public landing page at `/`
+- Session-aware public landing entry at `/`
 - Dedicated login entry at `/login`
 - Protected mobile app shell rooted at `/capture`
 - Protected desktop workspace rooted at `/desktop`
@@ -85,7 +85,7 @@ Responsibilities:
 
 Committed frontend routes:
 
-- `/` is a public landing page with no auth requirement.
+- `/` is a public, session-aware landing entry: signed-out users see landing content, and signed-in users redirect to `/capture`.
 - `/login` is the dedicated auth entry and defaults successful sign-in to `/capture`.
 - `/capture`, `/tasks`, `/tasks/completed`, `/tasks/groups`, and `/tasks/:taskId` are protected mobile-app routes under `AppShell`.
 - `/desktop` and its child routes are protected desktop workspace routes under `DesktopShell`.
@@ -99,6 +99,7 @@ Responsive entry behavior:
 Landing-page implementation contract:
 
 - the cinematic public route lives outside the protected app shell
+- the root entry checks the backend session endpoint before showing landing content so authenticated users do not see a landing flash
 - GSAP + `ScrollTrigger` may drive the landing motion, but content must remain readable when the animation timeline is unavailable
 
 ### State Model
@@ -142,7 +143,7 @@ Use `vite-plugin-pwa` to generate and register the service worker and manifest.
 PWA scope for v1:
 
 - manifest `scope` remains `/`
-- manifest `start_url` is `/`
+- manifest `start_url` is `/`, with the root route deciding between landing and app from backend session status
 - installable on iOS and Android
 - offline app shell only
 - no offline writes
@@ -186,6 +187,7 @@ Committed model:
 
 The frontend learns whether the user is signed in by calling the backend session endpoint, not by reading tokens from browser storage.
 Logout must clear client-side query caches before the next account signs in so stale user data is not reused.
+Unsuccessful or blocked OAuth callbacks redirect to the landing entry with a sanitized auth error; only successful callbacks restore a signed-in session and redirect to `/capture`.
 
 ### Backend Auth Handling
 

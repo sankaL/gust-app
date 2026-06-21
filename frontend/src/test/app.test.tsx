@@ -15,11 +15,12 @@ import { DesktopGroupDetailRoute } from '../routes/desktop/DesktopGroupDetailRou
 import { DesktopGroupsRoute } from '../routes/desktop/DesktopGroupsRoute'
 import { DesktopTaskDetailRoute } from '../routes/desktop/DesktopTaskDetailRoute'
 import { DesktopTasksRoute } from '../routes/desktop/DesktopTasksRoute'
-import { LandingRoute } from '../routes/LandingRoute'
 import { LoginRoute } from '../routes/LoginRoute'
 import { ManageGroupsRoute } from '../routes/ManageGroupsRoute'
+import { RootRoute } from '../routes/RootRoute'
 import { TaskDetailRoute } from '../routes/TaskDetailRoute'
 import { TasksRoute } from '../routes/TasksRoute'
+import { signedInSession, signedOutSession } from './session-fixtures'
 
 const updateServiceWorkerMock = vi.fn()
 let mockNeedRefresh = false
@@ -62,7 +63,7 @@ function renderWithRoute(initialEntries: string[]) {
     [
       {
         path: '/',
-        element: <LandingRoute />
+        element: <RootRoute />
       },
       {
         path: '/login',
@@ -222,21 +223,9 @@ beforeEach(() => {
 
       if (url.includes('/auth/session')) {
         if (!isSignedIn) {
-          return jsonResponse({
-            signed_in: false,
-            user: null,
-            timezone: null,
-            inbox_group_id: null,
-            csrf_token: null
-          })
+          return jsonResponse(signedOutSession())
         }
-        return jsonResponse({
-          signed_in: true,
-          user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
-          timezone: 'UTC',
-          inbox_group_id: 'inbox-1',
-          csrf_token: 'csrf-token'
-        })
+        return jsonResponse(signedInSession())
       }
 
       if (url.includes('/groups')) {
@@ -361,8 +350,12 @@ afterEach(() => {
 })
 
 describe('app shell', () => {
-  it('renders the public landing page on /', async () => {
+  it('renders the public landing page on / when signed out', async () => {
     vi.stubEnv('VITE_ADMIN_EMAIL', 'admingust@example.com')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => jsonResponse(signedOutSession()))
+    )
     renderWithRoute(['/'])
 
     expect(await screen.findByText('Speak it once,')).toBeInTheDocument()
@@ -376,6 +369,10 @@ describe('app shell', () => {
 
   it('fails closed on the landing page when the admin email is missing', async () => {
     vi.stubEnv('VITE_ADMIN_EMAIL', '')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => jsonResponse(signedOutSession()))
+    )
     renderWithRoute(['/'])
 
     expect(await screen.findByText('Speak it once,')).toBeInTheDocument()
@@ -386,34 +383,80 @@ describe('app shell', () => {
   it('renders the public landing page when signed out', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(() =>
-        jsonResponse({
-          signed_in: false,
-          user: null,
-          timezone: null,
-          inbox_group_id: null,
-          csrf_token: null
-        })
-      )
+      vi.fn(() => jsonResponse(signedOutSession()))
     )
     renderWithRoute(['/'])
 
     expect(await screen.findByText('Speak it once,')).toBeInTheDocument()
-    expect(screen.queryByText('Verifying your account before loading Gust.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Verifying your current session.')).not.toBeInTheDocument()
+  })
+
+  it('redirects signed-in mobile root visits to capture', async () => {
+    vi.mocked(fetch).mockImplementationOnce((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      return Promise.resolve(
+        url.includes('/auth/session') ? jsonResponse(signedInSession()) : jsonResponse({})
+      )
+    })
+    setUserAgent(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+    )
+    const { router } = renderWithRoute(['/'])
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/capture')
+    })
+    expect(await screen.findByText('Tap to record')).toBeInTheDocument()
+  })
+
+  it('shows the allowlist error on the landing route', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => jsonResponse(signedOutSession()))
+    )
+    renderWithRoute(['/?auth_error=email_not_allowed'])
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
+    )
+  })
+
+  it('shows the allowlist error on the landing route when session status rejects the current user', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        jsonResponse(
+          {
+            error: {
+              code: 'auth_email_not_allowed',
+              message: 'This email is not allowed to access Gust.'
+            }
+          },
+          { status: 403 }
+        )
+      )
+    )
+    renderWithRoute(['/'])
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
+    )
+  })
+
+  it('shows a retryable session-check error when the root session request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Network failed'))))
+    renderWithRoute(['/'])
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Gust could not verify your session. Check your connection and try again.'
+    )
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
   it('navigates from the landing login CTA to the login route', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(() =>
-        jsonResponse({
-          signed_in: false,
-          user: null,
-          timezone: null,
-          inbox_group_id: null,
-          csrf_token: null
-        })
-      )
+      vi.fn(() => jsonResponse(signedOutSession()))
     )
     const user = userEvent.setup()
     const { router } = renderWithRoute(['/'])
