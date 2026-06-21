@@ -6,8 +6,14 @@ import { Check, X } from 'lucide-react'
 import './LandingRoute.css'
 
 
+const EMAIL_NOT_ALLOWED_MESSAGE =
+  'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
 
 const METRIC_VALUE = 3
+
+type LandingRouteProps = {
+  authErrorCode?: string | null
+}
 
 function shouldRunCinematicTimeline() {
   if (typeof window === 'undefined') {
@@ -29,7 +35,7 @@ function getAdminEmail() {
   return import.meta.env.VITE_ADMIN_EMAIL?.trim() ?? ''
 }
 
-export function LandingRoute() {
+export function LandingRoute({ authErrorCode }: LandingRouteProps = {}) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mainCardRef = useRef<HTMLDivElement>(null)
   const mockupRef = useRef<HTMLDivElement>(null)
@@ -37,6 +43,8 @@ export function LandingRoute() {
   const requestRef = useRef<number | null>(null)
   const adminEmail = getAdminEmail()
   const hasAdminEmail = adminEmail.length > 0
+  const authErrorMessage =
+    authErrorCode === 'email_not_allowed' ? EMAIL_NOT_ALLOWED_MESSAGE : null
 
   useLayoutEffect(() => {
     if (!shouldRunCinematicTimeline()) {
@@ -251,6 +259,14 @@ export function LandingRoute() {
         <h1 className="gust-text-days gust-text-silver-matte max-w-[12ch] overflow-visible pb-[0.14em] font-display text-[3.25rem] font-extrabold leading-[0.94] tracking-tighter md:text-[5.5rem] lg:text-[5rem]">
           leave organized.
         </h1>
+        {authErrorMessage ? (
+          <div
+            role="alert"
+            className="mt-5 w-[min(92vw,34rem)] rounded-[1.1rem] border border-red-200/20 bg-red-950/70 px-4 py-3 shadow-[0_16px_32px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+          >
+            <p className="font-body text-sm leading-6 text-red-100">{authErrorMessage}</p>
+          </div>
+        ) : null}
         <div className="gust-entry-actions mt-6 flex w-[min(92vw,34rem)] flex-col gap-4 px-4 sm:mt-8 sm:flex-row sm:px-0">
           {hasAdminEmail ? (
             <a
@@ -298,6 +314,14 @@ export function LandingRoute() {
           Request access to Gust or log in to your workspace to capture tasks by voice and keep
           moving.
         </p>
+        {authErrorMessage ? (
+          <div
+            aria-hidden="true"
+            className="mx-auto mb-8 max-w-xl rounded-[1.1rem] border border-red-200/20 bg-red-950/70 px-5 py-3 shadow-[0_16px_32px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+          >
+            <p className="font-body text-sm leading-6 text-red-100">{authErrorMessage}</p>
+          </div>
+        ) : null}
         <div className="flex flex-col gap-6 sm:flex-row">
           {hasAdminEmail ? (
             <a

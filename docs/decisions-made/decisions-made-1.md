@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-06-21 11:11:00 EDT
+
+- Made the root route session-aware while keeping the PWA manifest `start_url` at `/`, so signed-out and incognito launches still show the public landing page while signed-in launches continue into the app.
+- Kept `/capture` as the successful Google OAuth callback destination, and moved blocked or allowlist-failed callbacks to `/?auth_error=email_not_allowed` so unsuccessful sign-in attempts return to the landing page with a sanitized notice.
+- Preserved the separation between the cinematic landing route and the protected app shells by adding a lightweight root session gate that uses the backend session endpoint rather than browser-readable auth storage.
+
 ## 2026-06-04 12:23:40 EDT
 
 - Changed the PWA `start_url` from `/capture` to `/` so installed, remembered, or shortcut-style app launches land on the public Gust entry before any protected-route auth redirect.

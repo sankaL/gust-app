@@ -5,8 +5,9 @@ import { isMobilePhoneDevice } from '../lib/device'
 import { AppProviders } from '../providers'
 import { AppShell } from '../components/AppShell'
 import { DesktopShell } from '../components/DesktopShell'
-import { LandingRoute } from '../routes/LandingRoute'
+import { RootRoute } from '../routes/RootRoute'
 import { DEVICE_REDIRECT_OVERRIDE_KEY } from '../hooks/useDeviceRedirect'
+import { signedInSession, signedOutSession } from './session-fixtures'
 
 const defaultUserAgent = window.navigator.userAgent
 const defaultPlatform = window.navigator.platform
@@ -48,6 +49,16 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' }
   })
+}
+
+function requestUrl(input: RequestInfo | URL) {
+  if (typeof input === 'string') {
+    return input
+  }
+  if (input instanceof URL) {
+    return input.toString()
+  }
+  return input.url
 }
 
 describe('Device detection utilities', () => {
@@ -123,13 +134,7 @@ describe('Device-specific routing redirection', () => {
       'fetch',
       vi.fn((url: string) => {
         if (url.includes('/auth/session')) {
-          return jsonResponse({
-            signed_in: true,
-            user: { id: 'user-1', email: 'user@example.com', display_name: 'Gust User' },
-            timezone: 'UTC',
-            inbox_group_id: 'inbox-1',
-            csrf_token: 'csrf-token'
-          })
+          return jsonResponse(signedInSession())
         }
         if (url.includes('/groups')) {
           return jsonResponse([])
@@ -149,7 +154,7 @@ describe('Device-specific routing redirection', () => {
       [
         {
           path: '/',
-          element: <LandingRoute />
+          element: <RootRoute />
         },
         {
           path: '/',
@@ -179,12 +184,35 @@ describe('Device-specific routing redirection', () => {
     }
   }
 
-  it('keeps the public landing page at / for desktop visitors', async () => {
+  it('redirects signed-in desktop visitors from / to /desktop', async () => {
+    vi.mocked(fetch).mockImplementationOnce((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      return Promise.resolve(
+        url.includes('/auth/session') ? jsonResponse(signedInSession()) : jsonResponse({})
+      )
+    })
     setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'MacIntel',
       0
     )
+
+    const { router } = renderRoutes(['/'])
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/desktop')
+    })
+    expect(await screen.findByTestId('desktop-dashboard')).toBeInTheDocument()
+    expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBe('true')
+  })
+
+  it('keeps the public landing page at / for signed-out desktop visitors', async () => {
+    setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'MacIntel',
+      0
+    )
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse(signedOutSession())))
 
     const { router } = renderRoutes(['/'])
 
@@ -260,12 +288,35 @@ describe('Device-specific routing redirection', () => {
     expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBe('true')
   })
 
-  it('keeps the public landing page at / for mobile phone visitors', async () => {
+  it('redirects signed-in mobile phone visitors from / to /capture', async () => {
+    vi.mocked(fetch).mockImplementationOnce((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      return Promise.resolve(
+        url.includes('/auth/session') ? jsonResponse(signedInSession()) : jsonResponse({})
+      )
+    })
     setUserAgent(
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       'iPhone',
       5
     )
+
+    const { router } = renderRoutes(['/'])
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/capture')
+    })
+    expect(await screen.findByTestId('mobile-capture')).toBeInTheDocument()
+    expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBeNull()
+  })
+
+  it('keeps the public landing page at / for signed-out mobile phone visitors', async () => {
+    setUserAgent(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      'iPhone',
+      5
+    )
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse(signedOutSession())))
 
     const { router } = renderRoutes(['/'])
 
