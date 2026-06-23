@@ -81,6 +81,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| ADH-64 | Make desktop sidebar collapsible | DONE | 2026-06-23 19:02 EDT | Added a desktop-only collapse/expand control that switches the mission-control sidebar between full labels and an accessible icon rail, with app-shell regression coverage. | Design, AGENTS |
 | ADH-63 | Create Fallow remediation plan from engineering audit output | DONE | 2026-06-07 14:07 EDT | Added a three-phase remediation plan in `docs/engineering/fallow-remediation-plan-20260607134941.md`, prioritized extracted-task edit/update helper extraction first, and called out likely false positives/noisy findings. | AGENTS |
 | BUG-64 | Make landing root session-aware for signed-in launches | DONE | 2026-06-21 11:11 EDT | Added a root session gate so signed-in launches continue to `/capture` while signed-out/incognito launches render landing, moved blocked auth callbacks to the landing auth-error notice, and updated routing/docs regression coverage. | PRD, Tech, AGENTS |
 | BUG-63 | Restore landing access CTA and prevent signed-out PWA launches from bypassing the public page | DONE | 2026-06-04 12:23 EDT | Exposed `VITE_ADMIN_EMAIL` to Railway/local frontend build env with `sanka.lokuliyana@gmail.com` as the default contact, changed manifest `start_url` to `/`, added PWA config coverage, and updated PWA entry docs/decision log. | PRD, Tech, AGENTS |

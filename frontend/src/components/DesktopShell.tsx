@@ -9,6 +9,8 @@ import {
   LayoutDashboard,
   LogOut,
   Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Settings2,
   Smartphone,
@@ -143,6 +145,7 @@ export function DesktopShell() {
   const [isRecording, setIsRecording] = useState(false)
   const [isRecorderLoading, setIsRecorderLoading] = useState(false)
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   const sessionQuery = useQuery({
     queryKey: ['session-status'],
@@ -312,20 +315,62 @@ export function DesktopShell() {
   }
 
   const groups = groupsQuery.data ?? []
+  const SidebarToggleIcon = isSidebarCollapsed ? PanelLeftOpen : PanelLeftClose
 
   return (
     <div className="min-h-[100dvh] bg-surface text-on-surface">
-      <div className="grid min-h-[100dvh] grid-cols-[18rem_minmax(0,1fr)] max-lg:grid-cols-1">
-        <aside className="sticky top-0 flex h-[100dvh] flex-col border-r border-white/10 bg-surface-dim/85 px-4 py-5 backdrop-blur-xl max-lg:hidden">
-          <Link to="/desktop" className="flex items-center gap-3 px-2">
-            <img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-8 w-8" />
-            <div>
-              <p className="font-display text-2xl leading-none text-on-surface">Gust</p>
-              <p className="font-body text-[0.68rem] uppercase tracking-[0.18em] text-on-surface-variant">
-                Mission Control
-              </p>
-            </div>
-          </Link>
+      <div
+        className={[
+          'grid min-h-[100dvh] transition-[grid-template-columns] duration-300 max-lg:grid-cols-1',
+          isSidebarCollapsed
+            ? 'grid-cols-[5.75rem_minmax(0,1fr)]'
+            : 'grid-cols-[18rem_minmax(0,1fr)]',
+        ].join(' ')}
+      >
+        <aside
+          id="desktop-sidebar"
+          className={[
+            'sticky top-0 flex h-[100dvh] flex-col border-r border-white/10 bg-surface-dim/85 py-5 backdrop-blur-xl transition-[padding,width] duration-300 max-lg:hidden',
+            isSidebarCollapsed ? 'px-3' : 'px-4',
+          ].join(' ')}
+        >
+          <div
+            className={[
+              'flex items-center',
+              isSidebarCollapsed ? 'flex-col gap-3' : 'justify-between gap-3',
+            ].join(' ')}
+          >
+            <Link
+              to="/desktop"
+              className={[
+                'flex min-w-0 items-center gap-3 px-2',
+                isSidebarCollapsed ? 'justify-center' : '',
+              ].join(' ')}
+              aria-label="Gust mission control"
+              title={isSidebarCollapsed ? 'Gust' : undefined}
+            >
+              <img src="/logos/gust-wind-electric.svg" alt="" className="h-8 w-8 shrink-0" />
+              {isSidebarCollapsed ? null : (
+                <div className="min-w-0">
+                  <p className="font-display text-2xl leading-none text-on-surface">Gust</p>
+                  <p className="truncate font-body text-[0.68rem] uppercase tracking-[0.18em] text-on-surface-variant">
+                    Mission Control
+                  </p>
+                </div>
+              )}
+            </Link>
+            <button
+              type="button"
+              aria-controls="desktop-sidebar"
+              aria-expanded={!isSidebarCollapsed}
+              aria-label={isSidebarCollapsed ? 'Expand desktop sidebar' : 'Collapse desktop sidebar'}
+              title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={() => setIsSidebarCollapsed((current) => !current)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-container text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface active:scale-[0.96]"
+            >
+              <SidebarToggleIcon className="h-4 w-4" strokeWidth={1.8} />
+            </button>
+          </div>
 
           <nav aria-label="Desktop primary" className="mt-8 space-y-1">
             {primaryNavigation.map((item) => {
@@ -335,27 +380,37 @@ export function DesktopShell() {
                   key={item.to}
                   to={item.to}
                   end={item.end}
+                  aria-label={isSidebarCollapsed ? item.label : undefined}
+                  title={isSidebarCollapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     [
                       'flex items-center gap-3 rounded-soft px-3 py-2.5 font-body text-sm transition duration-200 active:scale-[0.98]',
+                      isSidebarCollapsed ? 'justify-center' : '',
                       isActive
                         ? 'bg-surface-container-highest text-primary shadow-ambient'
                         : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
                     ].join(' ')
                   }
                 >
-                  <Icon className="h-4 w-4" strokeWidth={1.8} />
-                  {item.label}
+                  <Icon className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+                  <span className={isSidebarCollapsed ? 'sr-only' : ''}>{item.label}</span>
                 </NavLink>
               )
             })}
           </nav>
 
           <div className="mt-8 min-h-0 flex-1">
-            <div className="mb-3 flex items-center justify-between px-3">
-              <p className="font-body text-[0.68rem] uppercase tracking-[0.18em] text-on-surface-variant">
-                Groups
-              </p>
+            <div
+              className={[
+                'mb-3 flex items-center px-3',
+                isSidebarCollapsed ? 'justify-center' : 'justify-between',
+              ].join(' ')}
+            >
+              {isSidebarCollapsed ? null : (
+                <p className="font-body text-[0.68rem] uppercase tracking-[0.18em] text-on-surface-variant">
+                  Groups
+                </p>
+              )}
               <BarChart3 className="h-3.5 w-3.5 text-on-surface-variant" strokeWidth={1.8} />
             </div>
             <div className="max-h-[42vh] space-y-1 overflow-y-auto pr-1">
@@ -363,22 +418,40 @@ export function DesktopShell() {
                 <NavLink
                   key={group.id}
                   to={`/desktop/groups/${group.id}`}
+                  aria-label={
+                    isSidebarCollapsed
+                      ? `${group.name} group, ${group.open_task_count} open task${
+                          group.open_task_count === 1 ? '' : 's'
+                        }`
+                      : undefined
+                  }
+                  title={isSidebarCollapsed ? group.name : undefined}
                   className={({ isActive }) =>
                     [
-                      'flex items-center justify-between gap-3 rounded-card px-3 py-2 font-body text-sm transition duration-200 active:scale-[0.98]',
+                      'flex items-center gap-3 rounded-card px-3 py-2 font-body text-sm transition duration-200 active:scale-[0.98]',
+                      isSidebarCollapsed ? 'justify-center' : 'justify-between',
                       isActive
                         ? 'bg-surface-container-high text-on-surface'
                         : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
                     ].join(' ')
                   }
                 >
-                  <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={[
+                      'flex min-w-0 items-center gap-2',
+                      isSidebarCollapsed ? 'justify-center' : '',
+                    ].join(' ')}
+                  >
                     <FolderKanban className="h-4 w-4 shrink-0" strokeWidth={1.8} />
-                    <span className="truncate">{group.name}</span>
+                    <span className={isSidebarCollapsed ? 'sr-only' : 'truncate'}>
+                      {group.name}
+                    </span>
                   </span>
-                  <span className="shrink-0 rounded-pill bg-surface-container-highest px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">
-                    {group.open_task_count}
-                  </span>
+                  {isSidebarCollapsed ? null : (
+                    <span className="shrink-0 rounded-pill bg-surface-container-highest px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">
+                      {group.open_task_count}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </div>
@@ -389,10 +462,14 @@ export function DesktopShell() {
               type="button"
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
+              aria-label={isSidebarCollapsed ? 'Logout' : undefined}
+              title={isSidebarCollapsed ? 'Logout' : undefined}
               className="flex w-full items-center justify-center gap-2 px-3 py-2 font-body text-sm font-semibold text-red-400 transition duration-200 hover:text-red-300 active:scale-[0.98] disabled:opacity-60"
             >
-              <LogOut className="h-4 w-4" strokeWidth={1.8} />
-              {logoutMutation.isPending ? 'Logging out' : 'Logout'}
+              <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+              <span className={isSidebarCollapsed ? 'sr-only' : ''}>
+                {logoutMutation.isPending ? 'Logging out' : 'Logout'}
+              </span>
             </button>
           </div>
         </aside>
