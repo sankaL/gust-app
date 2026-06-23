@@ -789,6 +789,33 @@ describe('app shell', () => {
     expect(screen.queryByText('user@example.com')).not.toBeInTheDocument()
   })
 
+  it('collapses and expands the desktop sidebar navigation', async () => {
+    renderWithRoute(['/desktop'])
+    const user = userEvent.setup()
+
+    expect(await screen.findByRole('heading', { name: 'Weekly overview' })).toBeInTheDocument()
+    expect(screen.getByText('Gust')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Collapse desktop sidebar' }))
+
+    expect(screen.getByRole('button', { name: 'Expand desktop sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+    expect(screen.queryByText('Gust')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Inbox group, 1 open task' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Expand desktop sidebar' }))
+
+    expect(screen.getByRole('button', { name: 'Collapse desktop sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+    expect(screen.getByText('Gust')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Inbox 1/ })).toBeInTheDocument()
+  })
+
   it('renders desktop group configuration header in the top navigation row only', async () => {
     renderWithRoute(['/desktop/groups'])
 
