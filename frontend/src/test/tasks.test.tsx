@@ -1498,7 +1498,7 @@ describe('tasks flow', () => {
     expect(await screen.findByText('Task summary')).toBeInTheDocument()
   })
 
-  it('shows completed tasks route and reopens a completed task', async () => {
+  it('shows completed tasks route and confirms before reopening a completed task', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
       const method = init?.method ?? 'GET'
@@ -1551,10 +1551,123 @@ describe('tasks flow', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     renderTaskRoute(['/tasks/completed?group=inbox-1'])
+    const user = userEvent.setup()
 
     expect(await screen.findByText('Review extraction contract')).toBeInTheDocument()
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Restore' }))
+    await user.click(screen.getByRole('button', { name: 'Restore Review extraction contract' }))
+    expect(await screen.findByRole('dialog', { name: 'Restore task' })).toBeInTheDocument()
+    expect(screen.getByText(/moves the task back to To-do/i)).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/tasks/task-1/reopen'),
+      expect.anything()
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog', { name: 'Restore task' })).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/tasks/task-1/reopen'),
+      expect.anything()
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Restore Review extraction contract' }))
+    await user.click(await screen.findByRole('button', { name: 'Restore to To-do' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/tasks/task-1/reopen'),
+        expect.objectContaining({ method: 'POST', credentials: 'include' })
+      )
+    })
+  })
+
+  it('confirms restore from the completed task preview modal before reopening', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? 'GET'
+
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.endsWith('/tasks/task-1')) {
+        return Promise.resolve(
+          jsonResponse({
+            id: 'task-1',
+            title: 'Review extraction contract',
+            description: 'Check the structured output rules before rollout.',
+            status: 'completed',
+            needs_review: false,
+            due_date: null,
+            reminder_at: null,
+            due_bucket: 'no_date',
+            group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+            completed_at: '2026-03-24T12:00:00Z',
+            deleted_at: null,
+            recurrence_frequency: null,
+            recurrence: null,
+            subtasks: [],
+            subtask_count: 0
+          })
+        )
+      }
+      if (url.includes('/tasks?group_id=inbox-1&status=completed')) {
+        return Promise.resolve(
+          jsonResponse([
+            {
+              id: 'task-1',
+              title: 'Review extraction contract',
+              status: 'completed',
+              needs_review: false,
+              due_date: null,
+              reminder_at: null,
+              due_bucket: 'no_date',
+              group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+              completed_at: '2026-03-24T12:00:00Z',
+              deleted_at: null
+            }
+          ])
+        )
+      }
+      if (url.endsWith('/tasks/task-1/reopen') && method === 'POST') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 'task-1',
+            title: 'Review extraction contract',
+            status: 'open',
+            needs_review: false,
+            due_date: null,
+            reminder_at: null,
+            due_bucket: 'no_date',
+            group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+            completed_at: null,
+            deleted_at: null,
+            recurrence: null,
+            subtasks: [],
+            subtask_count: 0
+          })
+        )
+      }
+
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks/completed?group=inbox-1&task=task-1'])
+    const user = userEvent.setup()
+
+    expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Restore' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Restore task' })).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/tasks/task-1/reopen'),
+      expect.anything()
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Restore to To-do' }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

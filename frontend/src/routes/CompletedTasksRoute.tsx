@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { RotateCcw } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 
@@ -25,6 +26,7 @@ import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
 import { PullToRefresh, TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
 import { TaskPreviewModal } from '../components/TaskPreviewModal'
+import { TaskRestoreDialog } from '../components/TaskRestoreDialog'
 import {
   refreshTaskScreenQueries,
   TASK_SCREEN_GC_TIME_MS,
@@ -45,12 +47,12 @@ function buildCompletedLabel(task: TaskSummary) {
   }
 
   const value = new Date(task.completed_at)
-  return `Completed ${new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit'
-  }).format(value)}`
+  }).format(value)
 }
 
 function dedupeCompletedTasks(tasks: TaskSummary[]) {
@@ -91,6 +93,7 @@ export function CompletedTasksRoute() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([])
+  const [restoreCandidate, setRestoreCandidate] = useState<TaskSummary | null>(null)
   const { notifyError, notifySuccess } = useNotifications()
 
   const sessionQuery = useQuery({
@@ -192,6 +195,18 @@ export function CompletedTasksRoute() {
     setSearchParams(next, { replace: true })
   }
 
+  function requestRestore(task: TaskSummary) {
+    setRestoreCandidate(task)
+  }
+
+  function confirmRestore() {
+    if (!restoreCandidate || reopenMutation.isPending) {
+      return
+    }
+
+    reopenMutation.mutate(restoreCandidate)
+  }
+
   const reopenMutation = useMutation({
     onMutate: async (task) => {
       markTaskPending(task.id, true)
@@ -232,6 +247,7 @@ export function CompletedTasksRoute() {
       })
       prependTaskToMatchingLists(queryClient, task, 'open')
       updateTaskDetailCache(queryClient, task)
+      setRestoreCandidate(null)
       notifySuccess(`Moved ${task.title} back to To-do.`)
       void refreshTaskData()
     },
@@ -289,7 +305,7 @@ export function CompletedTasksRoute() {
           </div>
         ) : null}
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           {visibleCompletedTasks.map((task) => (
             <article
               key={task.id}
@@ -302,47 +318,49 @@ export function CompletedTasksRoute() {
                   openTaskPreview(task.id)
                 }
               }}
-              className="rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4 transition hover:bg-surface-container-highest/80 active:scale-[0.99]"
+              className="rounded-card bg-surface-container-high px-3 py-2.5 transition hover:bg-surface-container-highest/80 active:scale-[0.99]"
             >
-              <div className="flex items-stretch justify-between gap-4">
-                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-                  <div className="flex flex-col gap-1.5 align-top">
-                    <h3 className="font-display text-lg font-medium text-on-surface truncate leading-tight">
-                      {task.title}
-                    </h3>
-                    <p className="font-body text-xs text-on-surface-variant/80 font-medium">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3
+                    className="min-w-0 truncate pr-1 font-display text-[0.98rem] font-medium leading-tight text-on-surface"
+                    title={task.title}
+                  >
+                    {task.title}
+                  </h3>
+
+                  <div className="mt-1 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden font-body text-[0.62rem] uppercase tracking-[0.12em] text-on-surface-variant">
+                    <span className="min-w-0 max-w-[36%] shrink truncate font-medium text-on-surface-variant/85">
                       {task.group?.name || 'Inbox'}
-                    </p>
-                  </div>
-                  <div className="mt-4">
-                    <span className="text-tertiary uppercase tracking-wider text-[0.65rem] font-bold">
+                    </span>
+                    <span className="shrink-0 text-on-surface-variant/35">•</span>
+                    <span className="min-w-0 shrink truncate font-bold text-tertiary">
                       {buildCompletedLabel(task)}
                     </span>
-                  </div>
-                </div>
-                
-                <div className="flex flex-col items-end justify-between gap-4 shrink-0 px-2">
-                  <div className="flex items-center gap-2">
-                    {task.recurrence_frequency && (
-                      <span className="recurrence-badge shrink-0">
+                    {task.recurrence_frequency ? (
+                      <span
+                        className="recurrence-badge shrink-0"
+                        title={`Recurring: ${task.recurrence_frequency}`}
+                      >
                         {task.recurrence_frequency.toUpperCase()}
                       </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        reopenMutation.mutate(task)
-                      }}
-                      disabled={pendingTaskIds.includes(task.id)}
-                      className="rounded-pill bg-surface-dim px-3 py-1.5 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
-                    >
-                      Restore
-                    </button>
+                    ) : null}
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    requestRestore(task)
+                  }}
+                  disabled={pendingTaskIds.includes(task.id)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-dim text-on-surface-variant shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] transition-all hover:-translate-y-0.5 hover:bg-surface-container-highest hover:text-on-surface active:translate-y-0 active:scale-95 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
+                  aria-label={`Restore ${task.title}`}
+                  title="Restore"
+                >
+                  <RotateCcw className="h-4 w-4" strokeWidth={2} />
+                </button>
               </div>
             </article>
           ))}
@@ -355,12 +373,22 @@ export function CompletedTasksRoute() {
         isOpen={Boolean(selectedTaskId)}
         onClose={closeTaskPreview}
         onRestore={(task) => {
-          reopenMutation.mutate(task)
+          requestRestore(task)
           closeTaskPreview()
         }}
         busyTaskIds={pendingTaskIds}
         session={sessionQuery.data}
         groups={groupsQuery.data ?? []}
+      />
+      <TaskRestoreDialog
+        isOpen={restoreCandidate !== null}
+        taskTitle={restoreCandidate?.title ?? ''}
+        isRestoring={
+          reopenMutation.isPending ||
+          (restoreCandidate ? pendingTaskIds.includes(restoreCandidate.id) : false)
+        }
+        onRestore={confirmRestore}
+        onClose={() => setRestoreCandidate(null)}
       />
     </SessionGuard>
   )
