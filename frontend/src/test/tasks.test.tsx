@@ -1554,6 +1554,12 @@ describe('tasks flow', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByText('Review extraction contract')).toBeInTheDocument()
+    const refreshButton = screen.getByRole('button', { name: 'Refresh completed tasks' })
+    const profileButton = screen.getByRole('button', { name: 'Open account menu' })
+    expect(screen.getAllByRole('button', { name: 'Refresh completed tasks' })).toHaveLength(1)
+    expect(
+      Boolean(refreshButton.compareDocumentPosition(profileButton) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true)
 
     await user.click(screen.getByRole('button', { name: 'Restore Review extraction contract' }))
     expect(await screen.findByRole('dialog', { name: 'Restore task' })).toBeInTheDocument()

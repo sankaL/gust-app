@@ -24,6 +24,7 @@ import {
 } from '../lib/taskQueryCache'
 import { useNotifications } from '../components/Notifications'
 import { SessionGuard } from '../components/SessionGuard'
+import { useAppShellActions } from '../components/AppShellActions'
 import { PullToRefresh, TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
 import { TaskPreviewModal } from '../components/TaskPreviewModal'
 import { TaskRestoreDialog } from '../components/TaskRestoreDialog'
@@ -91,6 +92,7 @@ function dedupeCompletedTasks(tasks: TaskSummary[]) {
 
 export function CompletedTasksRoute() {
   const queryClient = useQueryClient()
+  const shellActions = useAppShellActions()
   const [searchParams, setSearchParams] = useSearchParams()
   const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([])
   const [restoreCandidate, setRestoreCandidate] = useState<TaskSummary | null>(null)
@@ -151,6 +153,20 @@ export function CompletedTasksRoute() {
   const isRefreshingCompletedTasks =
     (completedTasksQuery.isFetching && !completedTasksQuery.isLoading) ||
     (groupsQuery.isFetching && !groupsQuery.isLoading)
+
+  useEffect(() => {
+    shellActions?.setTopBarAction(
+      <TaskScreenRefreshButton
+        isRefreshing={isRefreshingCompletedTasks}
+        label="Refresh completed tasks"
+        onRefresh={refreshCompletedTasks}
+      />
+    )
+
+    return () => {
+      shellActions?.setTopBarAction(null)
+    }
+  }, [isRefreshingCompletedTasks, refreshCompletedTasks, shellActions])
 
   function requireCsrf(session: SessionStatus | undefined) {
     const csrfToken = session?.csrf_token
@@ -284,12 +300,6 @@ export function CompletedTasksRoute() {
     >
       <PullToRefresh isRefreshing={isRefreshingCompletedTasks} onRefresh={refreshCompletedTasks}>
       <section className="space-y-4">
-        <TaskScreenRefreshButton
-          isRefreshing={isRefreshingCompletedTasks}
-          label="Refresh completed tasks"
-          onRefresh={refreshCompletedTasks}
-        />
-
         {completedTasksQuery.isLoading ? (
           <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">
             Loading completed tasks.

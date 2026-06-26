@@ -81,6 +81,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| ADH-66 | Move completed-history refresh into mobile header actions | DONE | 2026-06-24 23:56 EDT | Registered the completed-tasks refresh control in the app-shell top bar so it appears left of the profile dropdown instead of inside the page body. | Design, AGENTS |
 | ADH-65 | Compact mobile completed task history and confirm restores | DONE | 2026-06-24 19:13 EDT | Reworked mobile completed-task cards into compact rows and gated card/preview restore actions behind an explicit confirmation dialog. | Design, AGENTS |
 | ADH-64 | Make desktop sidebar collapsible | DONE | 2026-06-23 19:02 EDT | Added a desktop-only collapse/expand control that switches the mission-control sidebar between full labels and an accessible icon rail, with app-shell regression coverage. | Design, AGENTS |
 | ADH-63 | Create Fallow remediation plan from engineering audit output | DONE | 2026-06-07 14:07 EDT | Added a three-phase remediation plan in `docs/engineering/fallow-remediation-plan-20260607134941.md`, prioritized extracted-task edit/update helper extraction first, and called out likely false positives/noisy findings. | AGENTS |
