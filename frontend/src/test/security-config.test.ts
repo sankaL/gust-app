@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 
+import { getAppConfig } from '../lib/config'
+
 const SRC_ROOT = path.resolve(import.meta.dirname, '..')
 const ALLOWED_ENV_KEYS = new Set([
   'MODE',
@@ -30,6 +32,10 @@ function collectSourceFiles(directory: string): string[] {
 }
 
 describe('frontend env safety', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('only reads approved VITE env keys from source files', () => {
     const files = collectSourceFiles(SRC_ROOT)
     const discoveredKeys = new Set<string>()
@@ -54,5 +60,47 @@ describe('frontend env safety', () => {
         expect(source.includes(prefix)).toBe(false)
       }
     }
+  })
+
+  it('rejects a cleartext production API origin', () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'false')
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.gustapp.ca')
+
+    expect(() => getAppConfig()).toThrow('must use HTTPS')
+  })
+
+  it('rejects a non-URL API base', () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'false')
+    vi.stubEnv('VITE_API_BASE_URL', 'api.gustapp.ca')
+
+    expect(() => getAppConfig()).toThrow('must be an absolute URL')
+  })
+
+  it('rejects API origins containing credentials or paths', () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'false')
+    vi.stubEnv('VITE_API_BASE_URL', 'https://user:password@api.gustapp.ca/v1')
+
+    expect(() => getAppConfig()).toThrow('must not contain credentials')
+  })
+
+  it('rejects API origins containing query parameters', () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'false')
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.gustapp.ca?redirect=https://evil.example')
+
+    expect(() => getAppConfig()).toThrow('must not contain credentials')
+  })
+
+  it('allows cleartext localhost only in dev mode', () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'true')
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
+
+    expect(getAppConfig().apiBaseUrl).toBe('http://localhost:8000')
+  })
+
+  it('rejects explicitly configured cleartext localhost outside dev mode', () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'false')
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
+
+    expect(() => getAppConfig()).toThrow('must use HTTPS')
   })
 })

@@ -81,6 +81,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| ADH-67 | Audit and harden RLS, request throttling, auth boundaries, deployment dependencies, and Fallow security findings | DONE | 2026-07-14 10:52 EDT | Added relational parent-ownership RLS policies, pre-auth IP and post-auth user throttles, Railway proxy/host hardening, bounded request IDs and callback codes, constant-time internal-secret checks, locked Python 3.12 dependencies, zero-vulnerability npm/Python audits, and baseline/final Fallow evidence. | PRD, Schema, Runbook, Tech, AGENTS |
 | ADH-66 | Move completed-history refresh into mobile header actions | DONE | 2026-06-24 23:56 EDT | Registered the completed-tasks refresh control in the app-shell top bar so it appears left of the profile dropdown instead of inside the page body. | Design, AGENTS |
 | ADH-65 | Compact mobile completed task history and confirm restores | DONE | 2026-06-24 19:13 EDT | Reworked mobile completed-task cards into compact rows and gated card/preview restore actions behind an explicit confirmation dialog. | Design, AGENTS |
 | ADH-64 | Make desktop sidebar collapsible | DONE | 2026-06-23 19:02 EDT | Added a desktop-only collapse/expand control that switches the mission-control sidebar between full labels and an accessible icon rail, with app-shell regression coverage. | Design, AGENTS |

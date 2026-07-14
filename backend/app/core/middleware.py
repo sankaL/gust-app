@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 
@@ -17,6 +18,7 @@ from app.core.timing import begin_request_timing, record_timing, reset_request_t
 from app.services.auth import ExpiredSignatureError, SupabaseAuthService
 
 logger = logging.getLogger("gust.api")
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -27,22 +29,26 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         self.auth_service = SupabaseAuthService(settings)
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request_id = _safe_request_id(request.headers.get("X-Request-ID"))
         request.state.request_id = request_id
 
-        user_id = await self._resolve_rate_limit_user_id(request)
-        rate_limit = self.rate_limiter.evaluate_request(request=request, user_id=user_id)
+        rate_limit = self.rate_limiter.evaluate_ip_request(request=request)
         if rate_limit is not None and rate_limit.exceeded:
-            response = build_error_response(
-                request,
-                status_code=429,
-                code="rate_limit_exceeded",
-                message="Rate limit exceeded. Please retry shortly.",
-                headers=rate_limit.headers,
+            return self._rate_limited_response(request, request_id, rate_limit.headers)
+
+        user_id = await self._resolve_rate_limit_user_id(request)
+        user_rate_limit = None
+        if user_id is not None:
+            user_rate_limit = self.rate_limiter.evaluate_user_request(
+                request=request,
+                user_id=user_id,
             )
-            set_response_security_headers(request, response)
-            response.headers["X-Request-ID"] = request_id
-            return response
+            if user_rate_limit is not None and user_rate_limit.exceeded:
+                return self._rate_limited_response(
+                    request,
+                    request_id,
+                    user_rate_limit.headers,
+                )
 
         started_at = time.perf_counter()
         recorder, timing_token = begin_request_timing()
@@ -56,8 +62,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         response.headers["X-Request-ID"] = request_id
         if recorder.segments:
             response.headers["Server-Timing"] = recorder.as_server_timing_header()
-        if rate_limit is not None:
-            for key, value in rate_limit.headers.items():
+        response_rate_limit = user_rate_limit or rate_limit
+        if response_rate_limit is not None:
+            for key, value in response_rate_limit.headers.items():
                 response.headers.setdefault(key, value)
         set_response_security_headers(request, response)
 
@@ -77,8 +84,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
     async def _resolve_rate_limit_user_id(self, request: Request) -> str | None:
         access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
-        refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
-
         if access_token:
             try:
                 return self.auth_service.validate_access_token(access_token).user_id
@@ -93,6 +98,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             except Exception:
                 return None
 
+        refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
         if not refresh_token:
             return None
 
@@ -105,3 +111,26 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         request.state.prefetched_session = prefetched_session
         return prefetched_session.identity.user_id
+
+    @staticmethod
+    def _rate_limited_response(
+        request: Request,
+        request_id: str,
+        headers: dict[str, str],
+    ) -> Response:
+        response = build_error_response(
+            request,
+            status_code=429,
+            code="rate_limit_exceeded",
+            message="Rate limit exceeded. Please retry shortly.",
+            headers=headers,
+        )
+        set_response_security_headers(request, response)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+def _safe_request_id(candidate: str | None) -> str:
+    if candidate is not None and _REQUEST_ID_PATTERN.fullmatch(candidate):
+        return candidate
+    return str(uuid.uuid4())

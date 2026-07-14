@@ -234,6 +234,26 @@ Deployment implication:
 
 - environments must apply `0015_completed_tasks_index` before relying on the optimized completed-task analytics range path in production
 
+## Phase 16 Revision (Relational RLS Hardening)
+
+Phase 16 introduces `0016_harden_rls_relationships` as the required application revision.
+
+That revision establishes:
+
+- enabled and forced RLS on every user-owned application table
+- actor policies that verify both the row's `user_id` and ownership of referenced parent rows for tasks, subtasks, reminders, and staged extracted tasks
+- bounded rate-limit counter keys and nonnegative counts
+- positive fixed-window durations while preserving the intentional zero-duration sentinel used only by `action_lock:*` rows
+
+Deployment implication:
+
+- apply `0016_harden_rls_relationships` with the privileged migration connection before deploying the backend that requires revision 0016
+- the migration sets a five-second lock timeout, takes a fixed-order write-blocking lock across relationship tables to make the preflight race-free, and replaces policies under short table locks; deploy during a low-traffic window and keep a recoverable backup available
+- the migration performs no data rewrite or backfill, and fails closed if it finds a historical cross-owner parent relationship
+- counter checks are added `NOT VALID` and then validated under PostgreSQL's weaker validation lock; the migration still fails closed if existing counter rows violate them
+- run the documented relationship and counter preflight queries before deployment so a validation failure is discovered before the maintenance window
+- after deployment, run the RLS verification script with the least-privilege runtime connection and exercise authenticated capture/task flows plus both internal digest modes
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -294,7 +314,7 @@ Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
 - Production Railway backend deploys fail closed if `APP_ENV=production` and `MIGRATION_DATABASE_URL` is missing.
-- The required revision configured for the backend matches `0015_completed_tasks_index` or the current deployed head.
+- The required revision configured for the backend matches `0016_harden_rls_relationships` or the current deployed head.
 - Backend startup revision check passes.
 - `scripts/prod/check-postgres-rls.py` passes against the runtime `DATABASE_URL`.
 - The current Postgres runtime role reports `rolbypassrls = false`.
@@ -319,8 +339,9 @@ Minimum verification after applying schema-affecting changes:
 - a non-allowlisted Google email is rejected before `auth.users` insertion.
 - a previously-created but now-removed email cannot restore a backend session and is redirected or returned as `auth_email_not_allowed`.
 - `rate_limit_counters` exists with the composite primary key and `expires_at` cleanup index.
+- `rate_limit_counters` rejects empty/oversized keys, negative counts, and nonpositive windows except for the explicit `action_lock:*` zero-duration sentinel.
 - hosted `anon` / `authenticated` roles cannot read or mutate `public.rate_limit_counters`.
-- `POST /auth/session/google/start` returns the PKCE verifier cookie and does not attach a backend-owned OAuth `state` parameter to the Supabase authorize URL.
+- `POST /auth/session/google/start` returns a short-lived, high-entropy PKCE verifier cookie and does not attach a backend-owned OAuth `state` parameter that Supabase social sign-in would consume rather than echo to Gust.
 - `GET /auth/session/callback` rejects a missing PKCE verifier cookie.
 - Unsafe cookie-authenticated methods reject requests with missing or foreign `Origin` / `Referer`.
 - Trusted host enforcement accepts the deployed frontend/backend hosts and rejects unexpected `Host` headers.
@@ -349,6 +370,7 @@ For RLS-related releases, also verify:
 - authenticated task/group/capture/staging routes still succeed for the signed-in user
 - digest/cleanup jobs still succeed through the internal-job context path
 - a direct runtime-role query without actor context does not return user-owned rows from protected tables
+- direct inserts/updates cannot attach a current user's task, subtask, reminder, or staged extracted task to another user's parent row
 
 ## Railway Cron DST Maintenance
 

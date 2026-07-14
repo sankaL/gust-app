@@ -1,7 +1,7 @@
 # Gust Database Schema
 
-**Version:** 1.9
-**Last Updated:** 2026-04-02
+**Version:** 1.10
+**Last Updated:** 2026-07-14
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
 
@@ -60,6 +60,9 @@ Policy contract:
 - internal digest/cleanup job transactions set `app.internal_job = true`
 - `users` rows are readable/writable only when `users.id = app.current_user_id`
 - all other user-owned rows are readable/writable only when `user_id = app.current_user_id`
+- task policies also require the referenced group and optional capture to belong to the current actor
+- subtask and reminder policies also require the referenced task to belong to the current actor
+- staged extracted-task policies also require the referenced capture and group to belong to the current actor
 - internal jobs may bypass per-user matching only through the explicit `app.internal_job = true` policy path
 
 Application correctness must still keep explicit `user_id` filters in backend queries. RLS is defense in depth, not the only authorization boundary.
@@ -385,6 +388,9 @@ Constraints and invariants:
 - Primary key on `(`scope`, `subject_key`, `window_start`, `window_seconds`)`.
 - This table is backend-owned operational state, not user-owned application data.
 - Counters are updated atomically through upsert/increment logic.
+- `scope` and `subject_key` are non-empty and bounded to 100 and 300 characters respectively.
+- `request_count` cannot be negative.
+- Fixed-window rows require `window_seconds > 0`; only `action_lock:*` sentinel rows may use `window_seconds = 0`.
 - Expired rows may be deleted opportunistically without affecting active enforcement.
 - Hosted `anon` and `authenticated` roles must not have table privileges on `public.rate_limit_counters`.
 - The backend runtime role may hold only the read/write privileges needed for fixed-window enforcement.

@@ -271,6 +271,67 @@ def test_phase12_migration_revokes_public_access_to_rate_limit_counters() -> Non
     )
 
 
+def test_phase16_migration_hardens_rls_parent_ownership_and_counter_constraints() -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0016_harden_rls_relationships.py"
+    )
+    spec = importlib.util.spec_from_file_location("harden_rls_relationships", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    class _Dialect:
+        name = "postgresql"
+
+    class _Bind:
+        dialect = _Dialect()
+
+    executed_sql: list[str] = []
+    module.op.get_bind = lambda: _Bind()
+    module.op.execute = lambda statement: executed_sql.append(statement)
+
+    module.upgrade()
+
+    assert module.revision == "0016_harden_rls_relationships"
+    assert module.down_revision == "0015_completed_tasks_index"
+    task_policy = next(
+        statement
+        for statement in executed_sql
+        if "CREATE POLICY tasks_actor_rls" in statement
+    )
+    assert "owner_group.id = group_id" in task_policy
+    assert "owner_capture.id = capture_id" in task_policy
+    subtask_policy = next(
+        statement
+        for statement in executed_sql
+        if "CREATE POLICY subtasks_actor_rls" in statement
+    )
+    assert "owner_task.id = task_id" in subtask_policy
+    extracted_policy = next(
+        statement
+        for statement in executed_sql
+        if "CREATE POLICY extracted_tasks_actor_rls" in statement
+    )
+    assert "owner_capture.id = capture_id" in extracted_policy
+    assert "owner_group.id = group_id" in extracted_policy
+    assert any("ck_rate_limit_counters_valid_window" in sql for sql in executed_sql)
+    assert any("scope LIKE 'action_lock:%'" in sql for sql in executed_sql)
+    assert any("ck_rate_limit_counters_nonnegative_count" in sql for sql in executed_sql)
+    assert any("SET LOCAL lock_timeout = '5s'" in sql for sql in executed_sql)
+    assert any("IN SHARE ROW EXCLUSIVE MODE" in sql for sql in executed_sql)
+    assert any(
+        "RLS preflight failed: tasks reference cross-owner groups" in sql
+        for sql in executed_sql
+    )
+    assert sum("NOT VALID" in sql for sql in executed_sql) == 4
+    assert sum("VALIDATE CONSTRAINT" in sql for sql in executed_sql) == 4
+
+
 def test_supabase_allowlist_hardening_migration_revokes_public_roles() -> None:
     migration_path = (
         Path(__file__).resolve().parents[2]

@@ -181,7 +181,7 @@ Committed model:
 
 - Google OAuth flow completes through Supabase
 - backend exchanges and manages the session
-- backend generates and validates both PKCE verifier state and a separate OAuth `state` cookie on the callback path
+- backend generates a short-lived, high-entropy PKCE verifier cookie and rejects callbacks that cannot prove possession of it
 - browser receives `Secure`, `HttpOnly` session cookies on the app domain
 - unsafe HTTP methods require CSRF protection plus same-origin `Origin` or `Referer` validation
 
@@ -206,8 +206,10 @@ The backend owns request-abuse protection.
 
 Required behavior:
 
-- centralized fixed-window rate limiting backed by Postgres for auth, capture, and general API routes
+- centralized fixed-window rate limiting backed by Postgres, with an IP gate before auth/provider work and a user gate after local access-token validation
 - stricter per-user and per-IP limits on expensive capture/transcription/extraction endpoints
+- dedicated IP limits for unauthenticated mutations and shared-secret internal jobs
+- the cheap `/health` liveness route stays independent of database-backed throttling so deploy health checks do not fail during a database incident
 - one-at-a-time per-user locking for expensive capture processing so duplicate in-flight submissions do not fan out provider calls
 - low-friction bot resistance through auth allowlisting, CSRF, same-origin checks, and throttling rather than CAPTCHA by default
 
@@ -249,6 +251,7 @@ Correctness rules:
 - Postgres runtime connections for authenticated API work set `app.current_user_id` per transaction
 - Postgres runtime connections for digest/cleanup work set `app.internal_job = true` per transaction
 - RLS is enabled on user-owned tables as defense in depth, not as the only guard
+- RLS checks referenced parent ownership as well as the row's `user_id`, preventing cross-user foreign-key relationships if an application scoping bug is introduced
 - the runtime application role must not have `BYPASSRLS`
 
 This is deliberate because Supabase service access can bypass RLS, and relying on undocumented request-context magic would make the system brittle. The backend remains responsible for explicit user scoping, while Postgres policies deny access when the transaction actor context does not match.
@@ -409,6 +412,8 @@ If the schema cannot represent those contracts cleanly, the product spec is not 
 - All API routes are subject to centralized request throttling; capture and auth routes use stricter limits.
 - Expensive capture routes use per-user concurrency locks so only one costly provider-backed action runs at a time.
 - Trusted host validation and conservative response security headers are part of the backend HTTP contract.
+- Railway request identity trusts only a syntactically valid platform-provided `X-Real-IP`; arbitrary forwarding headers are ignored.
+- Production Python dependency resolution is locked to Python 3.12 and deployed from the committed `uv.lock`.
 - All SQL must be parameterized.
 
 ### Privacy

@@ -116,14 +116,13 @@ async def auth_callback(
     request: Request,
     settings: SettingsDep,
     auth_service: AuthServiceDep,
-    code: str = Query(...),
+    code: str = Query(..., min_length=1, max_length=4096),
 ) -> RedirectResponse:
     auth_service.ensure_configured()
 
     code_verifier = request.cookies.get(OAUTH_CODE_VERIFIER_COOKIE)
     if not code_verifier:
         raise CsrfValidationError("OAuth PKCE verifier was missing or expired.")
-
     try:
         session = await auth_service.exchange_code_for_session(
             code=code,

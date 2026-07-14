@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from urllib.parse import urlparse
 
 from starlette.requests import Request
@@ -19,9 +20,13 @@ LOCAL_ORIGINS: tuple[str, ...] = (
 )
 
 
-def client_ip_for_request(request: Request) -> str:
+def client_ip_for_request(request: Request, settings: Settings) -> str:
+    if _has_railway_runtime(settings):
+        railway_ip = _normalized_ip(request.headers.get("X-Real-IP"))
+        if railway_ip is not None:
+            return railway_ip
     if request.client is not None and request.client.host:
-        return request.client.host
+        return _normalized_ip(request.client.host) or request.client.host[:255]
     return "unknown"
 
 
@@ -40,15 +45,7 @@ def allowed_request_origins(settings: Settings) -> set[str]:
 
 def trusted_hosts(settings: Settings) -> list[str]:
     hosts = set(LOCAL_HOSTS)
-    has_railway_runtime = any(
-        (
-            settings.railway_private_domain,
-            settings.railway_public_domain,
-            settings.railway_service_backend_url,
-            settings.railway_service_frontend_url,
-            settings.railway_static_url,
-        )
-    )
+    has_railway_runtime = _has_railway_runtime(settings)
     for candidate in settings.trusted_hosts:
         normalized = _hostname_or_host(candidate)
         if normalized is not None:
@@ -66,7 +63,8 @@ def trusted_hosts(settings: Settings) -> list[str]:
         if normalized is not None:
             hosts.add(normalized)
     if has_railway_runtime:
-        hosts.add("*")
+        hosts.add("*.railway.internal")
+        hosts.add("*.up.railway.app")
     return sorted(hosts)
 
 
@@ -130,3 +128,24 @@ def _hostname_or_host(value: str | None) -> str | None:
         return _hostname_from_url(value)
     candidate = value.strip()
     return candidate or None
+
+
+def _has_railway_runtime(settings: Settings) -> bool:
+    return any(
+        (
+            settings.railway_private_domain,
+            settings.railway_public_domain,
+            settings.railway_service_backend_url,
+            settings.railway_service_frontend_url,
+            settings.railway_static_url,
+        )
+    )
+
+
+def _normalized_ip(value: str | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        return ipaddress.ip_address(value.strip()).compressed
+    except ValueError:
+        return None

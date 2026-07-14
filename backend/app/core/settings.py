@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
     )
     required_alembic_revision: str = Field(
-        default="0012_harden_backend_table_grants",
+        default="0016_harden_rls_relationships",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -126,6 +126,14 @@ class Settings(BaseSettings):
     rate_limit_public_get_ip: str = Field(
         default="120/60",
         validation_alias=AliasChoices("RATE_LIMIT_PUBLIC_GET_IP"),
+    )
+    rate_limit_unauthenticated_write_ip: str = Field(
+        default="60/60,600/3600",
+        validation_alias=AliasChoices("RATE_LIMIT_UNAUTHENTICATED_WRITE_IP"),
+    )
+    rate_limit_internal_job_ip: str = Field(
+        default="10/60,100/3600",
+        validation_alias=AliasChoices("RATE_LIMIT_INTERNAL_JOB_IP"),
     )
     rate_limit_authenticated_get_user: str = Field(
         default="120/60",

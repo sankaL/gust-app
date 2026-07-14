@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # ruff: noqa: UP007, UP045
+import secrets
 from typing import Annotated, Optional, Union
 
 from fastapi import Depends, Request, Response
@@ -210,6 +211,6 @@ def require_internal_job_secret(
     if not settings.internal_job_shared_secret:
         raise ConfigurationError("Internal reminder job configuration is missing.")
 
-    header_value = request.headers.get(INTERNAL_JOB_SECRET_HEADER)
-    if header_value != settings.internal_job_shared_secret:
+    header_value = request.headers.get(INTERNAL_JOB_SECRET_HEADER) or ""
+    if not secrets.compare_digest(header_value, settings.internal_job_shared_secret):
         raise InternalJobAuthError()

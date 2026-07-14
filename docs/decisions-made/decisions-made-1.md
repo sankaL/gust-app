@@ -1,5 +1,13 @@
 # Decisions Made
 
+## 2026-07-14 10:52:00 EDT
+
+- Strengthened RLS from row-only `user_id` matching to relational ownership checks, so tasks, subtasks, reminders, and staged extracted tasks cannot reference another user's parent rows even if an application-layer scoping regression is introduced.
+- Made the RLS migration fail closed on historical cross-owner relationships under a bounded, fixed-order write-blocking lock, and validate new counter checks under weaker PostgreSQL validation locks, avoiding both a preflight race and indefinite deploy blocking.
+- Split rate limiting into an IP phase before token parsing or upstream auth work and a user phase after local access-token validation; kept Postgres fixed windows to avoid new infrastructure, with separate bounds for unauthenticated writes and shared-secret internal jobs.
+- Standardized production on Python 3.12 with a committed `uv.lock` and frozen Railway installation because the prior Python 3.9 compatibility range forced known-vulnerable dependency versions.
+- Retained PKCE verifier binding as the Gust callback-CSRF control and removed unused custom OAuth-state helpers. Supabase social sign-in owns its provider `state` value and does not echo an application-supplied value to Gust, so requiring one at the Gust callback would break Google sign-in.
+
 ## 2026-06-21 11:11:00 EDT
 
 - Made the root route session-aware while keeping the PWA manifest `start_url` at `/`, so signed-out and incognito launches still show the public landing page while signed-in launches continue into the app.

@@ -147,7 +147,9 @@ async function apiRequest<T>(
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${config.apiBaseUrl}${path}`, {
+  const url = buildApiUrl(config.apiBaseUrl, path)
+  // fallow-ignore-next-line security-sink
+  const response = await fetch(url, {
     ...init,
     headers,
     credentials: 'include'
@@ -170,6 +172,19 @@ async function apiRequest<T>(
   }
 
   return payload as T
+}
+
+function buildApiUrl(apiBaseUrl: string, path: string): string {
+  if (!path.startsWith('/') || path.startsWith('//')) {
+    throw new Error('API request paths must be root-relative.')
+  }
+
+  const baseUrl = new URL(apiBaseUrl)
+  const requestUrl = new URL(path, baseUrl)
+  if (requestUrl.origin !== baseUrl.origin) {
+    throw new Error('API request URL escaped the configured API origin.')
+  }
+  return requestUrl.toString()
 }
 
 export function getAuthStartUrl(): string {
