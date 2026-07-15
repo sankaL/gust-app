@@ -222,7 +222,7 @@ export function formatDateTimeLabel(value: string | null | undefined) {
   }).format(date)
 }
 
-export function getCompletedIsoDate(task: TaskSummary, timezone: string | null): string | null {
+function getCompletedIsoDate(task: TaskSummary, timezone: string | null): string | null {
   if (!task.completed_at) {
     return null
   }
@@ -512,60 +512,44 @@ export function filterDesktopTasks(
   filters: DesktopTaskFilters
 ): TaskSummary[] {
   const search = filters.search.trim().toLowerCase()
-
-  return tasks.filter((task) => {
-    if (search) {
+  let result = tasks
+  if (search) {
+    result = result.filter((task) => {
       const haystack = [task.title, task.description, task.group.name]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
-      if (!haystack.includes(search)) {
-        return false
-      }
-    }
-
-    if (filters.groupId !== 'all' && task.group.id !== filters.groupId) {
-      return false
-    }
-
-    if (filters.dueBucket !== 'all' && task.due_bucket !== filters.dueBucket) {
-      return false
-    }
-
-    if (filters.dueFrom && (!task.due_date || task.due_date < filters.dueFrom)) {
-      return false
-    }
-
-    if (filters.dueTo && (!task.due_date || task.due_date > filters.dueTo)) {
-      return false
-    }
-
-    if (filters.review === 'needs_review' && !task.needs_review) {
-      return false
-    }
-
-    if (filters.review === 'clear' && task.needs_review) {
-      return false
-    }
-
-    if (filters.recurrence === 'recurring' && !task.recurrence_frequency) {
-      return false
-    }
-
-    if (filters.recurrence === 'one_off' && task.recurrence_frequency) {
-      return false
-    }
-
-    if (filters.subtasks === 'has_subtasks' && task.subtask_count === 0) {
-      return false
-    }
-
-    if (filters.subtasks === 'no_subtasks' && task.subtask_count > 0) {
-      return false
-    }
-
-    return true
-  })
+      return haystack.includes(search)
+    })
+  }
+  if (filters.groupId !== 'all') {
+    result = result.filter((task) => task.group.id === filters.groupId)
+  }
+  if (filters.dueBucket !== 'all') {
+    result = result.filter((task) => task.due_bucket === filters.dueBucket)
+  }
+  if (filters.dueFrom) {
+    result = result.filter((task) => Boolean(task.due_date && task.due_date >= filters.dueFrom))
+  }
+  if (filters.dueTo) {
+    result = result.filter((task) => Boolean(task.due_date && task.due_date <= filters.dueTo))
+  }
+  if (filters.review === 'needs_review') {
+    result = result.filter((task) => task.needs_review)
+  } else if (filters.review === 'clear') {
+    result = result.filter((task) => !task.needs_review)
+  }
+  if (filters.recurrence === 'recurring') {
+    result = result.filter((task) => Boolean(task.recurrence_frequency))
+  } else if (filters.recurrence === 'one_off') {
+    result = result.filter((task) => !task.recurrence_frequency)
+  }
+  if (filters.subtasks === 'has_subtasks') {
+    result = result.filter((task) => task.subtask_count > 0)
+  } else if (filters.subtasks === 'no_subtasks') {
+    result = result.filter((task) => task.subtask_count === 0)
+  }
+  return result
 }
 
 export function sortDesktopTasks(tasks: TaskSummary[], sort: DesktopSortState): TaskSummary[] {

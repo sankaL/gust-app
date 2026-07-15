@@ -11,7 +11,7 @@
 
 The audit found and fixed several material defense-in-depth gaps without changing the intended product flows. The most important change is Alembic revision `0016_harden_rls_relationships`, which retains explicit backend `user_id` scoping while making Postgres reject cross-user parent relationships. Request throttling now runs an IP phase before auth/provider work and a user phase after local token or refresh-session resolution. Dependency audits now report zero known vulnerabilities in both frontend and Python environments.
 
-Fallow 3.5.0's security surface moved from one medium candidate to zero verified candidates. Its changed-file audit passes. The remaining Fallow code-health backlog is documented below and was not mixed into this security change.
+Fallow 3.5.0's security surface moved from one medium candidate to zero verified candidates. A follow-up remediation cleared all dead code, removed every substantive clone at or above 80 tokens and 10 lines, and extracted the highest-risk shared logic. Fallow's original strict thresholds remain in force; the residual small clones and legacy JSX complexity are reported below rather than hidden by relaxed configuration.
 
 ## Identified and Fixed
 
@@ -33,26 +33,31 @@ Fallow 3.5.0's security surface moved from one medium candidate to zero verified
 | Browser API target | Fallow reported the browser `fetch` target as a medium SSRF candidate. | API origins must now be absolute HTTPS origins (loopback HTTP only for local/dev inference), cannot include credentials/path/query/fragment, and request paths cannot escape the configured origin. The verified sink is narrowly suppressed. |
 | Frontend dependencies | Baseline `npm audit` reported 16 vulnerabilities, including 1 critical and 9 high. | Updated the lockfile within declared dependency ranges; final audit reports zero. |
 | Python dependencies | The Python 3.9 environment reported 42 vulnerabilities across 16 packages, while secure current releases no longer support that runtime. | Standardized on Python 3.12, raised secure dependency floors, committed `uv.lock`, and made Railway install the frozen production environment. Final `pip-audit` reports zero known vulnerabilities. |
+| Recorder terminal cleanup | Independent review found constructor, start, or recorder-error paths could leave an acquired microphone stream active. | Added idempotent stream cleanup for constructor/start/error/normal-stop paths plus three lifecycle regression tests. |
+| Optimistic desktop cache races | Shared status transitions updated desktop caches without first cancelling in-flight desktop task queries. | Both status-mutation paths now cancel `['desktop', 'tasks']` before snapshot/write, with a regression assertion. |
+| Missing-CSRF bulk actions | Approve/discard-all silently returned when session CSRF state was absent. | Centralized fail-closed CSRF enforcement now throws the sanitized session error through the existing notification path. |
+| Scanner integrity | The first remediation configuration relaxed duplication/CRAP thresholds and could overstate the result as zero backlog. | Restored Fallow defaults, removed broad overrides, regenerated strict reports, and explicitly deferred the remaining low-granularity clones and legacy JSX complexity. |
 
 ## Fallow Results
 
 Raw reports are stored under `docs/engineering/`.
 
-| Surface | Baseline | Final |
-|---|---:|---:|
-| Security candidates | 1 medium (`frontend/src/lib/api.ts`, dynamic browser fetch) | 0 |
-| Changed-file audit | Not applicable | `pass` |
-| Dead-code issues | 12 | 12 |
-| Duplicate groups | 48 | 48 |
-| Complexity functions above thresholds | 55 | 55 |
-| Average maintainability | 90.6 | 90.5 |
+| Surface | Baseline | Security pass | Remediated |
+|---|---:|---:|---:|
+| Security candidates | 1 medium (`frontend/src/lib/api.ts`, dynamic browser fetch) | 0 | 0 |
+| Strict audit | Not applicable | `pass` for the security-only changes | `fail` after the broader refactor because touched legacy functions retain strict complexity/clone findings |
+| Dead-code issues | 12 | 12 | 0 |
+| Duplicate groups at Fallow defaults | 48 | 48 | 27 |
+| Duplicated lines at Fallow defaults | 1,270 | 1,270 | 585; none meet both 80 tokens and 10 lines |
+| Complexity functions above Fallow defaults | 55 | 55 | 49 |
+| Average maintainability | 90.6 | 90.5 | 91.0 |
 
-The remaining dead-code, duplication, and complexity results are code-health findings, not verified security vulnerabilities. The changed-file audit confirms this branch introduced no new Fallow regression; its three dead exports and one complexity item are all marked pre-existing.
+The remediation deleted two unused components and five unused public API surfaces, centralized task-form validation/diffing, recurrence data, CSRF enforcement, optimistic status updates, recorder setup, route-preview state, session presentation, staging actions, and shared desktop routes. Fallow now consumes real Istanbul coverage for coverage-aware CRAP scoring. Test harness files are excluded from production complexity scoring, but production thresholds remain at Fallow's defaults. The residual duplicate groups are short presentation overlaps; the residual complexity findings are primarily legacy JSX route/modal orchestration and coverage-aware CRAP gaps.
 
 ## Validation Completed
 
-- `make check`
-  - frontend: 130 tests passed
+- `make check` for the security hardening, followed by the remediation verification suite
+  - frontend: 146 tests passed with Istanbul coverage enabled
   - backend: 211 tests passed after review fixes
   - frontend production build passed
   - backend/frontend lint passed with three pre-existing frontend warnings
@@ -60,18 +65,19 @@ The remaining dead-code, duplication, and complexity results are code-health fin
 - Targeted post-review backend checks: 25 migration/security tests passed before the final full backend run.
 - `npm audit --json`: 0 vulnerabilities across 725 dependencies.
 - `uvx pip-audit --path backend/.venv/lib/python3.12/site-packages`: no known vulnerabilities; only the local `gust-backend` project is not a PyPI-auditable package.
-- Fallow 3.5.0 combined, security, and changed-file audit scans completed; final security candidate count is zero and changed-file verdict is pass.
+- Fallow 3.5.0 combined, security, and strict audit scans completed; final results are zero dead-code issues, 27 short duplicate groups, 49 strict complexity findings, zero security candidates, and a strict audit verdict of `fail`. The raw reports preserve those residual findings.
 - Ephemeral PostgreSQL validation with a non-`BYPASSRLS` runtime role passed: Alembic 0016 applied, all four counter constraints validated, the production RLS verifier passed, a same-owner relationship succeeded, a cross-owner task insert was rejected by RLS, and the zero-window action-lock sentinel remained valid.
 - A live two-connection PostgreSQL test proved the preflight lock closes the concurrent-write race: the old-policy cross-owner writer was blocked and failed with SQLSTATE `55P03` while the migration lock was held, while the same control write succeeded immediately after lock release. A dirty 0015 database then failed the 0016 preflight as intended.
 
 ## Deferred
 
-- Fallow's 12 dead-code findings, 48 duplicate groups, and 55 complexity hotspots are deferred to the existing remediation work. Broad deletion/refactoring is not justified inside an authorization migration and could create unrelated regressions.
+- Deep decomposition of the 49 remaining strict complexity findings is deferred. The highest-value domain logic and shared security-sensitive paths were extracted, but fully splitting the remaining legacy JSX route/modal orchestration would be a broad UI rewrite with disproportionate regression risk in this security branch.
+- Fallow's 27 remaining duplicate groups are deferred after review: all are below either 80 tokens or 10 lines and are predominantly short icon, loading-state, field-row, or optimistic-cache presentation variants. The raw default-threshold report remains committed so this debt is visible.
 - Three existing frontend lint warnings, a large Vite bundle warning, and framework deprecation warnings remain. They are not security blockers for this change.
 - A local Railway Docker build was attempted but cancelled when Docker Hub base-image metadata did not return; the same frozen Python 3.12 dependency set was installed and fully tested through `uv` locally.
 - Application rate limiting still consumes a database write and is not a substitute for an edge WAF or volumetric DDoS protection.
 - RLS protects against application query/scoping mistakes, not compromise of the runtime database credential. The current internal-job path is a caller-set transaction GUC; a holder capable of arbitrary SQL with that credential can set it too.
-- Fallow reported 663 unresolved callee sites in its final security graph. It reported zero unresolved edge files, but the call-graph blind spots should be kept in mind when adding dynamic runtime loading.
+- Fallow reported 668 unresolved callee sites in its final security graph. It reported zero unresolved edge files, but the call-graph blind spots should be kept in mind when adding dynamic runtime loading.
 
 ## Needs User Input or Operational Action
 
@@ -82,4 +88,4 @@ The remaining dead-code, duplication, and complexity results are code-health fin
 
 ## Confidence
 
-Confidence is 96%. Production confidence would increase after the privileged preflight returns zero on production-sized data, migration 0016 is exercised against a staging clone representative of production load, and the post-deploy runtime-role/two-user verification passes.
+Confidence is 97%. Production confidence would increase after the privileged preflight returns zero on production-sized data, migration 0016 is exercised against a staging clone representative of production load, and the post-deploy runtime-role/two-user verification passes. Refactor confidence would increase further with browser end-to-end coverage of desktop task status transitions and task-detail editing.

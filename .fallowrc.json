@@ -7,5 +7,11 @@
     "frontend/eslint.config.js",
     "frontend/postcss.config.js",
     "frontend/tailwind.config.ts"
-  ]
+  ],
+  "health": {
+    "coverage": "frontend/coverage/coverage-final.json",
+    "ignore": [
+      "frontend/src/test/**"
+    ]
+  }
 }

@@ -11,7 +11,6 @@ import {
   type GroupSummary,
   type SessionStatus,
   type TaskDetail,
-  type TaskRecurrence,
 } from '../lib/api'
 import {
   adjustGroupOpenCount,
@@ -25,18 +24,18 @@ import {
   TASK_SCREEN_GC_TIME_MS,
   TASK_SCREEN_STALE_TIME_MS,
 } from '../lib/taskScreenCache'
-import { dateTimeLocalToIso, toDateTimeLocalValue } from '../lib/dateTime'
+import { requireCsrfToken } from '../lib/sessionSecurity'
+import { dateTimeLocalToIso } from '../lib/dateTime'
+import {
+  buildTaskDetailDraft,
+  RECURRENCE_OPTIONS,
+  recurrenceForDueDate,
+  type TaskDetailDraft,
+} from '../lib/taskFormModel'
 import { DatePicker } from './DatePicker'
 import { SelectDropdown } from './SelectDropdown'
 
-type DraftState = {
-  title: string
-  description: string
-  groupId: string
-  dueDate: string
-  reminderAt: string
-  recurrence: TaskRecurrence | null
-}
+type DraftState = TaskDetailDraft
 
 type TaskPreviewModalProps = {
   taskId: string | null
@@ -49,14 +48,6 @@ type TaskPreviewModalProps = {
   session?: SessionStatus
   groups?: GroupSummary[]
 }
-
-const RECURRENCE_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'yearly', label: 'Yearly' },
-] as const
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -122,57 +113,6 @@ function MetadataTile({ label, value }: { label: string; value: string }) {
       <p className="mt-2 truncate font-body text-sm font-medium text-on-surface">{value}</p>
     </div>
   )
-}
-
-function buildDraftState(task: TaskDetail, timezone: string | null | undefined): DraftState {
-  return {
-    title: task.title,
-    description: task.description ?? '',
-    groupId: task.group.id,
-    dueDate: task.due_date ?? '',
-    reminderAt: toDateTimeLocalValue(task.reminder_at, timezone),
-    recurrence: task.recurrence,
-  }
-}
-
-function recurrenceForDueDate(
-  frequency: TaskRecurrence['frequency'],
-  dueDate: string
-): TaskRecurrence {
-  const localDate = dueDate ? new Date(`${dueDate}T12:00:00`) : null
-  if (frequency === 'weekly') {
-    return {
-      frequency,
-      weekday: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getDay() : null,
-      day_of_month: null,
-      month: null,
-    }
-  }
-  if (frequency === 'monthly') {
-    return {
-      frequency,
-      weekday: null,
-      day_of_month: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getDate() : null,
-      month: null,
-    }
-  }
-  if (frequency === 'yearly') {
-    return {
-      frequency,
-      weekday: null,
-      day_of_month: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getDate() : null,
-      month: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getMonth() + 1 : null,
-    }
-  }
-  return { frequency, weekday: null, day_of_month: null, month: null }
-}
-
-function requireCsrf(session: SessionStatus | undefined) {
-  const csrfToken = session?.csrf_token
-  if (!csrfToken) {
-    throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
-  }
-  return csrfToken
 }
 
 export function TaskPreviewModal({
@@ -283,11 +223,11 @@ export function TaskPreviewModal({
           reminder_at: dateTimeLocalToIso(draft.reminderAt, session?.timezone),
           recurrence: draft.recurrence,
         },
-        requireCsrf(session)
+        requireCsrfToken(session)
       )
     },
     onSuccess: (updatedTask) => {
-      setDraft(buildDraftState(updatedTask, session?.timezone))
+      setDraft(buildTaskDetailDraft(updatedTask, session?.timezone))
       setDraftTaskId(updatedTask.id)
       setIsDraftDirty(false)
       updateTaskDetailCache(queryClient, updatedTask)
@@ -347,7 +287,7 @@ export function TaskPreviewModal({
         throw new Error('Subtask title is required.')
       }
 
-      return createSubtask(taskId, newSubtaskTitle.trim(), requireCsrf(session))
+      return createSubtask(taskId, newSubtaskTitle.trim(), requireCsrfToken(session))
     },
     onSuccess: () => {
       setNewSubtaskTitle('')
@@ -397,7 +337,7 @@ export function TaskPreviewModal({
         throw new Error('Task preview is not ready.')
       }
 
-      return deleteSubtask(taskId, subtaskId, requireCsrf(session))
+      return deleteSubtask(taskId, subtaskId, requireCsrfToken(session))
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] })
@@ -510,7 +450,7 @@ export function TaskPreviewModal({
     }
 
     if (draftTaskId !== task.id || !isDraftDirty) {
-      setDraft(buildDraftState(task, session?.timezone))
+      setDraft(buildTaskDetailDraft(task, session?.timezone))
       setDraftTaskId(task.id)
       setIsDraftDirty(false)
       setSaveError(null)
@@ -659,7 +599,7 @@ export function TaskPreviewModal({
                               recurrence:
                                 option.value === 'none'
                                   ? null
-                                  : recurrenceForDueDate(option.value, current.dueDate),
+                                  : recurrenceForDueDate(option.value, current.dueDate, null),
                             }))
                           }
                           className={[

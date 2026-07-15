@@ -21,6 +21,7 @@ import {
 } from '../lib/taskQueryCache'
 import { refreshTaskScreenQueries } from '../lib/taskScreenCache'
 import { acquireTaskMutationLock } from '../lib/taskMutationLocks'
+import { requireCsrfToken } from '../lib/sessionSecurity'
 
 type CompleteVariables = { task: TaskSummary; releaseLock: () => void }
 type MoveDueDateVariables = { task: TaskSummary; dueDate: string | null; releaseLock: () => void }
@@ -30,14 +31,6 @@ function buildFriendlyMessage(error: unknown, fallback: string) {
     return error.message
   }
   return fallback
-}
-
-function requireCsrf(session: SessionStatus | undefined) {
-  const csrfToken = session?.csrf_token
-  if (!csrfToken) {
-    throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
-  }
-  return csrfToken
 }
 
 export function useDesktopTaskActions(session: SessionStatus | undefined) {
@@ -76,24 +69,28 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
     })
   }
 
+  async function prepareStatusMutation(
+    task: TaskSummary,
+    status: TaskSummary['status'],
+    completedAt: string | null,
+    openCountDelta: number
+  ) {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: ['tasks'] }),
+      queryClient.cancelQueries({ queryKey: ['desktop', 'tasks'] }),
+      queryClient.cancelQueries({ queryKey: ['groups'] }),
+      queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
+    ])
+    const snapshots = snapshotTaskQueries(queryClient, task.id)
+    syncTaskCaches({ ...task, status, completed_at: completedAt })
+    adjustGroupOpenCount(queryClient, task.group.id, openCountDelta)
+    return { snapshots }
+  }
+
   const completeMutation = useMutation({
-    onMutate: async ({ task }: CompleteVariables) => {
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['tasks'] }),
-        queryClient.cancelQueries({ queryKey: ['groups'] }),
-        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
-      ])
-      const snapshots = snapshotTaskQueries(queryClient, task.id)
-      const optimisticTask: TaskSummary = {
-        ...task,
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      }
-      syncTaskCaches(optimisticTask)
-      adjustGroupOpenCount(queryClient, task.group.id, -1)
-      return { snapshots }
-    },
-    mutationFn: async ({ task }: CompleteVariables) => completeTask(task.id, requireCsrf(session)),
+    onMutate: async ({ task }: CompleteVariables) =>
+      prepareStatusMutation(task, 'completed', new Date().toISOString(), -1),
+    mutationFn: async ({ task }: CompleteVariables) => completeTask(task.id, requireCsrfToken(session)),
     onSuccess: (task) => {
       syncTaskCaches(task)
       notifySuccess(`Completed ${task.title}.`)
@@ -111,23 +108,8 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
   })
 
   const reopenMutation = useMutation({
-    onMutate: async ({ task }: CompleteVariables) => {
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['tasks'] }),
-        queryClient.cancelQueries({ queryKey: ['groups'] }),
-        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
-      ])
-      const snapshots = snapshotTaskQueries(queryClient, task.id)
-      const optimisticTask: TaskSummary = {
-        ...task,
-        status: 'open',
-        completed_at: null,
-      }
-      syncTaskCaches(optimisticTask)
-      adjustGroupOpenCount(queryClient, task.group.id, 1)
-      return { snapshots }
-    },
-    mutationFn: async ({ task }: CompleteVariables) => reopenTask(task.id, requireCsrf(session)),
+    onMutate: async ({ task }: CompleteVariables) => prepareStatusMutation(task, 'open', null, 1),
+    mutationFn: async ({ task }: CompleteVariables) => reopenTask(task.id, requireCsrfToken(session)),
     onSuccess: (task) => {
       syncTaskCaches(task)
       notifySuccess(`Moved ${task.title} back to To-do.`)
@@ -193,7 +175,7 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
           reminder_at: dueDate ? detail.reminder_at : null,
           recurrence: dueDate ? detail.recurrence : null,
         },
-        requireCsrf(session)
+        requireCsrfToken(session)
       )
     },
     onSuccess: (task) => {

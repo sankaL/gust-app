@@ -1,25 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
 
 import {
   ApiError,
-  getTaskDetail,
   getSessionStatus,
   listAllTasks,
   listGroups,
   listTasks,
   reopenTask,
-  type SessionStatus,
   type TaskSummary
 } from '../lib/api'
 import {
-  adjustGroupOpenCount,
   applyTaskListMutation,
   prependTaskToMatchingLists,
+  prepareOptimisticTaskStatus,
   restoreQuerySnapshots,
-  snapshotTaskQueries,
   updateTaskDetailCache,
 } from '../lib/taskQueryCache'
 import { useNotifications } from '../components/Notifications'
@@ -33,6 +29,9 @@ import {
   TASK_SCREEN_GC_TIME_MS,
   TASK_SCREEN_STALE_TIME_MS,
 } from '../lib/taskScreenCache'
+import { dedupeCompletedTasks } from '../lib/desktopData'
+import { requireCsrfToken } from '../lib/sessionSecurity'
+import { useTaskListRouteState } from '../hooks/useTaskListRouteState'
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -56,45 +55,18 @@ function buildCompletedLabel(task: TaskSummary) {
   }).format(value)
 }
 
-function dedupeCompletedTasks(tasks: TaskSummary[]) {
-  const seen = new Set<string>()
-  const result: TaskSummary[] = []
-
-  for (const task of tasks) {
-    const completedSecond = task.completed_at ? task.completed_at.slice(0, 19) : 'none'
-    const normalizedTitle = task.title.trim().toLowerCase()
-    const dueValue = task.due_date ?? 'none'
-    const candidateKeys = [`task:${task.id}`]
-
-    if (task.series_id) {
-      candidateKeys.push(`series:${task.series_id}|second:${completedSecond}`)
-    } else if (task.recurrence_frequency) {
-      candidateKeys.push(
-        `recurrence:${normalizedTitle}|group:${task.group.id}|due:${dueValue}|second:${completedSecond}`
-      )
-    }
-
-    if (task.completed_at && !task.series_id && !task.recurrence_frequency) {
-      candidateKeys.push(
-        `legacy:${normalizedTitle}|group:${task.group.id}|due:${dueValue}|second:${completedSecond}`
-      )
-    }
-
-    if (candidateKeys.some((key) => seen.has(key))) {
-      continue
-    }
-    candidateKeys.forEach((key) => seen.add(key))
-    result.push(task)
-  }
-
-  return result
-}
-
 export function CompletedTasksRoute() {
   const queryClient = useQueryClient()
   const shellActions = useAppShellActions()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([])
+  const {
+    searchParams,
+    setSearchParams,
+    selectedTaskId,
+    pendingTaskIds,
+    markTaskPending,
+    openTaskPreview,
+    closeTaskPreview,
+  } = useTaskListRouteState(queryClient)
   const [restoreCandidate, setRestoreCandidate] = useState<TaskSummary | null>(null)
   const { notifyError, notifySuccess } = useNotifications()
 
@@ -113,7 +85,6 @@ export function CompletedTasksRoute() {
   })
 
   const selectedGroupId = searchParams.get('group')
-  const selectedTaskId = searchParams.get('task')
   const isAllGroupsView = selectedGroupId === 'all'
   const resolvedGroupId = isAllGroupsView
     ? null
@@ -168,47 +139,8 @@ export function CompletedTasksRoute() {
     }
   }, [isRefreshingCompletedTasks, refreshCompletedTasks, shellActions])
 
-  function requireCsrf(session: SessionStatus | undefined) {
-    const csrfToken = session?.csrf_token
-    if (!csrfToken) {
-      throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
-    }
-    return csrfToken
-  }
-
   async function refreshTaskData() {
     await refreshCompletedTasks()
-  }
-
-  function markTaskPending(taskId: string, isPending: boolean) {
-    setPendingTaskIds((current) => {
-      if (isPending) {
-        return current.includes(taskId) ? current : [...current, taskId]
-      }
-      return current.filter((candidate) => candidate !== taskId)
-    })
-  }
-
-  function prefetchTaskDetail(taskId: string) {
-    void queryClient.prefetchQuery({
-      queryKey: ['task-detail', taskId],
-      queryFn: () => getTaskDetail(taskId),
-      staleTime: TASK_SCREEN_STALE_TIME_MS,
-      gcTime: TASK_SCREEN_GC_TIME_MS,
-    })
-  }
-
-  function openTaskPreview(taskId: string) {
-    prefetchTaskDetail(taskId)
-    const next = new URLSearchParams(searchParams)
-    next.set('task', taskId)
-    setSearchParams(next)
-  }
-
-  function closeTaskPreview() {
-    const next = new URLSearchParams(searchParams)
-    next.delete('task')
-    setSearchParams(next, { replace: true })
   }
 
   function requestRestore(task: TaskSummary) {
@@ -226,32 +158,10 @@ export function CompletedTasksRoute() {
   const reopenMutation = useMutation({
     onMutate: async (task) => {
       markTaskPending(task.id, true)
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['groups'] }),
-        queryClient.cancelQueries({ queryKey: ['tasks'] }),
-        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
-      ])
-      const snapshots = snapshotTaskQueries(queryClient, task.id)
-      const optimisticTask: TaskSummary = {
-        ...task,
-        status: 'open',
-        completed_at: null,
-      }
-
-      applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
-        if (currentTask.id !== task.id) {
-          return currentTask
-        }
-        return statusSegment === 'open' ? optimisticTask : null
-      })
-      prependTaskToMatchingLists(queryClient, optimisticTask, 'open')
-      adjustGroupOpenCount(queryClient, task.group.id, 1)
-      updateTaskDetailCache(queryClient, optimisticTask)
-
-      return { snapshots }
+      return prepareOptimisticTaskStatus(queryClient, task, 'open', null)
     },
     mutationFn: async (task: TaskSummary) => {
-      const csrfToken = requireCsrf(sessionQuery.data)
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       return reopenTask(task.id, csrfToken)
     },
     onSuccess: (task) => {

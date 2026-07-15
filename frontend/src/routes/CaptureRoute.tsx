@@ -23,11 +23,13 @@ import { StagingTable } from '../components/StagingTable'
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
 import { ExtractingLoader } from '../components/ExtractingLoader'
 import { useNotifications } from '../components/Notifications'
-
-type RecordedAudio = {
-  blob: Blob
-  filename: string
-}
+import {
+  classifyMicrophoneError,
+  createAudioRecorder,
+  stopMediaStream,
+  type RecordedAudio,
+} from '../lib/microphone'
+import { requireCsrfToken } from '../lib/sessionSecurity'
 
 type CaptureErrorState = {
   message: string
@@ -79,35 +81,9 @@ function buildVoiceCaptureError(error: unknown): CaptureErrorState {
   }
 }
 
-function classifyMicrophoneError(error: unknown): string {
-  const fallback = 'Microphone access failed. Check your device settings, then try again.'
-  if (!(error instanceof DOMException)) {
-    return fallback
-  }
-
-  switch (error.name) {
-    case 'NotAllowedError':
-    case 'SecurityError':
-    case 'PermissionDeniedError':
-      return 'Microphone permission was denied. Text capture is still available.'
-    case 'NotFoundError':
-    case 'DevicesNotFoundError':
-      return 'No microphone was found. Connect a mic and try again, or use text capture.'
-    case 'NotReadableError':
-    case 'TrackStartError':
-    case 'AbortError':
-      return 'Microphone is unavailable or in use by another app. Try again, or use text capture.'
-    case 'OverconstrainedError':
-      return 'Microphone settings are unsupported on this device. Try default audio settings or text capture.'
-    default:
-      return fallback
-  }
-}
-
 export function CaptureRoute() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
-  const recordedChunksRef = useRef<BlobPart[]>([])
   const retryAudioRef = useRef<RecordedAudio | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const wakeLockRequestIdRef = useRef(0)
@@ -250,42 +226,27 @@ export function CaptureRoute() {
     enabled: !!sessionQuery.data?.signed_in
   })
 
+  async function handleAllPending(
+    action: (captureId: string, csrfToken: string) => Promise<unknown>,
+    successMessage: string
+  ) {
+    const tasks = visiblePendingTasks
+    if (tasks.length === 0) return
+    const csrfToken = requireCsrfToken(sessionQuery.data)
+    const captureIds = [...new Set(tasks.map((task) => task.capture_id))]
+    await Promise.all(captureIds.map((captureId) => action(captureId, csrfToken)))
+    await refreshTaskQueries(null)
+    notifySuccess(successMessage)
+  }
+
   // Batch approve all pending tasks across all captures
   const handleApproveAllPending = async () => {
-    const tasks = visiblePendingTasks
-    const csrfToken = sessionQuery.data?.csrf_token
-    if (tasks.length === 0 || !csrfToken) return
-    const tasksByCapture = tasks.reduce((acc, task) => {
-      if (!acc[task.capture_id]) acc[task.capture_id] = []
-      acc[task.capture_id].push(task)
-      return acc
-    }, {} as Record<string, typeof tasks>)
-    await Promise.all(
-      Object.entries(tasksByCapture).map(async ([captureId]) => {
-        await approveAllExtractedTasks(captureId, csrfToken)
-      })
-    )
-    await refreshTaskQueries(null)
-    notifySuccess('Approved all older pending tasks.')
+    await handleAllPending(approveAllExtractedTasks, 'Approved all older pending tasks.')
   }
 
   // Batch discard all pending tasks across all captures
   const handleDiscardAllPending = async () => {
-    const tasks = visiblePendingTasks
-    const csrfToken = sessionQuery.data?.csrf_token
-    if (tasks.length === 0 || !csrfToken) return
-    const tasksByCapture = tasks.reduce((acc, task) => {
-      if (!acc[task.capture_id]) acc[task.capture_id] = []
-      acc[task.capture_id].push(task)
-      return acc
-    }, {} as Record<string, typeof tasks>)
-    await Promise.all(
-      Object.entries(tasksByCapture).map(async ([captureId]) => {
-        await discardAllExtractedTasks(captureId, csrfToken)
-      })
-    )
-    await refreshTaskQueries(null)
-    notifySuccess('Discarded all older pending tasks.')
+    await handleAllPending(discardAllExtractedTasks, 'Discarded all older pending tasks.')
   }
 
   const isLoadingTasks = extractedTasksQuery.isLoading || extractedTasksQuery.isFetching
@@ -451,29 +412,15 @@ export function CaptureRoute() {
       return
     }
 
+    let stream: MediaStream | null = null
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream)
-      recordedChunksRef.current = []
-      mediaStreamRef.current = stream
-      mediaRecorderRef.current = recorder
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data)
-        }
-      }
-
-      recorder.onstop = () => {
-        const mimeType = recorder.mimeType || 'audio/webm'
-        const fileExtension = mimeType.includes('mp4') ? 'mp4' : 'webm'
-        const blob = new Blob(recordedChunksRef.current, { type: mimeType })
-        stream.getTracks().forEach((track) => track.stop())
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = createAudioRecorder(stream, (recordedAudio) => {
         mediaStreamRef.current = null
         mediaRecorderRef.current = null
         setIsRecording(false)
 
-        if (blob.size === 0) {
+        if (recordedAudio.blob.size === 0) {
           setTranscriptionError({
             message: 'No audio was captured. Try again or use text capture.',
             requestId: null,
@@ -482,19 +429,24 @@ export function CaptureRoute() {
           return
         }
 
-        const recordedAudio = {
-          blob,
-          filename: `capture.${fileExtension}`
-        }
-
         retryAudioRef.current = recordedAudio
         voiceCaptureMutation.mutate(recordedAudio)
-      }
-
+      }, (error) => {
+        mediaStreamRef.current = null
+        mediaRecorderRef.current = null
+        setIsRecording(false)
+        setPermissionError(classifyMicrophoneError(error, { mentionTextCaptureForUnsupported: true }))
+      })
+      mediaStreamRef.current = stream
+      mediaRecorderRef.current = recorder
       recorder.start()
       setIsRecording(true)
     } catch (error) {
-      setPermissionError(classifyMicrophoneError(error))
+      stopMediaStream(stream)
+      mediaStreamRef.current = null
+      mediaRecorderRef.current = null
+      setIsRecording(false)
+      setPermissionError(classifyMicrophoneError(error, { mentionTextCaptureForUnsupported: true }))
       setTextExpanded(true)
     } finally {
       setIsRecorderLoading(false)

@@ -1,4 +1,9 @@
 import type { TaskRecurrence } from '../lib/api'
+import {
+  RECURRENCE_MONTHS,
+  RECURRENCE_WEEKDAYS,
+  recurrenceForDueDate,
+} from '../lib/taskFormModel'
 import { SelectDropdown } from './SelectDropdown'
 import { DatePicker } from './DatePicker'
 
@@ -26,17 +31,6 @@ interface TaskFormFieldsProps {
   onGroupDropdownOpenChange: (isOpen: boolean) => void
 }
 
-const WEEKDAYS = [
-  { value: '', label: 'Select a day' },
-  { value: 0, label: 'Sunday' },
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
-]
-
 const FREQUENCIES = [
   { value: 'none', label: 'None' },
   { value: 'daily', label: 'Daily' },
@@ -48,58 +42,6 @@ const FREQUENCIES = [
 function normalizeRecurrenceFrequency(value: string | null | undefined): string {
   if (value === 'daily' || value === 'weekly' || value === 'monthly' || value === 'yearly') return value
   return 'none'
-}
-
-const MONTHS = [
-  { value: '', label: 'Select a month' },
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' },
-]
-
-function recurrenceForDueDate(
-  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly',
-  dueDate: string,
-  current: TaskRecurrence | null
-): TaskRecurrence {
-  if (frequency === 'daily') {
-    return { frequency, weekday: null, day_of_month: null, month: null }
-  }
-
-  if (!dueDate) {
-    return current ?? { frequency, weekday: null, day_of_month: null, month: null }
-  }
-
-  const localDate = new Date(`${dueDate}T12:00:00`)
-  if (frequency === 'weekly') {
-    return { frequency, weekday: localDate.getDay(), day_of_month: null, month: null }
-  }
-
-  const dateParts = dueDate.split('-')
-  if (frequency === 'yearly') {
-    return {
-      frequency,
-      weekday: null,
-      day_of_month: Number(dateParts[2] ?? current?.day_of_month ?? 1),
-      month: Number(dateParts[1] ?? current?.month ?? 1),
-    }
-  }
-
-  return {
-    frequency,
-    weekday: null,
-    day_of_month: Number(dateParts[2] ?? current?.day_of_month ?? 1),
-    month: null,
-  }
 }
 
 export function TaskFormFields({
@@ -137,13 +79,13 @@ export function TaskFormFields({
 
     // Update recurrence based on new due date
     if (recurrenceFrequency === 'weekly') {
-      const newRecurrence = recurrenceForDueDate('weekly', newDueDate, null)
+      const newRecurrence = recurrenceForDueDate('weekly', newDueDate)
       onRecurrenceChange(newRecurrence)
     } else if (recurrenceFrequency === 'monthly') {
-      const newRecurrence = recurrenceForDueDate('monthly', newDueDate, null)
+      const newRecurrence = recurrenceForDueDate('monthly', newDueDate)
       onRecurrenceChange(newRecurrence)
     } else if (recurrenceFrequency === 'yearly') {
-      const newRecurrence = recurrenceForDueDate('yearly', newDueDate, null)
+      const newRecurrence = recurrenceForDueDate('yearly', newDueDate)
       onRecurrenceChange(newRecurrence)
     }
   }
@@ -155,21 +97,21 @@ export function TaskFormFields({
       onRecurrenceChange({ frequency: 'daily', weekday: null, day_of_month: null, month: null })
     } else if (frequency === 'weekly') {
       if (dueDate) {
-        const newRecurrence = recurrenceForDueDate('weekly', dueDate, null)
+        const newRecurrence = recurrenceForDueDate('weekly', dueDate)
         onRecurrenceChange(newRecurrence)
       } else {
         onRecurrenceChange({ frequency: 'weekly', weekday: null, day_of_month: null, month: null })
       }
     } else if (frequency === 'monthly') {
       if (dueDate) {
-        const newRecurrence = recurrenceForDueDate('monthly', dueDate, null)
+        const newRecurrence = recurrenceForDueDate('monthly', dueDate)
         onRecurrenceChange(newRecurrence)
       } else {
         onRecurrenceChange({ frequency: 'monthly', weekday: null, day_of_month: 1, month: null })
       }
     } else if (frequency === 'yearly') {
       if (dueDate) {
-        const newRecurrence = recurrenceForDueDate('yearly', dueDate, null)
+        const newRecurrence = recurrenceForDueDate('yearly', dueDate)
         onRecurrenceChange(newRecurrence)
       } else {
         onRecurrenceChange({ frequency: 'yearly', weekday: null, day_of_month: 1, month: 1 })
@@ -358,7 +300,7 @@ export function TaskFormFields({
               <div className="mt-3">
                 <SelectDropdown
                   label=""
-                  options={WEEKDAYS}
+                  options={RECURRENCE_WEEKDAYS}
                   value={recurrenceWeekday ?? ''}
                   onChange={handleWeekdayChange}
                   placeholder="Select a day"
@@ -398,7 +340,7 @@ export function TaskFormFields({
                 <div className="mt-3">
                   <SelectDropdown
                     label=""
-                    options={MONTHS}
+                    options={RECURRENCE_MONTHS}
                     value={recurrenceMonth ?? ''}
                     onChange={handleMonthChange}
                     placeholder="Select a month"

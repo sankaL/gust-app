@@ -34,6 +34,8 @@ import {
   type GroupSummary,
   type SessionStatus,
 } from '../lib/api'
+import { classifyMicrophoneError, createAudioRecorder, stopMediaStream } from '../lib/microphone'
+import { buildAvatarLabel, buildLoginPath, getAuthErrorParam } from '../lib/sessionPresentation'
 import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/taskScreenCache'
 import { useNotifications } from './Notifications'
 import { markDeviceRedirectOverride, useDeviceRedirect } from '../hooks/useDeviceRedirect'
@@ -70,54 +72,11 @@ const accountNavigation = [
   { to: '/capture', label: 'Mobile Mode', icon: Smartphone, end: true },
 ]
 
-function buildLoginPath(pathname: string, search: string, authError?: string) {
-  const nextPath = `${pathname}${search}`
-  const params = new URLSearchParams({ next: nextPath })
-  if (authError) {
-    params.set('auth_error', authError)
-  }
-  return `/login?${params.toString()}`
-}
-
-function buildAvatarLabel(displayName: string | null, email: string) {
-  const source = (displayName?.trim() || email.split('@')[0] || 'G').replace(/\s+/g, ' ')
-  const parts = source.split(' ').filter(Boolean)
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
-  }
-  return source.slice(0, 2).toUpperCase()
-}
-
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
     return error.message
   }
   return fallback
-}
-
-function classifyMicrophoneError(error: unknown): string {
-  const fallback = 'Microphone access failed. Check your device settings, then try again.'
-  if (!(error instanceof DOMException)) {
-    return fallback
-  }
-
-  switch (error.name) {
-    case 'NotAllowedError':
-    case 'SecurityError':
-    case 'PermissionDeniedError':
-      return 'Microphone permission was denied. Text capture is still available.'
-    case 'NotFoundError':
-    case 'DevicesNotFoundError':
-      return 'No microphone was found. Connect a mic and try again, or use text capture.'
-    case 'NotReadableError':
-    case 'TrackStartError':
-    case 'AbortError':
-      return 'Microphone is unavailable or in use by another app. Try again, or use text capture.'
-    case 'OverconstrainedError':
-      return 'Microphone settings are unsupported on this device. Try default audio settings.'
-    default:
-      return fallback
-  }
 }
 
 export function useDesktopHeader(header: DesktopHeaderContent) {
@@ -140,7 +99,6 @@ export function DesktopShell() {
   const [desktopHeader, setDesktopHeader] = useState<DesktopHeaderContent>(DEFAULT_DESKTOP_HEADER)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
-  const recordedChunksRef = useRef<BlobPart[]>([])
   const accountMenuRef = useRef<HTMLDivElement | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [isRecorderLoading, setIsRecorderLoading] = useState(false)
@@ -228,24 +186,10 @@ export function DesktopShell() {
     }
 
     setIsRecorderLoading(true)
+    let stream: MediaStream | null = null
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream)
-      recordedChunksRef.current = []
-      mediaStreamRef.current = stream
-      mediaRecorderRef.current = recorder
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data)
-        }
-      }
-
-      recorder.onstop = () => {
-        const mimeType = recorder.mimeType || 'audio/webm'
-        const fileExtension = mimeType.includes('mp4') ? 'mp4' : 'webm'
-        const blob = new Blob(recordedChunksRef.current, { type: mimeType })
-        stream.getTracks().forEach((track) => track.stop())
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = createAudioRecorder(stream, ({ blob, filename }) => {
         mediaStreamRef.current = null
         mediaRecorderRef.current = null
         setIsRecording(false)
@@ -254,16 +198,22 @@ export function DesktopShell() {
           notifyError('No audio was captured. Try again.')
           return
         }
-
-        voiceCaptureMutation.mutate({
-          blob,
-          filename: `capture.${fileExtension}`,
-        })
-      }
-
+        voiceCaptureMutation.mutate({ blob, filename })
+      }, (error) => {
+        mediaStreamRef.current = null
+        mediaRecorderRef.current = null
+        setIsRecording(false)
+        notifyError(classifyMicrophoneError(error))
+      })
+      mediaStreamRef.current = stream
+      mediaRecorderRef.current = recorder
       recorder.start()
       setIsRecording(true)
     } catch (error) {
+      stopMediaStream(stream)
+      mediaStreamRef.current = null
+      mediaRecorderRef.current = null
+      setIsRecording(false)
       notifyError(classifyMicrophoneError(error))
     } finally {
       setIsRecorderLoading(false)
@@ -303,11 +253,12 @@ export function DesktopShell() {
   }
 
   if (sessionQuery.isError) {
-    const authError =
-      sessionQuery.error instanceof ApiError && sessionQuery.error.code === 'auth_email_not_allowed'
-        ? 'email_not_allowed'
-        : undefined
-    return <Navigate to={buildLoginPath(location.pathname, location.search, authError)} replace />
+    return (
+      <Navigate
+        to={buildLoginPath(location.pathname, location.search, getAuthErrorParam(sessionQuery.error))}
+        replace
+      />
+    )
   }
 
   if (!sessionQuery.data?.signed_in) {

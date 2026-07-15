@@ -6,11 +6,20 @@ import {
   type ExtractedTask,
   type ExtractedTaskUpdates,
   type GroupSummary,
-  type TaskRecurrence,
 } from '../lib/api'
-import { dateTimeLocalToIso, toDateTimeLocalValue } from '../lib/dateTime'
+import {
+  buildExtractedTaskDraft,
+  buildExtractedTaskUpdates,
+  RECURRENCE_MONTHS,
+  RECURRENCE_OPTIONS,
+  RECURRENCE_WEEKDAYS,
+  recurrenceForDueDate,
+  type TaskFormDraft,
+} from '../lib/taskFormModel'
 import { DatePicker } from './DatePicker'
 import { SelectDropdown } from './SelectDropdown'
+import { DesktopTaskGroupField } from './DesktopTaskGroupField'
+import { AddSubtaskInput } from './AddSubtaskInput'
 
 type DesktopEditExtractedTaskModalProps = {
   task: ExtractedTask | null
@@ -22,170 +31,7 @@ type DesktopEditExtractedTaskModalProps = {
   timezone?: string | null
 }
 
-type DraftState = {
-  title: string
-  description: string
-  groupId: string
-  dueDate: string
-  reminderAt: string
-  recurrence: TaskRecurrence | null
-  subtaskTitles: string[]
-}
-
-const RECURRENCE_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'yearly', label: 'Yearly' },
-] as const
-
-const WEEKDAYS = [
-  { value: '', label: 'Select a day' },
-  { value: 0, label: 'Sunday' },
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
-]
-
-const MONTHS = [
-  { value: '', label: 'Select a month' },
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' },
-]
-
-function isTaskRecurrenceFrequency(value: string | null): value is TaskRecurrence['frequency'] {
-  return value === 'daily' || value === 'weekly' || value === 'monthly' || value === 'yearly'
-}
-
-function buildDraft(task: ExtractedTask, timezone: string | null | undefined): DraftState {
-  return {
-    title: task.title,
-    description: task.description ?? '',
-    groupId: task.group_id,
-    dueDate: task.due_date ? task.due_date.split('T')[0] : '',
-    reminderAt: toDateTimeLocalValue(task.reminder_at, timezone),
-    subtaskTitles: task.subtask_titles ?? [],
-    recurrence: isTaskRecurrenceFrequency(task.recurrence_frequency)
-      ? {
-          frequency: task.recurrence_frequency,
-          weekday: task.recurrence_weekday,
-          day_of_month: task.recurrence_day_of_month,
-          month: task.recurrence_month,
-        }
-      : null,
-  }
-}
-
-function recurrenceForDueDate(
-  frequency: TaskRecurrence['frequency'],
-  dueDate: string
-): TaskRecurrence {
-  if (frequency === 'daily') {
-    return { frequency, weekday: null, day_of_month: null, month: null }
-  }
-
-  const localDate = dueDate ? new Date(`${dueDate}T12:00:00`) : null
-  if (frequency === 'weekly') {
-    return {
-      frequency,
-      weekday: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getDay() : null,
-      day_of_month: null,
-      month: null,
-    }
-  }
-
-  const parts = dueDate.split('-')
-  const dayOfMonth = dueDate ? Number(parts[2] ?? 1) : 1
-  if (frequency === 'yearly') {
-    return {
-      frequency,
-      weekday: null,
-      day_of_month: dayOfMonth,
-      month: dueDate ? Number(parts[1] ?? 1) : 1,
-    }
-  }
-
-  return { frequency, weekday: null, day_of_month: dayOfMonth, month: null }
-}
-
-function buildUpdates(
-  task: ExtractedTask,
-  draft: DraftState,
-  timezone: string | null | undefined
-): ExtractedTaskUpdates {
-  const updates: ExtractedTaskUpdates = {}
-  if (draft.title !== task.title) updates.title = draft.title
-  if ((draft.description || null) !== task.description) updates.description = draft.description || null
-  if (draft.groupId !== task.group_id) updates.group_id = draft.groupId
-  const currentSubtaskTitles = task.subtask_titles ?? []
-  const nextSubtaskTitles = draft.subtaskTitles.map((title) => title.trim()).filter(Boolean)
-  const subtasksChanged =
-    nextSubtaskTitles.length !== currentSubtaskTitles.length ||
-    nextSubtaskTitles.some((title, index) => title !== currentSubtaskTitles[index])
-  if (subtasksChanged) updates.subtask_titles = nextSubtaskTitles
-
-  const initialDueDate = task.due_date ? task.due_date.split('T')[0] : ''
-  if (draft.dueDate !== initialDueDate) updates.due_date = draft.dueDate || null
-
-  const initialReminderAt = task.reminder_at ? toDateTimeLocalValue(task.reminder_at, timezone) : ''
-  if (draft.reminderAt !== initialReminderAt) {
-    updates.reminder_at = dateTimeLocalToIso(draft.reminderAt, timezone)
-  }
-
-  const initialFrequency = task.recurrence_frequency || 'none'
-  const nextFrequency = draft.recurrence?.frequency || 'none'
-  if (nextFrequency !== initialFrequency) {
-    updates.recurrence_frequency = nextFrequency === 'none' ? null : nextFrequency
-  }
-
-  if (nextFrequency === 'weekly') {
-    if (draft.recurrence?.weekday !== task.recurrence_weekday || initialFrequency !== 'weekly') {
-      updates.recurrence_weekday = draft.recurrence?.weekday ?? null
-    }
-    if (task.recurrence_day_of_month !== null) updates.recurrence_day_of_month = null
-    if (task.recurrence_month !== null) updates.recurrence_month = null
-  } else if (nextFrequency === 'monthly') {
-    if (
-      draft.recurrence?.day_of_month !== task.recurrence_day_of_month ||
-      initialFrequency !== 'monthly'
-    ) {
-      updates.recurrence_day_of_month = draft.recurrence?.day_of_month ?? null
-    }
-    if (task.recurrence_weekday !== null) updates.recurrence_weekday = null
-    if (task.recurrence_month !== null) updates.recurrence_month = null
-  } else if (nextFrequency === 'yearly') {
-    if (draft.recurrence?.month !== task.recurrence_month || initialFrequency !== 'yearly') {
-      updates.recurrence_month = draft.recurrence?.month ?? null
-    }
-    if (
-      draft.recurrence?.day_of_month !== task.recurrence_day_of_month ||
-      initialFrequency !== 'yearly'
-    ) {
-      updates.recurrence_day_of_month = draft.recurrence?.day_of_month ?? null
-    }
-    if (task.recurrence_weekday !== null) updates.recurrence_weekday = null
-  } else {
-    if (task.recurrence_weekday !== null) updates.recurrence_weekday = null
-    if (task.recurrence_day_of_month !== null) updates.recurrence_day_of_month = null
-    if (task.recurrence_month !== null) updates.recurrence_month = null
-  }
-
-  return updates
-}
+type DraftState = TaskFormDraft
 
 export function DesktopEditExtractedTaskModal({
   task,
@@ -203,7 +49,7 @@ export function DesktopEditExtractedTaskModal({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
 
   useEffect(() => {
-    setDraft(task ? buildDraft(task, timezone) : null)
+    setDraft(task ? buildExtractedTaskDraft(task, timezone) : null)
     setNewSubtaskTitle('')
     setError(null)
     setIsGroupDropdownOpen(false)
@@ -245,7 +91,7 @@ export function DesktopEditExtractedTaskModal({
 
     let serverSaved = false
     try {
-      const cleanUpdates = buildUpdates(
+      const cleanUpdates = buildExtractedTaskUpdates(
         currentTask,
         {
           ...currentDraft,
@@ -345,21 +191,15 @@ export function DesktopEditExtractedTaskModal({
 
             <section className="space-y-4">
               <div className="rounded-card bg-surface/35">
-                <div className="grid border-b border-white/10 px-4 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center">
-                  <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">Group</p>
-                  <div className={isGroupDropdownOpen ? 'relative z-40' : ''}>
-                    <SelectDropdown
-                      label=""
-                      options={groups.map((group) => ({ value: group.id, label: group.name }))}
-                      value={draft.groupId}
-                      onChange={(value) =>
-                        updateDraft((current) => ({ ...current, groupId: value as string }))
-                      }
-                      onOpenChange={setIsGroupDropdownOpen}
-                      disabled={isSaving}
-                    />
-                  </div>
-                </div>
+                <DesktopTaskGroupField
+                  groups={groups}
+                  value={draft.groupId}
+                  isOpen={isGroupDropdownOpen}
+                  disabled={isSaving}
+                  labelWidthClass="sm:grid-cols-[9rem_minmax(0,1fr)]"
+                  onChange={(groupId) => updateDraft((current) => ({ ...current, groupId }))}
+                  onOpenChange={setIsGroupDropdownOpen}
+                />
 
                 <div className="grid border-b border-white/10 px-4 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center">
                   <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">Due date</p>
@@ -424,7 +264,7 @@ export function DesktopEditExtractedTaskModal({
                     {draft.recurrence?.frequency === 'weekly' ? (
                       <SelectDropdown
                         label=""
-                        options={WEEKDAYS}
+                        options={RECURRENCE_WEEKDAYS}
                         value={draft.recurrence.weekday ?? ''}
                         onChange={(value) =>
                           updateDraft((current) => ({
@@ -446,7 +286,7 @@ export function DesktopEditExtractedTaskModal({
                         {draft.recurrence.frequency === 'yearly' ? (
                           <SelectDropdown
                             label=""
-                            options={MONTHS}
+                            options={RECURRENCE_MONTHS}
                             value={draft.recurrence.month ?? ''}
                             onChange={(value) =>
                               updateDraft((current) => ({
@@ -545,29 +385,12 @@ export function DesktopEditExtractedTaskModal({
                   )}
                 </div>
 
-                <div className="mt-3 flex gap-2">
-                  <input
-                    value={newSubtaskTitle}
-                    onChange={(event) => setNewSubtaskTitle(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && newSubtaskTitle.trim()) {
-                        event.preventDefault()
-                        addSubtaskDraft()
-                      }
-                    }}
-                    placeholder="Add a subtask..."
-                    className="min-w-0 flex-1 rounded-card border border-dashed border-outline/30 bg-surface-dim px-3 py-3 text-sm text-on-surface outline-none focus:border-primary"
-                    disabled={isSaving}
-                  />
-                  <button
-                    type="button"
-                    onClick={addSubtaskDraft}
-                    disabled={!newSubtaskTitle.trim() || isSaving}
-                    className="rounded-pill bg-primary px-4 py-2 text-sm font-semibold text-surface disabled:opacity-50"
-                  >
-                    Add
-                  </button>
-                </div>
+                <AddSubtaskInput
+                  value={newSubtaskTitle}
+                  disabled={isSaving}
+                  onChange={setNewSubtaskTitle}
+                  onAdd={addSubtaskDraft}
+                />
               </section>
             </section>
           </div>

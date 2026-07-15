@@ -136,47 +136,36 @@ export function SelectDropdown({
     }
   }, [isOpen, updatePosition])
 
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (disabled) return
+  function handleSelectKey() {
+    const option = isOpen && highlightedIndex >= 0 ? options[highlightedIndex] : undefined
+    if (option) {
+      onChange(option.value)
+      setIsOpen(false)
+      return
+    }
+    updatePosition()
+    setIsOpen((current) => !current)
+  }
 
-    switch (event.key) {
-      case 'Enter':
-      case ' ':
-        event.preventDefault()
-        if (isOpen && highlightedIndex >= 0) {
-          const option = options[highlightedIndex]
-          if (option) {
-            onChange(option.value)
-            setIsOpen(false)
-          }
-        } else {
-          updatePosition()
-          setIsOpen((current) => !current)
-        }
-        break
-      case 'ArrowDown':
-        event.preventDefault()
-        if (!isOpen) {
-          updatePosition()
-          setIsOpen(true)
-          setHighlightedIndex(options.length > 0 ? 0 : -1)
-        } else if (options.length > 0) {
-          setHighlightedIndex((prev) => Math.min(prev + 1, options.length - 1))
-        }
-        break
-      case 'ArrowUp':
-        event.preventDefault()
-        if (isOpen && options.length > 0) {
-          setHighlightedIndex((prev) => Math.max(prev - 1, 0))
-        }
-        break
-      case 'Escape':
-        event.preventDefault()
-        setIsOpen(false)
-        break
-      case 'Tab':
-        setIsOpen(false)
-        break
+  function handleArrowDown() {
+    if (!isOpen) {
+      updatePosition()
+      setIsOpen(true)
+      setHighlightedIndex(options.length > 0 ? 0 : -1)
+    } else if (options.length > 0) {
+      setHighlightedIndex((previous) => Math.min(previous + 1, options.length - 1))
+    }
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (disabled || !['Enter', ' ', 'ArrowDown', 'ArrowUp', 'Escape', 'Tab'].includes(event.key)) return
+    if (event.key !== 'Tab') event.preventDefault()
+    if (event.key === 'Enter' || event.key === ' ') handleSelectKey()
+    else if (event.key === 'ArrowDown') handleArrowDown()
+    else if (event.key === 'ArrowUp' && isOpen && options.length > 0) {
+      setHighlightedIndex((previous) => Math.max(previous - 1, 0))
+    } else if (event.key === 'Escape' || event.key === 'Tab') {
+      setIsOpen(false)
     }
   }
 

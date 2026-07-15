@@ -2,6 +2,7 @@ import { useMemo, useRef, useEffect, useCallback } from 'react'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { listAllTasks, type TaskSummary } from '../lib/api'
+import { getTodayIsoDate } from '../lib/desktopData'
 import {
   refreshTaskScreenQueries,
   TASK_SCREEN_GC_TIME_MS,
@@ -64,25 +65,6 @@ const SECTIONS = [
   { key: 'overdue', label: 'Overdue' },
   { key: 'others', label: 'Others' },
 ] as const
-
-function getTodayIsoDate(timezone: string | null): string {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone ?? undefined,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-  const parts = formatter.formatToParts(new Date())
-  const year = parts.find((part) => part.type === 'year')?.value
-  const month = parts.find((part) => part.type === 'month')?.value
-  const day = parts.find((part) => part.type === 'day')?.value
-
-  if (!year || !month || !day) {
-    throw new Error('Failed to compute current date in user timezone.')
-  }
-
-  return `${year}-${month}-${day}`
-}
 
 function getTaskSection(
   task: TaskSummary,

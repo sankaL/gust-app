@@ -239,21 +239,6 @@ export function createVoiceCapture(
   )
 }
 
-export function submitCapture(
-  captureId: string,
-  transcriptText: string,
-  csrfToken: string
-): Promise<SubmitCaptureResponse> {
-  return apiRequest<SubmitCaptureResponse>(
-    `/captures/${captureId}/submit`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ transcript_text: transcriptText })
-    },
-    csrfToken
-  )
-}
-
 export function listGroups(): Promise<GroupSummary[]> {
   return apiRequest<GroupSummary[]>('/groups')
 }
@@ -537,21 +522,6 @@ export function discardAllExtractedTasks(
   )
 }
 
-export function reExtractCapture(
-  captureId: string,
-  transcriptText: string,
-  csrfToken: string
-): Promise<CaptureReviewResponse> {
-  return apiRequest<CaptureReviewResponse>(
-    `/captures/${captureId}/re-extract`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ transcript_text: transcriptText })
-    },
-    csrfToken
-  )
-}
-
 export function completeCapture(
   captureId: string,
   csrfToken: string
@@ -559,22 +529,6 @@ export function completeCapture(
   return apiRequest<{ status: string }>(
     `/captures/${captureId}/complete`,
     { method: 'POST' },
-    csrfToken
-  )
-}
-
-export function updateExtractedTaskDueDate(
-  captureId: string,
-  taskId: string,
-  dueDate: string | null,
-  csrfToken: string
-): Promise<ExtractedTask> {
-  return apiRequest<ExtractedTask>(
-    `/captures/${captureId}/extracted-tasks/${taskId}`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ due_date: dueDate })
-    },
     csrfToken
   )
 }

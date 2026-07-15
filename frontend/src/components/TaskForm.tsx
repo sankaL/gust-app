@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Trash2 } from 'lucide-react'
 import type { TaskRecurrence } from '../lib/api'
+import { validateTaskFormDraft } from '../lib/taskFormModel'
 import { TaskFormFields } from './TaskFormFields'
+import { AddSubtaskInput } from './AddSubtaskInput'
 
 interface GroupSummary {
   id: string
@@ -106,51 +108,10 @@ export function TaskForm({
 
   const handleSubmit = async () => {
     setInternalError(null)
-
-    // Validation
-    if (!title.trim()) {
-      setInternalError('Please enter a task title')
+    const validationError = validateTaskFormDraft({ title, groupId, recurrence }, isCreateMode)
+    if (validationError) {
+      setInternalError(validationError)
       return
-    }
-
-    if (isCreateMode && (!groupId || groupId.trim() === '')) {
-      setInternalError('Please select a valid group')
-      return
-    }
-
-    if (recurrence?.frequency === 'weekly' && recurrence.weekday === null) {
-      setInternalError('Please select a day of the week for weekly recurrence')
-      return
-    }
-
-    if (recurrence?.frequency === 'monthly') {
-      if (recurrence.day_of_month === null) {
-        setInternalError('Please select a day of the month for monthly recurrence')
-        return
-      }
-      if (recurrence.day_of_month < 1 || recurrence.day_of_month > 31) {
-        setInternalError('Day of month must be between 1 and 31')
-        return
-      }
-    }
-
-    if (recurrence?.frequency === 'yearly') {
-      if (recurrence.month === null) {
-        setInternalError('Please select a month for yearly recurrence')
-        return
-      }
-      if (recurrence.month < 1 || recurrence.month > 12) {
-        setInternalError('Month must be between 1 and 12')
-        return
-      }
-      if (recurrence.day_of_month === null) {
-        setInternalError('Please select a day of the month for yearly recurrence')
-        return
-      }
-      if (recurrence.day_of_month < 1 || recurrence.day_of_month > 31) {
-        setInternalError('Day of month must be between 1 and 31')
-        return
-      }
     }
 
     await onSave({
@@ -242,29 +203,12 @@ export function TaskForm({
             )}
           </div>
 
-          <div className="mt-3 flex gap-2">
-            <input
-              value={newSubtaskTitle}
-              onChange={(event) => setNewSubtaskTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && newSubtaskTitle.trim()) {
-                  event.preventDefault()
-                  addSubtaskDraft()
-                }
-              }}
-              placeholder="Add a subtask..."
-              className="min-w-0 flex-1 rounded-card border border-dashed border-outline/30 bg-surface-dim px-3 py-3 text-sm text-on-surface outline-none focus:border-primary"
-              disabled={isSaving}
-            />
-            <button
-              type="button"
-              onClick={addSubtaskDraft}
-              disabled={!newSubtaskTitle.trim() || isSaving}
-              className="rounded-pill bg-primary px-4 py-2 text-sm font-semibold text-surface disabled:opacity-50"
-            >
-              Add
-            </button>
-          </div>
+          <AddSubtaskInput
+            value={newSubtaskTitle}
+            disabled={isSaving}
+            onChange={setNewSubtaskTitle}
+            onAdd={addSubtaskDraft}
+          />
         </section>
       ) : null}
 

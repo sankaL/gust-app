@@ -26,20 +26,23 @@ import {
   TASK_SCREEN_GC_TIME_MS,
   TASK_SCREEN_STALE_TIME_MS,
 } from '../lib/taskScreenCache'
-import { dateTimeLocalToIso, toDateTimeLocalValue } from '../lib/dateTime'
+import { dateTimeLocalToIso } from '../lib/dateTime'
+import {
+  buildTaskDetailDraft,
+  RECURRENCE_MONTHS,
+  RECURRENCE_OPTIONS,
+  RECURRENCE_WEEKDAYS,
+  recurrenceForDueDate,
+  type TaskDetailDraft,
+} from '../lib/taskFormModel'
 import { acquireTaskMutationLock, isTaskMutationLocked } from '../lib/taskMutationLocks'
+import { requireCsrfToken } from '../lib/sessionSecurity'
 import { useNotifications } from './Notifications'
 import { DatePicker } from './DatePicker'
 import { SelectDropdown } from './SelectDropdown'
+import { DesktopTaskGroupField } from './DesktopTaskGroupField'
 
-type DraftState = {
-  title: string
-  description: string
-  groupId: string
-  dueDate: string
-  reminderAt: string
-  recurrence: TaskRecurrence | null
-}
+type DraftState = TaskDetailDraft
 
 type DesktopTaskDetailModalProps = {
   taskId: string | null
@@ -53,41 +56,6 @@ type DesktopTaskDetailModalProps = {
   busyTaskIds?: string[]
 }
 
-const RECURRENCE_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'yearly', label: 'Yearly' },
-] as const
-
-const WEEKDAYS = [
-  { value: '', label: 'Select a day' },
-  { value: 0, label: 'Sunday' },
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
-]
-
-const MONTHS = [
-  { value: '', label: 'Select a month' },
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' },
-]
-
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError || error instanceof Error) {
     return error.message
@@ -95,57 +63,9 @@ function buildFriendlyMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-function buildDraftState(task: TaskDetail, timezone: string | null | undefined): DraftState {
-  return {
-    title: task.title,
-    description: task.description ?? '',
-    groupId: task.group.id,
-    dueDate: task.due_date ?? '',
-    reminderAt: toDateTimeLocalValue(task.reminder_at, timezone),
-    recurrence: task.recurrence,
-  }
-}
-
 function formatRecurrenceValue(recurrence: TaskRecurrence | null) {
   if (!recurrence) return 'One-off'
   return recurrence.frequency.charAt(0).toUpperCase() + recurrence.frequency.slice(1)
-}
-
-function recurrenceForDueDate(
-  frequency: TaskRecurrence['frequency'],
-  dueDate: string
-): TaskRecurrence {
-  if (frequency === 'daily') {
-    return { frequency, weekday: null, day_of_month: null, month: null }
-  }
-
-  const localDate = dueDate ? new Date(`${dueDate}T12:00:00`) : null
-  if (frequency === 'weekly') {
-    return {
-      frequency,
-      weekday: localDate && !Number.isNaN(localDate.getTime()) ? localDate.getDay() : null,
-      day_of_month: null,
-      month: null,
-    }
-  }
-
-  const parts = dueDate.split('-')
-  const dayOfMonth = dueDate ? Number(parts[2] ?? 1) : 1
-  if (frequency === 'yearly') {
-    return {
-      frequency,
-      weekday: null,
-      day_of_month: dayOfMonth,
-      month: dueDate ? Number(parts[1] ?? 1) : 1,
-    }
-  }
-
-  return {
-    frequency,
-    weekday: null,
-    day_of_month: dayOfMonth,
-    month: null,
-  }
 }
 
 export function DesktopTaskDetailModal({
@@ -188,7 +108,7 @@ export function DesktopTaskDetailModal({
 
   useEffect(() => {
     if (!taskQuery.data) return
-    setDraft((current) => current ?? buildDraftState(taskQuery.data, session?.timezone))
+    setDraft((current) => current ?? buildTaskDetailDraft(taskQuery.data, session?.timezone))
     setSubtaskDrafts((current) =>
       Object.fromEntries(
         taskQuery.data.subtasks.map((subtask) => [subtask.id, current[subtask.id] ?? subtask.title])
@@ -204,14 +124,6 @@ export function DesktopTaskDetailModal({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isModal, isOpen, onClose])
-
-  function requireCsrf() {
-    const csrfToken = session?.csrf_token
-    if (!csrfToken) {
-      throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
-    }
-    return csrfToken
-  }
 
   function updateDraft(updater: (current: DraftState) => DraftState) {
     setDraft((current) => (current ? updater(current) : current))
@@ -292,12 +204,12 @@ export function DesktopTaskDetailModal({
           reminder_at: dateTimeLocalToIso(draft.reminderAt, session?.timezone),
           recurrence: draft.recurrence,
         },
-        requireCsrf()
+        requireCsrfToken(session)
       )
     },
     onSuccess: (task) => {
       syncTaskCaches(task)
-      setDraft(buildDraftState(task, session?.timezone))
+      setDraft(buildTaskDetailDraft(task, session?.timezone))
       notifySuccess('Task saved.')
       void refreshTaskData(task)
     },
@@ -334,7 +246,7 @@ export function DesktopTaskDetailModal({
     },
     mutationFn: async () => {
       if (!taskId) throw new Error('Task detail is not ready.')
-      return createSubtask(taskId, newSubtaskTitle, requireCsrf())
+      return createSubtask(taskId, newSubtaskTitle, requireCsrfToken(session))
     },
     onSuccess: (_subtask, _variables, context) => {
       if (context?.optimisticId) markSubtaskPending(context.optimisticId, false)
@@ -377,7 +289,7 @@ export function DesktopTaskDetailModal({
     },
     mutationFn: async (payload: { subtaskId: string; title?: string; is_completed?: boolean }) => {
       if (!taskId) throw new Error('Task detail is not ready.')
-      return updateSubtask(taskId, payload.subtaskId, payload, requireCsrf())
+      return updateSubtask(taskId, payload.subtaskId, payload, requireCsrfToken(session))
     },
     onSuccess: (_subtask, payload) => {
       markSubtaskPending(payload.subtaskId, false)
@@ -411,7 +323,7 @@ export function DesktopTaskDetailModal({
     },
     mutationFn: async (subtaskId: string) => {
       if (!taskId) throw new Error('Task detail is not ready.')
-      return deleteSubtask(taskId, subtaskId, requireCsrf())
+      return deleteSubtask(taskId, subtaskId, requireCsrfToken(session))
     },
     onSuccess: (_result, subtaskId) => {
       markSubtaskPending(subtaskId, false)
@@ -530,19 +442,15 @@ export function DesktopTaskDetailModal({
               </div>
 
               <div className="rounded-card bg-surface/35">
-                <div className="grid border-b border-white/10 px-4 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center">
-                  <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">Group</p>
-                  <div className={isGroupDropdownOpen ? 'relative z-40' : ''}>
-                    <SelectDropdown
-                      label=""
-                      options={groups.map((group) => ({ value: group.id, label: group.name }))}
-                      value={draft.groupId}
-                      onChange={(value) => updateDraft((current) => ({ ...current, groupId: value as string }))}
-                      onOpenChange={setIsGroupDropdownOpen}
-                      disabled={isBusy}
-                    />
-                  </div>
-                </div>
+                <DesktopTaskGroupField
+                  groups={groups}
+                  value={draft.groupId}
+                  isOpen={isGroupDropdownOpen}
+                  disabled={isBusy}
+                  labelWidthClass="sm:grid-cols-[10rem_minmax(0,1fr)]"
+                  onChange={(groupId) => updateDraft((current) => ({ ...current, groupId }))}
+                  onOpenChange={setIsGroupDropdownOpen}
+                />
                 <div className="grid border-b border-white/10 px-4 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center">
                   <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">Due date</p>
                   <DatePicker
@@ -606,7 +514,7 @@ export function DesktopTaskDetailModal({
                     {draft.recurrence?.frequency === 'weekly' ? (
                       <SelectDropdown
                         label=""
-                        options={WEEKDAYS}
+                        options={RECURRENCE_WEEKDAYS}
                         value={draft.recurrence.weekday ?? ''}
                         onChange={(value) =>
                           updateDraft((current) => ({
@@ -648,7 +556,7 @@ export function DesktopTaskDetailModal({
                       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
                         <SelectDropdown
                           label=""
-                          options={MONTHS}
+                          options={RECURRENCE_MONTHS}
                           value={draft.recurrence.month ?? ''}
                           onChange={(value) =>
                             updateDraft((current) => ({

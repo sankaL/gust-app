@@ -2,6 +2,11 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { ExtractedTask, GroupSummary, createTask, updateExtractedTask } from '../lib/api'
 import type { ExtractedTaskUpdates, TaskRecurrence } from '../lib/api'
+import {
+  buildExtractedTaskDraft,
+  buildExtractedTaskUpdates,
+  type TaskFormDraft,
+} from '../lib/taskFormModel'
 import { TaskForm } from './TaskForm'
 
 interface EditExtractedTaskModalProps {
@@ -24,14 +29,6 @@ interface TaskFormData {
   subtaskTitles?: string[]
 }
 
-function toDateTimeLocalValue(value: string | null | undefined): string {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 16)
-}
-
 export function EditExtractedTaskModal({
   task,
   groups,
@@ -47,25 +44,17 @@ export function EditExtractedTaskModal({
 
   if (!isOpen) return null
 
-  // Prepare initial values for edit mode
-  const initialTitle = isCreateMode ? '' : task.title
-  const initialDescription = isCreateMode ? '' : (task.description ?? '')
-  const initialGroupId = isCreateMode ? '' : task.group_id
-  const initialDueDate = isCreateMode ? '' : (task.due_date ? task.due_date.split('T')[0] : '')
-  const initialReminderAt = isCreateMode
-    ? ''
-    : (task.reminder_at ? toDateTimeLocalValue(task.reminder_at) : '')
-  const initialSubtaskTitles = isCreateMode ? [] : (task.subtask_titles ?? [])
-  const initialRecurrence: TaskRecurrence | null = isCreateMode
-    ? null
-    : task.recurrence_frequency
-      ? {
-          frequency: task.recurrence_frequency as 'daily' | 'weekly' | 'monthly' | 'yearly',
-          weekday: task.recurrence_weekday,
-          day_of_month: task.recurrence_day_of_month,
-          month: task.recurrence_month,
-        }
-      : null
+  const initialDraft: TaskFormDraft = task
+    ? buildExtractedTaskDraft(task)
+    : {
+        title: '',
+        description: '',
+        groupId: '',
+        dueDate: '',
+        reminderAt: '',
+        recurrence: null,
+        subtaskTitles: [],
+      }
 
   const handleSave = async (data: TaskFormData) => {
     setIsSaving(true)
@@ -87,88 +76,10 @@ export function EditExtractedTaskModal({
         )
         await onSave(created.id, { title: data.title })
       } else {
-        // Update existing extracted task
-        const cleanUpdates: ExtractedTaskUpdates = {}
-
-        if (data.title !== task.title) {
-          cleanUpdates.title = data.title
-        }
-        if ((data.description || null) !== task.description) {
-          cleanUpdates.description = data.description || null
-        }
-        if (data.groupId !== task.group_id) {
-          cleanUpdates.group_id = data.groupId
-        }
-        const initialDueDate = task.due_date ? task.due_date.split('T')[0] : ''
-        if (data.dueDate !== initialDueDate) {
-          cleanUpdates.due_date = data.dueDate || null
-        }
-
-        // Reminder handling
-        const shouldUpdateReminderAt = data.reminderAt !== initialReminderAt
-        if (shouldUpdateReminderAt) {
-          cleanUpdates.reminder_at = data.reminderAt
-            ? new Date(data.reminderAt).toISOString()
-            : null
-        }
-
-        // Recurrence handling
-        const initialRecurrenceFrequency = task.recurrence_frequency || 'none'
-        const newRecurrenceFrequency = data.recurrence?.frequency || 'none'
-        if (newRecurrenceFrequency !== initialRecurrenceFrequency) {
-          cleanUpdates.recurrence_frequency = newRecurrenceFrequency === 'none' ? null : newRecurrenceFrequency
-        }
-
-        if (newRecurrenceFrequency === 'weekly') {
-          if (data.recurrence?.weekday !== task.recurrence_weekday || initialRecurrenceFrequency !== 'weekly') {
-            cleanUpdates.recurrence_weekday = data.recurrence?.weekday ?? null
-          }
-          if (task.recurrence_day_of_month !== null) {
-            cleanUpdates.recurrence_day_of_month = null
-          }
-          if (task.recurrence_month !== null) {
-            cleanUpdates.recurrence_month = null
-          }
-        } else if (newRecurrenceFrequency === 'monthly') {
-          if (data.recurrence?.day_of_month !== task.recurrence_day_of_month || initialRecurrenceFrequency !== 'monthly') {
-            cleanUpdates.recurrence_day_of_month = data.recurrence?.day_of_month ?? null
-          }
-          if (task.recurrence_weekday !== null) {
-            cleanUpdates.recurrence_weekday = null
-          }
-          if (task.recurrence_month !== null) {
-            cleanUpdates.recurrence_month = null
-          }
-        } else if (newRecurrenceFrequency === 'yearly') {
-          if (data.recurrence?.month !== task.recurrence_month || initialRecurrenceFrequency !== 'yearly') {
-            cleanUpdates.recurrence_month = data.recurrence?.month ?? null
-          }
-          if (data.recurrence?.day_of_month !== task.recurrence_day_of_month || initialRecurrenceFrequency !== 'yearly') {
-            cleanUpdates.recurrence_day_of_month = data.recurrence?.day_of_month ?? null
-          }
-          if (task.recurrence_weekday !== null) {
-            cleanUpdates.recurrence_weekday = null
-          }
-        } else {
-          if (task.recurrence_weekday !== null) {
-            cleanUpdates.recurrence_weekday = null
-          }
-          if (task.recurrence_day_of_month !== null) {
-            cleanUpdates.recurrence_day_of_month = null
-          }
-          if (task.recurrence_month !== null) {
-            cleanUpdates.recurrence_month = null
-          }
-        }
-
-        const currentSubtaskTitles = task.subtask_titles ?? []
-        const nextSubtaskTitles = data.subtaskTitles?.map((title) => title.trim()).filter(Boolean) ?? []
-        const subtasksChanged =
-          nextSubtaskTitles.length !== currentSubtaskTitles.length ||
-          nextSubtaskTitles.some((title, index) => title !== currentSubtaskTitles[index])
-        if (subtasksChanged) {
-          cleanUpdates.subtask_titles = nextSubtaskTitles
-        }
+        const cleanUpdates = buildExtractedTaskUpdates(task, {
+          ...data,
+          subtaskTitles: data.subtaskTitles ?? [],
+        })
 
         if (Object.keys(cleanUpdates).length > 0) {
           await updateExtractedTask(task.capture_id, task.id, cleanUpdates, csrfToken)
@@ -232,13 +143,13 @@ export function EditExtractedTaskModal({
             <TaskForm
               key={isCreateMode ? 'create-task-form' : task.id}
               mode={isCreateMode ? 'create' : 'edit'}
-              initialTitle={initialTitle}
-              initialDescription={initialDescription}
-              initialGroupId={initialGroupId}
-              initialDueDate={initialDueDate}
-              initialReminderAt={initialReminderAt}
-              initialRecurrence={initialRecurrence}
-              initialSubtaskTitles={initialSubtaskTitles}
+              initialTitle={initialDraft.title}
+              initialDescription={initialDraft.description}
+              initialGroupId={initialDraft.groupId}
+              initialDueDate={initialDraft.dueDate}
+              initialReminderAt={initialDraft.reminderAt}
+              initialRecurrence={initialDraft.recurrence}
+              initialSubtaskTitles={initialDraft.subtaskTitles}
               showSubtasks={!isCreateMode}
               groups={groups}
               defaultGroupId={defaultGroupId}

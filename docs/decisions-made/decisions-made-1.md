@@ -1,5 +1,12 @@
 # Decisions Made
 
+## 2026-07-14 21:29:28 EDT
+
+- Kept Fallow's default dead-code, duplication, cyclomatic, cognitive, CRAP, and function-size thresholds unchanged after review showed that broader thresholds would make the remediation report misleading.
+- Wired Fallow health scoring to real Istanbul coverage and excluded only test harness files from production complexity scoring, so the committed strict report reflects production code risk rather than test-fixture structure.
+- Classified residual clones below either 80 tokens or 10 lines and the remaining legacy JSX orchestration hotspots as visible deferred debt; raw default-threshold results stay committed rather than being suppressed or converted into a false zero-backlog claim.
+- Centralized CSRF token enforcement and optimistic status-transition cache updates as shared fail-closed helpers to remove divergent security-sensitive copies across mobile, desktop, and completed-task flows.
+
 ## 2026-07-14 10:52:00 EDT
 
 - Strengthened RLS from row-only `user_id` matching to relational ownership checks, so tasks, subtasks, reminders, and staged extracted tasks cannot reference another user's parent rows even if an application-layer scoping regression is introduced.

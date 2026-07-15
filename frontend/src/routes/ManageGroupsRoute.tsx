@@ -18,6 +18,7 @@ import {
   TASK_SCREEN_GC_TIME_MS,
   TASK_SCREEN_STALE_TIME_MS,
 } from '../lib/taskScreenCache'
+import { requireCsrfToken } from '../lib/sessionSecurity'
 
 function buildFriendlyMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -51,14 +52,6 @@ export function ManageGroupsRoute() {
     gcTime: TASK_SCREEN_GC_TIME_MS,
   })
 
-  function requireCsrf() {
-    const csrfToken = sessionQuery.data?.csrf_token
-    if (!csrfToken) {
-      throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
-    }
-    return csrfToken
-  }
-
   async function refreshGroups() {
     await refreshTaskScreenQueries(queryClient, {
       statuses: ['open', 'completed'],
@@ -71,7 +64,7 @@ export function ManageGroupsRoute() {
 
   const createGroupMutation = useMutation({
     mutationFn: async () => {
-      const csrfToken = requireCsrf()
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       return createGroup(
         {
           name: newGroupName,
@@ -93,7 +86,7 @@ export function ManageGroupsRoute() {
 
   const updateGroupMutation = useMutation({
     mutationFn: async (groupId: string) => {
-      const csrfToken = requireCsrf()
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       const draft = drafts[groupId]
       return updateGroup(
         groupId,
@@ -123,7 +116,7 @@ export function ManageGroupsRoute() {
           422
         )
       }
-      const csrfToken = requireCsrf()
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       return deleteGroup(groupId, destinationGroupId, csrfToken)
     },
     onSuccess: () => {

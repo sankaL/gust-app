@@ -17,6 +17,50 @@ interface StagingTableProps {
   variant?: 'mobile' | 'desktop'
 }
 
+type BulkActionButtonsProps = {
+  isApproving: boolean
+  isDiscarding: boolean
+  disabled: boolean
+  onApprove: () => void
+  onDiscard: () => void
+  className: string
+}
+
+function BulkActionButtons({
+  isApproving,
+  isDiscarding,
+  disabled,
+  onApprove,
+  onDiscard,
+  className,
+}: BulkActionButtonsProps) {
+  return (
+    <div className={className}>
+      <Button size="sm" variant="solid" onClick={onApprove} disabled={disabled} className="w-full justify-center sm:w-auto">
+        {isApproving ? '...' : 'Approve All'}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onDiscard}
+        disabled={disabled}
+        className="w-full justify-center text-tertiary hover:bg-tertiary/10 hover:text-tertiary sm:w-auto"
+      >
+        {isDiscarding ? '...' : 'Discard All'}
+      </Button>
+    </div>
+  )
+}
+
+function ReviewCount({ count, className }: { count: number; className: string }) {
+  if (count === 0) return null
+  return (
+    <span className={className}>
+      {count} task{count !== 1 ? 's' : ''} need{count === 1 ? 's' : ''} review
+    </span>
+  )
+}
+
 export function StagingTable({
   tasks,
   onApprove,
@@ -62,6 +106,15 @@ export function StagingTable({
 
   const pendingTasks = tasks.filter(t => t.status === 'pending')
   const needsReviewCount = pendingTasks.filter(t => t.needs_review).length
+  const bulkActionsDisabled =
+    isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0
+  const bulkActionProps = {
+    isApproving: isApprovingAll,
+    isDiscarding: isDiscardingAll,
+    disabled: bulkActionsDisabled,
+    onApprove: () => { void handleApproveAll() },
+    onDiscard: () => { void handleDiscardAll() },
+  }
 
   if (isLoading) {
     return (
@@ -102,37 +155,9 @@ export function StagingTable({
           </h2>
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 font-body text-xs text-on-surface-variant">
             <span>{pendingTasks.length} pending</span>
-            {needsReviewCount > 0 && (
-              <span className="font-semibold text-warning">
-                {needsReviewCount} task{needsReviewCount !== 1 ? 's' : ''} need{needsReviewCount === 1 ? 's' : ''} review
-              </span>
-            )}
+            <ReviewCount count={needsReviewCount} className="font-semibold text-warning" />
           </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:shrink-0">
-            <Button
-              size="sm"
-              variant="solid"
-              onClick={() => {
-                void handleApproveAll()
-              }}
-              disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
-              className="w-full justify-center sm:w-auto"
-            >
-              {isApprovingAll ? '...' : 'Approve All'}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                void handleDiscardAll()
-              }}
-              disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
-              className="w-full justify-center text-tertiary hover:bg-tertiary/10 hover:text-tertiary sm:w-auto"
-            >
-              {isDiscardingAll ? '...' : 'Discard All'}
-            </Button>
-          </div>
+          <BulkActionButtons {...bulkActionProps} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:shrink-0" />
         </div>
       ) : (
         <div className="space-y-3">
@@ -146,37 +171,9 @@ export function StagingTable({
                   {subtext}
                 </p>
               )}
-              {needsReviewCount > 0 && (
-                <p className="text-xs text-warning mt-1">
-                  {needsReviewCount} task{needsReviewCount !== 1 ? 's' : ''} need{needsReviewCount === 1 ? 's' : ''} review
-                </p>
-              )}
+              <ReviewCount count={needsReviewCount} className="mt-1 block text-xs text-warning" />
             </div>
-
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0">
-              <Button
-                size="sm"
-                variant="solid"
-                onClick={() => {
-                  void handleApproveAll()
-                }}
-                disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
-                className="w-full justify-center sm:w-auto"
-              >
-                {isApprovingAll ? '...' : 'Approve All'}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  void handleDiscardAll()
-                }}
-                disabled={isApprovingAll || isDiscardingAll || isLoading || pendingTasks.length === 0}
-                className="w-full justify-center text-tertiary hover:bg-tertiary/10 hover:text-tertiary sm:w-auto"
-              >
-                {isDiscardingAll ? '...' : 'Discard All'}
-              </Button>
-            </div>
+            <BulkActionButtons {...bulkActionProps} className="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0" />
           </div>
         </div>
       )}

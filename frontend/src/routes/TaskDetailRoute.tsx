@@ -35,6 +35,7 @@ import {
   TASK_SCREEN_GC_TIME_MS,
   TASK_SCREEN_STALE_TIME_MS,
 } from '../lib/taskScreenCache'
+import { requireCsrfToken } from '../lib/sessionSecurity'
 
 type DraftState = {
   title: string
@@ -205,14 +206,6 @@ export function TaskDetailRoute() {
     setIsEditMode((current) => current || taskQuery.data.needs_review)
   }, [taskQuery.data])
 
-  function requireCsrf() {
-    const csrfToken = sessionQuery.data?.csrf_token
-    if (!csrfToken) {
-      throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
-    }
-    return csrfToken
-  }
-
   const refreshTaskData = useCallback(
     (groupIds: Array<string | null | undefined> = [taskQuery.data?.group.id]) =>
       refreshTaskScreenQueries(queryClient, {
@@ -315,7 +308,7 @@ export function TaskDetailRoute() {
         throw new Error('Task detail is not ready.')
       }
 
-      const csrfToken = requireCsrf()
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       return updateTask(
         taskId,
         {
@@ -375,7 +368,7 @@ export function TaskDetailRoute() {
       if (!taskId) {
         throw new Error('Task detail is not ready.')
       }
-      const csrfToken = requireCsrf()
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       return createSubtask(taskId, newSubtaskTitle, csrfToken)
     },
     onSuccess: (_subtask, _variables, context) => {
@@ -429,7 +422,7 @@ export function TaskDetailRoute() {
       if (!taskId) {
         throw new Error('Task detail is not ready.')
       }
-      const csrfToken = requireCsrf()
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       return updateSubtask(taskId, payload.subtaskId, payload, csrfToken)
     },
     onSuccess: (_subtask, payload) => {
@@ -469,7 +462,7 @@ export function TaskDetailRoute() {
       if (!taskId) {
         throw new Error('Task detail is not ready.')
       }
-      const csrfToken = requireCsrf()
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       return deleteSubtask(taskId, subtaskId, csrfToken)
     },
     onSuccess: (_result, subtaskId) => {
@@ -513,14 +506,14 @@ export function TaskDetailRoute() {
       if (!taskId) {
         throw new Error('Task detail is not ready.')
       }
-      const csrfToken = requireCsrf()
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       return deleteTask(taskId, csrfToken, scope)
     },
     onSuccess: async () => {
       setPendingDelete(null)
       const taskTitle = taskQuery.data?.title ?? 'task'
       const deletedTaskId = taskId as string
-      const csrfToken = requireCsrf()
+      const csrfToken = requireCsrfToken(sessionQuery.data)
       const notificationId = showNotification({
         type: 'warning',
         message: `Deleted ${taskTitle}`,

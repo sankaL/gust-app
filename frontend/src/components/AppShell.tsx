@@ -4,6 +4,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { ApiError, getSessionStatus, logoutSession } from '../lib/api'
+import { buildAvatarLabel, buildLoginPath, getAuthErrorParam } from '../lib/sessionPresentation'
 import { markDeviceRedirectOverride, useDeviceRedirect } from '../hooks/useDeviceRedirect'
 import { AppShellActionsContext } from './AppShellActions'
 import { Button } from './Button'
@@ -36,24 +37,6 @@ function buildFriendlyMessage(error: unknown, fallback: string) {
     return error.message
   }
   return fallback
-}
-
-function buildAvatarLabel(displayName: string | null, email: string) {
-  const source = (displayName?.trim() || email.split('@')[0] || 'G').replace(/\s+/g, ' ')
-  const parts = source.split(' ').filter(Boolean)
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
-  }
-  return source.slice(0, 2).toUpperCase()
-}
-
-function buildLoginPath(pathname: string, search: string, authError?: string) {
-  const nextPath = `${pathname}${search}`
-  const params = new URLSearchParams({ next: nextPath })
-  if (authError) {
-    params.set('auth_error', authError)
-  }
-  return `/login?${params.toString()}`
 }
 
 export function AppShell() {
@@ -195,11 +178,12 @@ export function AppShell() {
   }
 
   if (sessionQuery.isError) {
-    const authError =
-      sessionQuery.error instanceof ApiError && sessionQuery.error.code === 'auth_email_not_allowed'
-        ? 'email_not_allowed'
-        : undefined
-    return <Navigate to={buildLoginPath(location.pathname, location.search, authError)} replace />
+    return (
+      <Navigate
+        to={buildLoginPath(location.pathname, location.search, getAuthErrorParam(sessionQuery.error))}
+        replace
+      />
+    )
   }
 
   if (!sessionQuery.data?.signed_in) {
