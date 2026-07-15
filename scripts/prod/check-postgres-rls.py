@@ -18,6 +18,15 @@ TABLE_NAMES = (
     "extracted_tasks",
     "digest_dispatches",
 )
+POLICY_REQUIRED_FRAGMENTS = {
+    "tasks": ("owner_group.id = tasks.group_id", "owner_capture.id = tasks.capture_id"),
+    "subtasks": ("owner_task.id = subtasks.task_id",),
+    "reminders": ("owner_task.id = reminders.task_id",),
+    "extracted_tasks": (
+        "owner_capture.id = extracted_tasks.capture_id",
+        "owner_group.id = extracted_tasks.group_id",
+    ),
+}
 
 
 def main() -> int:
@@ -101,25 +110,84 @@ def main() -> int:
 
             cursor.execute(
                 """
-                SELECT tablename, policyname
+                SELECT tablename, policyname, permissive, roles, cmd, qual, with_check
                   FROM pg_policies
                  WHERE schemaname = 'public'
                    AND tablename = ANY(%s)
                 """,
                 (list(TABLE_NAMES),),
             )
-            policies_by_table: dict[str, set[str]] = {}
-            for table_name, policy_name in cursor.fetchall():
-                policies_by_table.setdefault(table_name, set()).add(policy_name)
+            policies_by_table: dict[str, list[tuple[object, ...]]] = {}
+            for policy_row in cursor.fetchall():
+                policies_by_table.setdefault(policy_row[0], []).append(policy_row[1:])
 
             missing_policies = [
                 table_name
                 for table_name in TABLE_NAMES
-                if f"{table_name}_actor_rls" not in policies_by_table.get(table_name, set())
+                if not any(
+                    row[0] == f"{table_name}_actor_rls"
+                    for row in policies_by_table.get(table_name, [])
+                )
             ]
             if missing_policies:
                 print(
                     "FAIL: missing actor RLS policies on: " + ", ".join(sorted(missing_policies)),
+                    file=sys.stderr,
+                )
+                return 1
+
+            invalid_policies: list[str] = []
+            for table_name in TABLE_NAMES:
+                policy = next(
+                    row
+                    for row in policies_by_table[table_name]
+                    if row[0] == f"{table_name}_actor_rls"
+                )
+                _policy_name, permissive, roles, command, using_expression, check_expression = policy
+                normalized_using = " ".join(str(using_expression or "").split()).lower()
+                normalized_check = " ".join(str(check_expression or "").split()).lower()
+                required_fragments = (
+                    "current_setting('app.current_user_id'::text, true)",
+                    *POLICY_REQUIRED_FRAGMENTS.get(table_name, ()),
+                )
+                fragments_present = all(
+                    fragment.lower() in normalized_using and fragment.lower() in normalized_check
+                    for fragment in required_fragments
+                )
+                if (
+                    permissive != "PERMISSIVE"
+                    or roles != ["public"]
+                    or command != "ALL"
+                    or not fragments_present
+                ):
+                    invalid_policies.append(table_name)
+
+            if invalid_policies:
+                print(
+                    "FAIL: actor RLS policy definitions are incomplete on: "
+                    + ", ".join(sorted(invalid_policies)),
+                    file=sys.stderr,
+                )
+                return 1
+
+            cursor.execute(
+                """
+                SELECT rolname,
+                       has_table_privilege(rolname, 'public.rate_limit_counters', 'SELECT')
+                       OR has_table_privilege(rolname, 'public.rate_limit_counters', 'INSERT')
+                       OR has_table_privilege(rolname, 'public.rate_limit_counters', 'UPDATE')
+                       OR has_table_privilege(rolname, 'public.rate_limit_counters', 'DELETE')
+                  FROM pg_roles
+                 WHERE rolname IN ('anon', 'authenticated')
+                """
+            )
+            exposed_operational_roles = [
+                role_name for role_name, has_privilege in cursor.fetchall() if has_privilege
+            ]
+            if exposed_operational_roles:
+                print(
+                    "FAIL: rate_limit_counters is exposed to: "
+                    + ", ".join(sorted(exposed_operational_roles)),
                     file=sys.stderr,
                 )
                 return 1

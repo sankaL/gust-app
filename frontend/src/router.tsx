@@ -1,22 +1,52 @@
+import { lazy, type ComponentType } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 
-import { AppShell } from './components/AppShell'
-import { DesktopShell } from './components/DesktopShell'
-import { CaptureRoute } from './routes/CaptureRoute'
-import { CompletedTasksRoute } from './routes/CompletedTasksRoute'
-import { DesktopCaptureRoute } from './routes/desktop/DesktopCaptureRoute'
-import { DesktopCompletedRoute } from './routes/desktop/DesktopCompletedRoute'
-import { DesktopCreateTaskRoute } from './routes/desktop/DesktopCreateTaskRoute'
-import { DesktopDashboardRoute } from './routes/desktop/DesktopDashboardRoute'
-import { DesktopGroupDetailRoute } from './routes/desktop/DesktopGroupDetailRoute'
-import { DesktopGroupsRoute } from './routes/desktop/DesktopGroupsRoute'
-import { DesktopTaskDetailRoute } from './routes/desktop/DesktopTaskDetailRoute'
-import { DesktopTasksRoute } from './routes/desktop/DesktopTasksRoute'
 import { LoginRoute } from './routes/LoginRoute'
 import { ManageGroupsRoute } from './routes/ManageGroupsRoute'
 import { RootRoute } from './routes/RootRoute'
-import { TaskDetailRoute } from './routes/TaskDetailRoute'
-import { TasksRoute } from './routes/TasksRoute'
+
+function lazyRoute<T extends ComponentType>(loader: () => Promise<T>) {
+  return lazy(async () => ({ default: await loader() }))
+}
+
+const AppShell = lazyRoute(() => import('./components/AppShell').then((module) => module.AppShell))
+const DesktopShell = lazyRoute(() =>
+  import('./components/DesktopShell').then((module) => module.DesktopShell)
+)
+const CaptureRoute = lazyRoute(() =>
+  import('./routes/CaptureRoute').then((module) => module.CaptureRoute)
+)
+const TasksRoute = lazyRoute(() => import('./routes/TasksRoute').then((module) => module.TasksRoute))
+const CompletedTasksRoute = lazyRoute(() =>
+  import('./routes/CompletedTasksRoute').then((module) => module.CompletedTasksRoute)
+)
+const TaskDetailRoute = lazyRoute(() =>
+  import('./routes/TaskDetailRoute').then((module) => module.TaskDetailRoute)
+)
+const DesktopDashboardRoute = lazyRoute(() =>
+  import('./routes/desktop/DesktopDashboardRoute').then((module) => module.DesktopDashboardRoute)
+)
+const DesktopTasksRoute = lazyRoute(() =>
+  import('./routes/desktop/DesktopTasksRoute').then((module) => module.DesktopTasksRoute)
+)
+const DesktopCreateTaskRoute = lazyRoute(() =>
+  import('./routes/desktop/DesktopCreateTaskRoute').then((module) => module.DesktopCreateTaskRoute)
+)
+const DesktopTaskDetailRoute = lazyRoute(() =>
+  import('./routes/desktop/DesktopTaskDetailRoute').then((module) => module.DesktopTaskDetailRoute)
+)
+const DesktopCaptureRoute = lazyRoute(() =>
+  import('./routes/desktop/DesktopCaptureRoute').then((module) => module.DesktopCaptureRoute)
+)
+const DesktopCompletedRoute = lazyRoute(() =>
+  import('./routes/desktop/DesktopCompletedRoute').then((module) => module.DesktopCompletedRoute)
+)
+const DesktopGroupsRoute = lazyRoute(() =>
+  import('./routes/desktop/DesktopGroupsRoute').then((module) => module.DesktopGroupsRoute)
+)
+const DesktopGroupDetailRoute = lazyRoute(() =>
+  import('./routes/desktop/DesktopGroupDetailRoute').then((module) => module.DesktopGroupDetailRoute)
+)
 
 export const router = createBrowserRouter([
   {

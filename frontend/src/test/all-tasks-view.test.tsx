@@ -59,6 +59,8 @@ vi.mock('@tanstack/react-virtual', async () => {
       }, [keys, sizes])
 
       const virtualItems = React.useMemo(() => {
+        // The mock mirrors the real virtualizer: measuring invalidates cached offsets.
+        void revision
         let fallbackOffset = 0
         return keys.map((key, index) => {
           const start = cacheRef.current.get(key) ?? fallbackOffset

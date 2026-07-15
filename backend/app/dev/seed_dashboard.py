@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 
 import sqlalchemy as sa
 
@@ -46,6 +46,7 @@ def main() -> None:
         f"Seeded {inserted_count} dashboard tasks for {LOCAL_DEV_AUTH_EMAIL} "
         f"from {today.isoformat()} through {(today + timedelta(days=6)).isoformat()}."
     )
+
 
 def _ensure_seed_groups(connection, *, user_id: str) -> dict[str, str]:
     desired_groups = {
@@ -119,7 +120,7 @@ def _insert_seed_tasks(
     group_ids: dict[str, str],
     today: date,
 ) -> int:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows: list[dict[str, object]] = []
 
     open_tasks = [
@@ -172,7 +173,7 @@ def _insert_seed_tasks(
             completed_at = datetime.combine(
                 completed_date,
                 time(hour=9 + (count_index % 8), minute=(count_index * 7) % 60),
-                tzinfo=timezone.utc,
+                tzinfo=UTC,
             )
             rows.append(
                 _task_row(

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { useFloatingDismiss } from '../hooks/useFloatingDismiss'
 
 interface DatePickerProps {
   value: string | null
@@ -210,7 +211,54 @@ function formatDateForDisplay(date: Date, mode: 'date' | 'datetime'): string {
   return formatDateToken(date, 'MMM d, yyyy')
 }
 
-export function DatePicker({
+function useDatePickerValue(value: string | null, setSelectedDate: (date: Date | null) => void, setViewDate: (date: Date) => void, setSelectedTime: (time: string) => void) {
+  useEffect(() => {
+    const date = toDateValue(value)
+    setSelectedDate(date)
+    if (!date) return
+    setViewDate(date)
+    setSelectedTime(formatDateToken(date, 'HH:mm'))
+  }, [setSelectedDate, setSelectedTime, setViewDate, value])
+}
+
+function useDatePickerViewport(isOpen: boolean, updatePosition: () => void, close: () => void) {
+  useEffect(() => {
+    if (!isOpen) return undefined
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', close, true)
+    return () => { window.removeEventListener('resize', updatePosition); window.removeEventListener('scroll', close, true) }
+  }, [close, isOpen, updatePosition])
+}
+
+function calendarPosition(rect: DOMRect, mode: DatePickerProps['mode']) {
+  const padding = 16
+  const width = Math.min(Math.max(rect.width, 280), window.innerWidth - padding * 2)
+  const height = mode === 'datetime' ? 420 : 380
+  const left = Math.max(padding, Math.min(rect.left, window.innerWidth - width - padding))
+  const below = rect.bottom + 8
+  const above = rect.top - height - 8
+  const overflows = below + height > window.innerHeight - padding
+  const top = overflows ? (above >= padding ? above : Math.max(padding, window.innerHeight - height - padding)) : below
+  return { top, left, width }
+}
+
+function useDatePickerState(value: string | null) {
+  const date = toDateValue(value)
+  const [isOpen, setIsOpen] = useState(false)
+  const [viewDate, setViewDate] = useState(() => date || new Date())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(() => date)
+  const [selectedTime, setSelectedTime] = useState(() => date ? formatDateToken(date, 'HH:mm') : '12:00')
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const calendarRef = useRef<HTMLDivElement>(null)
+  return { isOpen, setIsOpen, viewDate, setViewDate, selectedDate, setSelectedDate, selectedTime, setSelectedTime, position, setPosition, triggerRef, calendarRef }
+}
+
+export function DatePicker(props: DatePickerProps) {
+  return <DatePickerView {...useDatePickerViewProps(props)} />
+}
+
+function useDatePickerViewProps({
   value,
   onChange,
   mode = 'date',
@@ -218,103 +266,19 @@ export function DatePicker({
   placeholder = mode === 'datetime' ? 'Select date & time' : 'Select date',
   min,
   max,
-}: DatePickerProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [viewDate, setViewDate] = useState(() => toDateValue(value) || new Date())
-  const [selectedDate, setSelectedDate] = useState<Date | null>(() => toDateValue(value))
-  const [selectedTime, setSelectedTime] = useState(() => {
-    const date = toDateValue(value)
-    return date ? formatDateToken(date, 'HH:mm') : '12:00'
-  })
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const calendarRef = useRef<HTMLDivElement>(null)
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
-
-  useEffect(() => {
-    const date = toDateValue(value)
-    setSelectedDate(date)
-    if (date) {
-      setViewDate(date)
-      setSelectedTime(formatDateToken(date, 'HH:mm'))
-    }
-  }, [value])
+}: DatePickerProps): DatePickerViewProps {
+  const { isOpen, setIsOpen, viewDate, setViewDate, selectedDate, setSelectedDate, selectedTime, setSelectedTime, position, setPosition, triggerRef, calendarRef } = useDatePickerState(value)
+  const closeCalendar = useCallback(() => setIsOpen(false), [setIsOpen])
+  useDatePickerValue(value, setSelectedDate, setViewDate, setSelectedTime)
 
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return
-
     const rect = triggerRef.current.getBoundingClientRect()
-    const viewportPadding = 16
-    const availableWidth = window.innerWidth - viewportPadding * 2
-    const calendarWidth = Math.min(Math.max(rect.width, 280), availableWidth)
-    const calendarHeight = mode === 'datetime' ? 420 : 380
+    setPosition(calendarPosition(rect, mode))
+  }, [mode, setPosition, triggerRef])
 
-    let left = rect.left
-    if (left + calendarWidth > window.innerWidth - viewportPadding) {
-      left = window.innerWidth - calendarWidth - viewportPadding
-    }
-    left = Math.max(viewportPadding, left)
-
-    let top = rect.bottom + 8
-    const topAboveTrigger = rect.top - calendarHeight - 8
-    const canOpenAbove = topAboveTrigger >= viewportPadding
-    const overflowsBelow = top + calendarHeight > window.innerHeight - viewportPadding
-    if (overflowsBelow && canOpenAbove) {
-      top = topAboveTrigger
-    } else if (overflowsBelow) {
-      top = Math.max(viewportPadding, window.innerHeight - calendarHeight - viewportPadding)
-    }
-
-    setPosition({
-      top,
-      left,
-      width: calendarWidth,
-    })
-  }, [mode])
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node
-      if (
-        calendarRef.current &&
-        !calendarRef.current.contains(target) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(target)
-      ) {
-        setIsOpen(false)
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      updatePosition()
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isOpen, updatePosition])
-
-  useEffect(() => {
-    function handleResize() {
-      if (isOpen) {
-        updatePosition()
-      }
-    }
-
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [isOpen, updatePosition])
-
-  useEffect(() => {
-    function handleScroll() {
-      if (isOpen) {
-        setIsOpen(false)
-      }
-    }
-
-    window.addEventListener('scroll', handleScroll, true)
-    return () => window.removeEventListener('scroll', handleScroll, true)
-  }, [isOpen])
+  useFloatingDismiss(isOpen, calendarRef, triggerRef, closeCalendar, updatePosition)
+  useDatePickerViewport(isOpen, updatePosition, closeCalendar)
 
   const handleDateSelect = (date: Date) => {
     let finalDate = date
@@ -370,202 +334,56 @@ export function DatePicker({
     ? formatDateForDisplay(selectedDate, mode)
     : placeholder
 
-  const calendarDropdown = isOpen ? (
-    <div
-      ref={calendarRef}
-      className="fixed z-[140] overflow-hidden rounded-card shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
-      style={{
-        top: position.top,
-        left: position.left,
-        width: position.width,
-        maxHeight: 'calc(100vh - 2rem)',
-      }}
-    >
-      <div className="max-h-[calc(100vh-2rem)] overflow-y-auto bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)] p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={handlePrevMonth}
-            className="rounded-lg p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
+  const calendarDropdown = isOpen ? <DatePickerCalendar calendarRef={calendarRef} position={position} viewDate={viewDate} selectedDate={selectedDate} selectedTime={selectedTime} mode={mode} days={days} startDay={startDay} yearOptions={yearOptions} min={min} max={max} onPrevious={handlePrevMonth} onNext={handleNextMonth} onMonth={handleMonthChange} onYear={handleYearChange} onDate={handleDateSelect} onTime={handleTimeChange} onToday={() => { const today = new Date(); handleDateSelect(today); setViewDate(today) }} onClear={() => { setSelectedDate(null); onChange(''); setIsOpen(false) }} onDone={() => setIsOpen(false)} /> : null
 
-          <div className="flex min-w-0 flex-1 items-center gap-2 px-2">
-            <select
-              value={getMonth(viewDate)}
-              onChange={(e) => handleMonthChange(Number(e.target.value))}
-              className="min-w-0 flex-1 cursor-pointer rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary"
-            >
-              {MONTHS.map((month, index) => (
-                <option key={month} value={index}>{month}</option>
-              ))}
-            </select>
+  return { triggerRef, disabled, selected: Boolean(selectedDate), displayValue, isOpen, calendarDropdown, onToggle: () => { if (!disabled) { updatePosition(); setIsOpen((current) => !current) } } }
+}
 
-            <select
-              value={getYear(viewDate)}
-              onChange={(e) => handleYearChange(Number(e.target.value))}
-              className="min-w-0 flex-1 cursor-pointer rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary"
-            >
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </div>
+type DatePickerViewProps = { triggerRef: React.RefObject<HTMLButtonElement | null>; disabled: boolean; selected: boolean; displayValue: string; isOpen: boolean; calendarDropdown: React.ReactNode; onToggle: () => void }
 
-          <button
-            type="button"
-            onClick={handleNextMonth}
-            className="rounded-lg p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </button>
-        </div>
+function DatePickerView({ triggerRef, disabled, selected, displayValue, isOpen, calendarDropdown, onToggle }: DatePickerViewProps) {
+  const stateClass = disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-surface-container-highest focus:ring-1 focus:ring-primary'
+  return <div className="relative"><button ref={triggerRef} type="button" onClick={onToggle} disabled={disabled} className={`flex w-full items-center justify-between rounded-card bg-surface-dim px-3 py-3 text-left text-sm font-medium outline-none transition-all ${stateClass}`}><span className={selected ? 'text-on-surface' : 'text-on-surface-variant/40'}>{displayValue}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-on-surface-variant transition-transform ${isOpen ? 'rotate-180' : ''}`}><path d="M8 9l4 4 4-4" /></svg></button>{calendarDropdown && typeof document !== 'undefined' ? createPortal(calendarDropdown, document.body) : null}</div>
+}
 
-        <div className="mb-2 grid grid-cols-7 gap-1">
-          {WEEKDAYS.map((day) => (
-            <div
-              key={day}
-              className="py-1 text-center text-xs font-medium text-on-surface-variant"
-            >
-              {day}
-            </div>
-          ))}
-        </div>
+type CalendarProps = { calendarRef: React.RefObject<HTMLDivElement | null>; position: { top: number; left: number; width: number }; viewDate: Date; selectedDate: Date | null; selectedTime: string; mode: 'date' | 'datetime'; days: Date[]; startDay: number; yearOptions: number[]; min?: string; max?: string; onPrevious: () => void; onNext: () => void; onMonth: (month: number) => void; onYear: (year: number) => void; onDate: (date: Date) => void; onTime: (time: string) => void; onToday: () => void; onClear: () => void; onDone: () => void }
 
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: startDay }).map((_, index) => (
-            <div key={`empty-${index}`} className="h-9" />
-          ))}
+function DatePickerCalendar(props: CalendarProps) {
+  return <div ref={props.calendarRef} className="fixed z-[140] overflow-hidden rounded-card shadow-[0_24px_60px_rgba(0,0,0,0.6)]" style={{ ...props.position, maxHeight: 'calc(100vh - 2rem)' }}><div className="max-h-[calc(100vh-2rem)] overflow-y-auto bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)] p-4"><CalendarHeader viewDate={props.viewDate} yearOptions={props.yearOptions} onPrevious={props.onPrevious} onNext={props.onNext} onMonth={props.onMonth} onYear={props.onYear} /><CalendarGrid days={props.days} startDay={props.startDay} selectedDate={props.selectedDate} min={props.min} max={props.max} onDate={props.onDate} />{props.mode === 'datetime' ? <TimeField value={props.selectedTime} onChange={props.onTime} /> : null}<CalendarActions mode={props.mode} onToday={props.onToday} onClear={props.onClear} onDone={props.onDone} /></div></div>
+}
 
-          {days.map((day) => {
-            const isSelected =
-              selectedDate &&
-              formatDateToken(day, 'yyyy-MM-dd') === formatDateToken(selectedDate, 'yyyy-MM-dd')
-            const isToday =
-              formatDateToken(day, 'yyyy-MM-dd') === formatDateToken(new Date(), 'yyyy-MM-dd')
-            const dayString = formatDateToken(day, 'yyyy-MM-dd')
-            const isDisabled = Boolean((min && dayString < min) || (max && dayString > max))
+type CalendarHeaderProps = { viewDate: Date; yearOptions: number[]; onPrevious: () => void; onNext: () => void; onMonth: (month: number) => void; onYear: (year: number) => void }
+function CalendarHeader(props: CalendarHeaderProps) {
+  return <div className="mb-4 flex items-center justify-between"><NavButton direction="previous" onClick={props.onPrevious} /><div className="flex min-w-0 flex-1 items-center gap-2 px-2"><select value={getMonth(props.viewDate)} onChange={(event) => props.onMonth(Number(event.target.value))} className="min-w-0 flex-1 rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface">{MONTHS.map((month, index) => <option key={month} value={index}>{month}</option>)}</select><select value={getYear(props.viewDate)} onChange={(event) => props.onYear(Number(event.target.value))} className="min-w-0 flex-1 rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface">{props.yearOptions.map((year) => <option key={year}>{year}</option>)}</select></div><NavButton direction="next" onClick={props.onNext} /></div>
+}
 
-            return (
-              <button
-                key={day.toISOString()}
-                type="button"
-                onClick={() => !isDisabled && handleDateSelect(day)}
-                disabled={isDisabled}
-                className={`
-                  flex h-9 w-full items-center justify-center rounded-lg text-sm font-medium transition-all
-                  ${isSelected
-                    ? 'bg-primary text-surface'
-                    : isToday
-                      ? 'border border-primary/30 bg-surface-container-high text-primary'
-                      : 'text-on-surface hover:bg-surface-container-high'
-                  }
-                  ${isDisabled ? 'cursor-not-allowed opacity-30' : 'cursor-pointer'}
-                `}
-              >
-                {formatDateToken(day, 'd')}
-              </button>
-            )
-          })}
-        </div>
+function NavButton({ direction, onClick }: { direction: 'previous' | 'next'; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className="rounded-lg p-1 text-on-surface-variant hover:bg-surface-container-high" aria-label={`${direction} month`}><span aria-hidden="true">{direction === 'previous' ? '‹' : '›'}</span></button>
+}
 
-        {mode === 'datetime' && (
-          <div className="mt-4 border-t border-outline/20 pt-4">
-            <label className="mb-2 block text-xs font-medium text-on-surface-variant">
-              Time
-            </label>
-            <input
-              type="time"
-              value={selectedTime}
-              onChange={(e) => handleTimeChange(e.target.value)}
-              className="w-full rounded-card bg-surface-dim px-3 py-2 text-sm text-on-surface outline-none focus:bg-surface-container-high"
-              style={{ fontSize: '16px' }}
-            />
-          </div>
-        )}
+type CalendarGridProps = { days: Date[]; startDay: number; selectedDate: Date | null; min?: string; max?: string; onDate: (date: Date) => void }
+function CalendarGrid(props: CalendarGridProps) {
+  return <><div className="mb-2 grid grid-cols-7 gap-1">{WEEKDAYS.map((day) => <div key={day} className="py-1 text-center text-xs font-medium text-on-surface-variant">{day}</div>)}</div><div className="grid grid-cols-7 gap-1">{Array.from({ length: props.startDay }).map((_, index) => <div key={`empty-${index}`} className="h-9" />)}{props.days.map((day) => <DayButton key={day.toISOString()} day={day} selectedDate={props.selectedDate} min={props.min} max={props.max} onSelect={props.onDate} />)}</div></>
+}
 
-        <div className="mt-4 flex gap-2 border-t border-outline/20 pt-4">
-          <button
-            type="button"
-            onClick={() => {
-              const today = new Date()
-              handleDateSelect(today)
-              setViewDate(today)
-            }}
-            className="flex-1 rounded-lg bg-surface-container-high px-3 py-2 text-sm font-medium text-on-surface transition-colors hover:bg-surface-container-highest"
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedDate(null)
-              onChange('')
-              setIsOpen(false)
-            }}
-            className="flex-1 rounded-lg bg-surface-container-high px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:bg-surface-container-highest"
-          >
-            Clear
-          </button>
-          {mode === 'datetime' && (
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="flex-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-surface transition-colors hover:bg-primary-dim"
-            >
-              Done
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  ) : null
+function DayButton({ day, selectedDate, min, max, onSelect }: { day: Date; selectedDate: Date | null; min?: string; max?: string; onSelect: (date: Date) => void }) {
+  const token = formatDateToken(day, 'yyyy-MM-dd')
+  const selected = selectedDate ? token === formatDateToken(selectedDate, 'yyyy-MM-dd') : false
+  const today = token === formatDateToken(new Date(), 'yyyy-MM-dd')
+  const disabled = Boolean((min && token < min) || (max && token > max))
+  const color = selected ? 'bg-primary text-surface' : today ? 'border border-primary/30 bg-surface-container-high text-primary' : 'text-on-surface hover:bg-surface-container-high'
+  return <button type="button" onClick={() => onSelect(day)} disabled={disabled} className={`flex h-9 w-full items-center justify-center rounded-lg text-sm font-medium transition-all ${color} ${disabled ? 'cursor-not-allowed opacity-30' : 'cursor-pointer'}`}>{formatDateToken(day, 'd')}</button>
+}
 
-  return (
-    <div className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => {
-          if (!disabled) {
-            updatePosition()
-            setIsOpen((current) => !current)
-          }
-        }}
-        disabled={disabled}
-        className={`
-          w-full flex items-center justify-between px-3 py-3 rounded-card transition-all
-          bg-surface-dim text-left outline-none text-sm font-medium
-          ${disabled
-            ? 'cursor-not-allowed opacity-50'
-            : 'cursor-pointer hover:bg-surface-container-highest focus:ring-1 focus:ring-primary'
-          }
-        `}
-      >
-        <span className={selectedDate ? 'text-on-surface' : 'text-on-surface-variant/40'}>
-          {displayValue}
-        </span>
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          className={`text-on-surface-variant transition-transform ${isOpen ? 'rotate-180' : ''}`}
-        >
-          <path d="M8 9l4 4 4-4" />
-        </svg>
-      </button>
+function TimeField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return <div className="mt-4 border-t border-outline/20 pt-4"><label className="mb-2 block text-xs font-medium text-on-surface-variant">Time</label><input type="time" value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-card bg-surface-dim px-3 py-2 text-sm text-on-surface" style={{ fontSize: '16px' }} /></div>
+}
 
-      {calendarDropdown && typeof document !== 'undefined'
-        ? createPortal(calendarDropdown, document.body)
-        : null}
-    </div>
-  )
+type CalendarActionsProps = { mode: 'date' | 'datetime'; onToday: () => void; onClear: () => void; onDone: () => void }
+function CalendarActions(props: CalendarActionsProps) {
+  return <div className="mt-4 flex gap-2 border-t border-outline/20 pt-4"><CalendarAction onClick={props.onToday}>Today</CalendarAction><CalendarAction onClick={props.onClear}>Clear</CalendarAction>{props.mode === 'datetime' ? <CalendarAction onClick={props.onDone} primary>Done</CalendarAction> : null}</div>
+}
+
+function CalendarAction({ children, onClick, primary = false }: { children: React.ReactNode; onClick: () => void; primary?: boolean }) {
+  return <button type="button" onClick={onClick} className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${primary ? 'bg-primary text-surface' : 'bg-surface-container-high text-on-surface-variant'}`}>{children}</button>
 }

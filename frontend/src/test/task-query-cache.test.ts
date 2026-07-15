@@ -1,8 +1,12 @@
 import { QueryClient } from '@tanstack/react-query'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { TaskSummary } from '../lib/api'
-import { applyTaskListMutation, prependTaskToMatchingLists } from '../lib/taskQueryCache'
+import {
+  applyTaskListMutation,
+  prependTaskToMatchingLists,
+  prepareOptimisticTaskStatus,
+} from '../lib/taskQueryCache'
 
 function buildTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
   return {
@@ -54,5 +58,23 @@ describe('task query cache helpers', () => {
     expect(queryClient.getQueryData(['desktop', 'tasks', 'all', 'completed'])).toEqual([
       completedTask,
     ])
+  })
+
+  it('cancels desktop task queries before applying an optimistic status move', async () => {
+    const queryClient = new QueryClient()
+    const cancelQueries = vi.spyOn(queryClient, 'cancelQueries')
+    const task = buildTask()
+    queryClient.setQueryData(['desktop', 'tasks', 'all', 'open'], [task])
+    queryClient.setQueryData(['desktop', 'tasks', 'all', 'completed'], [])
+
+    await prepareOptimisticTaskStatus(
+      queryClient,
+      task,
+      'completed',
+      '2026-04-29T02:05:00.000Z'
+    )
+
+    expect(cancelQueries).toHaveBeenCalledWith({ queryKey: ['desktop', 'tasks'] })
+    expect(queryClient.getQueryData(['desktop', 'tasks', 'all', 'open'])).toEqual([])
   })
 })

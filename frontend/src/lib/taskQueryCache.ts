@@ -76,43 +76,6 @@ function getTaskScopeSegment(queryKey: QueryKey): unknown {
   return queryKey[0] === 'desktop' ? queryKey[2] : queryKey[1]
 }
 
-export function getTaskSummaryFromCache(
-  queryClient: QueryClient,
-  taskId: string
-): TaskSummary | null {
-  const taskQueries = getTaskListQueries(queryClient)
-
-  for (const [, data] of taskQueries) {
-    const items = flattenTaskListData(data)
-    const task = items.find((candidate) => candidate.id === taskId)
-    if (task) {
-      return task
-    }
-  }
-
-  return null
-}
-
-export function flattenTaskListData(data: TaskListData | undefined): TaskSummary[] {
-  if (!data) {
-    return []
-  }
-
-  if (Array.isArray(data)) {
-    return data
-  }
-
-  if (isPaginatedResponse(data)) {
-    return data.items
-  }
-
-  if (isInfiniteTaskData(data)) {
-    return data.pages.flatMap((page) => page.items)
-  }
-
-  return []
-}
-
 export function snapshotTaskQueries(
   queryClient: QueryClient,
   taskId?: string
@@ -208,7 +171,7 @@ export function prependTaskToMatchingLists(
   }
 }
 
-export function updateGroupCounts(
+function updateGroupCounts(
   queryClient: QueryClient,
   updater: (group: GroupSummary) => GroupSummary
 ): void {
@@ -234,4 +197,28 @@ export function adjustGroupOpenCount(
         }
       : group
   )
+}
+
+export async function prepareOptimisticTaskStatus(
+  queryClient: QueryClient,
+  task: TaskSummary,
+  status: TaskSummary['status'],
+  completedAt: string | null
+) {
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: ['groups'] }),
+    queryClient.cancelQueries({ queryKey: ['tasks'] }),
+    queryClient.cancelQueries({ queryKey: ['desktop', 'tasks'] }),
+    queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
+  ])
+  const snapshots = snapshotTaskQueries(queryClient, task.id)
+  const optimisticTask: TaskSummary = { ...task, status, completed_at: completedAt }
+  applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
+    if (currentTask.id !== task.id) return currentTask
+    return statusSegment === status ? optimisticTask : null
+  })
+  prependTaskToMatchingLists(queryClient, optimisticTask, status)
+  adjustGroupOpenCount(queryClient, task.group.id, status === 'open' ? 1 : -1)
+  updateTaskDetailCache(queryClient, optimisticTask)
+  return { snapshots, optimisticTask }
 }

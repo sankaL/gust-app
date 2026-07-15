@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 import sqlalchemy as sa
@@ -130,7 +130,7 @@ def test_task_group_id_is_non_null_at_schema_level(client) -> None:
 
 def test_due_reminder_claiming_requeues_expired_claims_and_ignores_ineligible_tasks(client) -> None:
     database_url = client.app.state.settings.database_url
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
 
     with connection_scope(database_url) as connection:
         user = upsert_user(
@@ -229,7 +229,7 @@ def test_due_reminder_claiming_requeues_expired_claims_and_ignores_ineligible_ta
 
 def test_expired_capture_cleanup_deletes_rows_and_nulls_task_capture_id(client) -> None:
     database_url = client.app.state.settings.database_url
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
 
     with connection_scope(database_url) as connection:
         user = upsert_user(
@@ -274,7 +274,7 @@ def test_expired_capture_cleanup_deletes_rows_and_nulls_task_capture_id(client) 
 
 def test_list_groups_with_recent_tasks_returns_ranked_titles_per_group(client) -> None:
     database_url = client.app.state.settings.database_url
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
 
     with connection_scope(database_url) as connection:
         user = upsert_user(

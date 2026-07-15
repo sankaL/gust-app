@@ -10,7 +10,7 @@ DEV_SUPABASE_DIR := $(DEV_RUNTIME_DIR)/supabase
 DEV_SUPABASE_WORKDIR := $(DEV_RUNTIME_DIR)
 DOCKER_COMPOSE := docker compose --env-file $(DEV_RUNTIME_ENV)
 
-.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime wait-supabase-db supabase-start supabase-stop supabase-sync-local seed-dev-dashboard wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
+.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-quality frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime wait-supabase-db supabase-start supabase-stop supabase-sync-local seed-dev-dashboard wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
 
 frontend-install:
 	npm --prefix frontend install
@@ -31,6 +31,10 @@ frontend-lint:
 
 frontend-test:
 	npm --prefix frontend run test
+
+frontend-quality:
+	npm --prefix frontend run test:coverage
+	npm --prefix frontend run quality:fallow
 
 frontend-build:
 	npm --prefix frontend run build
@@ -56,7 +60,7 @@ backend-smoke:
 		cd backend && APP_ENV=test DATABASE_URL=sqlite+pysqlite:///:memory: RUN_STARTUP_CHECKS=false ../"$(BACKEND_PYTHON)" -c "from app.core.app import create_app; create_app()"; \
 	fi
 
-check: frontend-lint frontend-test frontend-build backend-lint backend-test backend-smoke
+check: frontend-lint frontend-quality frontend-build backend-lint backend-test backend-smoke
 
 prepare-dev-runtime:
 	python3 scripts/dev/prepare-runtime.py

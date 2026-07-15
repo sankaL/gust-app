@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Trash2 } from 'lucide-react'
 import type { TaskRecurrence } from '../lib/api'
+import { validateTaskFormDraft } from '../lib/taskFormModel'
 import { TaskFormFields } from './TaskFormFields'
+import { SubtaskDrafts, TaskFormActions } from './TaskFormSections'
 
 interface GroupSummary {
   id: string
@@ -37,6 +38,32 @@ interface TaskFormProps {
   onErrorChange?: (error: string | null) => void
 }
 
+type TaskFormViewProps = {
+  groups: GroupSummary[]
+  values: Omit<TaskFormData, 'subtaskTitles'>
+  subtaskTitles: string[]
+  newSubtaskTitle: string
+  showSubtasks: boolean
+  isSaving: boolean
+  isCreateMode: boolean
+  isGroupDropdownOpen: boolean
+  error: string | null | undefined
+  onCancel?: () => void
+  setters: {
+    title: (value: string) => void
+    description: (value: string) => void
+    groupId: (value: string) => void
+    dueDate: (value: string) => void
+    reminderAt: (value: string) => void
+    recurrence: (value: TaskRecurrence | null) => void
+    groupOpen: (value: boolean) => void
+    subtasks: (value: string[]) => void
+    newSubtask: (value: string) => void
+  }
+  onAddSubtask: () => void
+  onSubmit: () => void
+}
+
 function toDateTimeLocalValue(value: string | null | undefined): string {
   if (!value) return ''
   const date = new Date(value)
@@ -45,24 +72,51 @@ function toDateTimeLocalValue(value: string | null | undefined): string {
   return local.toISOString().slice(0, 16)
 }
 
-export function TaskForm({
+function useTaskFormSynchronization({ internalError, onErrorChange, isCreateMode, groupId, defaultGroupId, setGroupId, initialSubtasks, setSubtasks, setNewSubtask }: { internalError: string | null; onErrorChange?: (error: string | null) => void; isCreateMode: boolean; groupId: string; defaultGroupId: string; setGroupId: (value: string) => void; initialSubtasks: string[]; setSubtasks: (value: string[]) => void; setNewSubtask: (value: string) => void }) {
+  useEffect(() => { onErrorChange?.(internalError) }, [internalError, onErrorChange])
+  useEffect(() => { if (isCreateMode && !groupId && defaultGroupId) setGroupId(defaultGroupId) }, [defaultGroupId, groupId, isCreateMode, setGroupId])
+  useEffect(() => { setSubtasks(initialSubtasks); setNewSubtask('') }, [initialSubtasks, setNewSubtask, setSubtasks])
+}
+
+type TaskFormDefaults = Required<Pick<TaskFormProps, 'initialTitle' | 'initialDescription' | 'initialGroupId' | 'initialDueDate' | 'initialReminderAt' | 'initialRecurrence' | 'initialSubtaskTitles' | 'showSubtasks' | 'isSaving'>>
+
+const TASK_FORM_DEFAULTS: TaskFormDefaults = {
+  initialTitle: '', initialDescription: '', initialGroupId: '', initialDueDate: '', initialReminderAt: '', initialRecurrence: null, initialSubtaskTitles: [], showSubtasks: false, isSaving: false,
+}
+
+async function submitTaskForm({ values, subtasks, showSubtasks, isCreateMode, onSave, onError }: { values: Omit<TaskFormData, 'subtaskTitles'>; subtasks: string[]; showSubtasks: boolean; isCreateMode: boolean; onSave: TaskFormProps['onSave']; onError: (error: string | null) => void }) {
+  onError(null)
+  const validationError = validateTaskFormDraft(values, isCreateMode)
+  if (validationError) { onError(validationError); return }
+  await onSave({ ...values, title: values.title.trim(), description: values.description.trim(), subtaskTitles: showSubtasks ? subtasks.map((title) => title.trim()).filter(Boolean) : undefined })
+}
+
+export function TaskForm(props: TaskFormProps) {
+  return <TaskFormResolved {...TASK_FORM_DEFAULTS} {...props} />
+}
+
+function TaskFormResolved(props: TaskFormProps & TaskFormDefaults) {
+  return <TaskFormView {...useTaskFormViewProps(props)} />
+}
+
+function useTaskFormViewProps({
   mode,
-  initialTitle = '',
-  initialDescription = '',
-  initialGroupId = '',
-  initialDueDate = '',
-  initialReminderAt = '',
-  initialRecurrence = null,
-  initialSubtaskTitles = [],
-  showSubtasks = false,
+  initialTitle,
+  initialDescription,
+  initialGroupId,
+  initialDueDate,
+  initialReminderAt,
+  initialRecurrence,
+  initialSubtaskTitles,
+  showSubtasks,
   groups,
   defaultGroupId,
   onSave,
   onCancel,
-  isSaving = false,
+  isSaving,
   error: externalError,
   onErrorChange,
-}: TaskFormProps) {
+}: TaskFormProps & TaskFormDefaults): TaskFormViewProps {
   const isCreateMode = mode === 'create'
   const defaultGroupIdFinal = defaultGroupId ?? groups[0]?.id ?? ''
 
@@ -79,91 +133,15 @@ export function TaskForm({
 
   const error = externalError ?? internalError
 
-  useEffect(() => {
-    if (onErrorChange) {
-      onErrorChange(internalError)
-    }
-  }, [internalError, onErrorChange])
+  useTaskFormSynchronization({ internalError, onErrorChange, isCreateMode, groupId, defaultGroupId: defaultGroupIdFinal, setGroupId, initialSubtasks: initialSubtaskTitles, setSubtasks: setSubtaskTitles, setNewSubtask: setNewSubtaskTitle })
 
-  // Set default group when groups load
-  useEffect(() => {
-    if (isCreateMode && groupId === '' && defaultGroupIdFinal) {
-      setGroupId(defaultGroupIdFinal)
-    }
-  }, [defaultGroupIdFinal, groupId, isCreateMode])
+  function addSubtaskDraft() { const next = newSubtaskTitle.trim(); if (next) { setSubtaskTitles((current) => [...current, next]); setNewSubtaskTitle('') } }
+  const handleSubmit = () => submitTaskForm({ values: { title, description, groupId, dueDate, reminderAt, recurrence }, subtasks: subtaskTitles, showSubtasks, isCreateMode, onSave, onError: setInternalError })
 
-  useEffect(() => {
-    setSubtaskTitles(initialSubtaskTitles)
-    setNewSubtaskTitle('')
-  }, [initialSubtaskTitles])
+  return { groups, values: { title, description, groupId, dueDate, reminderAt, recurrence }, subtaskTitles, newSubtaskTitle, showSubtasks, isSaving, isCreateMode, isGroupDropdownOpen, error, onCancel, setters: { title: setTitle, description: setDescription, groupId: setGroupId, dueDate: setDueDate, reminderAt: setReminderAt, recurrence: setRecurrence, groupOpen: setIsGroupDropdownOpen, subtasks: setSubtaskTitles, newSubtask: setNewSubtaskTitle }, onAddSubtask: addSubtaskDraft, onSubmit: () => void handleSubmit() }
+}
 
-  function addSubtaskDraft() {
-    const title = newSubtaskTitle.trim()
-    if (!title) return
-    setSubtaskTitles((current) => [...current, title])
-    setNewSubtaskTitle('')
-  }
-
-  const handleSubmit = async () => {
-    setInternalError(null)
-
-    // Validation
-    if (!title.trim()) {
-      setInternalError('Please enter a task title')
-      return
-    }
-
-    if (isCreateMode && (!groupId || groupId.trim() === '')) {
-      setInternalError('Please select a valid group')
-      return
-    }
-
-    if (recurrence?.frequency === 'weekly' && recurrence.weekday === null) {
-      setInternalError('Please select a day of the week for weekly recurrence')
-      return
-    }
-
-    if (recurrence?.frequency === 'monthly') {
-      if (recurrence.day_of_month === null) {
-        setInternalError('Please select a day of the month for monthly recurrence')
-        return
-      }
-      if (recurrence.day_of_month < 1 || recurrence.day_of_month > 31) {
-        setInternalError('Day of month must be between 1 and 31')
-        return
-      }
-    }
-
-    if (recurrence?.frequency === 'yearly') {
-      if (recurrence.month === null) {
-        setInternalError('Please select a month for yearly recurrence')
-        return
-      }
-      if (recurrence.month < 1 || recurrence.month > 12) {
-        setInternalError('Month must be between 1 and 12')
-        return
-      }
-      if (recurrence.day_of_month === null) {
-        setInternalError('Please select a day of the month for yearly recurrence')
-        return
-      }
-      if (recurrence.day_of_month < 1 || recurrence.day_of_month > 31) {
-        setInternalError('Day of month must be between 1 and 31')
-        return
-      }
-    }
-
-    await onSave({
-      title: title.trim(),
-      description: description.trim(),
-      groupId,
-      dueDate,
-      reminderAt,
-      recurrence,
-      subtaskTitles: showSubtasks ? subtaskTitles.map((subtask) => subtask.trim()).filter(Boolean) : undefined,
-    })
-  }
-
+function TaskFormView({ groups, values, subtaskTitles, newSubtaskTitle, showSubtasks, isSaving, isCreateMode, isGroupDropdownOpen, error, onCancel, setters, onAddSubtask, onSubmit }: TaskFormViewProps) {
   return (
     <div className="space-y-5">
       {/* Error display */}
@@ -174,121 +152,23 @@ export function TaskForm({
       )}
 
       <TaskFormFields
-        title={title}
-        description={description}
-        groupId={groupId}
-        dueDate={dueDate}
-        reminderAt={reminderAt}
-        recurrence={recurrence}
+        {...values}
         groups={groups}
         isGroupDropdownOpen={isGroupDropdownOpen}
         disabled={isSaving}
-        onTitleChange={setTitle}
-        onDescriptionChange={setDescription}
-        onGroupIdChange={setGroupId}
-        onDueDateChange={setDueDate}
-        onReminderAtChange={setReminderAt}
-        onRecurrenceChange={setRecurrence}
-        onGroupDropdownOpenChange={setIsGroupDropdownOpen}
+        onTitleChange={setters.title}
+        onDescriptionChange={setters.description}
+        onGroupIdChange={setters.groupId}
+        onDueDateChange={setters.dueDate}
+        onReminderAtChange={setters.reminderAt}
+        onRecurrenceChange={setters.recurrence}
+        onGroupDropdownOpenChange={setters.groupOpen}
       />
 
-      {showSubtasks ? (
-        <section className="rounded-card bg-surface-container/75 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-display text-lg text-on-surface">Subtasks</p>
-              <p className="mt-1 font-body text-xs text-on-surface-variant">
-                {subtaskTitles.length} {subtaskTitles.length === 1 ? 'subtask' : 'subtasks'}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-3 space-y-2">
-            {subtaskTitles.length === 0 ? (
-              <div className="rounded-card bg-surface-dim px-4 py-4 text-sm text-on-surface-variant">
-                No subtasks yet.
-              </div>
-            ) : (
-              subtaskTitles.map((subtaskTitle, index) => (
-                <div key={`${subtaskTitle}-${index}`} className="flex items-center gap-2 rounded-card bg-surface-dim p-2">
-                  <input
-                    value={subtaskTitle}
-                    onChange={(event) =>
-                      setSubtaskTitles((current) =>
-                        current.map((title, candidateIndex) =>
-                          candidateIndex === index ? event.target.value : title
-                        )
-                      )
-                    }
-                    className="min-w-0 flex-1 rounded-card bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:bg-surface-container-high"
-                    aria-label={`Subtask ${subtaskTitle || index + 1}`}
-                    disabled={isSaving}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSubtaskTitles((current) =>
-                        current.filter((_title, candidateIndex) => candidateIndex !== index)
-                      )
-                    }
-                    disabled={isSaving}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-tertiary/10 hover:text-tertiary disabled:opacity-50"
-                    aria-label={`Delete ${subtaskTitle || `subtask ${index + 1}`}`}
-                  >
-                    <Trash2 className="h-4 w-4" strokeWidth={2} />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="mt-3 flex gap-2">
-            <input
-              value={newSubtaskTitle}
-              onChange={(event) => setNewSubtaskTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && newSubtaskTitle.trim()) {
-                  event.preventDefault()
-                  addSubtaskDraft()
-                }
-              }}
-              placeholder="Add a subtask..."
-              className="min-w-0 flex-1 rounded-card border border-dashed border-outline/30 bg-surface-dim px-3 py-3 text-sm text-on-surface outline-none focus:border-primary"
-              disabled={isSaving}
-            />
-            <button
-              type="button"
-              onClick={addSubtaskDraft}
-              disabled={!newSubtaskTitle.trim() || isSaving}
-              className="rounded-pill bg-primary px-4 py-2 text-sm font-semibold text-surface disabled:opacity-50"
-            >
-              Add
-            </button>
-          </div>
-        </section>
-      ) : null}
+      {showSubtasks ? <SubtaskDrafts titles={subtaskTitles} newTitle={newSubtaskTitle} disabled={isSaving} onTitlesChange={setters.subtasks} onNewTitleChange={setters.newSubtask} onAdd={onAddSubtask} /> : null}
 
       {/* Action Buttons (for standalone mode) */}
-      {onCancel && (
-        <div className="grid grid-cols-2 gap-3 pt-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSaving}
-            className="w-full rounded-pill border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-medium text-on-surface transition-colors hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-white/5"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={isSaving}
-            className="w-full rounded-pill bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_8px_0_#4c1d95,_0_16px_22px_rgba(0,0,0,0.35),_inset_0_2px_3px_rgba(255,255,255,0.38)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] active:shadow-[0_0px_0_#4c1d95,_0_4px_10px_rgba(0,0,0,0.35),_inset_0_2px_4px_rgba(0,0,0,0.18)] disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0 disabled:active:translate-y-0"
-          >
-            {isSaving ? 'Saving...' : isCreateMode ? 'Add Task' : 'Save Changes'}
-          </button>
-        </div>
-      )}
+      {onCancel ? <TaskFormActions isSaving={isSaving} isCreateMode={isCreateMode} onCancel={onCancel} onSave={onSubmit} /> : null}
     </div>
   )
 }

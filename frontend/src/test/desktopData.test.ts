@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildDesktopAnalytics,
+  EMPTY_DESKTOP_FILTERS,
+  filterDesktopTasks,
+  sortDesktopTasks,
   type CompletionTrendPoint,
 } from '../lib/desktopData'
 import type { TaskSummary } from '../lib/api'
@@ -173,5 +176,68 @@ describe('desktop analytics', () => {
 
     expect(maySecond?.count).toBe(1)
     expect(mayThird?.count).toBe(1)
+  })
+})
+
+describe('desktop task filtering and sorting', () => {
+  const alpha = {
+    ...completedTask('alpha', '2026-05-03T15:00:00Z'),
+    title: 'Alpha plan',
+    description: 'Launch checklist',
+    status: 'open' as const,
+    needs_review: true,
+    due_date: '2026-05-05',
+    due_bucket: 'due_soon' as const,
+    recurrence_frequency: 'weekly' as const,
+    subtask_count: 2,
+  }
+  const beta = {
+    ...completedTask('beta', '2026-05-02T15:00:00Z'),
+    title: 'Beta note',
+    status: 'open' as const,
+    group: { id: 'work', name: 'Work', is_system: false },
+    due_date: null,
+    due_bucket: 'no_date' as const,
+  }
+
+  it('applies every supported filter independently', () => {
+    const tasks = [alpha, beta]
+    const cases = [
+      { search: 'checklist' },
+      { groupId: 'inbox-1' },
+      { dueBucket: 'due_soon' },
+      { dueFrom: '2026-05-04' },
+      { dueTo: '2026-05-06' },
+      { review: 'needs_review' },
+      { recurrence: 'recurring' },
+      { subtasks: 'has_subtasks' },
+    ]
+    for (const filters of cases) {
+      expect(filterDesktopTasks(tasks, { ...EMPTY_DESKTOP_FILTERS, ...filters })).toEqual([alpha])
+    }
+  })
+
+  it('supports inverse filters and combined filtering', () => {
+    expect(filterDesktopTasks([alpha, beta], { ...EMPTY_DESKTOP_FILTERS, review: 'clear' })).toEqual([beta])
+    expect(filterDesktopTasks([alpha, beta], { ...EMPTY_DESKTOP_FILTERS, recurrence: 'one_off' })).toEqual([beta])
+    expect(filterDesktopTasks([alpha, beta], { ...EMPTY_DESKTOP_FILTERS, subtasks: 'no_subtasks' })).toEqual([beta])
+    expect(filterDesktopTasks([alpha, beta], { ...EMPTY_DESKTOP_FILTERS, search: 'plan', groupId: 'work' })).toEqual([])
+  })
+
+  it('sorts every supported desktop column in both directions', () => {
+    const tasks = [beta, alpha]
+    const expectations = {
+      title: { asc: ['alpha', 'beta'], desc: ['beta', 'alpha'] },
+      group: { asc: ['alpha', 'beta'], desc: ['beta', 'alpha'] },
+      due_date: { asc: ['alpha', 'beta'], desc: ['alpha', 'beta'] },
+      created_at: { asc: ['beta', 'alpha'], desc: ['alpha', 'beta'] },
+      completed_at: { asc: ['beta', 'alpha'], desc: ['alpha', 'beta'] },
+      review: { asc: ['beta', 'alpha'], desc: ['alpha', 'beta'] },
+      recurrence: { asc: ['beta', 'alpha'], desc: ['alpha', 'beta'] },
+    } as const
+    for (const key of Object.keys(expectations) as Array<keyof typeof expectations>) {
+      expect(sortDesktopTasks(tasks, { key, direction: 'asc' }).map((task) => task.id)).toEqual(expectations[key].asc)
+      expect(sortDesktopTasks(tasks, { key, direction: 'desc' }).map((task) => task.id)).toEqual(expectations[key].desc)
+    }
   })
 })

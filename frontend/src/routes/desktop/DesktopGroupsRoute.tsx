@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { CheckCircle2, ChevronRight, CircleDashed, FolderKanban, PenLine, Plus } from 'lucide-react'
 
-import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
+import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShellContext'
 import { refreshTaskScreenQueries } from '../../lib/taskScreenCache'
 import { GroupModal } from '../../components/GroupModal'
 import { GroupSummary } from '../../lib/api'

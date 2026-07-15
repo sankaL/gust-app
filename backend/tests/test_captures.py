@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
 import asyncio
 import logging
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import sqlalchemy as sa
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 import app.services.capture as capture_service_module
 from app.core.action_locks import ActionLockBusyError, user_action_lock
@@ -194,7 +193,7 @@ def _seed_capture(
                 input_type="text",
                 status=status,
                 transcript_text="Plan roadmap",
-                expires_at=datetime(2026, 3, 29, tzinfo=timezone.utc),
+                expires_at=datetime(2026, 3, 29, tzinfo=UTC),
             )
         )
     return capture_id
@@ -349,6 +348,7 @@ def test_voice_capture_rate_limit_returns_429(
             )
         ),
     )
+    _override_extraction_service(app, FakeExtractionService(responses=[{"tasks": []}]))
 
     first = client.post(
         "/captures/voice",
@@ -417,18 +417,20 @@ def test_capture_lock_contention_returns_429(
 def test_user_action_lock_blocks_concurrent_attempts_and_releases(client: TestClient) -> None:
     database_url = client.app.state.settings.database_url
 
-    with user_action_lock(
-        database_url=database_url,
-        user_id="11111111-1111-1111-1111-111111111111",
-        action="capture_voice",
+    with (
+        user_action_lock(
+            database_url=database_url,
+            user_id="11111111-1111-1111-1111-111111111111",
+            action="capture_voice",
+        ),
+        pytest.raises(ActionLockBusyError),
+        user_action_lock(
+            database_url=database_url,
+            user_id="11111111-1111-1111-1111-111111111111",
+            action="capture_voice",
+        ),
     ):
-        with pytest.raises(ActionLockBusyError):
-            with user_action_lock(
-                database_url=database_url,
-                user_id="11111111-1111-1111-1111-111111111111",
-                action="capture_voice",
-            ):
-                pass
+        pass
 
     with user_action_lock(
         database_url=database_url,
@@ -451,6 +453,7 @@ def test_voice_capture_transcribes_audio_and_returns_review_state(
         )
     )
     _override_transcription_service(app, fake_transcription)
+    _override_extraction_service(app, FakeExtractionService(responses=[{"tasks": []}]))
 
     response = client.post(
         "/captures/voice",
@@ -1216,7 +1219,7 @@ def test_submit_capture_is_scoped_to_the_authenticated_user(
                 input_type="text",
                 status="ready_for_review",
                 transcript_text="Secret task",
-                expires_at=datetime(2026, 3, 29, tzinfo=timezone.utc),
+                expires_at=datetime(2026, 3, 29, tzinfo=UTC),
             )
         )
 

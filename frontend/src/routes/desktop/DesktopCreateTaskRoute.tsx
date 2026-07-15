@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 
 import { TaskForm } from '../../components/TaskForm'
-import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
+import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShellContext'
 import { useNotifications } from '../../components/Notifications'
 import { ApiError, createTask, type TaskRecurrence } from '../../lib/api'
 import { dateTimeLocalToIso } from '../../lib/dateTime'

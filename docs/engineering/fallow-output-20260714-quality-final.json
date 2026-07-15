@@ -1,0 +1,3747 @@
+{
+  "kind": "combined",
+  "schema_version": 7,
+  "version": "3.5.0",
+  "elapsed_ms": 1557,
+  "check": {
+    "schema_version": 7,
+    "version": "3.5.0",
+    "elapsed_ms": 71,
+    "total_issues": 0,
+    "entry_points": {
+      "total": 31,
+      "sources": {
+        "manual_entry": 6,
+        "plugin": 25
+      }
+    },
+    "summary": {
+      "total_issues": 0,
+      "unused_files": 0,
+      "unused_exports": 0,
+      "unused_types": 0,
+      "private_type_leaks": 0,
+      "unused_dependencies": 0,
+      "unused_enum_members": 0,
+      "unused_class_members": 0,
+      "unused_store_members": 0,
+      "unprovided_injects": 0,
+      "unrendered_components": 0,
+      "unused_component_props": 0,
+      "unused_component_emits": 0,
+      "unused_component_inputs": 0,
+      "unused_component_outputs": 0,
+      "unused_svelte_events": 0,
+      "unused_server_actions": 0,
+      "unused_load_data_keys": 0,
+      "unresolved_imports": 0,
+      "unlisted_dependencies": 0,
+      "duplicate_exports": 0,
+      "type_only_dependencies": 0,
+      "test_only_dependencies": 0,
+      "dev_dependencies_in_production": 0,
+      "circular_dependencies": 0,
+      "re_export_cycles": 0,
+      "boundary_violations": 0,
+      "boundary_coverage_violations": 0,
+      "boundary_call_violations": 0,
+      "policy_violations": 0,
+      "stale_suppressions": 0,
+      "unused_catalog_entries": 0,
+      "empty_catalog_groups": 0,
+      "unresolved_catalog_references": 0,
+      "unused_dependency_overrides": 0,
+      "misconfigured_dependency_overrides": 0,
+      "invalid_client_exports": 0,
+      "mixed_client_server_barrels": 0,
+      "misplaced_directives": 0,
+      "route_collisions": 0,
+      "dynamic_segment_name_conflicts": 0
+    },
+    "unused_files": [],
+    "unused_exports": [],
+    "unused_types": [],
+    "private_type_leaks": [],
+    "unused_dependencies": [],
+    "unused_dev_dependencies": [],
+    "unused_optional_dependencies": [],
+    "unused_enum_members": [],
+    "unused_class_members": [],
+    "unresolved_imports": [],
+    "unlisted_dependencies": [],
+    "duplicate_exports": [],
+    "type_only_dependencies": [],
+    "test_only_dependencies": [],
+    "dev_dependencies_in_production": [],
+    "circular_dependencies": [],
+    "re_export_cycles": [],
+    "boundary_violations": [],
+    "boundary_coverage_violations": [],
+    "boundary_call_violations": [],
+    "policy_violations": [],
+    "stale_suppressions": [],
+    "unused_catalog_entries": [],
+    "empty_catalog_groups": [],
+    "unresolved_catalog_references": [],
+    "unused_dependency_overrides": [],
+    "misconfigured_dependency_overrides": [],
+    "invalid_client_exports": [],
+    "mixed_client_server_barrels": [],
+    "misplaced_directives": [],
+    "route_collisions": [],
+    "dynamic_segment_name_conflicts": []
+  },
+  "dupes": {
+    "clone_groups": [],
+    "clone_families": [],
+    "stats": {
+      "total_files": 106,
+      "files_with_clones": 0,
+      "total_lines": 11783,
+      "duplicated_lines": 0,
+      "total_tokens": 84953,
+      "duplicated_tokens": 0,
+      "clone_groups": 0,
+      "clone_instances": 0,
+      "duplication_percentage": 0.0
+    }
+  },
+  "health": {
+    "findings": [],
+    "summary": {
+      "files_analyzed": 113,
+      "functions_analyzed": 1479,
+      "functions_above_threshold": 0,
+      "max_cyclomatic_threshold": 20,
+      "max_cognitive_threshold": 15,
+      "max_crap_threshold": 30.0,
+      "max_unit_size_threshold": 60,
+      "files_scored": 103,
+      "average_maintainability": 87.4,
+      "coverage_model": "istanbul",
+      "istanbul_matched": 1481,
+      "istanbul_total": 1921,
+      "severity_critical_count": 0,
+      "severity_high_count": 0,
+      "severity_moderate_count": 0
+    },
+    "vital_signs": {
+      "dead_file_pct": 0.0,
+      "dead_export_pct": 0.0,
+      "avg_cyclomatic": 2.1,
+      "critical_complexity_pct": 0.0,
+      "p90_cyclomatic": 4,
+      "hotspot_count": 1,
+      "hotspot_top_pct_count": 2,
+      "maintainability_avg": 87.4,
+      "maintainability_low_pct": 3.9,
+      "unused_dep_count": 0,
+      "unused_deps_per_k_files": 0.0,
+      "circular_dep_count": 0,
+      "circular_deps_per_k_files": 0.0,
+      "counts": {
+        "total_files": 113,
+        "total_exports": 233,
+        "dead_files": 0,
+        "dead_exports": 0,
+        "total_lines": 11940,
+        "files_scored": 103,
+        "total_deps": 0
+      },
+      "unit_size_profile": {
+        "low_risk": 88.2,
+        "medium_risk": 7.3,
+        "high_risk": 2.9,
+        "very_high_risk": 1.6
+      },
+      "functions_over_60_loc_per_k": 15.6,
+      "unit_interfacing_profile": {
+        "low_risk": 92.6,
+        "medium_risk": 7.0,
+        "high_risk": 0.3,
+        "very_high_risk": 0.0
+      },
+      "p95_fan_in": 10,
+      "coupling_high_pct": 3.9,
+      "p95_render_fan_in": 2,
+      "render_fan_in_high_pct": 0.0,
+      "max_render_fan_in": 9,
+      "top_render_fan_in": [
+        {
+          "component": "SelectDropdown",
+          "path": "frontend/src/components/SelectDropdown.tsx",
+          "render_sites": 9,
+          "distinct_parents": 9
+        },
+        {
+          "component": "Card",
+          "path": "frontend/src/components/Card.tsx",
+          "render_sites": 6,
+          "distinct_parents": 6
+        },
+        {
+          "component": "PullToRefresh",
+          "path": "frontend/src/components/TaskScreenRefresh.tsx",
+          "render_sites": 5,
+          "distinct_parents": 5
+        },
+        {
+          "component": "DesktopTaskDetailModal",
+          "path": "frontend/src/components/DesktopTaskDetailModal.tsx",
+          "render_sites": 4,
+          "distinct_parents": 4
+        },
+        {
+          "component": "SessionGuard",
+          "path": "frontend/src/components/SessionGuard.tsx",
+          "render_sites": 4,
+          "distinct_parents": 4
+        },
+        {
+          "component": "TaskFormFields",
+          "path": "frontend/src/components/TaskFormFields.tsx",
+          "render_sites": 4,
+          "distinct_parents": 4
+        },
+        {
+          "component": "TaskScreenRefreshButton",
+          "path": "frontend/src/components/TaskScreenRefresh.tsx",
+          "render_sites": 4,
+          "distinct_parents": 4
+        },
+        {
+          "component": "Button",
+          "path": "frontend/src/components/Button.tsx",
+          "render_sites": 4,
+          "distinct_parents": 3
+        },
+        {
+          "component": "SessionRequiredCard",
+          "path": "frontend/src/components/SessionRequiredCard.tsx",
+          "render_sites": 3,
+          "distinct_parents": 3
+        },
+        {
+          "component": "StagingTable",
+          "path": "frontend/src/components/StagingTable.tsx",
+          "render_sites": 3,
+          "distinct_parents": 3
+        },
+        {
+          "component": "Field",
+          "path": "frontend/src/components/TaskRecurrenceFields.tsx",
+          "render_sites": 3,
+          "distinct_parents": 3
+        },
+        {
+          "component": "DatePicker",
+          "path": "frontend/src/components/DatePicker.tsx",
+          "render_sites": 4,
+          "distinct_parents": 2
+        },
+        {
+          "component": "PortraitOrientationGuard",
+          "path": "frontend/src/components/PortraitOrientationGuard.tsx",
+          "render_sites": 3,
+          "distinct_parents": 2
+        },
+        {
+          "component": "DesktopStatusTasksRoute",
+          "path": "frontend/src/components/DesktopStatusTasksRoute.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "DesktopTaskTable",
+          "path": "frontend/src/components/DesktopTaskTable.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "EditExtractedTaskModal",
+          "path": "frontend/src/components/EditExtractedTaskModal.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "ConfidenceBadge",
+          "path": "frontend/src/components/ExtractedTaskCard.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "NeedsReview",
+          "path": "frontend/src/components/ExtractedTaskCard.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "TaskActions",
+          "path": "frontend/src/components/ExtractedTaskCard.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "TaskBadges",
+          "path": "frontend/src/components/ExtractedTaskCard.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        }
+      ],
+      "total_loc": 11940
+    },
+    "file_scores": [
+      {
+        "path": "frontend/src/routes/LandingRoute.tsx",
+        "fan_in": 1,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.05,
+        "maintainability_index": 95.7,
+        "total_cyclomatic": 29,
+        "total_cognitive": 25,
+        "function_count": 9,
+        "lines": 590,
+        "crap_max": 21.5,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/GroupModal.tsx",
+        "fan_in": 1,
+        "fan_out": 4,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.42,
+        "maintainability_index": 81.0,
+        "total_cyclomatic": 55,
+        "total_cognitive": 38,
+        "function_count": 23,
+        "lines": 131,
+        "crap_max": 21.2,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopTaskDetailView.tsx",
+        "fan_in": 1,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 1.28,
+        "maintainability_index": 54.4,
+        "total_cyclomatic": 91,
+        "total_cognitive": 52,
+        "function_count": 43,
+        "lines": 71,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useDesktopTaskDetail.ts",
+        "fan_in": 1,
+        "fan_out": 7,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.78,
+        "maintainability_index": 68.3,
+        "total_cyclomatic": 108,
+        "total_cognitive": 79,
+        "function_count": 47,
+        "lines": 138,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskPreviewModal.tsx",
+        "fan_in": 3,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.74,
+        "maintainability_index": 70.6,
+        "total_cyclomatic": 72,
+        "total_cognitive": 61,
+        "function_count": 28,
+        "lines": 97,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/task-detail/useTaskDetailController.tsx",
+        "fan_in": 1,
+        "fan_out": 8,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.57,
+        "maintainability_index": 74.1,
+        "total_cyclomatic": 146,
+        "total_cognitive": 99,
+        "function_count": 75,
+        "lines": 257,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useTaskPreviewMutations.ts",
+        "fan_in": 1,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.49,
+        "maintainability_index": 78.1,
+        "total_cyclomatic": 70,
+        "total_cognitive": 32,
+        "function_count": 37,
+        "lines": 142,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopDashboardRoute.tsx",
+        "fan_in": 2,
+        "fan_out": 8,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.38,
+        "maintainability_index": 79.8,
+        "total_cyclomatic": 36,
+        "total_cognitive": 28,
+        "function_count": 20,
+        "lines": 96,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/SelectDropdown.tsx",
+        "fan_in": 8,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.53,
+        "maintainability_index": 81.3,
+        "total_cyclomatic": 77,
+        "total_cognitive": 84,
+        "function_count": 40,
+        "lines": 145,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useDesktopCaptureReview.ts",
+        "fan_in": 2,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.44,
+        "maintainability_index": 82.4,
+        "total_cyclomatic": 46,
+        "total_cognitive": 29,
+        "function_count": 27,
+        "lines": 104,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useDesktopTaskActions.ts",
+        "fan_in": 6,
+        "fan_out": 6,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.27,
+        "maintainability_index": 84.1,
+        "total_cyclomatic": 57,
+        "total_cognitive": 28,
+        "function_count": 31,
+        "lines": 211,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useDesktopShellState.ts",
+        "fan_in": 1,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.28,
+        "maintainability_index": 84.4,
+        "total_cyclomatic": 38,
+        "total_cognitive": 31,
+        "function_count": 22,
+        "lines": 134,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/ManageGroupsRoute.tsx",
+        "fan_in": 3,
+        "fan_out": 6,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.23,
+        "maintainability_index": 85.3,
+        "total_cyclomatic": 62,
+        "total_cognitive": 37,
+        "function_count": 43,
+        "lines": 264,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopCaptureReviewView.tsx",
+        "fan_in": 1,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.57,
+        "maintainability_index": 87.3,
+        "total_cyclomatic": 12,
+        "total_cognitive": 8,
+        "function_count": 4,
+        "lines": 21,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopCreateTaskRoute.tsx",
+        "fan_in": 1,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.14,
+        "maintainability_index": 88.6,
+        "total_cyclomatic": 14,
+        "total_cognitive": 13,
+        "function_count": 8,
+        "lines": 99,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/taskQueryCache.ts",
+        "fan_in": 7,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.28,
+        "maintainability_index": 88.8,
+        "total_cyclomatic": 64,
+        "total_cognitive": 34,
+        "function_count": 26,
+        "lines": 225,
+        "crap_max": 20.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useDesktopTaskTableState.ts",
+        "fan_in": 2,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.33,
+        "maintainability_index": 85.7,
+        "total_cyclomatic": 34,
+        "total_cognitive": 25,
+        "function_count": 15,
+        "lines": 103,
+        "crap_max": 19.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopTaskTableView.tsx",
+        "fan_in": 1,
+        "fan_out": 4,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.8,
+        "maintainability_index": 69.6,
+        "total_cyclomatic": 63,
+        "total_cognitive": 34,
+        "function_count": 32,
+        "lines": 79,
+        "crap_max": 18.7,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/TaskDetailRoute.tsx",
+        "fan_in": 3,
+        "fan_out": 4,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.87,
+        "maintainability_index": 81.6,
+        "total_cyclomatic": 20,
+        "total_cognitive": 11,
+        "function_count": 10,
+        "lines": 23,
+        "crap_max": 17.9,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/CaptureRoute.tsx",
+        "fan_in": 4,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.5,
+        "maintainability_index": 79.5,
+        "total_cyclomatic": 34,
+        "total_cognitive": 19,
+        "function_count": 13,
+        "lines": 68,
+        "crap_max": 16.7,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopGroupsRoute.tsx",
+        "fan_in": 2,
+        "fan_out": 4,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.08,
+        "maintainability_index": 91.2,
+        "total_cyclomatic": 14,
+        "total_cognitive": 13,
+        "function_count": 9,
+        "lines": 167,
+        "crap_max": 15.5,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/api.ts",
+        "fan_in": 74,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.1,
+        "maintainability_index": 94.2,
+        "total_cyclomatic": 56,
+        "total_cognitive": 20,
+        "function_count": 33,
+        "lines": 564,
+        "crap_max": 15.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskPreviewView.tsx",
+        "fan_in": 1,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 1.35,
+        "maintainability_index": 57.2,
+        "total_cyclomatic": 62,
+        "total_cognitive": 42,
+        "function_count": 28,
+        "lines": 46,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/PortraitOrientationGuard.tsx",
+        "fan_in": 2,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.22,
+        "maintainability_index": 89.0,
+        "total_cyclomatic": 23,
+        "total_cognitive": 16,
+        "function_count": 10,
+        "lines": 106,
+        "crap_max": 14.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/Notifications.tsx",
+        "fan_in": 18,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.18,
+        "maintainability_index": 94.6,
+        "total_cyclomatic": 81,
+        "total_cognitive": 56,
+        "function_count": 44,
+        "lines": 438,
+        "crap_max": 14.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useTaskRouteQueries.ts",
+        "fan_in": 2,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.69,
+        "maintainability_index": 78.3,
+        "total_cyclomatic": 27,
+        "total_cognitive": 22,
+        "function_count": 4,
+        "lines": 39,
+        "crap_max": 14.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopTaskDetailModal.tsx",
+        "fan_in": 5,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.73,
+        "maintainability_index": 71.8,
+        "total_cyclomatic": 35,
+        "total_cognitive": 29,
+        "function_count": 14,
+        "lines": 48,
+        "crap_max": 13.9,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "fan_in": 1,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.33,
+        "maintainability_index": 84.6,
+        "total_cyclomatic": 60,
+        "total_cognitive": 47,
+        "function_count": 20,
+        "lines": 183,
+        "crap_max": 13.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskScreenRefresh.tsx",
+        "fan_in": 8,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.18,
+        "maintainability_index": 94.6,
+        "total_cyclomatic": 26,
+        "total_cognitive": 19,
+        "function_count": 8,
+        "lines": 146,
+        "crap_max": 13.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopDashboardView.tsx",
+        "fan_in": 1,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.44,
+        "maintainability_index": 81.3,
+        "total_cyclomatic": 46,
+        "total_cognitive": 28,
+        "function_count": 25,
+        "lines": 105,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/capture/useCaptureController.ts",
+        "fan_in": 1,
+        "fan_out": 6,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.36,
+        "maintainability_index": 81.4,
+        "total_cyclomatic": 49,
+        "total_cognitive": 39,
+        "function_count": 31,
+        "lines": 138,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/AllTasksView.tsx",
+        "fan_in": 2,
+        "fan_out": 4,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.34,
+        "maintainability_index": 84.0,
+        "total_cyclomatic": 16,
+        "total_cognitive": 12,
+        "function_count": 6,
+        "lines": 47,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/ExtractedTaskCard.tsx",
+        "fan_in": 2,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.33,
+        "maintainability_index": 85.7,
+        "total_cyclomatic": 41,
+        "total_cognitive": 33,
+        "function_count": 15,
+        "lines": 126,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/taskFormModel.ts",
+        "fan_in": 11,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.32,
+        "maintainability_index": 86.0,
+        "total_cyclomatic": 69,
+        "total_cognitive": 53,
+        "function_count": 12,
+        "lines": 213,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useCompletedTaskRestore.ts",
+        "fan_in": 1,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.24,
+        "maintainability_index": 87.3,
+        "total_cyclomatic": 18,
+        "total_cognitive": 8,
+        "function_count": 11,
+        "lines": 75,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useOpenTaskActions.ts",
+        "fan_in": 1,
+        "fan_out": 4,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.21,
+        "maintainability_index": 87.3,
+        "total_cyclomatic": 39,
+        "total_cognitive": 18,
+        "function_count": 21,
+        "lines": 182,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/StagingTable.tsx",
+        "fan_in": 2,
+        "fan_out": 4,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.2,
+        "maintainability_index": 87.6,
+        "total_cyclomatic": 31,
+        "total_cognitive": 32,
+        "function_count": 14,
+        "lines": 153,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/OpenTaskCard.tsx",
+        "fan_in": 3,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.21,
+        "maintainability_index": 88.2,
+        "total_cyclomatic": 27,
+        "total_cognitive": 23,
+        "function_count": 13,
+        "lines": 130,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopCaptureRoute.tsx",
+        "fan_in": 1,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.39,
+        "maintainability_index": 88.6,
+        "total_cyclomatic": 7,
+        "total_cognitive": 8,
+        "function_count": 4,
+        "lines": 18,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/CompletedTaskList.tsx",
+        "fan_in": 1,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.24,
+        "maintainability_index": 90.0,
+        "total_cyclomatic": 17,
+        "total_cognitive": 9,
+        "function_count": 8,
+        "lines": 72,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/taskScreenCache.ts",
+        "fan_in": 15,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.2,
+        "maintainability_index": 91.2,
+        "total_cyclomatic": 16,
+        "total_cognitive": 14,
+        "function_count": 4,
+        "lines": 79,
+        "crap_max": 12.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/desktopData.ts",
+        "fan_in": 10,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.25,
+        "maintainability_index": 89.7,
+        "total_cyclomatic": 166,
+        "total_cognitive": 97,
+        "function_count": 74,
+        "lines": 669,
+        "crap_max": 11.2,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TasksRouteView.tsx",
+        "fan_in": 1,
+        "fan_out": 9,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.24,
+        "maintainability_index": 83.6,
+        "total_cyclomatic": 18,
+        "total_cognitive": 7,
+        "function_count": 3,
+        "lines": 74,
+        "crap_max": 11.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/CompletedTasksRoute.tsx",
+        "fan_in": 3,
+        "fan_out": 10,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.33,
+        "maintainability_index": 80.5,
+        "total_cyclomatic": 20,
+        "total_cognitive": 20,
+        "function_count": 7,
+        "lines": 60,
+        "crap_max": 10.4,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopEditExtractedTaskModal.tsx",
+        "fan_in": 2,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.23,
+        "maintainability_index": 85.9,
+        "total_cyclomatic": 39,
+        "total_cognitive": 27,
+        "function_count": 23,
+        "lines": 167,
+        "crap_max": 10.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/OpenTaskCardContent.tsx",
+        "fan_in": 1,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.22,
+        "maintainability_index": 90.6,
+        "total_cyclomatic": 40,
+        "total_cognitive": 31,
+        "function_count": 14,
+        "lines": 179,
+        "crap_max": 10.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/EditExtractedTaskModal.tsx",
+        "fan_in": 3,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.12,
+        "maintainability_index": 90.9,
+        "total_cyclomatic": 20,
+        "total_cognitive": 26,
+        "function_count": 3,
+        "lines": 168,
+        "crap_max": 10.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskRecurrenceFields.tsx",
+        "fan_in": 1,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.59,
+        "maintainability_index": 76.8,
+        "total_cyclomatic": 35,
+        "total_cognitive": 16,
+        "function_count": 15,
+        "lines": 59,
+        "crap_max": 9.6,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/config.ts",
+        "fan_in": 3,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.32,
+        "maintainability_index": 90.4,
+        "total_cyclomatic": 25,
+        "total_cognitive": 15,
+        "function_count": 6,
+        "lines": 77,
+        "crap_max": 9.6,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DatePicker.tsx",
+        "fan_in": 3,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.31,
+        "maintainability_index": 87.9,
+        "total_cyclomatic": 119,
+        "total_cognitive": 73,
+        "function_count": 67,
+        "lines": 390,
+        "crap_max": 9.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/device.ts",
+        "fan_in": 3,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.5,
+        "maintainability_index": 95.2,
+        "total_cyclomatic": 8,
+        "total_cognitive": 6,
+        "function_count": 1,
+        "lines": 16,
+        "crap_max": 8.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopGroupDetailRoute.tsx",
+        "fan_in": 2,
+        "fan_out": 6,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.54,
+        "maintainability_index": 80.9,
+        "total_cyclomatic": 19,
+        "total_cognitive": 18,
+        "function_count": 5,
+        "lines": 35,
+        "crap_max": 8.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/LoginRoute.tsx",
+        "fan_in": 3,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.14,
+        "maintainability_index": 90.3,
+        "total_cyclomatic": 13,
+        "total_cognitive": 12,
+        "function_count": 2,
+        "lines": 93,
+        "crap_max": 8.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/AppShellView.tsx",
+        "fan_in": 1,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.11,
+        "maintainability_index": 91.2,
+        "total_cyclomatic": 19,
+        "total_cognitive": 15,
+        "function_count": 9,
+        "lines": 169,
+        "crap_max": 8.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/capture/useRecordingWakeLock.ts",
+        "fan_in": 1,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.35,
+        "maintainability_index": 89.5,
+        "total_cyclomatic": 28,
+        "total_cognitive": 18,
+        "function_count": 12,
+        "lines": 81,
+        "crap_max": 7.6,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/capture/CaptureView.tsx",
+        "fan_in": 1,
+        "fan_out": 6,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.45,
+        "maintainability_index": 78.7,
+        "total_cyclomatic": 38,
+        "total_cognitive": 24,
+        "function_count": 15,
+        "lines": 84,
+        "crap_max": 6.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/Card.tsx",
+        "fan_in": 4,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.12,
+        "maintainability_index": 96.4,
+        "total_cyclomatic": 7,
+        "total_cognitive": 8,
+        "function_count": 1,
+        "lines": 57,
+        "crap_max": 7.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useAllTasksViewModel.tsx",
+        "fan_in": 1,
+        "fan_out": 6,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.41,
+        "maintainability_index": 79.9,
+        "total_cyclomatic": 45,
+        "total_cognitive": 33,
+        "function_count": 27,
+        "lines": 111,
+        "crap_max": 4.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/SessionGuard.tsx",
+        "fan_in": 4,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.08,
+        "maintainability_index": 93.2,
+        "total_cyclomatic": 5,
+        "total_cognitive": 6,
+        "function_count": 1,
+        "lines": 61,
+        "crap_max": 6.6,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/TasksRoute.tsx",
+        "fan_in": 3,
+        "fan_out": 9,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.33,
+        "maintainability_index": 80.9,
+        "total_cyclomatic": 29,
+        "total_cognitive": 22,
+        "function_count": 17,
+        "lines": 89,
+        "crap_max": 6.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskFormFields.tsx",
+        "fan_in": 5,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.26,
+        "maintainability_index": 85.0,
+        "total_cyclomatic": 21,
+        "total_cognitive": 11,
+        "function_count": 10,
+        "lines": 81,
+        "crap_max": 6.3,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskForm.tsx",
+        "fan_in": 3,
+        "fan_out": 4,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.18,
+        "maintainability_index": 88.2,
+        "total_cyclomatic": 32,
+        "total_cognitive": 37,
+        "function_count": 15,
+        "lines": 175,
+        "crap_max": 6.3,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/router.tsx",
+        "fan_in": 1,
+        "fan_out": 17,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.24,
+        "maintainability_index": 81.2,
+        "total_cyclomatic": 30,
+        "total_cognitive": 0,
+        "function_count": 30,
+        "lines": 125,
+        "crap_max": 2.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/dateTime.ts",
+        "fan_in": 4,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.24,
+        "maintainability_index": 92.8,
+        "total_cyclomatic": 20,
+        "total_cognitive": 11,
+        "function_count": 9,
+        "lines": 85,
+        "crap_max": 6.2,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useAppShellController.ts",
+        "fan_in": 1,
+        "fan_out": 4,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.32,
+        "maintainability_index": 84.0,
+        "total_cyclomatic": 45,
+        "total_cognitive": 37,
+        "function_count": 30,
+        "lines": 141,
+        "crap_max": 6.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskGroupTabs.tsx",
+        "fan_in": 1,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.41,
+        "maintainability_index": 84.9,
+        "total_cyclomatic": 24,
+        "total_cognitive": 11,
+        "function_count": 15,
+        "lines": 59,
+        "crap_max": 6.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/task-detail/TaskDetailView.tsx",
+        "fan_in": 2,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.31,
+        "maintainability_index": 85.2,
+        "total_cyclomatic": 56,
+        "total_cognitive": 25,
+        "function_count": 31,
+        "lines": 178,
+        "crap_max": 6.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/capture/captureModel.ts",
+        "fan_in": 3,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.34,
+        "maintainability_index": 88.3,
+        "total_cyclomatic": 15,
+        "total_cognitive": 5,
+        "function_count": 7,
+        "lines": 44,
+        "crap_max": 6.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useDeviceRedirect.ts",
+        "fan_in": 9,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.24,
+        "maintainability_index": 91.9,
+        "total_cyclomatic": 9,
+        "total_cognitive": 9,
+        "function_count": 3,
+        "lines": 37,
+        "crap_max": 6.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskFormSections.tsx",
+        "fan_in": 2,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.15,
+        "maintainability_index": 92.7,
+        "total_cyclomatic": 16,
+        "total_cognitive": 10,
+        "function_count": 10,
+        "lines": 105,
+        "crap_max": 6.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/SessionRequiredCard.tsx",
+        "fan_in": 3,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.09,
+        "maintainability_index": 92.9,
+        "total_cyclomatic": 9,
+        "total_cognitive": 9,
+        "function_count": 4,
+        "lines": 105,
+        "crap_max": 6.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/microphone.ts",
+        "fan_in": 4,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.24,
+        "maintainability_index": 92.8,
+        "total_cyclomatic": 17,
+        "total_cognitive": 11,
+        "function_count": 7,
+        "lines": 71,
+        "crap_max": 5.6,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/RootRoute.tsx",
+        "fan_in": 3,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.15,
+        "maintainability_index": 91.1,
+        "total_cyclomatic": 23,
+        "total_cognitive": 13,
+        "function_count": 13,
+        "lines": 156,
+        "crap_max": 5.2,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopShell.tsx",
+        "fan_in": 3,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.11,
+        "maintainability_index": 89.5,
+        "total_cyclomatic": 6,
+        "total_cognitive": 9,
+        "function_count": 2,
+        "lines": 56,
+        "crap_max": 5.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/Skeleton.tsx",
+        "fan_in": 1,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.16,
+        "maintainability_index": 96.9,
+        "total_cyclomatic": 5,
+        "total_cognitive": 4,
+        "function_count": 1,
+        "lines": 32,
+        "crap_max": 5.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskDeleteDialog.tsx",
+        "fan_in": 2,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.05,
+        "maintainability_index": 98.5,
+        "total_cyclomatic": 5,
+        "total_cognitive": 10,
+        "function_count": 1,
+        "lines": 104,
+        "crap_max": 5.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopStatusTasksRoute.tsx",
+        "fan_in": 2,
+        "fan_out": 7,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.19,
+        "maintainability_index": 86.0,
+        "total_cyclomatic": 16,
+        "total_cognitive": 20,
+        "function_count": 8,
+        "lines": 83,
+        "crap_max": 4.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/capture/useCaptureRecorder.ts",
+        "fan_in": 1,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.24,
+        "maintainability_index": 88.4,
+        "total_cyclomatic": 20,
+        "total_cognitive": 14,
+        "function_count": 12,
+        "lines": 84,
+        "crap_max": 4.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/AddSubtaskInput.tsx",
+        "fan_in": 1,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.17,
+        "maintainability_index": 96.3,
+        "total_cyclomatic": 6,
+        "total_cognitive": 3,
+        "function_count": 3,
+        "lines": 36,
+        "crap_max": 4.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/sessionPresentation.ts",
+        "fan_in": 4,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.52,
+        "maintainability_index": 89.4,
+        "total_cyclomatic": 13,
+        "total_cognitive": 7,
+        "function_count": 4,
+        "lines": 25,
+        "crap_max": 4.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/GroupedOpenTaskList.tsx",
+        "fan_in": 1,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.14,
+        "maintainability_index": 91.4,
+        "total_cyclomatic": 9,
+        "total_cognitive": 10,
+        "function_count": 5,
+        "lines": 63,
+        "crap_max": 4.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useDesktopTaskCollections.ts",
+        "fan_in": 2,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.75,
+        "maintainability_index": 88.4,
+        "total_cyclomatic": 12,
+        "total_cognitive": 11,
+        "function_count": 5,
+        "lines": 16,
+        "crap_max": 3.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/AppShell.tsx",
+        "fan_in": 6,
+        "fan_out": 6,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.1,
+        "maintainability_index": 89.2,
+        "total_cyclomatic": 5,
+        "total_cognitive": 5,
+        "function_count": 3,
+        "lines": 51,
+        "crap_max": 3.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopGroupDetailView.tsx",
+        "fan_in": 1,
+        "fan_out": 5,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.29,
+        "maintainability_index": 89.2,
+        "total_cyclomatic": 6,
+        "total_cognitive": 7,
+        "function_count": 6,
+        "lines": 21,
+        "crap_max": 2.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/CompletedTasksRouteView.tsx",
+        "fan_in": 1,
+        "fan_out": 6,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.08,
+        "maintainability_index": 89.8,
+        "total_cyclomatic": 7,
+        "total_cognitive": 23,
+        "function_count": 4,
+        "lines": 92,
+        "crap_max": 3.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useTaskListRouteState.ts",
+        "fan_in": 2,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.19,
+        "maintainability_index": 89.9,
+        "total_cyclomatic": 10,
+        "total_cognitive": 5,
+        "function_count": 8,
+        "lines": 52,
+        "crap_max": 3.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useDesktopTaskPreview.ts",
+        "fan_in": 3,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.3,
+        "maintainability_index": 96.4,
+        "total_cyclomatic": 6,
+        "total_cognitive": 4,
+        "function_count": 4,
+        "lines": 20,
+        "crap_max": 3.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useFloatingDismiss.ts",
+        "fan_in": 4,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.47,
+        "maintainability_index": 91.5,
+        "total_cyclomatic": 14,
+        "total_cognitive": 7,
+        "function_count": 8,
+        "lines": 30,
+        "crap_max": 3.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/VirtualTaskRows.tsx",
+        "fan_in": 2,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.11,
+        "maintainability_index": 92.3,
+        "total_cyclomatic": 7,
+        "total_cognitive": 6,
+        "function_count": 5,
+        "lines": 61,
+        "crap_max": 3.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/sessionSecurity.ts",
+        "fan_in": 8,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.3,
+        "maintainability_index": 95.4,
+        "total_cyclomatic": 3,
+        "total_cognitive": 1,
+        "function_count": 1,
+        "lines": 10,
+        "crap_max": 3.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/Button.tsx",
+        "fan_in": 2,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.06,
+        "maintainability_index": 98.3,
+        "total_cyclomatic": 3,
+        "total_cognitive": 3,
+        "function_count": 1,
+        "lines": 47,
+        "crap_max": 3.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopTaskTable.tsx",
+        "fan_in": 2,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.12,
+        "maintainability_index": 92.7,
+        "total_cyclomatic": 3,
+        "total_cognitive": 10,
+        "function_count": 2,
+        "lines": 25,
+        "crap_max": 2.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopTaskDetailRoute.tsx",
+        "fan_in": 2,
+        "fan_out": 3,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.06,
+        "maintainability_index": 92.8,
+        "total_cyclomatic": 3,
+        "total_cognitive": 6,
+        "function_count": 2,
+        "lines": 47,
+        "crap_max": 2.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopTaskGroupField.tsx",
+        "fan_in": 1,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.1,
+        "maintainability_index": 93.3,
+        "total_cyclomatic": 4,
+        "total_cognitive": 4,
+        "function_count": 3,
+        "lines": 39,
+        "crap_max": 2.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/lib/taskMutationLocks.ts",
+        "fan_in": 2,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.25,
+        "maintainability_index": 97.0,
+        "total_cyclomatic": 5,
+        "total_cognitive": 2,
+        "function_count": 3,
+        "lines": 20,
+        "crap_max": 2.1,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/ExtractingLoader.tsx",
+        "fan_in": 2,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.1,
+        "maintainability_index": 94.2,
+        "total_cyclomatic": 6,
+        "total_cognitive": 3,
+        "function_count": 5,
+        "lines": 59,
+        "crap_max": 2.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/hooks/useSessionGroups.ts",
+        "fan_in": 2,
+        "fan_out": 2,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.13,
+        "maintainability_index": 94.4,
+        "total_cyclomatic": 2,
+        "total_cognitive": 1,
+        "function_count": 1,
+        "lines": 15,
+        "crap_max": 2.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopCompletedRoute.tsx",
+        "fan_in": 2,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.08,
+        "maintainability_index": 96.6,
+        "total_cyclomatic": 1,
+        "total_cognitive": 0,
+        "function_count": 1,
+        "lines": 13,
+        "crap_max": 2.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/TaskRestoreDialog.tsx",
+        "fan_in": 1,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.03,
+        "maintainability_index": 99.1,
+        "total_cyclomatic": 2,
+        "total_cognitive": 2,
+        "function_count": 1,
+        "lines": 67,
+        "crap_max": 2.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/DesktopShellContext.tsx",
+        "fan_in": 10,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.09,
+        "maintainability_index": 95.4,
+        "total_cyclomatic": 3,
+        "total_cognitive": 2,
+        "function_count": 3,
+        "lines": 33,
+        "crap_max": 1.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/providers.tsx",
+        "fan_in": 7,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.07,
+        "maintainability_index": 96.0,
+        "total_cyclomatic": 2,
+        "total_cognitive": 1,
+        "function_count": 2,
+        "lines": 29,
+        "crap_max": 1.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopTasksRoute.tsx",
+        "fan_in": 2,
+        "fan_out": 1,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.08,
+        "maintainability_index": 96.6,
+        "total_cyclomatic": 1,
+        "total_cognitive": 0,
+        "function_count": 1,
+        "lines": 13,
+        "crap_max": 1.0,
+        "crap_above_threshold": 0
+      },
+      {
+        "path": "frontend/src/components/AppShellActions.tsx",
+        "fan_in": 5,
+        "fan_out": 0,
+        "dead_code_ratio": 0.0,
+        "complexity_density": 0.08,
+        "maintainability_index": 99.4,
+        "total_cyclomatic": 1,
+        "total_cognitive": 1,
+        "function_count": 1,
+        "lines": 12,
+        "crap_max": 1.0,
+        "crap_above_threshold": 0
+      }
+    ],
+    "hotspots": [
+      {
+        "path": "frontend/src/routes/TaskDetailRoute.tsx",
+        "score": 70.3,
+        "commits": 18,
+        "weighted_commits": 8.79,
+        "lines_added": 1794,
+        "lines_deleted": 837,
+        "complexity_density": 0.87,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/TaskDetailRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/TaskDetailRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/TasksRoute.tsx",
+        "score": 37.9,
+        "commits": 26,
+        "weighted_commits": 12.51,
+        "lines_added": 1748,
+        "lines_deleted": 1004,
+        "complexity_density": 0.33,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/TasksRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/TasksRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/CaptureRoute.tsx",
+        "score": 37.8,
+        "commits": 18,
+        "weighted_commits": 8.23,
+        "lines_added": 1442,
+        "lines_deleted": 617,
+        "complexity_density": 0.5,
+        "fan_in": 4,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/CaptureRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/CaptureRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/AllTasksView.tsx",
+        "score": 30.3,
+        "commits": 20,
+        "weighted_commits": 9.69,
+        "lines_added": 878,
+        "lines_deleted": 518,
+        "complexity_density": 0.34,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/AllTasksView.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/AllTasksView.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/CompletedTasksRoute.tsx",
+        "score": 29.8,
+        "commits": 18,
+        "weighted_commits": 9.84,
+        "lines_added": 592,
+        "lines_deleted": 272,
+        "complexity_density": 0.33,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/CompletedTasksRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/CompletedTasksRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/TaskPreviewModal.tsx",
+        "score": 20.1,
+        "commits": 4,
+        "weighted_commits": 2.95,
+        "lines_added": 960,
+        "lines_deleted": 150,
+        "complexity_density": 0.74,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/TaskPreviewModal.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/TaskPreviewModal.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/SelectDropdown.tsx",
+        "score": 16.7,
+        "commits": 6,
+        "weighted_commits": 3.43,
+        "lines_added": 374,
+        "lines_deleted": 121,
+        "complexity_density": 0.53,
+        "fan_in": 8,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/SelectDropdown.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/SelectDropdown.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/router.tsx",
+        "score": 12.7,
+        "commits": 10,
+        "weighted_commits": 5.74,
+        "lines_added": 108,
+        "lines_deleted": 14,
+        "complexity_density": 0.24,
+        "fan_in": 1,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/router.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/router.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/ExtractedTaskCard.tsx",
+        "score": 12.3,
+        "commits": 9,
+        "weighted_commits": 4.06,
+        "lines_added": 553,
+        "lines_deleted": 291,
+        "complexity_density": 0.33,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/ExtractedTaskCard.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/ExtractedTaskCard.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopDashboardRoute.tsx",
+        "score": 10.3,
+        "commits": 5,
+        "weighted_commits": 2.95,
+        "lines_added": 959,
+        "lines_deleted": 445,
+        "complexity_density": 0.38,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/desktop/DesktopDashboardRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/desktop/DesktopDashboardRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/StagingTable.tsx",
+        "score": 10.3,
+        "commits": 11,
+        "weighted_commits": 5.63,
+        "lines_added": 503,
+        "lines_deleted": 307,
+        "complexity_density": 0.2,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/StagingTable.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/StagingTable.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/ManageGroupsRoute.tsx",
+        "score": 9.6,
+        "commits": 9,
+        "weighted_commits": 4.53,
+        "lines_added": 622,
+        "lines_deleted": 239,
+        "complexity_density": 0.23,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/ManageGroupsRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/ManageGroupsRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/OpenTaskCard.tsx",
+        "score": 9.0,
+        "commits": 10,
+        "weighted_commits": 4.64,
+        "lines_added": 370,
+        "lines_deleted": 42,
+        "complexity_density": 0.21,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/OpenTaskCard.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/OpenTaskCard.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopGroupDetailRoute.tsx",
+        "score": 8.8,
+        "commits": 3,
+        "weighted_commits": 1.77,
+        "lines_added": 284,
+        "lines_deleted": 98,
+        "complexity_density": 0.54,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/desktop/DesktopGroupDetailRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/desktop/DesktopGroupDetailRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/lib/taskQueryCache.ts",
+        "score": 7.9,
+        "commits": 5,
+        "weighted_commits": 3.07,
+        "lines_added": 280,
+        "lines_deleted": 56,
+        "complexity_density": 0.28,
+        "fan_in": 7,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/lib/taskQueryCache.ts`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/lib/taskQueryCache.ts` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/lib/desktopData.ts",
+        "score": 7.8,
+        "commits": 5,
+        "weighted_commits": 3.38,
+        "lines_added": 719,
+        "lines_deleted": 84,
+        "complexity_density": 0.25,
+        "fan_in": 10,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/lib/desktopData.ts`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/lib/desktopData.ts` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/AppShell.tsx",
+        "score": 7.5,
+        "commits": 16,
+        "weighted_commits": 8.13,
+        "lines_added": 499,
+        "lines_deleted": 101,
+        "complexity_density": 0.1,
+        "fan_in": 6,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/AppShell.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/AppShell.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/hooks/useDesktopTaskActions.ts",
+        "score": 6.9,
+        "commits": 4,
+        "weighted_commits": 2.79,
+        "lines_added": 285,
+        "lines_deleted": 64,
+        "complexity_density": 0.27,
+        "fan_in": 6,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/hooks/useDesktopTaskActions.ts`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/hooks/useDesktopTaskActions.ts` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/TaskFormFields.tsx",
+        "score": 6.9,
+        "commits": 5,
+        "weighted_commits": 2.87,
+        "lines_added": 488,
+        "lines_deleted": 115,
+        "complexity_density": 0.26,
+        "fan_in": 5,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/TaskFormFields.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/TaskFormFields.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/lib/config.ts",
+        "score": 6.7,
+        "commits": 4,
+        "weighted_commits": 2.29,
+        "lines_added": 83,
+        "lines_deleted": 7,
+        "complexity_density": 0.32,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/lib/config.ts`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/lib/config.ts` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/TaskForm.tsx",
+        "score": 5.9,
+        "commits": 6,
+        "weighted_commits": 3.58,
+        "lines_added": 309,
+        "lines_deleted": 71,
+        "complexity_density": 0.18,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/TaskForm.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/TaskForm.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/DesktopShell.tsx",
+        "score": 5.8,
+        "commits": 8,
+        "weighted_commits": 5.72,
+        "lines_added": 709,
+        "lines_deleted": 133,
+        "complexity_density": 0.11,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/DesktopShell.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/DesktopShell.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/EditExtractedTaskModal.tsx",
+        "score": 5.4,
+        "commits": 9,
+        "weighted_commits": 4.92,
+        "lines_added": 647,
+        "lines_deleted": 480,
+        "complexity_density": 0.12,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/EditExtractedTaskModal.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/EditExtractedTaskModal.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/lib/api.ts",
+        "score": 5.1,
+        "commits": 9,
+        "weighted_commits": 5.58,
+        "lines_added": 620,
+        "lines_deleted": 57,
+        "complexity_density": 0.1,
+        "fan_in": 74,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/lib/api.ts`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/lib/api.ts` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/DesktopEditExtractedTaskModal.tsx",
+        "score": 4.8,
+        "commits": 3,
+        "weighted_commits": 2.29,
+        "lines_added": 630,
+        "lines_deleted": 209,
+        "complexity_density": 0.23,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/DesktopEditExtractedTaskModal.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/DesktopEditExtractedTaskModal.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/PortraitOrientationGuard.tsx",
+        "score": 3.8,
+        "commits": 3,
+        "weighted_commits": 1.87,
+        "lines_added": 121,
+        "lines_deleted": 16,
+        "complexity_density": 0.22,
+        "fan_in": 2,
+        "trend": "accelerating",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/PortraitOrientationGuard.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/PortraitOrientationGuard.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/LoginRoute.tsx",
+        "score": 3.7,
+        "commits": 6,
+        "weighted_commits": 2.89,
+        "lines_added": 112,
+        "lines_deleted": 20,
+        "complexity_density": 0.14,
+        "fan_in": 3,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/LoginRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/LoginRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/Notifications.tsx",
+        "score": 3.1,
+        "commits": 3,
+        "weighted_commits": 1.87,
+        "lines_added": 599,
+        "lines_deleted": 177,
+        "complexity_density": 0.18,
+        "fan_in": 18,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/Notifications.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/Notifications.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/SessionRequiredCard.tsx",
+        "score": 2.5,
+        "commits": 7,
+        "weighted_commits": 2.99,
+        "lines_added": 167,
+        "lines_deleted": 63,
+        "complexity_density": 0.09,
+        "fan_in": 3,
+        "trend": "accelerating",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/SessionRequiredCard.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/SessionRequiredCard.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/DesktopTaskTable.tsx",
+        "score": 2.0,
+        "commits": 3,
+        "weighted_commits": 1.77,
+        "lines_added": 704,
+        "lines_deleted": 153,
+        "complexity_density": 0.12,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/DesktopTaskTable.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/DesktopTaskTable.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopCompletedRoute.tsx",
+        "score": 2.0,
+        "commits": 4,
+        "weighted_commits": 2.77,
+        "lines_added": 115,
+        "lines_deleted": 103,
+        "complexity_density": 0.08,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/desktop/DesktopCompletedRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/desktop/DesktopCompletedRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopTasksRoute.tsx",
+        "score": 2.0,
+        "commits": 4,
+        "weighted_commits": 2.77,
+        "lines_added": 117,
+        "lines_deleted": 105,
+        "complexity_density": 0.08,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/desktop/DesktopTasksRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/desktop/DesktopTasksRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/LandingRoute.tsx",
+        "score": 1.4,
+        "commits": 4,
+        "weighted_commits": 3.02,
+        "lines_added": 827,
+        "lines_deleted": 228,
+        "complexity_density": 0.05,
+        "fan_in": 1,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/LandingRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/LandingRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/desktop/DesktopGroupsRoute.tsx",
+        "score": 1.3,
+        "commits": 3,
+        "weighted_commits": 1.77,
+        "lines_added": 452,
+        "lines_deleted": 286,
+        "complexity_density": 0.08,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/routes/desktop/DesktopGroupsRoute.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/routes/desktop/DesktopGroupsRoute.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/providers.tsx",
+        "score": 1.1,
+        "commits": 4,
+        "weighted_commits": 1.7,
+        "lines_added": 42,
+        "lines_deleted": 14,
+        "complexity_density": 0.07,
+        "fan_in": 7,
+        "trend": "stable",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/providers.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/providers.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/Button.tsx",
+        "score": 1.0,
+        "commits": 3,
+        "weighted_commits": 1.86,
+        "lines_added": 48,
+        "lines_deleted": 2,
+        "complexity_density": 0.06,
+        "fan_in": 2,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/Button.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/Button.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/SessionGuard.tsx",
+        "score": 0.9,
+        "commits": 3,
+        "weighted_commits": 1.25,
+        "lines_added": 85,
+        "lines_deleted": 25,
+        "complexity_density": 0.08,
+        "fan_in": 4,
+        "trend": "cooling",
+        "actions": [
+          {
+            "type": "refactor-file",
+            "auto_fixable": false,
+            "description": "Refactor `frontend/src/components/SessionGuard.tsx`, high complexity combined with frequent changes makes this a maintenance risk",
+            "note": "Prioritize extracting complex functions, adding tests, or splitting the module"
+          },
+          {
+            "type": "add-tests",
+            "auto_fixable": false,
+            "description": "Add test coverage for `frontend/src/components/SessionGuard.tsx` to reduce change risk",
+            "note": "Frequently changed complex files benefit most from comprehensive test coverage"
+          }
+        ]
+      }
+    ],
+    "hotspot_summary": {
+      "since": "6 months",
+      "min_commits": 3,
+      "files_analyzed": 37,
+      "files_excluded": 27,
+      "shallow_clone": false
+    },
+    "targets": [
+      {
+        "path": "frontend/src/routes/TaskDetailRoute.tsx",
+        "priority": 53.2,
+        "efficiency": 26.6,
+        "recommendation": "Split high-impact file (23 LOC), 3 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "medium",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.87,
+            "threshold": 0.3,
+            "detail": "density 0.87 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 3.0,
+            "threshold": 3.0,
+            "detail": "3 files depend on this"
+          },
+          {
+            "metric": "hotspot_score",
+            "value": 70.3,
+            "threshold": 30.0,
+            "detail": "hotspot score 70 (18 commits, cooling trend)"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/router.tsx",
+              "symbols": [
+                {
+                  "imported": "TaskDetailRoute",
+                  "local": "TaskDetailRoute",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/app.test.tsx",
+              "symbols": [
+                {
+                  "imported": "TaskDetailRoute",
+                  "local": "TaskDetailRoute",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/tasks.test.tsx",
+              "symbols": [
+                {
+                  "imported": "TaskDetailRoute",
+                  "local": "TaskDetailRoute",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (23 LOC), 3 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/DesktopTaskDetailModal.tsx",
+        "priority": 35.7,
+        "efficiency": 17.9,
+        "recommendation": "Split high-impact file (48 LOC), 5 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "medium",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.73,
+            "threshold": 0.3,
+            "detail": "density 0.73 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 5.0,
+            "threshold": 3.0,
+            "detail": "5 files depend on this"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/components/DesktopGroupDetailView.tsx",
+              "symbols": [
+                {
+                  "imported": "DesktopTaskDetailModal",
+                  "local": "DesktopTaskDetailModal",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/DesktopStatusTasksRoute.tsx",
+              "symbols": [
+                {
+                  "imported": "DesktopTaskDetailModal",
+                  "local": "DesktopTaskDetailModal",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/routes/desktop/DesktopDashboardRoute.tsx",
+              "symbols": [
+                {
+                  "imported": "DesktopTaskDetailModal",
+                  "local": "DesktopTaskDetailModal",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/routes/desktop/DesktopTaskDetailRoute.tsx",
+              "symbols": [
+                {
+                  "imported": "DesktopTaskDetailModal",
+                  "local": "DesktopTaskDetailModal",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/desktop-task-detail-modal.test.tsx",
+              "symbols": [
+                {
+                  "imported": "DesktopTaskDetailModal",
+                  "local": "DesktopTaskDetailModal",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (48 LOC), 5 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/CaptureRoute.tsx",
+        "priority": 34.2,
+        "efficiency": 17.1,
+        "recommendation": "Split high-impact file (68 LOC), 4 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "medium",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.5,
+            "threshold": 0.3,
+            "detail": "density 0.50 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 4.0,
+            "threshold": 3.0,
+            "detail": "4 files depend on this"
+          },
+          {
+            "metric": "hotspot_score",
+            "value": 37.8,
+            "threshold": 30.0,
+            "detail": "hotspot score 38 (18 commits, cooling trend)"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/router.tsx",
+              "symbols": [
+                {
+                  "imported": "CaptureRoute",
+                  "local": "CaptureRoute",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/app.test.tsx",
+              "symbols": [
+                {
+                  "imported": "CaptureRoute",
+                  "local": "CaptureRoute",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/capture.pending-dedup.test.tsx",
+              "symbols": [
+                {
+                  "imported": "CaptureRoute",
+                  "local": "CaptureRoute",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/capture.test.tsx",
+              "symbols": [
+                {
+                  "imported": "CaptureRoute",
+                  "local": "CaptureRoute",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (68 LOC), 4 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/TasksRoute.tsx",
+        "priority": 33.9,
+        "efficiency": 17.0,
+        "recommendation": "Split high-impact file (89 LOC), 3 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "medium",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.33,
+            "threshold": 0.3,
+            "detail": "density 0.33 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 3.0,
+            "threshold": 3.0,
+            "detail": "3 files depend on this"
+          },
+          {
+            "metric": "fan_out",
+            "value": 9.0,
+            "threshold": 6.0,
+            "detail": "imports 9 modules"
+          },
+          {
+            "metric": "hotspot_score",
+            "value": 37.9,
+            "threshold": 30.0,
+            "detail": "hotspot score 38 (26 commits, cooling trend)"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/router.tsx",
+              "symbols": [
+                {
+                  "imported": "TasksRoute",
+                  "local": "TasksRoute",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/app.test.tsx",
+              "symbols": [
+                {
+                  "imported": "TasksRoute",
+                  "local": "TasksRoute",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/tasks.test.tsx",
+              "symbols": [
+                {
+                  "imported": "TasksRoute",
+                  "local": "TasksRoute",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (89 LOC), 3 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/CompletedTasksRoute.tsx",
+        "priority": 31.9,
+        "efficiency": 16.0,
+        "recommendation": "Split high-impact file (60 LOC), 3 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "medium",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.33,
+            "threshold": 0.3,
+            "detail": "density 0.33 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 3.0,
+            "threshold": 3.0,
+            "detail": "3 files depend on this"
+          },
+          {
+            "metric": "fan_out",
+            "value": 10.0,
+            "threshold": 6.0,
+            "detail": "imports 10 modules"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/router.tsx",
+              "symbols": [
+                {
+                  "imported": "CompletedTasksRoute",
+                  "local": "CompletedTasksRoute",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/app.test.tsx",
+              "symbols": [
+                {
+                  "imported": "CompletedTasksRoute",
+                  "local": "CompletedTasksRoute",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/tasks.test.tsx",
+              "symbols": [
+                {
+                  "imported": "CompletedTasksRoute",
+                  "local": "CompletedTasksRoute",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (60 LOC), 3 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/TaskPreviewModal.tsx",
+        "priority": 38.0,
+        "efficiency": 12.7,
+        "recommendation": "Split high-impact file (97 LOC), 3 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "high",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.74,
+            "threshold": 0.3,
+            "detail": "density 0.74 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 3.0,
+            "threshold": 3.0,
+            "detail": "3 files depend on this"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/components/CompletedTasksRouteView.tsx",
+              "symbols": [
+                {
+                  "imported": "TaskPreviewModal",
+                  "local": "TaskPreviewModal",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/TasksRouteView.tsx",
+              "symbols": [
+                {
+                  "imported": "TaskPreviewModal",
+                  "local": "TaskPreviewModal",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/task-preview-modal.test.tsx",
+              "symbols": [
+                {
+                  "imported": "TaskPreviewModal",
+                  "local": "TaskPreviewModal",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (97 LOC), 3 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/SelectDropdown.tsx",
+        "priority": 33.3,
+        "efficiency": 11.1,
+        "recommendation": "Split high-impact file (145 LOC), 8 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "high",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.53,
+            "threshold": 0.3,
+            "detail": "density 0.53 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 8.0,
+            "threshold": 3.0,
+            "detail": "8 files depend on this"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/components/DesktopTaskDetailView.tsx",
+              "symbols": [
+                {
+                  "imported": "SelectDropdown",
+                  "local": "SelectDropdown",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/DesktopTaskGroupField.tsx",
+              "symbols": [
+                {
+                  "imported": "SelectDropdown",
+                  "local": "SelectDropdown",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/DesktopTaskTableView.tsx",
+              "symbols": [
+                {
+                  "imported": "SelectDropdown",
+                  "local": "SelectDropdown",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/GroupModal.tsx",
+              "symbols": [
+                {
+                  "imported": "SelectDropdown",
+                  "local": "SelectDropdown",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/TaskFormFields.tsx",
+              "symbols": [
+                {
+                  "imported": "SelectDropdown",
+                  "local": "SelectDropdown",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (145 LOC), 8 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/hooks/useFloatingDismiss.ts",
+        "priority": 20.1,
+        "efficiency": 10.1,
+        "recommendation": "Split high-impact file (30 LOC), 4 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "medium",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.47,
+            "threshold": 0.3,
+            "detail": "density 0.47 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 4.0,
+            "threshold": 3.0,
+            "detail": "4 files depend on this"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/components/DatePicker.tsx",
+              "symbols": [
+                {
+                  "imported": "useFloatingDismiss",
+                  "local": "useFloatingDismiss",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/DesktopEditExtractedTaskModal.tsx",
+              "symbols": [
+                {
+                  "imported": "useEscapeDismiss",
+                  "local": "useEscapeDismiss",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/GroupModal.tsx",
+              "symbols": [
+                {
+                  "imported": "useEscapeDismiss",
+                  "local": "useEscapeDismiss",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/SelectDropdown.tsx",
+              "symbols": [
+                {
+                  "imported": "useFloatingDismiss",
+                  "local": "useFloatingDismiss",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (30 LOC), 4 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/lib/taskFormModel.ts",
+        "priority": 27.1,
+        "efficiency": 9.0,
+        "recommendation": "Split high-impact file (213 LOC), 11 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "high",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.32,
+            "threshold": 0.3,
+            "detail": "density 0.32 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 11.0,
+            "threshold": 3.0,
+            "detail": "11 files depend on this"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/components/DesktopEditExtractedTaskModal.tsx",
+              "symbols": [
+                {
+                  "imported": "TaskFormDraft",
+                  "local": "TaskFormDraft",
+                  "type_only": true
+                },
+                {
+                  "imported": "buildExtractedTaskDraft",
+                  "local": "buildExtractedTaskDraft",
+                  "type_only": false
+                },
+                {
+                  "imported": "buildExtractedTaskUpdates",
+                  "local": "buildExtractedTaskUpdates",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/DesktopTaskDetailView.tsx",
+              "symbols": [
+                {
+                  "imported": "RECURRENCE_MONTHS",
+                  "local": "RECURRENCE_MONTHS",
+                  "type_only": false
+                },
+                {
+                  "imported": "RECURRENCE_OPTIONS",
+                  "local": "RECURRENCE_OPTIONS",
+                  "type_only": false
+                },
+                {
+                  "imported": "RECURRENCE_WEEKDAYS",
+                  "local": "RECURRENCE_WEEKDAYS",
+                  "type_only": false
+                },
+                {
+                  "imported": "TaskDetailDraft",
+                  "local": "TaskDetailDraft",
+                  "type_only": true
+                },
+                {
+                  "imported": "recurrenceForDueDate",
+                  "local": "recurrenceForDueDate",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/EditExtractedTaskModal.tsx",
+              "symbols": [
+                {
+                  "imported": "TaskFormDraft",
+                  "local": "TaskFormDraft",
+                  "type_only": true
+                },
+                {
+                  "imported": "buildExtractedTaskDraft",
+                  "local": "buildExtractedTaskDraft",
+                  "type_only": false
+                },
+                {
+                  "imported": "buildExtractedTaskUpdates",
+                  "local": "buildExtractedTaskUpdates",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/TaskForm.tsx",
+              "symbols": [
+                {
+                  "imported": "validateTaskFormDraft",
+                  "local": "validateTaskFormDraft",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/TaskFormFields.tsx",
+              "symbols": [
+                {
+                  "imported": "recurrenceForDueDate",
+                  "local": "recurrenceForDueDate",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (213 LOC), 11 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/routes/capture/captureModel.ts",
+        "priority": 16.0,
+        "efficiency": 8.0,
+        "recommendation": "Split high-impact file (44 LOC), 3 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "medium",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.34,
+            "threshold": 0.3,
+            "detail": "density 0.34 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 3.0,
+            "threshold": 3.0,
+            "detail": "3 files depend on this"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/routes/capture/CaptureView.tsx",
+              "symbols": [
+                {
+                  "imported": "CaptureErrorState",
+                  "local": "CaptureErrorState",
+                  "type_only": true
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/routes/capture/useCaptureController.ts",
+              "symbols": [
+                {
+                  "imported": "CaptureErrorState",
+                  "local": "CaptureErrorState",
+                  "type_only": true
+                },
+                {
+                  "imported": "buildVoiceCaptureError",
+                  "local": "buildVoiceCaptureError",
+                  "type_only": false
+                },
+                {
+                  "imported": "captureErrorMessage",
+                  "local": "captureErrorMessage",
+                  "type_only": false
+                },
+                {
+                  "imported": "resolveCaptureId",
+                  "local": "resolveCaptureId",
+                  "type_only": false
+                },
+                {
+                  "imported": "uniqueCaptureIds",
+                  "local": "uniqueCaptureIds",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/capture-model.test.ts",
+              "symbols": [
+                {
+                  "imported": "buildVoiceCaptureError",
+                  "local": "buildVoiceCaptureError",
+                  "type_only": false
+                },
+                {
+                  "imported": "resolveCaptureId",
+                  "local": "resolveCaptureId",
+                  "type_only": false
+                },
+                {
+                  "imported": "uniqueCaptureIds",
+                  "local": "uniqueCaptureIds",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (44 LOC), 3 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/lib/config.ts",
+        "priority": 15.8,
+        "efficiency": 7.9,
+        "recommendation": "Split high-impact file (77 LOC), 3 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "medium",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.32,
+            "threshold": 0.3,
+            "detail": "density 0.32 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 3.0,
+            "threshold": 3.0,
+            "detail": "3 files depend on this"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/components/SessionRequiredCard.tsx",
+              "symbols": [
+                {
+                  "imported": "getAppConfig",
+                  "local": "getAppConfig",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/lib/api.ts",
+              "symbols": [
+                {
+                  "imported": "getAppConfig",
+                  "local": "getAppConfig",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/security-config.test.ts",
+              "symbols": [
+                {
+                  "imported": "getAppConfig",
+                  "local": "getAppConfig",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (77 LOC), 3 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      },
+      {
+        "path": "frontend/src/components/DatePicker.tsx",
+        "priority": 15.1,
+        "efficiency": 7.6,
+        "recommendation": "Split high-impact file (390 LOC), 3 dependents amplify every change",
+        "category": "split_high_impact",
+        "effort": "medium",
+        "confidence": "medium",
+        "factors": [
+          {
+            "metric": "complexity_density",
+            "value": 0.31,
+            "threshold": 0.3,
+            "detail": "density 0.31 exceeds 0.3"
+          },
+          {
+            "metric": "fan_in",
+            "value": 3.0,
+            "threshold": 3.0,
+            "detail": "3 files depend on this"
+          }
+        ],
+        "evidence": {
+          "direct_callers": [
+            {
+              "path": "frontend/src/components/DesktopTaskDetailView.tsx",
+              "symbols": [
+                {
+                  "imported": "DatePicker",
+                  "local": "DatePicker",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/TaskFormFields.tsx",
+              "symbols": [
+                {
+                  "imported": "DatePicker",
+                  "local": "DatePicker",
+                  "type_only": false
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/test/task-form-overlays.test.tsx",
+              "symbols": [
+                {
+                  "imported": "DatePicker",
+                  "local": "DatePicker",
+                  "type_only": false
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "type": "apply-refactoring",
+            "auto_fixable": false,
+            "description": "Split high-impact file (390 LOC), 3 dependents amplify every change",
+            "category": "split_high_impact"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress the underlying complexity finding",
+            "comment": "// fallow-ignore-next-line complexity"
+          }
+        ]
+      }
+    ],
+    "target_thresholds": {
+      "fan_in_p95": 10.0,
+      "fan_in_p75": 3.0,
+      "fan_out_p95": 8.0,
+      "fan_out_p90": 6
+    },
+    "framework_health": {
+      "detected_frameworks": [
+        "react"
+      ],
+      "detectors": [
+        {
+          "id": "unused-component-prop",
+          "framework": "react",
+          "status": "active"
+        },
+        {
+          "id": "prop-drilling",
+          "framework": "react",
+          "status": "disabled_by_config",
+          "reason": "disabled_by_config"
+        },
+        {
+          "id": "thin-wrapper",
+          "framework": "react",
+          "status": "disabled_by_config",
+          "reason": "disabled_by_config"
+        },
+        {
+          "id": "duplicate-prop-shape",
+          "framework": "react",
+          "status": "disabled_by_config",
+          "reason": "disabled_by_config"
+        }
+      ]
+    }
+  },
+  "_meta": {
+    "telemetry": {
+      "analysis_run_id": "run_729579e1f637c4b3"
+    }
+  }
+}

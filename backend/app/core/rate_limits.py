@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from starlette.requests import Request
 
@@ -65,27 +65,63 @@ class RequestRateLimiter:
         self.authenticated_write_user = _parse_windows(settings.rate_limit_authenticated_write_user)
         self.authenticated_get_user = _parse_windows(settings.rate_limit_authenticated_get_user)
         self.public_get_ip = _parse_windows(settings.rate_limit_public_get_ip)
+        self.unauthenticated_write_ip = _parse_windows(settings.rate_limit_unauthenticated_write_ip)
+        self.internal_job_ip = _parse_windows(settings.rate_limit_internal_job_ip)
 
-    def evaluate_request(
+    def evaluate_ip_request(
         self,
         *,
         request: Request,
-        user_id: str | None,
     ) -> RateLimitEvaluation | None:
-        if request.method in {"HEAD", "OPTIONS"}:
+        if request.method == "OPTIONS":
             return None
 
-        policy = self._resolve_policy(request=request, user_id=user_id)
+        policy = self._resolve_ip_policy(request=request)
         if policy is None:
             return None
+        return self._evaluate_policy(
+            request=request,
+            policy=policy,
+            user_id=None,
+            cleanup_expired=True,
+        )
 
-        now = datetime.now(timezone.utc)
-        client_ip = client_ip_for_request(request)
+    def evaluate_user_request(
+        self,
+        *,
+        request: Request,
+        user_id: str,
+    ) -> RateLimitEvaluation | None:
+        if request.method == "OPTIONS":
+            return None
+
+        policy = self._resolve_user_policy(request=request)
+        if policy is None:
+            return None
+        return self._evaluate_policy(
+            request=request,
+            policy=policy,
+            user_id=user_id,
+            cleanup_expired=False,
+        )
+
+    def _evaluate_policy(
+        self,
+        *,
+        request: Request,
+        policy: RateLimitPolicy,
+        user_id: str | None,
+        cleanup_expired: bool,
+    ) -> RateLimitEvaluation | None:
+
+        now = datetime.now(UTC)
+        client_ip = client_ip_for_request(request, self.settings)
         primary_state: RateLimitState | None = None
         exceeded_state: RateLimitState | None = None
 
         with connection_scope(self.settings.database_url) as connection:
-            delete_expired_rate_limit_counters(connection, now=now, limit=500)
+            if cleanup_expired:
+                delete_expired_rate_limit_counters(connection, now=now, limit=500)
 
             if policy.user_windows and user_id is not None:
                 current_state = self._evaluate_subject(
@@ -125,14 +161,16 @@ class RequestRateLimiter:
             headers=primary_state.as_headers(include_retry_after=False),
         )
 
-    def _resolve_policy(
+    def _resolve_ip_policy(
         self,
         *,
         request: Request,
-        user_id: str | None,
     ) -> RateLimitPolicy | None:
         path = request.url.path
         method = request.method.upper()
+
+        if path == "/health":
+            return None
 
         if path in {
             "/auth/session/google/start",
@@ -148,48 +186,74 @@ class RequestRateLimiter:
         if method == "POST" and path == "/captures/voice":
             return RateLimitPolicy(
                 scope="capture_voice",
-                user_windows=self.capture_voice_user,
                 ip_windows=self.capture_voice_ip,
-                primary_subject="user" if user_id else "ip",
+                primary_subject="ip",
             )
 
         if method == "POST" and path == "/captures/text":
             return RateLimitPolicy(
                 scope="capture_text",
-                user_windows=self.capture_text_user,
                 ip_windows=self.capture_text_ip,
-                primary_subject="user" if user_id else "ip",
+                primary_subject="ip",
             )
 
         if method == "POST" and _CAPTURE_SUBMIT_PATH.fullmatch(path):
             return RateLimitPolicy(
                 scope="capture_submit",
-                user_windows=self.capture_submit_user,
                 ip_windows=self.capture_submit_ip,
-                primary_subject="user" if user_id else "ip",
+                primary_subject="ip",
             )
 
-        if method == "GET":
-            if user_id is not None:
-                return RateLimitPolicy(
-                    scope="authenticated_get",
-                    user_windows=self.authenticated_get_user,
-                    primary_subject="user",
-                )
+        if path.startswith("/internal/reminders"):
+            return RateLimitPolicy(
+                scope="internal_job",
+                ip_windows=self.internal_job_ip,
+                primary_subject="ip",
+            )
+
+        if method in {"GET", "HEAD"}:
             return RateLimitPolicy(
                 scope="public_get",
                 ip_windows=self.public_get_ip,
                 primary_subject="ip",
             )
 
-        if user_id is not None and method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if method in {"POST", "PUT", "PATCH", "DELETE"}:
             return RateLimitPolicy(
-                scope="authenticated_write",
-                user_windows=self.authenticated_write_user,
-                primary_subject="user",
+                scope="unauthenticated_write",
+                ip_windows=self.unauthenticated_write_ip,
+                primary_subject="ip",
             )
 
         return None
+
+    def _resolve_user_policy(self, *, request: Request) -> RateLimitPolicy | None:
+        path = request.url.path
+        method = request.method.upper()
+
+        if method == "POST" and path == "/captures/voice":
+            windows = self.capture_voice_user
+            scope = "capture_voice"
+        elif method == "POST" and path == "/captures/text":
+            windows = self.capture_text_user
+            scope = "capture_text"
+        elif method == "POST" and _CAPTURE_SUBMIT_PATH.fullmatch(path):
+            windows = self.capture_submit_user
+            scope = "capture_submit"
+        elif method in {"GET", "HEAD"}:
+            windows = self.authenticated_get_user
+            scope = "authenticated_get"
+        elif method in {"POST", "PUT", "PATCH", "DELETE"}:
+            windows = self.authenticated_write_user
+            scope = "authenticated_write"
+        else:
+            return None
+
+        return RateLimitPolicy(
+            scope=scope,
+            user_windows=windows,
+            primary_subject="user",
+        )
 
     def _evaluate_subject(
         self,
@@ -238,13 +302,17 @@ def _parse_windows(value: str) -> tuple[RateLimitWindow, ...]:
         if not normalized:
             continue
         limit_str, window_seconds_str = normalized.split("/", maxsplit=1)
-        windows.append(
-            RateLimitWindow(limit=int(limit_str.strip()), window_seconds=int(window_seconds_str))
-        )
+        limit = int(limit_str.strip())
+        window_seconds = int(window_seconds_str)
+        if limit <= 0 or window_seconds <= 0:
+            raise ValueError("Rate-limit windows must use positive limits and durations.")
+        windows.append(RateLimitWindow(limit=limit, window_seconds=window_seconds))
+    if not windows:
+        raise ValueError("At least one rate-limit window is required.")
     return tuple(windows)
 
 
 def _window_start(*, now: datetime, window_seconds: int) -> datetime:
     epoch_seconds = int(now.timestamp())
     start_epoch = epoch_seconds - (epoch_seconds % window_seconds)
-    return datetime.fromtimestamp(start_epoch, tz=timezone.utc)
+    return datetime.fromtimestamp(start_epoch, tz=UTC)

@@ -9,9 +9,9 @@ import {
   type PropsWithChildren,
 } from 'react'
 
-export type NotificationType = 'success' | 'error' | 'warning' | 'info' | 'loading'
+type NotificationType = 'success' | 'error' | 'warning' | 'info' | 'loading'
 
-export type NotificationInput = {
+type NotificationInput = {
   id?: string
   type: NotificationType
   message: string
@@ -21,7 +21,7 @@ export type NotificationInput = {
   durationMs?: number | null
 }
 
-export type NotificationRecord = NotificationInput & {
+type NotificationRecord = NotificationInput & {
   id: string
 }
 
@@ -79,6 +79,25 @@ function CloseIcon({ className }: IconProps) {
   )
 }
 
+function dragPresentation(deltaX: number, deltaY: number, threshold: number) {
+  const absX = Math.abs(deltaX)
+  const absY = Math.abs(deltaY)
+  if (Math.max(absX, absY) <= threshold) return null
+  const vertical = absY > absX
+  return {
+    translate: dragTranslation(vertical, deltaX, deltaY),
+    opacity: Math.max(0.3, 1 - dragDistance(vertical, absX, absY) / 300),
+  }
+}
+
+function dragTranslation(vertical: boolean, deltaX: number, deltaY: number) {
+  return vertical ? { x: deltaX * 0.2, y: deltaY } : { x: deltaX, y: deltaY * 0.2 }
+}
+
+function dragDistance(vertical: boolean, absX: number, absY: number) {
+  return vertical ? absY : absX
+}
+
 // Swipe hook for touch gestures
 function useSwipeToDismiss(
   onDismiss: () => void,
@@ -96,47 +115,31 @@ function useSwipeToDismiss(
     isDragging.current = true
   }, [enabled])
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+  const updateDrag = useCallback((clientX: number, clientY: number, movementThreshold: number) => {
     if (!enabled || !isDragging.current || !startPos.current) return
-    const touch = e.touches[0]
-    const deltaX = touch.clientX - startPos.current.x
-    const deltaY = touch.clientY - startPos.current.y
-
-    // Only respond to meaningful movements (more horizontal or vertical)
-    const absX = Math.abs(deltaX)
-    const absY = Math.abs(deltaY)
-
-    if (absX > 10 || absY > 10) {
-      // Prefer the dominant direction
-      if (absY > absX) {
-        // Vertical swipe
-        setTranslate({ x: deltaX * 0.2, y: deltaY })
-        setOpacity(Math.max(0.3, 1 - Math.abs(deltaY) / 300))
-      } else {
-        // Horizontal swipe
-        setTranslate({ x: deltaX, y: deltaY * 0.2 })
-        setOpacity(Math.max(0.3, 1 - Math.abs(deltaX) / 300))
-      }
-    }
+    const presentation = dragPresentation(clientX - startPos.current.x, clientY - startPos.current.y, movementThreshold)
+    if (!presentation) return
+    setTranslate(presentation.translate)
+    setOpacity(presentation.opacity)
   }, [enabled])
 
-  const handleTouchEnd = useCallback(() => {
+  const finishDrag = useCallback(() => {
     if (!enabled) return
-    const threshold = 100
     const { x, y } = translate
-
-    // Dismiss if swiped far enough in any direction
-    if (Math.abs(x) > threshold || Math.abs(y) > threshold) {
+    if (Math.abs(x) > 100 || Math.abs(y) > 100) {
       onDismiss()
     } else {
-      // Snap back
       setTranslate({ x: 0, y: 0 })
       setOpacity(1)
     }
-
     startPos.current = null
     isDragging.current = false
   }, [enabled, translate, onDismiss])
+
+  const handleTouchMove = useCallback((event: React.TouchEvent) => {
+    const touch = event.touches[0]
+    updateDrag(touch.clientX, touch.clientY, 10)
+  }, [updateDrag])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!enabled) return
@@ -145,39 +148,8 @@ function useSwipeToDismiss(
   }, [enabled])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!enabled || !isDragging.current || !startPos.current) return
-    const deltaX = e.clientX - startPos.current.x
-    const deltaY = e.clientY - startPos.current.y
-
-    const absX = Math.abs(deltaX)
-    const absY = Math.abs(deltaY)
-
-    if (absX > 5 || absY > 5) {
-      if (absY > absX) {
-        setTranslate({ x: deltaX * 0.2, y: deltaY })
-        setOpacity(Math.max(0.3, 1 - Math.abs(deltaY) / 300))
-      } else {
-        setTranslate({ x: deltaX, y: deltaY * 0.2 })
-        setOpacity(Math.max(0.3, 1 - Math.abs(deltaX) / 300))
-      }
-    }
-  }, [enabled])
-
-  const handleMouseUp = useCallback(() => {
-    if (!enabled) return
-    const threshold = 100
-    const { x, y } = translate
-
-    if (Math.abs(x) > threshold || Math.abs(y) > threshold) {
-      onDismiss()
-    } else {
-      setTranslate({ x: 0, y: 0 })
-      setOpacity(1)
-    }
-
-    startPos.current = null
-    isDragging.current = false
-  }, [enabled, translate, onDismiss])
+    updateDrag(e.clientX, e.clientY, 5)
+  }, [updateDrag])
 
   return {
     translate,
@@ -185,11 +157,11 @@ function useSwipeToDismiss(
     handlers: enabled ? {
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
-      onTouchEnd: handleTouchEnd,
+      onTouchEnd: finishDrag,
       onMouseDown: handleMouseDown,
       onMouseMove: handleMouseMove,
-      onMouseUp: handleMouseUp,
-      onMouseLeave: handleMouseUp,
+      onMouseUp: finishDrag,
+      onMouseLeave: finishDrag,
     } : {},
   }
 }

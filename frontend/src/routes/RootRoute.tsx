@@ -33,26 +33,30 @@ function RootSessionLoading() {
   )
 }
 
-function RootSessionError({ onRetry }: { onRetry: () => void }) {
+function RootErrorState({ eyebrow, title, description, actionLabel, onAction }: {
+  eyebrow: string
+  title: string
+  description: string
+  actionLabel: string
+  onAction: () => void
+}) {
   return (
     <main className="safe-area-shell min-h-screen bg-surface text-on-surface">
       <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
         <section className="w-full space-y-4 text-center" role="alert">
           <div className="space-y-3">
             <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
-              Session check
+              {eyebrow}
             </p>
-            <h1 className="font-display text-3xl text-on-surface">Could not open Gust</h1>
-            <p className="font-body text-sm leading-6 text-on-surface-variant">
-              Gust could not verify your session. Check your connection and try again.
-            </p>
+            <h1 className="font-display text-3xl text-on-surface">{title}</h1>
+            <p className="font-body text-sm leading-6 text-on-surface-variant">{description}</p>
           </div>
           <button
             type="button"
             className="rounded-card bg-white px-5 py-3 font-display text-base font-bold text-black shadow-[0_5px_0_#a1a1aa,_0_8px_15px_rgba(0,0,0,0.4)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] active:shadow-[0_0px_0_#a1a1aa,_0_2px_4px_rgba(0,0,0,0.4)]"
-            onClick={onRetry}
+            onClick={onAction}
           >
-            Try again
+            {actionLabel}
           </button>
         </section>
       </div>
@@ -60,30 +64,47 @@ function RootSessionError({ onRetry }: { onRetry: () => void }) {
   )
 }
 
+function RootSessionError({ onRetry }: { onRetry: () => void }) {
+  return <RootErrorState eyebrow="Session check" title="Could not open Gust" description="Gust could not verify your session. Check your connection and try again." actionLabel="Try again" onAction={onRetry} />
+}
+
 function RootLandingLoadError() {
+  return <RootErrorState eyebrow="Landing page" title="Could not load Gust" description="The landing page did not finish loading. Refresh this page to try again." actionLabel="Refresh" onAction={() => window.location.reload()} />
+}
+
+type RootSessionResolutionProps = {
+  authErrorCode: AuthErrorCode | null
+  isError: boolean
+  isLoading: boolean
+  isSignedIn: boolean
+  onRetry: () => void
+}
+
+function RootSessionResolution({
+  authErrorCode,
+  isError,
+  isLoading,
+  isSignedIn,
+  onRetry,
+}: RootSessionResolutionProps) {
+  if (isLoading) {
+    return <RootSessionLoading />
+  }
+
+  if (isSignedIn) {
+    return <Navigate to="/capture" replace />
+  }
+
+  if (isError && !authErrorCode) {
+    return <RootSessionError onRetry={onRetry} />
+  }
+
   return (
-    <main className="safe-area-shell min-h-screen bg-surface text-on-surface">
-      <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
-        <section className="w-full space-y-4 text-center" role="alert">
-          <div className="space-y-3">
-            <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
-              Landing page
-            </p>
-            <h1 className="font-display text-3xl text-on-surface">Could not load Gust</h1>
-            <p className="font-body text-sm leading-6 text-on-surface-variant">
-              The landing page did not finish loading. Refresh this page to try again.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="rounded-card bg-white px-5 py-3 font-display text-base font-bold text-black shadow-[0_5px_0_#a1a1aa,_0_8px_15px_rgba(0,0,0,0.4)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] active:shadow-[0_0px_0_#a1a1aa,_0_2px_4px_rgba(0,0,0,0.4)]"
-            onClick={() => window.location.reload()}
-          >
-            Refresh
-          </button>
-        </section>
-      </div>
-    </main>
+    <RootLandingErrorBoundary>
+      <Suspense fallback={<RootSessionLoading />}>
+        <LandingRoute authErrorCode={authErrorCode} />
+      </Suspense>
+    </RootLandingErrorBoundary>
   )
 }
 
@@ -114,35 +135,21 @@ export function RootRoute() {
     retry: false,
   })
 
-  if (sessionQuery.isLoading) {
-    return <RootSessionLoading />
-  }
-
   const authErrorCode =
     resolveAuthErrorCode(searchParams.get('auth_error')) ??
     (sessionQuery.error instanceof ApiError && sessionQuery.error.code === 'auth_email_not_allowed'
       ? 'email_not_allowed'
       : null)
 
-  if (sessionQuery.data?.signed_in) {
-    return <Navigate to="/capture" replace />
-  }
-
-  if (sessionQuery.isError && !authErrorCode) {
-    return (
-      <RootSessionError
-        onRetry={() => {
-          void sessionQuery.refetch()
-        }}
-      />
-    )
-  }
-
   return (
-    <RootLandingErrorBoundary>
-      <Suspense fallback={<RootSessionLoading />}>
-        <LandingRoute authErrorCode={authErrorCode} />
-      </Suspense>
-    </RootLandingErrorBoundary>
+    <RootSessionResolution
+      authErrorCode={authErrorCode}
+      isError={sessionQuery.isError}
+      isLoading={sessionQuery.isLoading}
+      isSignedIn={sessionQuery.data?.signed_in === true}
+      onRetry={() => {
+        void sessionQuery.refetch()
+      }}
+    />
   )
 }

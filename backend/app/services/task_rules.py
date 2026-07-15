@@ -150,29 +150,50 @@ def normalize_task_fields(
     )
 
 
-def validate_recurrence(recurrence: RecurrenceInput) -> None:
-    if recurrence.frequency == "daily":
-        if (
-            recurrence.weekday is None
-            and recurrence.day_of_month is None
-            and recurrence.month is None
-        ):
-            return
-    elif recurrence.frequency == "weekly":
-        if recurrence.weekday is not None and 0 <= recurrence.weekday <= 6:
-            if recurrence.day_of_month is None and recurrence.month is None:
-                return
-    elif recurrence.frequency == "monthly":
-        if recurrence.day_of_month is not None and 1 <= recurrence.day_of_month <= 31:
-            if recurrence.weekday is None and recurrence.month is None:
-                return
-    elif recurrence.frequency == "yearly":
-        if (recurrence.month is not None and 1 <= recurrence.month <= 12 and
-                recurrence.day_of_month is not None and 1 <= recurrence.day_of_month <= 31):
-            if recurrence.weekday is None:
-                return
+def _valid_daily_recurrence(recurrence: RecurrenceInput) -> bool:
+    return (
+        recurrence.weekday is None and recurrence.day_of_month is None and recurrence.month is None
+    )
 
-    raise ValueError("Recurrence payload is invalid for v1.")
+
+def _valid_weekly_recurrence(recurrence: RecurrenceInput) -> bool:
+    return (
+        recurrence.weekday is not None
+        and 0 <= recurrence.weekday <= 6
+        and recurrence.day_of_month is None
+        and recurrence.month is None
+    )
+
+
+def _valid_monthly_recurrence(recurrence: RecurrenceInput) -> bool:
+    return (
+        recurrence.day_of_month is not None
+        and 1 <= recurrence.day_of_month <= 31
+        and recurrence.weekday is None
+        and recurrence.month is None
+    )
+
+
+def _valid_yearly_recurrence(recurrence: RecurrenceInput) -> bool:
+    return (
+        recurrence.month is not None
+        and 1 <= recurrence.month <= 12
+        and recurrence.day_of_month is not None
+        and 1 <= recurrence.day_of_month <= 31
+        and recurrence.weekday is None
+    )
+
+
+def validate_recurrence(recurrence: RecurrenceInput) -> None:
+    validators = {
+        "daily": _valid_daily_recurrence,
+        "weekly": _valid_weekly_recurrence,
+        "monthly": _valid_monthly_recurrence,
+        "yearly": _valid_yearly_recurrence,
+    }
+    validator = validators.get(recurrence.frequency)
+    if validator is None or not validator(recurrence):
+        raise ValueError("Recurrence payload is invalid for v1.")
 
 
 def compute_reminder_offset_minutes(

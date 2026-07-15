@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
 from functools import lru_cache
-from typing import Optional
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,12 +28,12 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GUST_DEV_MODE"),
     )
     database_url: str = Field(validation_alias=AliasChoices("DATABASE_URL"))
-    migration_database_url: Optional[str] = Field(
+    migration_database_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
     )
     required_alembic_revision: str = Field(
-        default="0012_harden_backend_table_grants",
+        default="0016_harden_rls_relationships",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -47,39 +45,39 @@ class Settings(BaseSettings):
         default=True,
         validation_alias=AliasChoices("ENFORCE_ORIGIN_CHECKS"),
     )
-    frontend_app_url: Optional[str] = Field(
+    frontend_app_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("FRONTEND_APP_URL"),
     )
-    backend_public_url: Optional[str] = Field(
+    backend_public_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("BACKEND_PUBLIC_URL"),
     )
-    railway_private_domain: Optional[str] = Field(
+    railway_private_domain: str | None = Field(
         default=None,
         validation_alias=AliasChoices("RAILWAY_PRIVATE_DOMAIN"),
     )
-    railway_public_domain: Optional[str] = Field(
+    railway_public_domain: str | None = Field(
         default=None,
         validation_alias=AliasChoices("RAILWAY_PUBLIC_DOMAIN"),
     )
-    railway_service_backend_url: Optional[str] = Field(
+    railway_service_backend_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("RAILWAY_SERVICE_BACKEND_URL"),
     )
-    railway_service_frontend_url: Optional[str] = Field(
+    railway_service_frontend_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("RAILWAY_SERVICE_FRONTEND_URL"),
     )
-    railway_static_url: Optional[str] = Field(
+    railway_static_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("RAILWAY_STATIC_URL"),
     )
-    supabase_url: Optional[str] = Field(
+    supabase_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("SUPABASE_URL"),
     )
-    supabase_anon_key: Optional[str] = Field(
+    supabase_anon_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("SUPABASE_ANON_KEY"),
     )
@@ -87,7 +85,7 @@ class Settings(BaseSettings):
         default=True,
         validation_alias=AliasChoices("SESSION_COOKIE_SECURE"),
     )
-    session_cookie_domain: Optional[str] = Field(
+    session_cookie_domain: str | None = Field(
         default=None,
         validation_alias=AliasChoices("SESSION_COOKIE_DOMAIN"),
     )
@@ -126,6 +124,14 @@ class Settings(BaseSettings):
     rate_limit_public_get_ip: str = Field(
         default="120/60",
         validation_alias=AliasChoices("RATE_LIMIT_PUBLIC_GET_IP"),
+    )
+    rate_limit_unauthenticated_write_ip: str = Field(
+        default="60/60,600/3600",
+        validation_alias=AliasChoices("RATE_LIMIT_UNAUTHENTICATED_WRITE_IP"),
+    )
+    rate_limit_internal_job_ip: str = Field(
+        default="10/60,100/3600",
+        validation_alias=AliasChoices("RATE_LIMIT_INTERNAL_JOB_IP"),
     )
     rate_limit_authenticated_get_user: str = Field(
         default="120/60",
@@ -171,7 +177,7 @@ class Settings(BaseSettings):
         default="https://api.mistral.ai/v1/audio/transcriptions",
         validation_alias=AliasChoices("MISTRAL_API_URL"),
     )
-    mistral_api_key: Optional[str] = Field(
+    mistral_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("MISTRAL_API_KEY"),
     )
@@ -187,7 +193,7 @@ class Settings(BaseSettings):
         default="https://openrouter.ai/api/v1/chat/completions",
         validation_alias=AliasChoices("OPENROUTER_API_URL"),
     )
-    openrouter_api_key: Optional[str] = Field(
+    openrouter_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("OPENROUTER_API_KEY"),
     )
@@ -211,7 +217,7 @@ class Settings(BaseSettings):
         default=10.0,
         validation_alias=AliasChoices("EXTRACTION_RETRY_MAX_DELAY"),
     )
-    extraction_model_config_path: Optional[str] = Field(
+    extraction_model_config_path: str | None = Field(
         default=None,
         validation_alias=AliasChoices("EXTRACTION_MODEL_CONFIG_PATH"),
     )
@@ -223,15 +229,15 @@ class Settings(BaseSettings):
         default="https://api.resend.com/emails",
         validation_alias=AliasChoices("RESEND_API_URL"),
     )
-    resend_api_key: Optional[str] = Field(
+    resend_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("RESEND_API_KEY"),
     )
-    resend_from_email: Optional[str] = Field(
+    resend_from_email: str | None = Field(
         default=None,
         validation_alias=AliasChoices("RESEND_FROM_EMAIL"),
     )
-    internal_job_shared_secret: Optional[str] = Field(
+    internal_job_shared_secret: str | None = Field(
         default=None,
         validation_alias=AliasChoices("INTERNAL_JOB_SHARED_SECRET"),
     )

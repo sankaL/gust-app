@@ -27,6 +27,49 @@ from app.services.extraction_retry import ExtractionRetryError, ExtractionRetryM
 
 logger = logging.getLogger("gust.api")
 
+_PASS_OUTPUT_PATTERNS = (
+    r"PASS\s*2\s*OUTPUT\s*:(.*)",
+    r"PASS\s*TWO\s*OUTPUT\s*:(.*)",
+    r"PASS\s*2\s*OUTPUT\s*\n+(.*)",
+    r"```json\s*\n(.*?)\n```",
+    r"```\s*\n(.*?)\n```",
+)
+
+
+def _response_text(input_: Any) -> str:
+    if not hasattr(input_, "content"):
+        return str(input_)
+    content = input_.content
+    if not isinstance(content, list):
+        return str(content)
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "text":
+            return str(block.get("text", ""))
+        if isinstance(block, str):
+            return block
+    return ""
+
+
+def _strip_response_fence(value: str) -> str:
+    match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", value.strip(), flags=re.DOTALL)
+    return match.group(1).strip() if match else value.strip()
+
+
+def _final_output_fragment(text: str) -> str:
+    for pattern in _PASS_OUTPUT_PATTERNS:
+        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+        if match and match.group(1).strip().startswith("{"):
+            return match.group(1).strip()
+    return text
+
+
+def extract_json_from_text(input_: Any) -> dict[str, object]:
+    """Extract the final JSON object from a provider's mixed-text response."""
+    fragment = _strip_response_fence(_final_output_fragment(_response_text(input_)))
+    json_match = re.search(r"\{[\s\S]*\}", fragment)
+    payload = json_match.group(0) if json_match else fragment
+    return json.loads(payload)
+
 
 @dataclass
 class ExtractionRequest:
@@ -207,75 +250,6 @@ class LangChainExtractionService:
                 ("user", "{user_input}"),
             ]
         )
-
-        # Create chain - use a custom parser to extract JSON from mixed text output
-        def extract_json_from_text(input_: Any) -> dict:
-            """Extract JSON from the model's mixed-text response.
-
-            Strategy (in priority order):
-            1. Find the 'PASS 2 OUTPUT:' label and extract the JSON that follows it.
-               This is the most reliable anchor since the prompt explicitly uses this label.
-            2. If no label is found, fall back to the last top-level JSON object in the text
-               (greedy match, rightmost wins).
-            3. Strip any code fence (```json ... ```) before parsing in all cases.
-            """
-            import re
-
-            # ── 1. Normalise input to a plain string ──────────────────────────────
-            if hasattr(input_, "content"):
-                content = input_.content
-                if isinstance(content, list):
-                    text = ""
-                    for block in content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            text = block.get("text", "")
-                            break
-                        elif isinstance(block, str):
-                            text = block
-                            break
-                else:
-                    text = str(content)
-            else:
-                text = str(input_)
-
-            # ── 2. Helper: strip a single code fence wrapper ──────────────────────
-            def _strip_fence(s: str) -> str:
-                m = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", s.strip(), flags=re.DOTALL)
-                return m.group(1).strip() if m else s.strip()
-
-            # ── 3. Try to isolate the PASS 2 OUTPUT section first ─────────────────
-            # The prompt instructs the model to label its final JSON with "PASS 2 OUTPUT:"
-            # Be flexible with variations: "PASS TWO", "Pass 2 Output:", etc.
-            pass2_patterns = [
-                r"PASS\s*2\s*OUTPUT\s*:(.*)",  # PASS 2 OUTPUT:
-                r"PASS\s*TWO\s*OUTPUT\s*:(.*)",  # PASS TWO OUTPUT:
-                r"PASS\s*2\s*OUTPUT\s*\n+(.*)",  # PASS 2 OUTPUT with newlines
-                r"```json\s*\n(.*?)\n```",  # JSON in code block without PASS marker
-                r"```\s*\n(.*?)\n```",  # Any code block
-            ]
-
-            fragment = text  # Default to full text
-            for pattern in pass2_patterns:
-                pass2_match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-                if pass2_match:
-                    candidate = pass2_match.group(1).strip()
-                    # Verify this candidate actually looks like JSON (starts with {)
-                    if candidate.strip().startswith("{"):
-                        fragment = candidate
-                        break
-
-            # Strip a code fence that may wrap the whole fragment
-            fragment = _strip_fence(fragment)
-
-            # ── 4. Greedy match: outermost { … } in the fragment ──────────────────
-            # re.findall with a greedy pattern returns one match spanning
-            # the first '{' to the last '}', which is exactly the tasks object.
-            json_match = re.search(r"\{[\s\S]*\}", fragment)
-            if json_match:
-                return json.loads(json_match.group(0))
-
-            # ── 5. Last resort: parse fragment directly ───────────────────────────
-            return json.loads(fragment)
 
         chain = prompt | llm | RunnableLambda(extract_json_from_text)
 

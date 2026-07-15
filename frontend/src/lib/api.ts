@@ -147,7 +147,9 @@ async function apiRequest<T>(
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${config.apiBaseUrl}${path}`, {
+  const url = buildApiUrl(config.apiBaseUrl, path)
+  // fallow-ignore-next-line security-sink
+  const response = await fetch(url, {
     ...init,
     headers,
     credentials: 'include'
@@ -170,6 +172,19 @@ async function apiRequest<T>(
   }
 
   return payload as T
+}
+
+function buildApiUrl(apiBaseUrl: string, path: string): string {
+  if (!path.startsWith('/') || path.startsWith('//')) {
+    throw new Error('API request paths must be root-relative.')
+  }
+
+  const baseUrl = new URL(apiBaseUrl)
+  const requestUrl = new URL(path, baseUrl)
+  if (requestUrl.origin !== baseUrl.origin) {
+    throw new Error('API request URL escaped the configured API origin.')
+  }
+  return requestUrl.toString()
 }
 
 export function getAuthStartUrl(): string {
@@ -219,21 +234,6 @@ export function createVoiceCapture(
     {
       method: 'POST',
       body: formData
-    },
-    csrfToken
-  )
-}
-
-export function submitCapture(
-  captureId: string,
-  transcriptText: string,
-  csrfToken: string
-): Promise<SubmitCaptureResponse> {
-  return apiRequest<SubmitCaptureResponse>(
-    `/captures/${captureId}/submit`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ transcript_text: transcriptText })
     },
     csrfToken
   )
@@ -522,21 +522,6 @@ export function discardAllExtractedTasks(
   )
 }
 
-export function reExtractCapture(
-  captureId: string,
-  transcriptText: string,
-  csrfToken: string
-): Promise<CaptureReviewResponse> {
-  return apiRequest<CaptureReviewResponse>(
-    `/captures/${captureId}/re-extract`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ transcript_text: transcriptText })
-    },
-    csrfToken
-  )
-}
-
 export function completeCapture(
   captureId: string,
   csrfToken: string
@@ -544,22 +529,6 @@ export function completeCapture(
   return apiRequest<{ status: string }>(
     `/captures/${captureId}/complete`,
     { method: 'POST' },
-    csrfToken
-  )
-}
-
-export function updateExtractedTaskDueDate(
-  captureId: string,
-  taskId: string,
-  dueDate: string | null,
-  csrfToken: string
-): Promise<ExtractedTask> {
-  return apiRequest<ExtractedTask>(
-    `/captures/${captureId}/extracted-tasks/${taskId}`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ due_date: dueDate })
-    },
     csrfToken
   )
 }

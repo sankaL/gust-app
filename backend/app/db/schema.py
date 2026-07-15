@@ -290,6 +290,22 @@ rate_limit_counters = sa.Table(
     sa.Column(
         "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
     ),
+    sa.CheckConstraint(
+        "length(scope) BETWEEN 1 AND 100",
+        name="ck_rate_limit_counters_scope_length",
+    ),
+    sa.CheckConstraint(
+        "length(subject_key) BETWEEN 1 AND 300",
+        name="ck_rate_limit_counters_subject_length",
+    ),
+    sa.CheckConstraint(
+        "window_seconds > 0 OR (window_seconds = 0 AND scope LIKE 'action_lock:%')",
+        name="ck_rate_limit_counters_valid_window",
+    ),
+    sa.CheckConstraint(
+        "request_count >= 0",
+        name="ck_rate_limit_counters_nonnegative_count",
+    ),
 )
 
 sa.Index(

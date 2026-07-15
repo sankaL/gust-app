@@ -109,6 +109,7 @@ Group management is reached from the Tasks area and is not a primary navigation 
 
 Users sign in with Google. During private access, only explicitly allowlisted email addresses may create or restore a Gust session. All application data is scoped per user.
 Authentication uses a dedicated `/login` screen and redirects signed-out access away from protected task/capture routes. Unsuccessful sign-in attempts return to the landing page with a sanitized access notice.
+The backend binds the Google callback to the browser that started it with a short-lived PKCE verifier and rejects missing or invalid callback proof.
 The authenticated shell includes a top-right account avatar menu with entries for `Completed Tasks`, `Desktop Mode`, and `Logout`.
 
 ### 5. Email Digests
@@ -472,7 +473,9 @@ V1 behavior:
 
 - Every data mutation requires an authenticated user.
 - All reads and writes must be scoped by user identity.
+- Database defense-in-depth policies must also prevent cross-user parent relationships between tasks, groups, captures, subtasks, reminders, and staged extracted tasks.
 - Missing or invalid auth must fail closed.
+- Public, authenticated, capture, and internal-job endpoints must have bounded abuse controls before expensive auth/provider work.
 - AI provider keys remain server-side only.
 - Destructive actions require either explicit confirmation or a visible undo path.
 

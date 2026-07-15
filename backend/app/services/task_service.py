@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -111,37 +110,39 @@ class TaskService:
         completed_start: date | None = None,
         completed_end: date | None = None,
     ) -> PaginatedTaskList:
-        with timed_stage("db.tasks.list"):
-            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-                # Validate group exists if group_id is provided (skip validation for 'all')
-                if group_id is not None and group_id != "all":
-                    group = get_group(connection, user_id=user_id, group_id=group_id)
-                    if group is None:
-                        raise GroupNotFoundError()
+        with (
+            timed_stage("db.tasks.list"),
+            user_connection_scope(self.settings.database_url, user_id=user_id) as connection,
+        ):
+            # Validate group exists if group_id is provided (skip validation for 'all')
+            if group_id is not None and group_id != "all":
+                group = get_group(connection, user_id=user_id, group_id=group_id)
+                if group is None:
+                    raise GroupNotFoundError()
 
-                completed_start_at: datetime | None = None
-                completed_end_at: datetime | None = None
-                if status == "completed":
-                    zone = ZoneInfo(user_timezone)
-                    if completed_start is not None:
-                        completed_start_at = datetime.combine(
-                            completed_start, datetime.min.time(), tzinfo=zone
-                        ).astimezone(timezone.utc)
-                    if completed_end is not None:
-                        completed_end_at = datetime.combine(
-                            completed_end, datetime.min.time(), tzinfo=zone
-                        ).astimezone(timezone.utc)
+            completed_start_at: datetime | None = None
+            completed_end_at: datetime | None = None
+            if status == "completed":
+                zone = ZoneInfo(user_timezone)
+                if completed_start is not None:
+                    completed_start_at = datetime.combine(
+                        completed_start, datetime.min.time(), tzinfo=zone
+                    ).astimezone(UTC)
+                if completed_end is not None:
+                    completed_end_at = datetime.combine(
+                        completed_end, datetime.min.time(), tzinfo=zone
+                    ).astimezone(UTC)
 
-                task_rows, has_more, next_cursor = list_tasks(
-                    connection,
-                    user_id=user_id,
-                    group_id=group_id,
-                    status=status,
-                    limit=limit,
-                    cursor=cursor,
-                    completed_start=completed_start_at,
-                    completed_end=completed_end_at,
-                )
+            task_rows, has_more, next_cursor = list_tasks(
+                connection,
+                user_id=user_id,
+                group_id=group_id,
+                status=status,
+                limit=limit,
+                cursor=cursor,
+                completed_start=completed_start_at,
+                completed_end=completed_end_at,
+            )
 
         items = [
             TaskListItem(
@@ -159,15 +160,17 @@ class TaskService:
         return PaginatedTaskList(items=items, has_more=has_more, next_cursor=next_cursor)
 
     def get_task_detail(self, *, user_id: str, task_id: str) -> TaskDetail:
-        with timed_stage("db.tasks.detail"):
-            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-                task = get_task(connection, user_id=user_id, task_id=task_id)
-                if task is None:
-                    raise TaskNotFoundError()
-                group = get_group(connection, user_id=user_id, group_id=task.group_id)
-                if group is None:
-                    raise GroupNotFoundError("Task group could not be found.")
-                task_subtasks = list_subtasks(connection, user_id=user_id, task_id=task_id)
+        with (
+            timed_stage("db.tasks.detail"),
+            user_connection_scope(self.settings.database_url, user_id=user_id) as connection,
+        ):
+            task = get_task(connection, user_id=user_id, task_id=task_id)
+            if task is None:
+                raise TaskNotFoundError()
+            group = get_group(connection, user_id=user_id, group_id=task.group_id)
+            if group is None:
+                raise GroupNotFoundError("Task group could not be found.")
+            task_subtasks = list_subtasks(connection, user_id=user_id, task_id=task_id)
         return TaskDetail(task=task, group=group, subtasks=task_subtasks)
 
     def create_task(
@@ -213,7 +216,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task=created,
-                now=datetime.now(timezone.utc),
+                now=datetime.now(UTC),
             )
             group = get_group(connection, user_id=user_id, group_id=created.group_id)
             assert group is not None
@@ -273,7 +276,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task=updated,
-                now=datetime.now(timezone.utc),
+                now=datetime.now(UTC),
             )
             group = get_group(connection, user_id=user_id, group_id=updated.group_id)
             assert group is not None
@@ -301,7 +304,7 @@ class TaskService:
             series_id_to_assign: str | None = None
             if task.recurrence_frequency is not None and task.series_id is None:
                 series_id_to_assign = str(uuid.uuid4())
-            completed_at = datetime.now(timezone.utc)
+            completed_at = datetime.now(UTC)
             updated = complete_task_if_open(
                 connection,
                 user_id=user_id,
@@ -363,7 +366,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task=updated,
-                now=datetime.now(timezone.utc),
+                now=datetime.now(UTC),
             )
             group = get_group(connection, user_id=user_id, group_id=updated.group_id)
             assert group is not None
@@ -387,7 +390,7 @@ class TaskService:
                     "task_delete_conflict",
                     "Only active tasks can be deleted.",
                 )
-            deleted_at = datetime.now(timezone.utc)
+            deleted_at = datetime.now(UTC)
 
             if scope == "series":
                 task = self._ensure_series_id_for_recurring_task(
@@ -485,7 +488,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task=updated,
-                now=datetime.now(timezone.utc),
+                now=datetime.now(UTC),
             )
             group = get_group(connection, user_id=user_id, group_id=updated.group_id)
             assert group is not None
@@ -550,7 +553,7 @@ class TaskService:
                     raise InvalidSubtaskError(str(exc)) from exc
             if is_completed is not None:
                 values["is_completed"] = is_completed
-                values["completed_at"] = datetime.now(timezone.utc) if is_completed else None
+                values["completed_at"] = datetime.now(UTC) if is_completed else None
 
             updated = update_subtask(
                 connection,
@@ -671,7 +674,7 @@ class TaskService:
                 due_date=next_due_date,
                 reminder_offset_minutes=task.reminder_offset_minutes,
                 user_timezone=user_timezone,
-            ).astimezone(timezone.utc)
+            ).astimezone(UTC)
             if derived_reminder_at > completed_at:
                 next_reminder_at = derived_reminder_at
 
@@ -695,9 +698,7 @@ class TaskService:
                 else task.recurrence_day_of_month
             ),
             recurrence_month=(
-                task.recurrence_month
-                if task.recurrence_frequency == "yearly"
-                else None
+                task.recurrence_month if task.recurrence_frequency == "yearly" else None
             ),
             series_id=task.series_id,
         )
@@ -752,7 +753,7 @@ class TaskService:
                 due_date=next_due_date,
                 reminder_offset_minutes=task.reminder_offset_minutes,
                 user_timezone=user_timezone,
-            ).astimezone(timezone.utc)
+            ).astimezone(UTC)
             if derived_reminder_at > deleted_at:
                 next_reminder_at = derived_reminder_at
 
@@ -776,9 +777,7 @@ class TaskService:
                 else task.recurrence_day_of_month
             ),
             recurrence_month=(
-                task.recurrence_month
-                if task.recurrence_frequency == "yearly"
-                else None
+                task.recurrence_month if task.recurrence_frequency == "yearly" else None
             ),
             series_id=task.series_id,
         )
@@ -816,7 +815,7 @@ class TaskService:
 
         completed_at = task.completed_at
         if completed_at.tzinfo is None:
-            completed_at = completed_at.replace(tzinfo=timezone.utc)
+            completed_at = completed_at.replace(tzinfo=UTC)
 
         next_due_date, next_day_of_month = next_due_date_for_completed_task(
             completed_at=completed_at,
@@ -847,7 +846,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task_id=existing_open.id,
-                values={"deleted_at": datetime.now(timezone.utc)},
+                values={"deleted_at": datetime.now(UTC)},
             )
             cancel_reminder(connection, user_id=user_id, task_id=existing_open.id)
             return "keep_recurrence"
@@ -877,7 +876,7 @@ class TaskService:
             deleted_at = task.deleted_at
             assert deleted_at is not None
             if deleted_at.tzinfo is None:
-                deleted_at = deleted_at.replace(tzinfo=timezone.utc)
+                deleted_at = deleted_at.replace(tzinfo=UTC)
             occurrence_due_date = deleted_at.astimezone(ZoneInfo(user_timezone)).date()
 
         existing_open = get_open_task_in_series(
@@ -917,7 +916,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task_id=existing_open.id,
-                values={"deleted_at": datetime.now(timezone.utc)},
+                values={"deleted_at": datetime.now(UTC)},
             )
             cancel_reminder(connection, user_id=user_id, task_id=existing_open.id)
             return "keep_recurrence"

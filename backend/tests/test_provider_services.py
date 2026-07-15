@@ -2,7 +2,6 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
 from unittest.mock import patch
 
 import httpx
@@ -32,7 +31,7 @@ from app.services.transcription import MistralTranscriptionService, Transcriptio
 
 
 class FakeAsyncClient:
-    def __init__(self, *, response=None, error: Optional[Exception] = None) -> None:
+    def __init__(self, *, response=None, error: Exception | None = None) -> None:
         self.response = response
         self.error = error
         self.post_calls: list[dict[str, object]] = []
@@ -53,8 +52,8 @@ class FakeAsyncClient:
 @dataclass
 class FakeJsonResponse:
     status_code: int
-    json_value: Optional[object] = None
-    json_error: Optional[Exception] = None
+    json_value: object | None = None
+    json_error: Exception | None = None
 
     def json(self):
         if self.json_error is not None:
@@ -216,18 +215,20 @@ def test_extraction_service_chain_error_raises_service_error() -> None:
     async def fail_invoke(*args, **kwargs):
         raise RuntimeError("chain failed")
 
-    with patch.object(service, "_execute_extraction", side_effect=fail_invoke):
-        with pytest.raises(ExtractionServiceError):
-            asyncio.run(
-                service.extract(
-                    request=ExtractionRequest(
-                        transcript_text="Plan trip",
-                        user_timezone="UTC",
-                        current_local_date=date(2026, 3, 22),
-                        groups=[],
-                    ),
-                )
+    with (
+        patch.object(service, "_execute_extraction", side_effect=fail_invoke),
+        pytest.raises(ExtractionServiceError),
+    ):
+        asyncio.run(
+            service.extract(
+                request=ExtractionRequest(
+                    transcript_text="Plan trip",
+                    user_timezone="UTC",
+                    current_local_date=date(2026, 3, 22),
+                    groups=[],
+                ),
             )
+        )
 
 
 def test_extraction_service_invalid_json_raises_malformed_error() -> None:
@@ -243,18 +244,20 @@ def test_extraction_service_invalid_json_raises_malformed_error() -> None:
     async def return_invalid_json(*args, **kwargs):
         return "not valid json {"
 
-    with patch.object(service, "_execute_extraction", side_effect=return_invalid_json):
-        with pytest.raises(ExtractionServiceError):
-            asyncio.run(
-                service.extract(
-                    request=ExtractionRequest(
-                        transcript_text="Plan trip",
-                        user_timezone="UTC",
-                        current_local_date=date(2026, 3, 22),
-                        groups=[],
-                    ),
-                )
+    with (
+        patch.object(service, "_execute_extraction", side_effect=return_invalid_json),
+        pytest.raises(ExtractionServiceError),
+    ):
+        asyncio.run(
+            service.extract(
+                request=ExtractionRequest(
+                    transcript_text="Plan trip",
+                    user_timezone="UTC",
+                    current_local_date=date(2026, 3, 22),
+                    groups=[],
+                ),
             )
+        )
 
 
 def test_extraction_service_missing_api_key_raises_config_error() -> None:
@@ -298,18 +301,20 @@ def test_extraction_service_uses_correct_model_from_registry() -> None:
     async def mock_execute(*args, **kwargs):
         return {"tasks": []}
 
-    with patch.object(service, "_create_llm", side_effect=tracking_create_llm):
-        with patch.object(service, "_execute_extraction", side_effect=mock_execute):
-            asyncio.run(
-                service.extract(
-                    request=ExtractionRequest(
-                        transcript_text="Plan trip",
-                        user_timezone="UTC",
-                        current_local_date=date(2026, 3, 22),
-                        groups=[],
-                    ),
-                )
+    with (
+        patch.object(service, "_create_llm", side_effect=tracking_create_llm),
+        patch.object(service, "_execute_extraction", side_effect=mock_execute),
+    ):
+        asyncio.run(
+            service.extract(
+                request=ExtractionRequest(
+                    transcript_text="Plan trip",
+                    user_timezone="UTC",
+                    current_local_date=date(2026, 3, 22),
+                    groups=[],
+                ),
             )
+        )
 
     assert len(created_configs) == 1
     assert created_configs[0].model_id == "anthropic/claude-3.5-sonnet"
@@ -455,9 +460,11 @@ def test_extraction_parse_error_log_omits_raw_provider_content(
     service = LangChainExtractionService(settings=build_settings())
     malformed = 'not valid json {"secret":"user-task"}'
 
-    with caplog.at_level(logging.WARNING, logger="gust.api"):
-        with pytest.raises(ExtractorMalformedResponseError):
-            service._parse_result(malformed)
+    with (
+        caplog.at_level(logging.WARNING, logger="gust.api"),
+        pytest.raises(ExtractorMalformedResponseError),
+    ):
+        service._parse_result(malformed)
 
     parse_logs = [record for record in caplog.records if record.msg == "extraction_parse_error"]
     assert len(parse_logs) == 1

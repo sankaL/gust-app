@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
 from dataclasses import dataclass
 
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 from app.core.dependencies import get_auth_service
 from app.core.errors import UpstreamAuthError

@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fastapi import FastAPI
+from starlette.requests import Request
 
 from app.core.dependencies import get_auth_service
 from app.core.middleware import RequestContextMiddleware
 from app.core.rate_limits import RequestRateLimiter
+from app.core.request_security import client_ip_for_request
 from app.core.security import (
     ACCESS_TOKEN_COOKIE,
     CSRF_COOKIE,
@@ -77,9 +79,9 @@ def test_public_get_rate_limit_returns_429(client) -> None:
     client.app.state.settings.rate_limit_public_get_ip = "2/60"
     middleware.rate_limiter = RequestRateLimiter(client.app.state.settings)
 
-    first = client.get("/health")
-    second = client.get("/health")
-    third = client.get("/health")
+    first = client.get("/auth/session")
+    second = client.get("/auth/session")
+    third = client.get("/auth/session")
 
     assert first.status_code == 200
     assert second.status_code == 200
@@ -93,12 +95,60 @@ def test_x_forwarded_for_does_not_bypass_public_get_limit(client) -> None:
     client.app.state.settings.rate_limit_public_get_ip = "1/60"
     middleware.rate_limiter = RequestRateLimiter(client.app.state.settings)
 
-    first = client.get("/health", headers={"X-Forwarded-For": "198.51.100.10"})
-    second = client.get("/health", headers={"X-Forwarded-For": "203.0.113.25"})
+    first = client.get("/auth/session", headers={"X-Forwarded-For": "198.51.100.10"})
+    second = client.get("/auth/session", headers={"X-Forwarded-For": "203.0.113.25"})
 
     assert first.status_code == 200
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "rate_limit_exceeded"
+
+
+def test_health_liveness_does_not_depend_on_rate_limit_storage(client) -> None:
+    middleware = _request_context_middleware(client.app)
+    client.app.state.settings.rate_limit_public_get_ip = "1/60"
+    middleware.rate_limiter = RequestRateLimiter(client.app.state.settings)
+
+    first = client.get("/health")
+    second = client.get("/health")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+
+def test_railway_real_ip_is_used_only_in_railway_runtime(client) -> None:
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/health",
+            "headers": [(b"x-real-ip", b"198.51.100.9")],
+            "client": ("127.0.0.1", 1234),
+            "scheme": "http",
+            "server": ("testserver", 80),
+        }
+    )
+    assert client_ip_for_request(request, client.app.state.settings) != "198.51.100.9"
+
+    client.app.state.settings.railway_public_domain = "gust-api.up.railway.app"
+
+    assert client_ip_for_request(request, client.app.state.settings) == "198.51.100.9"
+
+
+def test_invalid_railway_real_ip_falls_back_to_socket_peer(client) -> None:
+    client.app.state.settings.railway_public_domain = "gust-api.up.railway.app"
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/health",
+            "headers": [(b"x-real-ip", b"not-an-ip")],
+            "client": ("127.0.0.1", 1234),
+            "scheme": "http",
+            "server": ("testserver", 80),
+        }
+    )
+
+    assert client_ip_for_request(request, client.app.state.settings) != "not-an-ip"
 
 
 def test_auth_entry_rate_limit_returns_429(app: FastAPI, client) -> None:
@@ -115,6 +165,39 @@ def test_auth_entry_rate_limit_returns_429(app: FastAPI, client) -> None:
     assert OAUTH_CODE_VERIFIER_COOKIE in first.headers["set-cookie"]
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "rate_limit_exceeded"
+
+
+def test_unauthenticated_write_rate_limit_returns_429(app: FastAPI, client) -> None:
+    middleware = _request_context_middleware(app)
+    app.state.settings.rate_limit_unauthenticated_write_ip = "1/60"
+    middleware.rate_limiter = RequestRateLimiter(app.state.settings)
+
+    first = client.post("/groups", json={"name": "First"})
+    second = client.post("/groups", json={"name": "Second"})
+
+    assert first.status_code == 401
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "rate_limit_exceeded"
+
+
+def test_internal_job_rate_limit_returns_429(app: FastAPI, client) -> None:
+    middleware = _request_context_middleware(app)
+    app.state.settings.rate_limit_internal_job_ip = "1/60"
+    middleware.rate_limiter = RequestRateLimiter(app.state.settings)
+
+    first = client.post("/internal/reminders/run?mode=daily")
+    second = client.post("/internal/reminders/run?mode=daily")
+
+    assert first.status_code in {401, 403, 503}
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "rate_limit_exceeded"
+
+
+def test_invalid_request_id_is_replaced(client) -> None:
+    response = client.get("/health", headers={"X-Request-ID": "bad request id\nforged"})
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] != "bad request id\nforged"
 
 
 def test_authenticated_json_responses_set_no_store_headers(client) -> None:
@@ -148,6 +231,39 @@ def test_expired_access_token_counts_against_authenticated_write_limit(
         ensure_inbox_group(connection, user_id="11111111-1111-1111-1111-111111111111")
 
     client.cookies.set(ACCESS_TOKEN_COOKIE, "expired-token")
+    client.cookies.set(REFRESH_TOKEN_COOKIE, "refresh-token")
+    client.cookies.set(CSRF_COOKIE, "csrf-token")
+    headers = {"X-CSRF-Token": "csrf-token", "Origin": "http://frontend.test"}
+
+    first = client.post("/groups", json={"name": "First"}, headers=headers)
+    second = client.post("/groups", json={"name": "Second"}, headers=headers)
+
+    assert first.status_code == 201
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "rate_limit_exceeded"
+
+
+def test_refresh_only_session_counts_against_authenticated_write_limit(
+    app: FastAPI,
+    client,
+) -> None:
+    fake_auth_service = FakeAuthService()
+    _override_auth_service(app)
+    middleware = _request_context_middleware(app)
+    middleware.auth_service = fake_auth_service
+    app.state.settings.rate_limit_authenticated_write_user = "1/60"
+    middleware.rate_limiter = RequestRateLimiter(app.state.settings)
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        upsert_user(
+            connection,
+            user_id="11111111-1111-1111-1111-111111111111",
+            email="user@example.com",
+            display_name="Gust User",
+            timezone="UTC",
+        )
+        ensure_inbox_group(connection, user_id="11111111-1111-1111-1111-111111111111")
+
     client.cookies.set(REFRESH_TOKEN_COOKIE, "refresh-token")
     client.cookies.set(CSRF_COOKIE, "csrf-token")
     headers = {"X-CSRF-Token": "csrf-token", "Origin": "http://frontend.test"}

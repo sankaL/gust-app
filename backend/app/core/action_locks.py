@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
 
@@ -14,7 +14,7 @@ class ActionLockBusyError(Exception):
     pass
 
 
-_ACTION_LOCK_WINDOW_START = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_ACTION_LOCK_WINDOW_START = datetime(1970, 1, 1, tzinfo=UTC)
 _ACTION_LOCK_WINDOW_SECONDS = 0
 _ACTION_LOCK_LEASE_SECONDS = 15 * 60
 
@@ -23,7 +23,7 @@ _ACTION_LOCK_LEASE_SECONDS = 15 * 60
 def user_action_lock(*, database_url: str, user_id: str, action: str) -> Iterator[None]:
     lock_scope = f"action_lock:{action}"
     subject_key = f"user:{user_id}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = now + timedelta(seconds=_ACTION_LOCK_LEASE_SECONDS)
 
     if not _acquire_action_lock(
@@ -119,8 +119,12 @@ def _lock_insert_statement(
                 index_elements=index_elements,
             )
         )
-    return sa.dialects.postgresql.insert(
-        rate_limit_counters,
-    ).values(**values).on_conflict_do_nothing(
-        index_elements=index_elements,
+    return (
+        sa.dialects.postgresql.insert(
+            rate_limit_counters,
+        )
+        .values(**values)
+        .on_conflict_do_nothing(
+            index_elements=index_elements,
+        )
     )

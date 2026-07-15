@@ -1,0 +1,518 @@
+{
+  "kind": "audit",
+  "schema_version": 7,
+  "version": "3.5.0",
+  "command": "audit",
+  "verdict": "pass",
+  "changed_files_count": 33,
+  "base_ref": "main",
+  "head_sha": "3f4eeba",
+  "elapsed_ms": 622,
+  "summary": {
+    "dead_code_issues": 3,
+    "dead_code_has_errors": true,
+    "complexity_findings": 1,
+    "max_cyclomatic": 15,
+    "duplication_clone_groups": 0
+  },
+  "attribution": {
+    "gate": "new-only",
+    "dead_code_introduced": 0,
+    "dead_code_inherited": 3,
+    "complexity_introduced": 0,
+    "complexity_inherited": 1,
+    "duplication_introduced": 0,
+    "duplication_inherited": 0
+  },
+  "dead_code": {
+    "schema_version": 7,
+    "version": "3.5.0",
+    "elapsed_ms": 120,
+    "total_issues": 3,
+    "entry_points": {
+      "total": 28,
+      "sources": {
+        "manual_entry": 6,
+        "plugin": 22
+      }
+    },
+    "summary": {
+      "total_issues": 3,
+      "unused_files": 0,
+      "unused_exports": 3,
+      "unused_types": 0,
+      "private_type_leaks": 0,
+      "unused_dependencies": 0,
+      "unused_enum_members": 0,
+      "unused_class_members": 0,
+      "unused_store_members": 0,
+      "unprovided_injects": 0,
+      "unrendered_components": 0,
+      "unused_component_props": 0,
+      "unused_component_emits": 0,
+      "unused_component_inputs": 0,
+      "unused_component_outputs": 0,
+      "unused_svelte_events": 0,
+      "unused_server_actions": 0,
+      "unused_load_data_keys": 0,
+      "unresolved_imports": 0,
+      "unlisted_dependencies": 0,
+      "duplicate_exports": 0,
+      "type_only_dependencies": 0,
+      "test_only_dependencies": 0,
+      "dev_dependencies_in_production": 0,
+      "circular_dependencies": 0,
+      "re_export_cycles": 0,
+      "boundary_violations": 0,
+      "boundary_coverage_violations": 0,
+      "boundary_call_violations": 0,
+      "policy_violations": 0,
+      "stale_suppressions": 0,
+      "unused_catalog_entries": 0,
+      "empty_catalog_groups": 0,
+      "unresolved_catalog_references": 0,
+      "unused_dependency_overrides": 0,
+      "misconfigured_dependency_overrides": 0,
+      "invalid_client_exports": 0,
+      "mixed_client_server_barrels": 0,
+      "misplaced_directives": 0,
+      "route_collisions": 0,
+      "dynamic_segment_name_conflicts": 0
+    },
+    "unused_files": [],
+    "unused_exports": [
+      {
+        "path": "frontend/src/lib/api.ts",
+        "export_name": "submitCapture",
+        "is_type_only": false,
+        "line": 242,
+        "col": 16,
+        "span_start": 5704,
+        "is_re_export": false,
+        "actions": [
+          {
+            "type": "remove-export",
+            "auto_fixable": true,
+            "description": "Remove the unused export from the public API"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress with an inline comment above the line",
+            "comment": "// fallow-ignore-next-line unused-export"
+          }
+        ],
+        "introduced": false
+      },
+      {
+        "path": "frontend/src/lib/api.ts",
+        "export_name": "reExtractCapture",
+        "is_type_only": false,
+        "line": 540,
+        "col": 16,
+        "span_start": 12572,
+        "is_re_export": false,
+        "actions": [
+          {
+            "type": "remove-export",
+            "auto_fixable": true,
+            "description": "Remove the unused export from the public API"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress with an inline comment above the line",
+            "comment": "// fallow-ignore-next-line unused-export"
+          }
+        ],
+        "introduced": false
+      },
+      {
+        "path": "frontend/src/lib/api.ts",
+        "export_name": "updateExtractedTaskDueDate",
+        "is_type_only": false,
+        "line": 566,
+        "col": 16,
+        "span_start": 13146,
+        "is_re_export": false,
+        "actions": [
+          {
+            "type": "remove-export",
+            "auto_fixable": true,
+            "description": "Remove the unused export from the public API"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress with an inline comment above the line",
+            "comment": "// fallow-ignore-next-line unused-export"
+          }
+        ],
+        "introduced": false
+      }
+    ],
+    "unused_types": [],
+    "private_type_leaks": [],
+    "unused_dependencies": [],
+    "unused_dev_dependencies": [],
+    "unused_optional_dependencies": [],
+    "unused_enum_members": [],
+    "unused_class_members": [],
+    "unresolved_imports": [],
+    "unlisted_dependencies": [],
+    "duplicate_exports": [],
+    "type_only_dependencies": [],
+    "test_only_dependencies": [],
+    "dev_dependencies_in_production": [],
+    "circular_dependencies": [],
+    "re_export_cycles": [],
+    "boundary_violations": [],
+    "boundary_coverage_violations": [],
+    "boundary_call_violations": [],
+    "policy_violations": [],
+    "stale_suppressions": [],
+    "unused_catalog_entries": [],
+    "empty_catalog_groups": [],
+    "unresolved_catalog_references": [],
+    "unused_dependency_overrides": [],
+    "misconfigured_dependency_overrides": [],
+    "invalid_client_exports": [],
+    "mixed_client_server_barrels": [],
+    "misplaced_directives": [],
+    "route_collisions": [],
+    "dynamic_segment_name_conflicts": []
+  },
+  "duplication": {
+    "clone_groups": [],
+    "clone_families": [],
+    "stats": {
+      "total_files": 64,
+      "files_with_clones": 0,
+      "total_lines": 16902,
+      "duplicated_lines": 0,
+      "total_tokens": 75901,
+      "duplicated_tokens": 0,
+      "clone_groups": 0,
+      "clone_instances": 0,
+      "duplication_percentage": 0.0
+    }
+  },
+  "complexity": {
+    "findings": [
+      {
+        "path": "frontend/src/lib/api.ts",
+        "name": "apiRequest",
+        "line": 134,
+        "col": 0,
+        "cyclomatic": 15,
+        "cognitive": 11,
+        "line_count": 42,
+        "param_count": 3,
+        "exceeded": "crap",
+        "severity": "high",
+        "crap": 63.6,
+        "coverage_tier": "partial",
+        "coverage_source": "estimated",
+        "actions": [
+          {
+            "type": "increase-coverage",
+            "auto_fixable": false,
+            "description": "Increase test coverage for `apiRequest` (file is reachable from existing tests; add targeted assertions for uncovered branches)",
+            "note": "CRAP = CC^2 * (1 - cov/100)^3 + CC; targeted branch coverage is more efficient than scaffolding new test files when the file already has coverage"
+          },
+          {
+            "type": "refactor-function",
+            "auto_fixable": false,
+            "description": "Refactor `apiRequest` to reduce complexity (extract helper functions, simplify branching)",
+            "note": "Consider splitting into smaller functions with single responsibilities"
+          },
+          {
+            "type": "suppress-line",
+            "auto_fixable": false,
+            "description": "Suppress with an inline comment above the function declaration",
+            "comment": "// fallow-ignore-next-line complexity",
+            "placement": "above-function-declaration"
+          }
+        ],
+        "introduced": false
+      }
+    ],
+    "summary": {
+      "files_analyzed": 3,
+      "functions_analyzed": 58,
+      "functions_above_threshold": 1,
+      "max_cyclomatic_threshold": 20,
+      "max_cognitive_threshold": 15,
+      "max_crap_threshold": 30.0,
+      "max_unit_size_threshold": 60,
+      "coverage_source_consistency": "uniform",
+      "severity_critical_count": 0,
+      "severity_high_count": 1,
+      "severity_moderate_count": 0
+    },
+    "vital_signs": {
+      "dead_file_pct": 0.0,
+      "dead_export_pct": 6.3,
+      "avg_cyclomatic": 1.9,
+      "critical_complexity_pct": 0.0,
+      "p90_cyclomatic": 4,
+      "maintainability_avg": 91.0,
+      "maintainability_low_pct": 0.0,
+      "unused_dep_count": 0,
+      "unused_deps_per_k_files": 0.0,
+      "circular_dep_count": 0,
+      "circular_deps_per_k_files": 0.0,
+      "counts": {
+        "total_files": 3,
+        "total_exports": 48,
+        "dead_files": 0,
+        "dead_exports": 3,
+        "total_lines": 794,
+        "files_scored": 3,
+        "total_deps": 0
+      },
+      "unit_size_profile": {
+        "low_risk": 84.5,
+        "medium_risk": 12.1,
+        "high_risk": 1.7,
+        "very_high_risk": 1.7
+      },
+      "functions_over_60_loc_per_k": 17.2,
+      "unit_interfacing_profile": {
+        "low_risk": 69.0,
+        "medium_risk": 27.6,
+        "high_risk": 3.4,
+        "very_high_risk": 0.0
+      },
+      "p95_fan_in": 38,
+      "coupling_high_pct": 0.0,
+      "p95_render_fan_in": 4,
+      "render_fan_in_high_pct": 0.0,
+      "max_render_fan_in": 7,
+      "top_render_fan_in": [
+        {
+          "component": "SelectDropdown",
+          "path": "frontend/src/components/SelectDropdown.tsx",
+          "render_sites": 17,
+          "distinct_parents": 7
+        },
+        {
+          "component": "DesktopTaskDetailModal",
+          "path": "frontend/src/components/DesktopTaskDetailModal.tsx",
+          "render_sites": 5,
+          "distinct_parents": 5
+        },
+        {
+          "component": "DatePicker",
+          "path": "frontend/src/components/DatePicker.tsx",
+          "render_sites": 8,
+          "distinct_parents": 4
+        },
+        {
+          "component": "Card",
+          "path": "frontend/src/components/Card.tsx",
+          "render_sites": 6,
+          "distinct_parents": 4
+        },
+        {
+          "component": "PullToRefresh",
+          "path": "frontend/src/components/TaskScreenRefresh.tsx",
+          "render_sites": 5,
+          "distinct_parents": 4
+        },
+        {
+          "component": "SessionGuard",
+          "path": "frontend/src/components/SessionGuard.tsx",
+          "render_sites": 4,
+          "distinct_parents": 4
+        },
+        {
+          "component": "TaskScreenRefreshButton",
+          "path": "frontend/src/components/TaskScreenRefresh.tsx",
+          "render_sites": 4,
+          "distinct_parents": 4
+        },
+        {
+          "component": "DesktopTaskTable",
+          "path": "frontend/src/components/DesktopTaskTable.tsx",
+          "render_sites": 3,
+          "distinct_parents": 3
+        },
+        {
+          "component": "SessionRequiredCard",
+          "path": "frontend/src/components/SessionRequiredCard.tsx",
+          "render_sites": 3,
+          "distinct_parents": 3
+        },
+        {
+          "component": "Button",
+          "path": "frontend/src/components/Button.tsx",
+          "render_sites": 6,
+          "distinct_parents": 2
+        },
+        {
+          "component": "PortraitOrientationGuard",
+          "path": "frontend/src/components/PortraitOrientationGuard.tsx",
+          "render_sites": 4,
+          "distinct_parents": 2
+        },
+        {
+          "component": "StagingTable",
+          "path": "frontend/src/components/StagingTable.tsx",
+          "render_sites": 4,
+          "distinct_parents": 2
+        },
+        {
+          "component": "EditExtractedTaskModal",
+          "path": "frontend/src/components/EditExtractedTaskModal.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "OpenTaskCardInner",
+          "path": "frontend/src/components/OpenTaskCard.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "TaskDeleteDialog",
+          "path": "frontend/src/components/TaskDeleteDialog.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "TaskForm",
+          "path": "frontend/src/components/TaskForm.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "TaskFormFields",
+          "path": "frontend/src/components/TaskFormFields.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "TaskPreviewModal",
+          "path": "frontend/src/components/TaskPreviewModal.tsx",
+          "render_sites": 2,
+          "distinct_parents": 2
+        },
+        {
+          "component": "MetadataTile",
+          "path": "frontend/src/components/TaskPreviewModal.tsx",
+          "render_sites": 5,
+          "distinct_parents": 1
+        },
+        {
+          "component": "MetricRow",
+          "path": "frontend/src/routes/desktop/DesktopDashboardRoute.tsx",
+          "render_sites": 4,
+          "distinct_parents": 1
+        }
+      ],
+      "total_loc": 794
+    },
+    "framework_health": {
+      "detected_frameworks": [
+        "react"
+      ],
+      "detectors": [
+        {
+          "id": "unused-component-prop",
+          "framework": "react",
+          "status": "active"
+        },
+        {
+          "id": "prop-drilling",
+          "framework": "react",
+          "status": "disabled_by_config",
+          "reason": "disabled_by_config"
+        },
+        {
+          "id": "thin-wrapper",
+          "framework": "react",
+          "status": "disabled_by_config",
+          "reason": "disabled_by_config"
+        },
+        {
+          "id": "duplicate-prop-shape",
+          "framework": "react",
+          "status": "disabled_by_config",
+          "reason": "disabled_by_config"
+        }
+      ]
+    },
+    "css_analytics": {
+      "files": [],
+      "summary": {
+        "files_analyzed": 2,
+        "total_rules": 36,
+        "total_declarations": 150,
+        "important_declarations": 0,
+        "empty_rules": 0,
+        "max_nesting_depth": 0,
+        "unique_colors": 73,
+        "unique_font_sizes": 2,
+        "unique_z_indexes": 1,
+        "unique_box_shadows": 11,
+        "unique_border_radii": 1,
+        "unique_line_heights": 1,
+        "custom_properties_defined": 27,
+        "custom_properties_unreferenced": 18,
+        "custom_properties_undefined": 2,
+        "keyframes_defined": 2,
+        "keyframes_unreferenced": 0,
+        "keyframes_undefined": 0,
+        "scoped_unused_classes": 0,
+        "duplicate_declaration_blocks": 0,
+        "duplicate_declarations_total": 0,
+        "tailwind_arbitrary_values": 0,
+        "tailwind_arbitrary_value_uses": 0,
+        "preprocessor_stylesheets": 0,
+        "preprocessor_reachability_abstained": false,
+        "raw_style_values": 0,
+        "unused_property_registrations": 0,
+        "unused_layers": 0,
+        "unresolved_class_references": 0,
+        "unreferenced_css_classes": 1,
+        "unused_font_faces": 0,
+        "unused_theme_tokens": 0,
+        "near_duplicate_theme_tokens": 0,
+        "near_duplicate_css_in_js_tokens": 0,
+        "font_size_units_used": 2,
+        "notable_truncated_files": 0
+      }
+    },
+    "styling_health": {
+      "formula_version": 3,
+      "score": 98.8,
+      "grade": "A",
+      "penalties": {
+        "duplication": 0.0,
+        "dead_surface": 1.0,
+        "broken_references": 0.0,
+        "token_erosion": 0.2,
+        "structural": 0.0
+      },
+      "confidence": "high"
+    }
+  },
+  "next_steps": [
+    {
+      "id": "trace-unused-export",
+      "command": "fallow dead-code --trace frontend/src/lib/api.ts:reExtractCapture",
+      "reason": "verify an export is truly unused before deleting"
+    },
+    {
+      "id": "complexity-breakdown",
+      "command": "fallow health --complexity-breakdown",
+      "reason": "see per-decision-point contributions for a hotspot"
+    }
+  ],
+  "_meta": {
+    "telemetry": {
+      "analysis_run_id": "run_e58282d7c8a60091"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { useNotifications } from '../components/Notifications'
 import {
@@ -21,6 +21,7 @@ import {
 } from '../lib/taskQueryCache'
 import { refreshTaskScreenQueries } from '../lib/taskScreenCache'
 import { acquireTaskMutationLock } from '../lib/taskMutationLocks'
+import { requireCsrfToken } from '../lib/sessionSecurity'
 
 type CompleteVariables = { task: TaskSummary; releaseLock: () => void }
 type MoveDueDateVariables = { task: TaskSummary; dueDate: string | null; releaseLock: () => void }
@@ -32,12 +33,23 @@ function buildFriendlyMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-function requireCsrf(session: SessionStatus | undefined) {
-  const csrfToken = session?.csrf_token
-  if (!csrfToken) {
-    throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
-  }
-  return csrfToken
+async function prepareDueDateMutation(queryClient: QueryClient, task: TaskSummary, dueDate: string | null) {
+  const queryKeys = [['tasks'], ['desktop', 'tasks'], ['task-detail', task.id]]
+  await Promise.all(queryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey })))
+  const snapshots = snapshotTaskQueries(queryClient, task.id)
+  const optimisticTask = dueDateTask(task, dueDate)
+  applyTaskListMutation(queryClient, (currentTask, statusSegment) => currentTask.id === task.id && statusSegment === task.status ? { ...currentTask, ...optimisticTask } : currentTask.id === task.id ? null : currentTask)
+  const detail = queryClient.getQueryData<TaskDetail>(['task-detail', task.id])
+  if (detail) updateTaskDetailCache(queryClient, dueDateDetail(detail, dueDate))
+  return { snapshots }
+}
+
+function dueDateTask(task: TaskSummary, dueDate: string | null): TaskSummary {
+  return { ...task, due_date: dueDate, reminder_at: dueDate ? task.reminder_at : null, recurrence_frequency: dueDate ? task.recurrence_frequency : null }
+}
+
+function dueDateDetail(task: TaskDetail, dueDate: string | null): TaskDetail {
+  return { ...task, due_date: dueDate, reminder_at: dueDate ? task.reminder_at : null, recurrence: dueDate ? task.recurrence : null, recurrence_frequency: dueDate ? task.recurrence_frequency : null }
 }
 
 export function useDesktopTaskActions(session: SessionStatus | undefined) {
@@ -76,24 +88,28 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
     })
   }
 
+  async function prepareStatusMutation(
+    task: TaskSummary,
+    status: TaskSummary['status'],
+    completedAt: string | null,
+    openCountDelta: number
+  ) {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: ['tasks'] }),
+      queryClient.cancelQueries({ queryKey: ['desktop', 'tasks'] }),
+      queryClient.cancelQueries({ queryKey: ['groups'] }),
+      queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
+    ])
+    const snapshots = snapshotTaskQueries(queryClient, task.id)
+    syncTaskCaches({ ...task, status, completed_at: completedAt })
+    adjustGroupOpenCount(queryClient, task.group.id, openCountDelta)
+    return { snapshots }
+  }
+
   const completeMutation = useMutation({
-    onMutate: async ({ task }: CompleteVariables) => {
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['tasks'] }),
-        queryClient.cancelQueries({ queryKey: ['groups'] }),
-        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
-      ])
-      const snapshots = snapshotTaskQueries(queryClient, task.id)
-      const optimisticTask: TaskSummary = {
-        ...task,
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      }
-      syncTaskCaches(optimisticTask)
-      adjustGroupOpenCount(queryClient, task.group.id, -1)
-      return { snapshots }
-    },
-    mutationFn: async ({ task }: CompleteVariables) => completeTask(task.id, requireCsrf(session)),
+    onMutate: async ({ task }: CompleteVariables) =>
+      prepareStatusMutation(task, 'completed', new Date().toISOString(), -1),
+    mutationFn: async ({ task }: CompleteVariables) => completeTask(task.id, requireCsrfToken(session)),
     onSuccess: (task) => {
       syncTaskCaches(task)
       notifySuccess(`Completed ${task.title}.`)
@@ -111,23 +127,8 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
   })
 
   const reopenMutation = useMutation({
-    onMutate: async ({ task }: CompleteVariables) => {
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['tasks'] }),
-        queryClient.cancelQueries({ queryKey: ['groups'] }),
-        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
-      ])
-      const snapshots = snapshotTaskQueries(queryClient, task.id)
-      const optimisticTask: TaskSummary = {
-        ...task,
-        status: 'open',
-        completed_at: null,
-      }
-      syncTaskCaches(optimisticTask)
-      adjustGroupOpenCount(queryClient, task.group.id, 1)
-      return { snapshots }
-    },
-    mutationFn: async ({ task }: CompleteVariables) => reopenTask(task.id, requireCsrf(session)),
+    onMutate: async ({ task }: CompleteVariables) => prepareStatusMutation(task, 'open', null, 1),
+    mutationFn: async ({ task }: CompleteVariables) => reopenTask(task.id, requireCsrfToken(session)),
     onSuccess: (task) => {
       syncTaskCaches(task)
       notifySuccess(`Moved ${task.title} back to To-do.`)
@@ -145,37 +146,7 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
   })
 
   const moveDueDateMutation = useMutation({
-    onMutate: async ({ task, dueDate }: MoveDueDateVariables) => {
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['tasks'] }),
-        queryClient.cancelQueries({ queryKey: ['desktop', 'tasks'] }),
-        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
-      ])
-      const snapshots = snapshotTaskQueries(queryClient, task.id)
-      const optimisticTask: TaskSummary = {
-        ...task,
-        due_date: dueDate,
-        reminder_at: dueDate ? task.reminder_at : null,
-        recurrence_frequency: dueDate ? task.recurrence_frequency : null,
-      }
-      applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
-        if (currentTask.id !== task.id) {
-          return currentTask
-        }
-        return statusSegment === task.status ? { ...currentTask, ...optimisticTask } : null
-      })
-      const currentDetail = queryClient.getQueryData<TaskDetail>(['task-detail', task.id])
-      if (currentDetail) {
-        updateTaskDetailCache(queryClient, {
-          ...currentDetail,
-          due_date: dueDate,
-          reminder_at: dueDate ? currentDetail.reminder_at : null,
-          recurrence: dueDate ? currentDetail.recurrence : null,
-          recurrence_frequency: dueDate ? currentDetail.recurrence_frequency : null,
-        })
-      }
-      return { snapshots }
-    },
+    onMutate: ({ task, dueDate }: MoveDueDateVariables) => prepareDueDateMutation(queryClient, task, dueDate),
     mutationFn: async ({ task, dueDate }: MoveDueDateVariables) => {
       const detail = await queryClient.fetchQuery({
         queryKey: ['task-detail', task.id],
@@ -193,7 +164,7 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
           reminder_at: dueDate ? detail.reminder_at : null,
           recurrence: dueDate ? detail.recurrence : null,
         },
-        requireCsrf(session)
+        requireCsrfToken(session)
       )
     },
     onSuccess: (task) => {

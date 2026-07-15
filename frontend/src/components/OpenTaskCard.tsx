@@ -1,7 +1,8 @@
-import { memo, useMemo, useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 
 import { type TaskSummary } from '../lib/api'
 import { Card } from './Card'
+import { OpenTaskCardContent } from './OpenTaskCardContent'
 
 type OpenTaskCardProps = {
   task: TaskSummary
@@ -14,62 +15,56 @@ type OpenTaskCardProps = {
   showCollapsedGroupLabel?: boolean
 }
 
-function buildDueLabel(dueDate: string | null) {
-  if (!dueDate) {
-    return '--'
+type SwipeOptions = Pick<OpenTaskCardProps, 'task' | 'onComplete' | 'isBusy'> & {
+  enabled: boolean
+}
+
+function useTaskCardSwipe({ task, onComplete, isBusy, enabled }: SwipeOptions) {
+  const [offsetX, setOffsetX] = useState(0)
+  const startXRef = useRef<number | null>(null)
+  const pointerIdRef = useRef<number | null>(null)
+  const offsetRef = useRef(0)
+  const suppressClickRef = useRef(false)
+
+  function reset() {
+    startXRef.current = null
+    pointerIdRef.current = null
+    offsetRef.current = 0
+    setOffsetX(0)
   }
 
-  const today = new Date()
-  const due = new Date(`${dueDate}T00:00:00`)
-  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
-  const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
-  const diffDays = dueDay - todayDay
+  function onPointerDown(event: React.PointerEvent<HTMLElement>) {
+    if (!enabled || isBusy) return
+    startXRef.current = event.clientX
+    pointerIdRef.current = event.pointerId
+  }
 
-  if (diffDays < 0) return 'Overdue'
-  if (diffDays === 0) return 'Today'
-  if (diffDays === 1) return 'Tomorrow'
+  function onPointerMove(event: React.PointerEvent<HTMLElement>) {
+    if (!enabled || startXRef.current === null || pointerIdRef.current !== event.pointerId) return
+    const nextOffset = Math.max(-120, Math.min(120, event.clientX - startXRef.current))
+    offsetRef.current = nextOffset
+    setOffsetX(nextOffset)
+  }
 
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric'
-  }).format(due)
+  function onPointerEnd() {
+    if (!enabled) return
+    if (offsetRef.current >= 90) {
+      suppressClickRef.current = true
+      onComplete(task)
+    }
+    reset()
+  }
+
+  function consumeSuppressedClick() {
+    const shouldSuppress = suppressClickRef.current
+    suppressClickRef.current = false
+    return shouldSuppress
+  }
+
+  return { offsetX, onPointerDown, onPointerMove, onPointerEnd, reset, consumeSuppressedClick }
 }
 
-function buildDueTone(dueDate: string | null) {
-  if (!dueDate) return 'text-on-surface-variant/55'
-
-  const today = new Date()
-  const due = new Date(`${dueDate}T00:00:00`)
-  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
-  const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
-  const diffDays = dueDay - todayDay
-
-  if (diffDays < 0) return 'text-error'
-  if (diffDays === 0) return 'text-warning'
-  return 'text-primary'
-}
-
-function formatRecurrenceLabel(recurrence: TaskSummary['recurrence_frequency']) {
-  return recurrence ? recurrence.toUpperCase() : 'ONE-OFF'
-}
-
-function formatReminder(reminderAt: string | null) {
-  if (!reminderAt) return 'No reminder'
-
-  return new Date(reminderAt).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
-}
-
-function formatSubtaskLabel(subtaskCount: number | undefined) {
-  const count = subtaskCount ?? 0
-  return `${count} ${count === 1 ? 'subtask' : 'subtasks'}`
-}
-
-const OpenTaskCardInner = function OpenTaskCardInner({
+function OpenTaskCardInner({
   task,
   onOpen,
   onPrepareOpen,
@@ -77,74 +72,21 @@ const OpenTaskCardInner = function OpenTaskCardInner({
   onDelete,
   isBusy,
   enableSwipe = false,
-  showCollapsedGroupLabel = false
+  showCollapsedGroupLabel = false,
 }: OpenTaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const [offsetX, setOffsetX] = useState(0)
-  const startXRef = useRef<number | null>(null)
-  const pointerIdRef = useRef<number | null>(null)
-  const offsetRef = useRef(0)
-  const suppressClickRef = useRef(false)
+  const swipe = useTaskCardSwipe({ task, onComplete, isBusy, enabled: enableSwipe })
 
-  const dueLabel = useMemo(() => buildDueLabel(task.due_date), [task.due_date])
-  const dueTone = useMemo(() => buildDueTone(task.due_date), [task.due_date])
-  const recurrenceLabel = useMemo(
-    () => formatRecurrenceLabel(task.recurrence_frequency ?? null),
-    [task.recurrence_frequency]
-  )
-  const subtaskLabel = useMemo(
-    () => formatSubtaskLabel(task.subtask_count),
-    [task.subtask_count]
-  )
-
-  function resetSwipe() {
-    startXRef.current = null
-    pointerIdRef.current = null
-    offsetRef.current = 0
-    setOffsetX(0)
-  }
-
-  function handlePointerDown(event: React.PointerEvent<HTMLElement>) {
-    if (!enableSwipe || isBusy) {
-      return
-    }
-
-    startXRef.current = event.clientX
-    pointerIdRef.current = event.pointerId
-  }
-
-  function handlePointerMove(event: React.PointerEvent<HTMLElement>) {
-    if (!enableSwipe || startXRef.current === null || pointerIdRef.current !== event.pointerId) {
-      return
-    }
-
-    const delta = event.clientX - startXRef.current
-    const clamped = Math.max(-120, Math.min(120, delta))
-    offsetRef.current = clamped
-    setOffsetX(clamped)
-  }
-
-  function handlePointerEnd() {
-    if (!enableSwipe) {
-      return
-    }
-
-    if (offsetRef.current >= 90) {
-      suppressClickRef.current = true
-      onComplete(task)
-    }
-
-    resetSwipe()
-  }
-
-  function handleCardActivate() {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false
-      return
-    }
-
+  function activateCard() {
+    if (swipe.consumeSuppressedClick()) return
     onPrepareOpen?.(task.id)
     onOpen(task.id)
+  }
+
+  function handleCardKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    activateCard()
   }
 
   return (
@@ -152,174 +94,33 @@ const OpenTaskCardInner = function OpenTaskCardInner({
       padding="none"
       className={`relative overflow-hidden bg-surface-container-high ${!task.due_date ? 'opacity-70' : ''}`}
     >
-      {enableSwipe ? (
+      {enableSwipe && (
         <div className="absolute inset-0 flex items-center justify-start px-6 text-[0.65rem] font-bold uppercase tracking-[0.15em] text-on-surface-variant">
           <span>Swipe right to complete</span>
         </div>
-      ) : null}
+      )}
 
       <div
         role="button"
         tabIndex={0}
-        onClick={handleCardActivate}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            handleCardActivate()
-          }
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerEnd}
-        onPointerCancel={resetSwipe}
+        onClick={activateCard}
+        onKeyDown={handleCardKeyDown}
+        onPointerDown={swipe.onPointerDown}
+        onPointerMove={swipe.onPointerMove}
+        onPointerUp={swipe.onPointerEnd}
+        onPointerCancel={swipe.reset}
         className="relative z-10 w-full touch-pan-y bg-surface-container-high p-4 text-left transition-transform duration-200"
-        style={{ transform: `translateX(${offsetX}px)` }}
+        style={{ transform: `translateX(${swipe.offsetX}px)` }}
       >
-        <div className={`flex ${isExpanded ? 'items-stretch gap-3' : 'items-start gap-2'}`}>
-          <div className={`min-w-0 flex-1 ${isExpanded ? 'flex flex-col' : ''}`}>
-            <div className={`flex ${isExpanded ? 'flex-1 flex-col gap-3' : 'flex-col gap-1.5'}`}>
-              <h3
-                className={`min-w-0 font-display font-medium leading-tight text-on-surface ${
-                  isExpanded ? 'text-base whitespace-normal' : 'truncate pr-2 text-[0.98rem]'
-                }`}
-                title={!isExpanded ? task.title : undefined}
-              >
-                {task.title}
-              </h3>
-
-              {isExpanded && task.description ? (
-                <p className="text-[0.78rem] leading-5 text-on-surface-variant">
-                  {task.description}
-                </p>
-              ) : null}
-
-              {isExpanded && task.needs_review ? (
-                <div className="flex items-center gap-2">
-                  <span className="inline-block rounded-pill bg-warning/20 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest text-warning">
-                    Needs Review
-                  </span>
-                </div>
-              ) : null}
-
-              {isExpanded ? (
-                <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden text-[0.66rem] leading-4 text-on-surface-variant sm:text-[0.68rem]">
-                  <span className="shrink-0 font-medium text-on-surface-variant/85">{subtaskLabel}</span>
-                  <span className="shrink-0 text-on-surface-variant/40">•</span>
-                  <span className="min-w-0 truncate text-on-surface-variant/85">
-                    Reminder: {formatReminder(task.reminder_at)}
-                  </span>
-                </div>
-              ) : null}
-
-              <div
-                className={`flex w-full min-w-0 items-center ${
-                  isExpanded
-                    ? 'mt-2 flex-nowrap gap-1.5 overflow-hidden text-[0.62rem] tracking-[0.12em]'
-                    : 'flex-nowrap gap-1 overflow-hidden text-[0.58rem] tracking-[0.12em] sm:text-[0.6rem]'
-                } uppercase`}
-              >
-                {isExpanded || showCollapsedGroupLabel ? (
-                  <span
-                    className={
-                      isExpanded
-                        ? 'min-w-0 max-w-[44%] shrink truncate font-medium text-on-surface-variant/85'
-                        : 'min-w-0 max-w-[48%] shrink truncate rounded-pill bg-surface-dim px-2 py-0.5 font-body tracking-[0.14em] text-on-surface-variant/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]'
-                    }
-                  >
-                    {task.group?.name || 'Inbox'}
-                  </span>
-                ) : null}
-
-                <span className={`shrink-0 whitespace-nowrap font-bold ${dueTone}`}>Due: {dueLabel}</span>
-
-                <span
-                  className="recurrence-badge shrink-0"
-                  title={task.recurrence_frequency ? `Recurring: ${task.recurrence_frequency}` : 'No recurrence'}
-                >
-                  {recurrenceLabel}
-                </span>
-
-                {!isExpanded ? (
-                  <span className="subtask-badge shrink-0">
-                    <svg
-                      className="h-3 w-3 shrink-0 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2.25}
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h12" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h12" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 18h12" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m17 8 2 2 4-4" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m17 14 2 2 4-4" />
-                    </svg>
-                    <span className="text-white text-[0.65rem] font-bold">{task.subtask_count ?? 0}</span>
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className={`flex shrink-0 flex-col ${isExpanded ? 'items-end justify-between gap-3 pt-0.5' : 'items-center gap-0 pt-0'}`}>
-            <button
-              type="button"
-              aria-label={isExpanded ? `Collapse ${task.title}` : `Expand ${task.title}`}
-              aria-expanded={isExpanded}
-              onClick={(event) => {
-                event.stopPropagation()
-                setIsExpanded((current) => !current)
-              }}
-              className="flex h-6 w-6 shrink-0 self-end items-center justify-center rounded-full bg-surface-dim text-on-surface-variant transition-all duration-200 hover:bg-surface-container-highest hover:text-on-surface"
-            >
-              <svg
-                className={`h-3 w-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-
-            {isExpanded ? (
-              <div className="flex items-center gap-2 self-end">
-                {onDelete ? (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onDelete?.(task)
-                    }}
-                    disabled={isBusy}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-tertiary transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface-container-highest active:translate-y-0 active:scale-90 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
-                    aria-label={`Delete ${task.title}`}
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                ) : null}
-
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onComplete(task)
-                  }}
-                  disabled={isBusy}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-primary transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface-container-highest active:translate-y-0 active:scale-90 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
-                  aria-label={`Complete ${task.title}`}
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                  </svg>
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <OpenTaskCardContent
+          task={task}
+          isExpanded={isExpanded}
+          isBusy={isBusy}
+          showCollapsedGroupLabel={showCollapsedGroupLabel}
+          onToggleExpanded={() => setIsExpanded((current) => !current)}
+          onComplete={() => onComplete(task)}
+          onDelete={onDelete ? () => onDelete(task) : undefined}
+        />
       </div>
     </Card>
   )

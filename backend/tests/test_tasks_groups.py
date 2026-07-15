@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import sqlalchemy as sa
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 from app.core.dependencies import get_auth_service
 from app.core.security import ACCESS_TOKEN_COOKIE
@@ -99,7 +98,7 @@ def _seed_task(
     deleted_at_value: datetime | None = None,
 ) -> str:
     task_id = str(uuid.uuid4())
-    completed_at = datetime.now(timezone.utc) if status == "completed" else None
+    completed_at = datetime.now(UTC) if status == "completed" else None
     with connection_scope(client.app.state.settings.database_url) as connection:
         connection.execute(
             tasks.insert().values(
@@ -331,7 +330,7 @@ def test_group_delete_reassigns_soft_deleted_tasks_too(app: FastAPI, client: Tes
         user_id=USER_ID,
         group_id=source_group_id,
         title="Previously deleted task",
-        deleted_at_value=datetime.now(timezone.utc),
+        deleted_at_value=datetime.now(UTC),
     )
 
     response = client.request(
@@ -359,7 +358,7 @@ def test_list_tasks_applies_sorting_and_user_scope(app: FastAPI, client: TestCli
     _seed_user(client, user_id=OTHER_USER_ID)
     other_group_id = _seed_group(client, user_id=OTHER_USER_ID, name="Other")
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     _seed_task(
         client,
         user_id=USER_ID,
@@ -496,7 +495,7 @@ def test_update_task_keeps_digest_only_reminder_state_and_series_id(
         needs_review=True,
     )
 
-    reminder_at_value = (datetime.now(timezone.utc) + timedelta(days=2)).replace(microsecond=0)
+    reminder_at_value = (datetime.now(UTC) + timedelta(days=2)).replace(microsecond=0)
     update_response = client.patch(
         f"/tasks/{task_id}",
         json={
@@ -594,7 +593,7 @@ def test_complete_reopen_delete_restore_manage_reminders(
 ) -> None:
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Home")
-    reminder_at_value = (datetime.now(timezone.utc) + timedelta(days=1)).replace(microsecond=0)
+    reminder_at_value = (datetime.now(UTC) + timedelta(days=1)).replace(microsecond=0)
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -650,7 +649,7 @@ def test_complete_recurring_task_rejects_if_due_date_is_in_future(
 ) -> None:
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Future Completion Guard")
-    tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
+    tomorrow = datetime.now(UTC).date() + timedelta(days=1)
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -675,9 +674,9 @@ def test_complete_task_creates_next_daily_occurrence_with_reset_subtasks(
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Recurring")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     reminder_at_value = datetime.combine(
-        today, datetime.min.time(), tzinfo=timezone.utc
+        today, datetime.min.time(), tzinfo=UTC
     ) + timedelta(hours=9)
     task_id = _seed_task(
         client,
@@ -700,7 +699,7 @@ def test_complete_task_creates_next_daily_occurrence_with_reset_subtasks(
                 user_id=USER_ID,
                 title="Review blockers",
                 is_completed=True,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
             )
         )
     _seed_reminder(client, user_id=USER_ID, task_id=task_id, scheduled_for=reminder_at_value)
@@ -745,7 +744,7 @@ def test_complete_task_repairs_missing_series_id_and_generates_next_occurrence(
 ) -> None:
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Legacy Recurring")
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -781,10 +780,10 @@ def test_delete_task_occurrence_creates_next_occurrence_from_due_date(
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Delete Occurrence")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     recurrence_weekday = (today.weekday() + 1) % 7
     reminder_at_value = datetime.combine(
-        today, datetime.min.time(), tzinfo=timezone.utc
+        today, datetime.min.time(), tzinfo=UTC
     ) + timedelta(hours=23)
     task_id = _seed_task(
         client,
@@ -840,7 +839,7 @@ def test_delete_occurrence_repairs_missing_series_id_and_generates_next_occurren
 ) -> None:
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Legacy Delete")
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -880,7 +879,7 @@ def test_delete_task_series_soft_deletes_open_occurrences_only(
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Delete Series")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     open_task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -913,8 +912,8 @@ def test_delete_task_series_soft_deletes_open_occurrences_only(
         recurrence_interval=1,
     )
 
-    first_reminder = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=2)
-    second_reminder = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=3)
+    first_reminder = datetime.now(UTC).replace(microsecond=0) + timedelta(hours=2)
+    second_reminder = datetime.now(UTC).replace(microsecond=0) + timedelta(hours=3)
     _seed_reminder(client, user_id=USER_ID, task_id=open_task_id, scheduled_for=first_reminder)
     _seed_reminder(
         client, user_id=USER_ID, task_id=second_open_task_id, scheduled_for=second_reminder
@@ -959,7 +958,7 @@ def test_delete_task_rejects_when_already_deleted(app: FastAPI, client: TestClie
         user_id=USER_ID,
         group_id=group_id,
         title="Deleted already",
-        deleted_at_value=datetime.now(timezone.utc),
+        deleted_at_value=datetime.now(UTC),
     )
 
     response = client.request("DELETE", f"/tasks/{task_id}", headers=headers)
@@ -975,7 +974,7 @@ def test_complete_task_monthly_recurrence_uses_new_occurrence_day_of_month(
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Billing")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -1013,7 +1012,7 @@ def test_complete_task_skips_new_occurrence_when_series_already_has_open_task(
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Series Guard")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -1060,8 +1059,8 @@ def test_complete_task_clears_past_derived_inherited_reminder(
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Past Reminder")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
-    reminder_at_value = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=1)
+    today = datetime.now(UTC).date()
+    reminder_at_value = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=1)
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -1103,9 +1102,9 @@ def test_reopen_recurring_task_reuses_generated_occurrence_as_undo_target(
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Undo Series")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     reminder_at_value = datetime.combine(
-        today, datetime.min.time(), tzinfo=timezone.utc
+        today, datetime.min.time(), tzinfo=UTC
     ) + timedelta(hours=9)
     task_id = _seed_task(
         client,
@@ -1154,7 +1153,7 @@ def test_reopen_recurring_task_keeps_series_and_generates_single_next_on_recompl
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Reopen Keep Series")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -1196,9 +1195,9 @@ def test_restore_deleted_recurring_task_reuses_generated_occurrence_as_undo_targ
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Restore Series")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     reminder_at_value = datetime.combine(
-        today, datetime.min.time(), tzinfo=timezone.utc
+        today, datetime.min.time(), tzinfo=UTC
     ) + timedelta(hours=9)
     task_id = _seed_task(
         client,
@@ -1251,7 +1250,7 @@ def test_reopen_recurring_task_returns_single_non_recurring_instance_when_no_ope
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Reopen Instance Only")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -1284,14 +1283,14 @@ def test_restore_deleted_recurring_task_returns_single_instance(
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Restore Instance Only")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     task_id = _seed_task(
         client,
         user_id=USER_ID,
         group_id=group_id,
         title="Monthly cleanup",
         due_date_value=today,
-        deleted_at_value=datetime.now(timezone.utc),
+        deleted_at_value=datetime.now(UTC),
         series_id=series_id,
         recurrence_frequency="monthly",
         recurrence_interval=1,
@@ -1321,7 +1320,7 @@ def test_reopen_recurring_task_detaches_when_series_has_other_open_occurrence(
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Reopen Detach")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     task_id = _seed_task(
         client,
         user_id=USER_ID,
@@ -1340,7 +1339,7 @@ def test_reopen_recurring_task_detaches_when_series_has_other_open_occurrence(
             .where(tasks.c.id == task_id)
             .values(
                 status="completed",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 updated_at=sa.text("CURRENT_TIMESTAMP"),
             )
         )
@@ -1376,14 +1375,14 @@ def test_restore_deleted_recurring_task_detaches_when_series_has_other_open_occu
     headers = _authenticated_headers(app, client)
     group_id = _seed_group(client, user_id=USER_ID, name="Restore Detach")
     series_id = str(uuid.uuid4())
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     task_id = _seed_task(
         client,
         user_id=USER_ID,
         group_id=group_id,
         title="Weekly sync",
         due_date_value=today,
-        deleted_at_value=datetime.now(timezone.utc),
+        deleted_at_value=datetime.now(UTC),
         series_id=series_id,
         recurrence_frequency="weekly",
         recurrence_interval=1,

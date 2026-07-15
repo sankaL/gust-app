@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import logging
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -167,7 +167,7 @@ class ReminderWorkerService:
         self.reminder_delivery_service = reminder_delivery_service
 
     async def run_due_work(self, *, mode: DigestMode) -> ReminderRunSummary:
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         summary = ReminderRunSummary(mode=mode)
 
         with internal_job_connection_scope(self.settings.database_url) as connection:
@@ -414,8 +414,8 @@ class ReminderWorkerService:
         return DigestPeriod(
             start_date=week_start,
             end_date=week_end,
-            completed_start_utc=completed_start_local.astimezone(timezone.utc),
-            completed_end_utc=completed_end_local.astimezone(timezone.utc),
+            completed_start_utc=completed_start_local.astimezone(UTC),
+            completed_end_utc=completed_end_local.astimezone(UTC),
         )
 
     def _build_daily_text_body(
@@ -554,8 +554,7 @@ class ReminderWorkerService:
         return self._build_html_email(
             heading="Gust Weekly Summary",
             subheading=(
-                "Week (Eastern): "
-                f"{period.start_date.isoformat()} to {period.end_date.isoformat()}"
+                f"Week (Eastern): {period.start_date.isoformat()} to {period.end_date.isoformat()}"
             ),
             user=user,
             sections=sections,
@@ -583,8 +582,7 @@ class ReminderWorkerService:
             )
 
         brand_open = (
-            f'<a href="{html.escape(home_url)}" '
-            'style="text-decoration:none;color:#111827;">'
+            f'<a href="{html.escape(home_url)}" style="text-decoration:none;color:#111827;">'
             if home_url
             else '<span style="color:#111827;">'
         )
@@ -603,8 +601,8 @@ class ReminderWorkerService:
                 f'<tr><td style="padding:0 0 20px {body_left_indent_px}px;">'
                 f'<a href="{html.escape(tasks_url)}" '
                 'style="display:inline-block;background:#A684FF;'
-                'background-image:radial-gradient(circle at top, rgba(186,158,255,0.92), '
-                'rgba(132,85,239,0.82));color:#ffffff;text-decoration:none;font-weight:700;'
+                "background-image:radial-gradient(circle at top, rgba(186,158,255,0.92), "
+                "rgba(132,85,239,0.82));color:#ffffff;text-decoration:none;font-weight:700;"
                 'font-size:14px;line-height:14px;padding:12px 16px;border-radius:12px;">'
                 "Open Gust</a>"
                 "</td></tr>"
@@ -634,8 +632,8 @@ class ReminderWorkerService:
                 '<tr><td style="padding:0 0 4px 0;">',
                 '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
                 '<td style="width:52px;vertical-align:middle;padding-right:10px;">',
-                f'{brand_open}{logo_html}{brand_close}',
-                "</td><td style=\"vertical-align:middle;\">",
+                f"{brand_open}{logo_html}{brand_close}",
+                '</td><td style="vertical-align:middle;">',
                 f'{brand_open}<div style="font-size:22px;line-height:28px;font-weight:700;">',
                 f"{html.escape(heading)}</div>",
                 '<div style="font-size:13px;line-height:20px;color:#4b5563;margin-top:4px;">',
@@ -669,11 +667,11 @@ class ReminderWorkerService:
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
             f'style="background:#ffffff;border-radius:14px;margin:0 0 12px 0;" '
             f'data-section="{html.escape(section_id)}">'
-            "<tr><td style=\"padding:10px 0;\">"
+            '<tr><td style="padding:10px 0;">'
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
             f'<td style="background:{html.escape(accent_color)};border-radius:10px;'
             'font-size:15px;line-height:20px;font-weight:700;color:#1f2937;padding:8px 10px;">'
-            f'{icon} {html.escape(title)}</td></tr></table>'
+            f"{icon} {html.escape(title)}</td></tr></table>"
             '<div style="height:8px;line-height:8px;">&nbsp;</div>'
             f"{body}"
             "</td></tr></table>"
@@ -731,7 +729,7 @@ class ReminderWorkerService:
                 'style="background:#f8fafc;border-radius:12px;'
                 'margin:0 0 10px 0;" data-group-card="true"><tr><td style="padding:10px 10px;">'
                 f'<div style="font-size:12px;line-height:16px;font-weight:700;'
-                f'letter-spacing:0.02em;text-transform:uppercase;color:{COLOR_PURPLE};'
+                f"letter-spacing:0.02em;text-transform:uppercase;color:{COLOR_PURPLE};"
                 'margin-bottom:8px;">'
                 f"{html.escape(group_label)}</div>"
                 f"{task_rows}"
@@ -744,13 +742,12 @@ class ReminderWorkerService:
             return '<p style="margin:0;color:#6b7280;font-size:12px;line-height:17px;">None</p>'
 
         items = [
-            "<li style=\"margin:0 0 4px 16px;color:#4b5563;font-size:12px;line-height:17px;\">"
+            '<li style="margin:0 0 4px 16px;color:#4b5563;font-size:12px;line-height:17px;">'
             f"{html.escape(task.title)}</li>"
             for task in tasks
         ]
         return (
-            '<ul style="margin:0;padding:0;" data-flat-pending-list="true">'
-            f'{"".join(items)}</ul>'
+            f'<ul style="margin:0;padding:0;" data-flat-pending-list="true">{"".join(items)}</ul>'
         )
 
     def _build_group_task_row(self, task: DigestTaskRecord, *, include_completed_at: bool) -> str:
@@ -794,7 +791,7 @@ class ReminderWorkerService:
     def _build_metadata_chip(self, *, label: str, background: str, color: str) -> str:
         return (
             f'<span style="display:inline-block;background:{background};color:{color};'
-            'border-radius:999px;padding:2px 8px;margin:0 6px 6px 0;font-size:11px;'
+            "border-radius:999px;padding:2px 8px;margin:0 6px 6px 0;font-size:11px;"
             f'line-height:15px;font-weight:600;">{html.escape(label)}</span>'
         )
 
@@ -851,12 +848,10 @@ class ReminderWorkerService:
                 'A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>'
             ),
             "user": (
-                '<path d="M20 21a8 8 0 0 0-16 0"></path>'
-                '<circle cx="12" cy="7" r="4"></circle>'
+                '<path d="M20 21a8 8 0 0 0-16 0"></path><circle cx="12" cy="7" r="4"></circle>'
             ),
             "circle-check": (
-                '<circle cx="12" cy="12" r="10"></circle>'
-                '<path d="m9 12 2 2 4-4"></path>'
+                '<circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path>'
             ),
         }
         glyph = glyph_by_name.get(name, '<circle cx="12" cy="12" r="9"></circle>')
