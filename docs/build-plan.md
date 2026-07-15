@@ -159,6 +159,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| BUG-65 | Railway backend predeploy cannot find Alembic after frozen `uv` installation | DONE | 2026-07-15 19:08 EDT | Replaced login-shell Railway commands with explicit `/app/.venv/bin` executables, preserving the production migration fail-closed check and adding regression coverage for the deploy manifest. | Runbook, Tech, AGENTS |
 | BUG-61 | Landing login navigation crashes during GSAP route teardown | DONE | 2026-06-04 09:09 EDT | Moved the landing page GSAP/ScrollTrigger setup to a layout-effect lifecycle so pinned DOM is reverted before React removes route nodes, and added regression coverage for clicking the landing login CTA into `/login`. | Design, AGENTS |
 | BUG-59 | Captured-task and task modals need subtask deletion parity | DONE | 2026-05-21 19:18 EDT | Added captured subtask editing to the mobile extracted-task modal, added desktop extracted-task subtask add/delete controls, persisted staged `subtask_titles` updates through the capture API, and added task preview subtask deletion with optimistic cache updates. | PRD, Tech, Schema, AGENTS |
 | BUG-58 | Desktop account menu needs mobile mode entry | DONE | 2026-05-21 18:39 EDT | Added a Mobile Mode account-menu item in the desktop shell, removed the old bottom-left Mobile Tasks shortcut, and covered the desktop-to-mobile navigation path with a focused app-shell test. | Design, AGENTS |

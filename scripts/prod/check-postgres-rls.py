@@ -29,7 +29,12 @@ POLICY_REQUIRED_FRAGMENTS = {
 }
 
 
-def main() -> int:
+def _psycopg_database_url(database_url: str) -> str:
+    """Convert SQLAlchemy's explicit psycopg scheme to a libpq-compatible URL."""
+    return database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+
+def main() -> int:  # noqa: C901
     parser = argparse.ArgumentParser(
         description="Verify the current Postgres role and Gust tables are configured for RLS."
     )
@@ -44,8 +49,10 @@ def main() -> int:
         print("DATABASE_URL is required.", file=sys.stderr)
         return 1
 
-    with psycopg.connect(args.database_url) as connection:
-        with connection.cursor() as cursor:
+    with (
+        psycopg.connect(_psycopg_database_url(args.database_url)) as connection,
+        connection.cursor() as cursor,
+    ):
             cursor.execute(
                 """
                 SELECT current_user, rolbypassrls
@@ -143,7 +150,14 @@ def main() -> int:
                     for row in policies_by_table[table_name]
                     if row[0] == f"{table_name}_actor_rls"
                 )
-                _policy_name, permissive, roles, command, using_expression, check_expression = policy
+                (
+                    _policy_name,
+                    permissive,
+                    roles,
+                    command,
+                    using_expression,
+                    check_expression,
+                ) = policy
                 normalized_using = " ".join(str(using_expression or "").split()).lower()
                 normalized_check = " ".join(str(check_expression or "").split()).lower()
                 required_fragments = (
@@ -196,5 +210,17 @@ def main() -> int:
     return 0
 
 
+def _run_main() -> int:
+    try:
+        return main()
+    except psycopg.Error as error:
+        error_code = error.sqlstate or "unavailable"
+        print(
+            f"FAIL: database verification failed (SQLSTATE {error_code}).",
+            file=sys.stderr,
+        )
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_run_main())

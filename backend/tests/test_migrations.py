@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -6,6 +7,16 @@ from sqlalchemy import create_engine, inspect, text
 
 from app.db.migrations import check_required_revision, get_current_revision
 from app.db.schema import metadata, tasks
+
+
+def test_railway_commands_use_the_bundled_virtual_environment() -> None:
+    config_path = Path(__file__).resolve().parents[1] / "railway.json"
+    deploy = json.loads(config_path.read_text())["deploy"]
+
+    assert "sh -lc" not in deploy["preDeployCommand"]
+    assert "/app/.venv/bin/alembic upgrade head" in deploy["preDeployCommand"]
+    assert "sh -lc" not in deploy["startCommand"]
+    assert "/app/.venv/bin/uvicorn" in deploy["startCommand"]
 
 
 def test_get_current_revision_returns_none_when_alembic_table_is_missing() -> None:
