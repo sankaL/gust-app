@@ -1,21 +1,10 @@
 import { useState } from 'react'
-import { ExtractedTask } from '../lib/api'
 import { CheckCircle2, Trash2 } from 'lucide-react'
+
+import type { ExtractedTask } from '../lib/api'
 import { Card } from './Card'
 
-const getDueDateColor = (dueDate: string | null): string => {
-  if (!dueDate) return 'text-on-surface-variant/50'
-  const today = new Date()
-  const due = new Date(`${dueDate}T00:00:00`)
-  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
-  const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
-  const diff = dueDay - todayDay
-  if (diff < 0) return 'text-error'
-  if (diff === 0) return 'text-warning'
-  return 'text-primary'
-}
-
-interface ExtractedTaskCardProps {
+type Props = {
   task: ExtractedTask
   onApprove: (taskId: string) => Promise<void>
   onDiscard: (taskId: string) => Promise<void>
@@ -23,240 +12,114 @@ interface ExtractedTaskCardProps {
   variant?: 'mobile' | 'desktop'
 }
 
-export function ExtractedTaskCard({
-  task,
-  onApprove,
-  onDiscard,
-  onClick,
-  variant = 'mobile'
-}: ExtractedTaskCardProps) {
-  const [isApproving, setIsApproving] = useState(false)
-  const [isDiscarding, setIsDiscarding] = useState(false)
+type ViewProps = {
+  task: ExtractedTask
+  isApproving: boolean
+  isDiscarding: boolean
+  onOpen: () => void
+  onApprove: (event: React.MouseEvent) => void
+  onDiscard: (event: React.MouseEvent) => void
+}
 
-  const clampTwoLines = {
-    display: '-webkit-box',
-    WebkitBoxOrient: 'vertical' as const,
-    WebkitLineClamp: 2,
-    overflow: 'hidden'
-  }
-
-  const handleApprove = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setIsApproving(true)
+export function ExtractedTaskCard({ task, onApprove, onDiscard, onClick, variant = 'mobile' }: Props) {
+  const [pendingAction, setPendingAction] = useState<'approve' | 'discard' | null>(null)
+  async function runAction(event: React.MouseEvent, action: 'approve' | 'discard') {
+    event.stopPropagation()
+    setPendingAction(action)
     try {
-      await onApprove(task.id)
+      await (action === 'approve' ? onApprove : onDiscard)(task.id)
     } finally {
-      setIsApproving(false)
+      setPendingAction(null)
     }
   }
-
-  const handleDiscard = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setIsDiscarding(true)
-    try {
-      await onDiscard(task.id)
-    } finally {
-      setIsDiscarding(false)
-    }
+  const viewProps: ViewProps = {
+    task,
+    isApproving: pendingAction === 'approve',
+    isDiscarding: pendingAction === 'discard',
+    onOpen: () => onClick(task),
+    onApprove: (event) => { void runAction(event, 'approve') },
+    onDiscard: (event) => { void runAction(event, 'discard') },
   }
+  return variant === 'desktop' ? <DesktopCard {...viewProps} /> : <MobileCard {...viewProps} />
+}
 
-  const handleCardClick = () => {
-    onClick(task)
-  }
-
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return 'text-primary'
-    if (confidence >= 0.7) return 'text-warning'
-    return 'text-tertiary'
-  }
-
-  const getConfidenceLabel = (confidence: number) => {
-    if (confidence >= 0.8) return 'High'
-    if (confidence >= 0.7) return 'Medium'
-    return 'Low'
-  }
-
-  if (variant === 'desktop') {
-    return (
-      <article
-        onClick={() => onClick(task)}
-        className="group flex cursor-pointer items-center justify-between gap-4 rounded-soft bg-surface-container p-3.5 transition-all hover:-translate-y-[1px] hover:bg-surface-container-high hover:shadow-ambient active:translate-y-0"
-      >
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-2">
-          <h3 className="truncate font-display text-[0.95rem] font-medium leading-tight text-on-surface group-hover:text-primary transition-colors">
-            {task.title}
-          </h3>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            {task.needs_review ? (
-              <span className="rounded-pill bg-warning/20 px-2 py-0.5 font-body text-[0.62rem] font-bold uppercase tracking-widest text-warning">
-                Needs Review
-              </span>
-            ) : null}
-
-            <div
-              className="flex items-center gap-1 rounded-pill bg-[rgba(30,30,30,0.5)] px-2 py-0.5"
-              title={`Confidence Score: ${getConfidenceLabel(task.top_confidence)}`}
-            >
-              <span className={`text-[0.55rem] ${getConfidenceColor(task.top_confidence)}`}>●</span>
-              <span className="font-body text-[0.62rem] uppercase tracking-widest text-on-surface-variant">
-                {getConfidenceLabel(task.top_confidence)}
-              </span>
-            </div>
-
-            <span className="rounded-pill bg-[rgba(30,30,30,0.5)] px-2 py-0.5 font-body text-[0.62rem] uppercase tracking-widest text-on-surface-variant">
-              {task.group_name || 'Inbox'}
-            </span>
-
-            {task.due_date ? (
-              <span className={`rounded-pill bg-[rgba(30,30,30,0.5)] px-2 py-0.5 font-body text-[0.62rem] font-bold uppercase tracking-widest ${getDueDateColor(task.due_date)}`}>
-                Due: {new Date(task.due_date + 'T00:00:00').toLocaleDateString()}
-              </span>
-            ) : null}
-
-            <span className="rounded-pill bg-[rgba(30,30,30,0.5)] px-2 py-0.5 font-body text-[0.62rem] uppercase tracking-widest text-on-surface-variant">
-              {task.recurrence_frequency && task.recurrence_frequency !== 'none'
-                ? task.recurrence_frequency
-                : 'One-off'}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={(event) => void handleApprove(event)}
-            disabled={isApproving || isDiscarding}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-dim text-primary transition-all hover:scale-105 hover:bg-surface-container-highest active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
-            aria-label="Approve"
-          >
-            {isApproving ? (
-              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            ) : (
-              <CheckCircle2 className="h-5 w-5" strokeWidth={2} />
-            )}
-          </button>
-
-          <button
-            onClick={(event) => void handleDiscard(event)}
-            disabled={isApproving || isDiscarding}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-dim text-tertiary transition-all hover:scale-105 hover:bg-surface-container-highest active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
-            aria-label="Discard"
-          >
-            {isDiscarding ? (
-              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            ) : (
-              <Trash2 className="h-4.5 w-4.5" strokeWidth={2} />
-            )}
-          </button>
-        </div>
-      </article>
-    )
-  }
-
-  // Mobile Variant (Original)
+function DesktopCard(props: ViewProps) {
   return (
-    <Card 
-      interactive 
-      onClick={handleCardClick}
-      className="bg-surface-container-high"
-    >
-      <div className="flex flex-col gap-3">
+    <article onClick={props.onOpen} className="group flex cursor-pointer items-center justify-between gap-4 rounded-soft bg-surface-container p-3.5 transition-all hover:-translate-y-[1px] hover:bg-surface-container-high hover:shadow-ambient active:translate-y-0">
+      <div className="min-w-0 flex-1 space-y-2">
+        <h3 className="truncate font-display text-[0.95rem] font-medium leading-tight text-on-surface transition-colors group-hover:text-primary">{props.task.title}</h3>
+        <TaskBadges task={props.task} compact />
+      </div>
+      <TaskActions {...props} desktop />
+    </article>
+  )
+}
+
+function MobileCard(props: ViewProps) {
+  return (
+    <Card interactive onClick={props.onOpen} className="bg-surface-container-high">
+      <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
-          <h3
-            className="min-w-0 flex-1 font-display text-base font-medium leading-tight text-on-surface"
-            style={clampTwoLines}
-          >
-            {task.title}
-          </h3>
-
-          <div
-            className="flex shrink-0 items-center gap-1 rounded-pill bg-surface-dim px-2 py-0.5 cursor-help"
-            title={`Confidence Score: ${getConfidenceLabel(task.top_confidence)}`}
-          >
-            <span className={`text-[0.65rem] ${getConfidenceColor(task.top_confidence)}`}>●</span>
-            <span className="font-body text-[0.65rem] uppercase tracking-widest text-on-surface-variant">
-              {getConfidenceLabel(task.top_confidence)}
-            </span>
-          </div>
+          <h3 className="line-clamp-2 min-w-0 flex-1 font-display text-base font-medium leading-tight text-on-surface">{props.task.title}</h3>
+          <ConfidenceBadge confidence={props.task.top_confidence} />
         </div>
-
-        {task.description ? (
-          <p className="text-[0.78rem] leading-5 text-on-surface-variant" style={clampTwoLines}>
-            {task.description}
-          </p>
-        ) : null}
-
-        {task.needs_review ? (
-          <div className="flex items-center gap-2">
-            <span className="inline-block rounded-pill bg-warning/20 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest text-warning">
-              Needs Review
-            </span>
-          </div>
-        ) : null}
-
+        {props.task.description ? <p className="line-clamp-2 text-[0.78rem] leading-5 text-on-surface-variant">{props.task.description}</p> : null}
+        {props.task.needs_review ? <NeedsReview /> : null}
         <div className="flex items-end justify-between gap-3">
-          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden text-[0.62rem] uppercase tracking-[0.12em] sm:text-[0.64rem]">
-            <span className="min-w-0 max-w-[44%] shrink truncate font-medium text-on-surface-variant/85">
-              {task.group_name || 'Inbox'}
-            </span>
-            <span className={`shrink-0 ${getDueDateColor(task.due_date)} font-bold`}>
-              Due: {task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString() : '--'}
-            </span>
-            <span
-              className="recurrence-badge shrink-0"
-              title={
-                task.recurrence_frequency && task.recurrence_frequency !== 'none'
-                  ? `Recurring: ${task.recurrence_frequency}`
-                  : 'No recurrence'
-              }
-            >
-              {task.recurrence_frequency && task.recurrence_frequency !== 'none'
-                ? task.recurrence_frequency.toUpperCase()
-                : 'ONE-OFF'}
-            </span>
-          </div>
-
-          <div
-            className="flex items-center gap-3 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-              <button
-                onClick={(e) => {
-                  void handleApprove(e)
-                }}
-                disabled={isApproving || isDiscarding}
-                className="flex items-center justify-center w-8 h-8 rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-primary hover:bg-surface-container-highest hover:-translate-y-0.5 transition-all duration-200 active:scale-90 active:translate-y-0 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
-                aria-label="Approve"
-              >
-                {isApproving ? (
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                )}
-              </button>
-            <button
-              onClick={(e) => {
-                void handleDiscard(e)
-              }}
-              disabled={isApproving || isDiscarding}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-surface-dim border border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] text-tertiary hover:bg-surface-container-highest hover:-translate-y-0.5 transition-all duration-200 active:scale-90 active:translate-y-0 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100"
-              aria-label="Discard"
-            >
-              {isDiscarding ? (
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-              )}
-            </button>
-          </div>
+          <TaskBadges task={props.task} />
+          <TaskActions {...props} />
         </div>
       </div>
     </Card>
   )
+}
+
+function TaskBadges({ task, compact = false }: { task: ExtractedTask; compact?: boolean }) {
+  const recurrence = task.recurrence_frequency && task.recurrence_frequency !== 'none' ? task.recurrence_frequency : null
+  return (
+    <div className={compact ? 'flex flex-wrap items-center gap-1.5' : 'flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden text-[0.62rem] uppercase tracking-[0.12em]'}>
+      {compact && task.needs_review ? <NeedsReview /> : null}
+      {compact ? <ConfidenceBadge confidence={task.top_confidence} /> : null}
+      <span className="max-w-[44%] shrink truncate rounded-pill bg-black/20 px-2 py-0.5 text-on-surface-variant">{task.group_name || 'Inbox'}</span>
+      {task.due_date || !compact ? <span className={`shrink-0 rounded-pill bg-black/20 px-2 py-0.5 font-bold ${dueDateColor(task.due_date)}`}>Due: {formatDueDate(task.due_date)}</span> : null}
+      <span className="recurrence-badge shrink-0" title={recurrence ? `Recurring: ${recurrence}` : 'No recurrence'}>{recurrence ? recurrence.toUpperCase() : 'ONE-OFF'}</span>
+    </div>
+  )
+}
+
+function TaskActions(props: ViewProps & { desktop?: boolean }) {
+  const disabled = props.isApproving || props.isDiscarding
+  const size = props.desktop ? 'h-9 w-9' : 'h-8 w-8'
+  return (
+    <div className="flex shrink-0 items-center gap-2" onClick={(event) => event.stopPropagation()}>
+      <ActionButton label="Approve" className={`${size} text-primary`} pending={props.isApproving} disabled={disabled} onClick={props.onApprove}><CheckCircle2 className="h-5 w-5" strokeWidth={2} /></ActionButton>
+      <ActionButton label="Discard" className={`${size} text-tertiary`} pending={props.isDiscarding} disabled={disabled} onClick={props.onDiscard}><Trash2 className="h-4 w-4" strokeWidth={2} /></ActionButton>
+    </div>
+  )
+}
+
+function ActionButton({ label, pending, disabled, onClick, className, children }: { label: string; pending: boolean; disabled: boolean; onClick: (event: React.MouseEvent) => void; className: string; children: React.ReactNode }) {
+  return <button type="button" onClick={onClick} disabled={disabled} className={`flex items-center justify-center rounded-full bg-surface-dim transition-all hover:bg-surface-container-highest active:scale-95 disabled:opacity-50 ${className}`} aria-label={label}>{pending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" /> : children}</button>
+}
+
+function ConfidenceBadge({ confidence }: { confidence: number }) {
+  const label = confidence >= 0.8 ? 'High' : confidence >= 0.7 ? 'Medium' : 'Low'
+  const color = confidence >= 0.8 ? 'text-primary' : confidence >= 0.7 ? 'text-warning' : 'text-tertiary'
+  return <span className="shrink-0 rounded-pill bg-black/20 px-2 py-0.5 font-body text-[0.62rem] uppercase tracking-widest text-on-surface-variant" title={`Confidence Score: ${label}`}><span className={color}>●</span> {label}</span>
+}
+
+function NeedsReview() {
+  return <span className="rounded-pill bg-warning/20 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-widest text-warning">Needs Review</span>
+}
+
+function formatDueDate(dueDate: string | null): string {
+  return dueDate ? new Date(`${dueDate}T00:00:00`).toLocaleDateString() : '--'
+}
+
+function dueDateColor(dueDate: string | null): string {
+  if (!dueDate) return 'text-on-surface-variant/50'
+  const today = new Date()
+  const due = new Date(`${dueDate}T00:00:00`)
+  const difference = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  return difference < 0 ? 'text-error' : difference === 0 ? 'text-warning' : 'text-primary'
 }

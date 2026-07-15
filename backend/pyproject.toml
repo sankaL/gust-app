@@ -48,9 +48,14 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-# Preserve the existing compatibility-oriented lint rules while production and
-# dependency resolution are pinned to Python 3.12 above.
-target-version = "py39"
+# Keep automated modernization aligned with the only supported runtime above.
+target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "N"]
+select = ["E", "F", "I", "B", "UP", "N", "C90", "SIM"]
+
+[dependency-groups]
+dev = [
+    # Starlette's TestClient imports httpx2 first and warns on its legacy httpx fallback.
+    "httpx2>=2.7.0",
+]

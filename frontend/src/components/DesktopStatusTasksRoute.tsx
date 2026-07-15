@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useOutletContext, useSearchParams } from 'react-router-dom'
+import { useOutletContext } from 'react-router-dom'
 
 import { useDesktopTaskActions } from '../hooks/useDesktopTaskActions'
+import { useDesktopTaskPreview } from '../hooks/useDesktopTaskPreview'
 import { fetchAllDesktopTasks, type DesktopTaskStatus } from '../lib/desktopData'
 import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/taskScreenCache'
 import { DesktopTaskDetailModal } from './DesktopTaskDetailModal'
-import { useDesktopHeader, type DesktopOutletContext } from './DesktopShell'
+import { useDesktopHeader, type DesktopOutletContext } from './DesktopShellContext'
 import { DesktopTaskTable } from './DesktopTaskTable'
 
 type DesktopStatusTasksRouteProps = {
@@ -14,6 +15,22 @@ type DesktopStatusTasksRouteProps = {
   eyebrow: string
   title: string
   errorTitle: string
+}
+
+function StatusTaskContent({ status, title, tasks, groups, session, taskActions, preview, onVisibleCountChange }: {
+  status: DesktopTaskStatus; title: string; tasks: Awaited<ReturnType<typeof fetchAllDesktopTasks>>;
+  groups: DesktopOutletContext['groups']; session: DesktopOutletContext['session'];
+  taskActions: ReturnType<typeof useDesktopTaskActions>; preview: ReturnType<typeof useDesktopTaskPreview>;
+  onVisibleCountChange: (visible: number, total: number) => void
+}) {
+  const open = status === 'open'
+  const tableActions = open
+    ? { onComplete: taskActions.completeTask, onMoveDueDate: taskActions.moveTaskDueDate }
+    : { onReopen: taskActions.reopenTask }
+  const detailActions = open
+    ? { onComplete: (task: (typeof tasks)[number]) => { taskActions.completeTask(task); preview.closeTaskPreview() } }
+    : { onRestore: (task: (typeof tasks)[number]) => { taskActions.reopenTask(task); preview.closeTaskPreview() } }
+  return <><DesktopTaskTable title={title} tasks={tasks} groups={groups} status={status} hideHeader busyTaskIds={taskActions.busyTaskIds} onTaskOpen={preview.openTaskPreview} onVisibleCountChange={onVisibleCountChange} {...tableActions} /><DesktopTaskDetailModal taskId={preview.selectedTaskId} isOpen={Boolean(preview.selectedTaskId)} onClose={preview.closeTaskPreview} session={session} groups={groups} busyTaskIds={taskActions.busyTaskIds} {...detailActions} /></>
 }
 
 export function DesktopStatusTasksRoute({
@@ -25,8 +42,7 @@ export function DesktopStatusTasksRoute({
   const { session, groups } = useOutletContext<DesktopOutletContext>()
   const taskActions = useDesktopTaskActions(session)
   const [visibleSummary, setVisibleSummary] = useState({ visible: 0, total: 0 })
-  const [searchParams, setSearchParams] = useSearchParams()
-  const selectedTaskId = searchParams.get('task')
+  const preview = useDesktopTaskPreview()
   const tasksQuery = useQuery({
     queryKey: ['desktop', 'tasks', 'all', status],
     queryFn: () => fetchAllDesktopTasks(status),
@@ -50,13 +66,6 @@ export function DesktopStatusTasksRoute({
   )
   useDesktopHeader(header)
 
-  function setSelectedTask(taskId: string | null) {
-    const next = new URLSearchParams(searchParams)
-    if (taskId) next.set('task', taskId)
-    else next.delete('task')
-    setSearchParams(next, taskId ? undefined : { replace: true })
-  }
-
   if (tasksQuery.isLoading) {
     return <div className="h-96 animate-pulse rounded-soft bg-surface-container" aria-busy="true" />
   }
@@ -69,39 +78,5 @@ export function DesktopStatusTasksRoute({
     )
   }
 
-  const isOpenStatus = status === 'open'
-  return (
-    <>
-      <DesktopTaskTable
-        title={title}
-        tasks={tasks}
-        groups={groups}
-        status={status}
-        hideHeader
-        busyTaskIds={taskActions.busyTaskIds}
-        onComplete={isOpenStatus ? taskActions.completeTask : undefined}
-        onReopen={isOpenStatus ? undefined : taskActions.reopenTask}
-        onMoveDueDate={isOpenStatus ? taskActions.moveTaskDueDate : undefined}
-        onTaskOpen={setSelectedTask}
-        onVisibleCountChange={handleVisibleCountChange}
-      />
-
-      <DesktopTaskDetailModal
-        taskId={selectedTaskId}
-        isOpen={Boolean(selectedTaskId)}
-        onClose={() => setSelectedTask(null)}
-        session={session}
-        groups={groups}
-        onComplete={isOpenStatus ? (task) => {
-          taskActions.completeTask(task)
-          setSelectedTask(null)
-        } : undefined}
-        onRestore={isOpenStatus ? undefined : (task) => {
-          taskActions.reopenTask(task)
-          setSelectedTask(null)
-        }}
-        busyTaskIds={taskActions.busyTaskIds}
-      />
-    </>
-  )
+  return <StatusTaskContent status={status} title={title} tasks={tasks} groups={groups} session={session} taskActions={taskActions} preview={preview} onVisibleCountChange={handleVisibleCountChange} />
 }

@@ -252,13 +252,14 @@ def _task_matches_intent(*, intent: GuardedIntent, task_title: str) -> bool:
     if intent.normalized_text in normalized_task or normalized_task in intent.normalized_text:
         return True
     # Strong match: domain keyword + action keyword + significant token overlap
-    if intent.domain_keywords & task_tokens and intent.action_keywords & task_actions:
-        if len(significant_overlap) >= 1:
-            return True
-    # Weaker fallback: domain keyword match only (for near-miss cases where action differs)
-    if intent.domain_keywords & task_tokens and task_actions:
+    if (
+        intent.domain_keywords & task_tokens
+        and intent.action_keywords & task_actions
+        and significant_overlap
+    ):
         return True
-    return False
+    # Weaker fallback: domain keyword match only (for near-miss cases where action differs)
+    return bool(intent.domain_keywords & task_tokens and task_actions)
 
 
 def _canonicalize(value: str) -> str:

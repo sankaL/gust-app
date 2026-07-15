@@ -54,33 +54,23 @@ export function LandingRoute({ authErrorCode }: LandingRouteProps = {}) {
     gsap.registerPlugin(ScrollTrigger)
 
     const handleMouseMove = (event: MouseEvent) => {
-      if (!mainCardRef.current || !mockupRef.current) {
-        return
-      }
-
-      if (window.scrollY > window.innerHeight * 2) {
-        return
-      }
-
-      if (requestRef.current !== null) cancelAnimationFrame(requestRef.current)
+      cancelAnimationFrame(requestRef.current ?? 0)
       requestRef.current = window.requestAnimationFrame(() => {
-        if (!mainCardRef.current || !mockupRef.current) {
-          return
-        }
+        const mainCard = mainCardRef.current
+        const mockup = mockupRef.current
+        if (!mainCard || !mockup || window.scrollY > window.innerHeight * 2) return
 
-        if (window.scrollY > window.innerHeight * 2) return
-
-        const rect = mainCardRef.current.getBoundingClientRect()
+        const rect = mainCard.getBoundingClientRect()
         const mouseX = event.clientX - rect.left
         const mouseY = event.clientY - rect.top
 
-        mainCardRef.current.style.setProperty('--mouse-x', `${mouseX}px`)
-        mainCardRef.current.style.setProperty('--mouse-y', `${mouseY}px`)
+        mainCard.style.setProperty('--mouse-x', `${mouseX}px`)
+        mainCard.style.setProperty('--mouse-y', `${mouseY}px`)
 
         const xVal = (event.clientX / window.innerWidth - 0.5) * 2
         const yVal = (event.clientY / window.innerHeight - 0.5) * 2
 
-        gsap.to(mockupRef.current, {
+        gsap.to(mockup, {
           rotateY: xVal * 12,
           rotateX: -yVal * 10,
           x: xVal * 10,

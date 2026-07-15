@@ -1,12 +1,28 @@
+import sqlite3
 from collections.abc import Generator
+from datetime import date, datetime
 
 import pytest
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 from app.core.app import create_app
 from app.core.settings import get_settings
 from app.db.engine import build_engine
 from app.db.schema import allowed_users, metadata
+
+
+def _adapt_sqlite_date(value: date) -> str:
+    return value.isoformat()
+
+
+def _adapt_sqlite_datetime(value: datetime) -> str:
+    return value.isoformat(" ")
+
+
+# Python 3.12 deprecated sqlite3's implicit adapters. Keep test-database
+# serialization explicit so the suite exercises the future runtime behavior.
+sqlite3.register_adapter(date, _adapt_sqlite_date)
+sqlite3.register_adapter(datetime, _adapt_sqlite_datetime)
 
 
 @pytest.fixture(autouse=True)

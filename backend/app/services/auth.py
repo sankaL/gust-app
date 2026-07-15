@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse

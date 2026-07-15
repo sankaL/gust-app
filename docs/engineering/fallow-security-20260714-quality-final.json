@@ -1,0 +1,265 @@
+{
+  "kind": "security",
+  "schema_version": "7",
+  "version": "3.5.0",
+  "elapsed_ms": 121,
+  "config": {
+    "rules": {
+      "security_client_server_leak": {
+        "configured": "off",
+        "effective": "warn"
+      },
+      "security_sink": {
+        "configured": "off",
+        "effective": "warn"
+      }
+    },
+    "categories_include": null,
+    "categories_exclude": null
+  },
+  "security_findings": [],
+  "unresolved_edge_files": 0,
+  "unresolved_callee_sites": 692,
+  "unresolved_callee_diagnostics": {
+    "sampled": [
+      {
+        "path": "frontend/src/components/AllTasksView.tsx",
+        "line": 16,
+        "col": 310,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/AppShellView.tsx",
+        "line": 115,
+        "col": 88,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/Button.tsx",
+        "line": 30,
+        "col": 26,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/Button.tsx",
+        "line": 30,
+        "col": 26,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/Card.tsx",
+        "line": 48,
+        "col": 17,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/Card.tsx",
+        "line": 48,
+        "col": 17,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/CompletedTaskList.tsx",
+        "line": 7,
+        "col": 9,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DatePicker.tsx",
+        "line": 22,
+        "col": 9,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DatePicker.tsx",
+        "line": 98,
+        "col": 34,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DatePicker.tsx",
+        "line": 179,
+        "col": 16,
+        "reason": "computed-member",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DatePicker.tsx",
+        "line": 287,
+        "col": 31,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DatePicker.tsx",
+        "line": 302,
+        "col": 31,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DatePicker.tsx",
+        "line": 366,
+        "col": 227,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopDashboardView.tsx",
+        "line": 99,
+        "col": 584,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 48,
+        "col": 39,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 64,
+        "col": 22,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 73,
+        "col": 41,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 78,
+        "col": 29,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 93,
+        "col": 43,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 94,
+        "col": 22,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 95,
+        "col": 39,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 131,
+        "col": 55,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 137,
+        "col": 39,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 161,
+        "col": 17,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      },
+      {
+        "path": "frontend/src/components/DesktopShellLayout.tsx",
+        "line": 181,
+        "col": 84,
+        "reason": "dynamic-dispatch",
+        "expression_kind": "static-member-expression"
+      }
+    ],
+    "top_files": [
+      {
+        "path": "frontend/src/test/app.test.tsx",
+        "count": 119
+      },
+      {
+        "path": "frontend/src/test/tasks.test.tsx",
+        "count": 108
+      },
+      {
+        "path": "frontend/src/test/capture.test.tsx",
+        "count": 48
+      },
+      {
+        "path": "frontend/src/test/desktopData.test.ts",
+        "count": 30
+      },
+      {
+        "path": "frontend/src/test/open-task-card.test.tsx",
+        "count": 29
+      },
+      {
+        "path": "frontend/src/test/all-tasks-view.test.tsx",
+        "count": 28
+      },
+      {
+        "path": "frontend/src/test/device.test.tsx",
+        "count": 28
+      },
+      {
+        "path": "frontend/src/lib/desktopData.ts",
+        "count": 27
+      },
+      {
+        "path": "frontend/src/routes/LandingRoute.tsx",
+        "count": 26
+      },
+      {
+        "path": "frontend/src/test/extracted-task-card.test.tsx",
+        "count": 17
+      }
+    ],
+    "by_reason": [
+      {
+        "reason": "dynamic-dispatch",
+        "count": 666
+      },
+      {
+        "reason": "unsupported-assignment-object",
+        "count": 21
+      },
+      {
+        "reason": "computed-member",
+        "count": 5
+      }
+    ],
+    "sample_limit": 25,
+    "top_files_limit": 10
+  },
+  "_meta": {
+    "telemetry": {
+      "analysis_run_id": "run_80b3cad6bfbd4431"
+    }
+  }
+}

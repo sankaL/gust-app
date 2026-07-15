@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-# ruff: noqa: UP037, UP045
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
@@ -241,7 +240,9 @@ class CaptureService:
                         user_id=user_id,
                         capture_id=capture.id,
                         status="ready_for_review",
-                        transcript_text=self._normalize_transcript_text(transcription.transcript_text),
+                        transcript_text=self._normalize_transcript_text(
+                            transcription.transcript_text
+                        ),
                         transcription_provider=transcription.provider,
                         transcription_latency_ms=transcription.latency_ms,
                         error_code=None,
@@ -339,17 +340,9 @@ class CaptureService:
         if not normalized_transcript:
             raise InvalidCaptureError("Transcript cannot be empty.")
 
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
-            if capture is None:
-                raise CaptureNotFoundError()
-            if capture.status not in {"ready_for_review", "extraction_failed"}:
-                raise CaptureStateConflictError()
-            user = get_user(connection, user_id)
-            if user is None:
-                raise CaptureNotFoundError("Authenticated user could not be resolved.")
-            inbox_group = ensure_inbox_group(connection, user_id=user_id)
-            groups = list_groups_with_recent_tasks(connection, user_id=user_id)
+        user, inbox_group, groups = self._load_submission_context(
+            user_id=user_id, capture_id=capture_id
+        )
 
         extraction_request = ExtractionRequest(
             transcript_text=normalized_transcript,
@@ -358,138 +351,27 @@ class CaptureService:
             groups=[self._group_context_payload(group) for group in groups],
         )
 
-        try:
-            with self._capture_lock(user_id=user_id, action="capture_submit"):
-                try:
-                    with timed_stage("capture.extraction"):
-                        (
-                            extractor_payload,
-                            extraction_attempt_count,
-                        ) = await self._extract_payload_with_guardrails(
-                            transcript_text=normalized_transcript,
-                            extraction_request=extraction_request,
-                            inbox_group=inbox_group,
-                        )
-                except (ExtractorMalformedResponseError, ValidationError) as exc:
-                    extraction_attempt_count = self._resolve_extraction_attempt_count()
-                    self._mark_capture_failure(
-                        capture_id=capture_id,
-                        user_id=user_id,
-                        status="extraction_failed",
-                        error_code="extractor_payload_invalid",
-                        extraction_attempt_count=extraction_attempt_count,
-                        transcript_edited_text=normalized_transcript,
-                    )
-                    raise ExtractionFailedError() from exc
-                except ExtractionServiceError as exc:
-                    extraction_attempt_count = self._resolve_extraction_attempt_count()
-                    self._mark_capture_failure(
-                        capture_id=capture_id,
-                        user_id=user_id,
-                        status="extraction_failed",
-                        error_code="extraction_provider_error",
-                        extraction_attempt_count=extraction_attempt_count,
-                        transcript_edited_text=normalized_transcript,
-                    )
-                    raise ExtractionFailedError() from exc
-                except Exception as exc:
-                    extraction_attempt_count = self._resolve_extraction_attempt_count()
-                    self._mark_capture_failure(
-                        capture_id=capture_id,
-                        user_id=user_id,
-                        status="extraction_failed",
-                        error_code=self._error_code_for_exception(exc),
-                        extraction_attempt_count=extraction_attempt_count,
-                        transcript_edited_text=normalized_transcript,
-                    )
-                    raise self._map_extraction_error(exc) from exc
-        except ActionLockBusyError as exc:
-            raise RateLimitExceededError(
-                message="Another capture is already processing. Please wait a moment and retry."
-            ) from exc
-
-        skipped_items: list[SkippedTaskItem] = []
-        prepared_tasks: list[PreparedTask] = []
-        groups_by_id = {group.id: group for group in groups}
-        groups_by_name = {group.name.lower(): group for group in groups}
-
-        for candidate in extractor_payload.tasks:
-            try:
-                prepared_tasks.append(
-                    self._prepare_task(
-                        candidate=candidate,
-                        inbox_group=inbox_group,
-                        groups_by_id=groups_by_id,
-                        groups_by_name=groups_by_name,
-                        user_timezone=user.timezone,
-                    )
-                )
-            except CandidateValidationError as exc:
-                skipped_items.append(
-                    SkippedTaskItem(code=exc.code, message=exc.message, title=exc.title)
-                )
-
-        created_count = 0
-        flagged_count = 0
-        with timed_stage("capture.db_write"):
-            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-                current_capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
-                if current_capture is None:
-                    raise CaptureNotFoundError()
-                if current_capture.status not in {"ready_for_review", "extraction_failed"}:
-                    raise CaptureStateConflictError()
-
-                submitted_capture = update_capture(
-                    connection,
-                    user_id=user_id,
-                    capture_id=capture_id,
-                    status="submitted",
-                    transcript_edited_text=normalized_transcript,
-                    error_code=None,
-                )
-                assert submitted_capture is not None
-
-                for prepared in prepared_tasks:
-                    task = create_task(
-                        connection,
-                        user_id=user_id,
-                        group_id=prepared.group_id,
-                        capture_id=capture_id,
-                        title=prepared.title,
-                        needs_review=prepared.needs_review,
-                        description=prepared.description,
-                        due_date=prepared.due_date,
-                        reminder_at=prepared.reminder_at,
-                        reminder_offset_minutes=prepared.reminder_offset_minutes,
-                        recurrence_frequency=prepared.recurrence_frequency,
-                        recurrence_interval=prepared.recurrence_interval,
-                        recurrence_weekday=prepared.recurrence_weekday,
-                        recurrence_day_of_month=prepared.recurrence_day_of_month,
-                        recurrence_month=prepared.recurrence_month,
-                        series_id=prepared.series_id,
-                    )
-                    if prepared.subtasks:
-                        create_subtasks(
-                            connection,
-                            user_id=user_id,
-                            task_id=task.id,
-                            titles=prepared.subtasks,
-                        )
-                    created_count += 1
-                    if task.needs_review:
-                        flagged_count += 1
-
-                final_capture = update_capture(
-                    connection,
-                    user_id=user_id,
-                    capture_id=capture_id,
-                    status="completed",
-                    transcript_edited_text=normalized_transcript,
-                    extraction_attempt_count=extraction_attempt_count,
-                    tasks_created_count=created_count,
-                    tasks_skipped_count=len(skipped_items),
-                    error_code=None,
-                )
+        extractor_payload, extraction_attempt_count = await self._extract_submission_payload(
+            user_id=user_id,
+            capture_id=capture_id,
+            transcript=normalized_transcript,
+            request=extraction_request,
+            inbox_group=inbox_group,
+        )
+        prepared_tasks, skipped_items = self._prepare_candidates(
+            candidates=extractor_payload.tasks,
+            inbox_group=inbox_group,
+            groups=groups,
+            user_timezone=user.timezone,
+        )
+        final_capture, created_count, flagged_count = self._store_submission(
+            user_id=user_id,
+            capture_id=capture_id,
+            transcript=normalized_transcript,
+            extraction_attempt_count=extraction_attempt_count,
+            prepared_tasks=prepared_tasks,
+            skipped_count=len(skipped_items),
+        )
 
         assert final_capture is not None
         return SubmitCaptureResult(
@@ -502,6 +384,192 @@ class CaptureService:
             skipped_items=skipped_items,
         )
 
+    def _load_submission_context(self, *, user_id: str, capture_id: str):
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+            capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
+            if capture is None:
+                raise CaptureNotFoundError()
+            if capture.status not in {"ready_for_review", "extraction_failed"}:
+                raise CaptureStateConflictError()
+            user = get_user(connection, user_id)
+            if user is None:
+                raise CaptureNotFoundError("Authenticated user could not be resolved.")
+            inbox_group = ensure_inbox_group(connection, user_id=user_id)
+            groups = list_groups_with_recent_tasks(connection, user_id=user_id)
+        return user, inbox_group, groups
+
+    async def _extract_submission_payload(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript: str,
+        request: ExtractionRequest,
+        inbox_group: GroupRecord,
+    ) -> tuple[ExtractorPayload, int]:
+        try:
+            with self._capture_lock(user_id=user_id, action="capture_submit"):
+                return await self._extract_submission_with_failure_mapping(
+                    user_id=user_id,
+                    capture_id=capture_id,
+                    transcript=transcript,
+                    request=request,
+                    inbox_group=inbox_group,
+                )
+        except ActionLockBusyError as exc:
+            raise RateLimitExceededError(
+                message="Another capture is already processing. Please wait a moment and retry."
+            ) from exc
+
+    async def _extract_submission_with_failure_mapping(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript: str,
+        request: ExtractionRequest,
+        inbox_group: GroupRecord,
+    ) -> tuple[ExtractorPayload, int]:
+        try:
+            with timed_stage("capture.extraction"):
+                return await self._extract_payload_with_guardrails(
+                    transcript_text=transcript,
+                    extraction_request=request,
+                    inbox_group=inbox_group,
+                )
+        except (ExtractorMalformedResponseError, ValidationError) as exc:
+            self._record_submission_failure(
+                user_id, capture_id, transcript, "extractor_payload_invalid"
+            )
+            raise ExtractionFailedError() from exc
+        except ExtractionServiceError as exc:
+            self._record_submission_failure(
+                user_id, capture_id, transcript, "extraction_provider_error"
+            )
+            raise ExtractionFailedError() from exc
+        except Exception as exc:
+            self._record_submission_failure(
+                user_id, capture_id, transcript, self._error_code_for_exception(exc)
+            )
+            raise self._map_extraction_error(exc) from exc
+
+    def _record_submission_failure(
+        self, user_id: str, capture_id: str, transcript: str, error_code: str
+    ) -> None:
+        self._mark_capture_failure(
+            capture_id=capture_id,
+            user_id=user_id,
+            status="extraction_failed",
+            error_code=error_code,
+            extraction_attempt_count=self._resolve_extraction_attempt_count(),
+            transcript_edited_text=transcript,
+        )
+
+    def _prepare_candidates(
+        self,
+        *,
+        candidates: list[ExtractedTaskCandidate],
+        inbox_group: GroupRecord,
+        groups: list[GroupContextRecord],
+        user_timezone: str,
+    ) -> tuple[list[PreparedTask], list[SkippedTaskItem]]:
+        prepared_tasks: list[PreparedTask] = []
+        skipped_items: list[SkippedTaskItem] = []
+        groups_by_id = {group.id: group for group in groups}
+        groups_by_name = {group.name.lower(): group for group in groups}
+        for candidate in candidates:
+            try:
+                prepared_tasks.append(
+                    self._prepare_task(
+                        candidate=candidate,
+                        inbox_group=inbox_group,
+                        groups_by_id=groups_by_id,
+                        groups_by_name=groups_by_name,
+                        user_timezone=user_timezone,
+                    )
+                )
+            except CandidateValidationError as exc:
+                skipped_items.append(
+                    SkippedTaskItem(code=exc.code, message=exc.message, title=exc.title)
+                )
+        return prepared_tasks, skipped_items
+
+    def _store_submission(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript: str,
+        extraction_attempt_count: int,
+        prepared_tasks: list[PreparedTask],
+        skipped_count: int,
+    ):
+        with (
+            timed_stage("capture.db_write"),
+            user_connection_scope(self.settings.database_url, user_id=user_id) as connection,
+        ):
+            current_capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
+            if current_capture is None:
+                raise CaptureNotFoundError()
+            if current_capture.status not in {"ready_for_review", "extraction_failed"}:
+                raise CaptureStateConflictError()
+            update_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                status="submitted",
+                transcript_edited_text=transcript,
+                error_code=None,
+            )
+            created_count, flagged_count = self._create_prepared_tasks(
+                connection, user_id=user_id, capture_id=capture_id, prepared_tasks=prepared_tasks
+            )
+            final_capture = update_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                status="completed",
+                transcript_edited_text=transcript,
+                extraction_attempt_count=extraction_attempt_count,
+                tasks_created_count=created_count,
+                tasks_skipped_count=skipped_count,
+                error_code=None,
+            )
+        assert final_capture is not None
+        return final_capture, created_count, flagged_count
+
+    def _create_prepared_tasks(
+        self, connection, *, user_id: str, capture_id: str, prepared_tasks: list[PreparedTask]
+    ) -> tuple[int, int]:
+        created_count = 0
+        flagged_count = 0
+        for prepared in prepared_tasks:
+            task = create_task(
+                connection,
+                user_id=user_id,
+                group_id=prepared.group_id,
+                capture_id=capture_id,
+                title=prepared.title,
+                needs_review=prepared.needs_review,
+                description=prepared.description,
+                due_date=prepared.due_date,
+                reminder_at=prepared.reminder_at,
+                reminder_offset_minutes=prepared.reminder_offset_minutes,
+                recurrence_frequency=prepared.recurrence_frequency,
+                recurrence_interval=prepared.recurrence_interval,
+                recurrence_weekday=prepared.recurrence_weekday,
+                recurrence_day_of_month=prepared.recurrence_day_of_month,
+                recurrence_month=prepared.recurrence_month,
+                series_id=prepared.series_id,
+            )
+            if prepared.subtasks:
+                create_subtasks(
+                    connection, user_id=user_id, task_id=task.id, titles=prepared.subtasks
+                )
+            created_count += 1
+            flagged_count += int(task.needs_review)
+        return created_count, flagged_count
+
     def _create_capture(
         self,
         *,
@@ -511,7 +579,7 @@ class CaptureService:
         source_text: str | None = None,
         transcript_text: str | None = None,
     ) -> CaptureRecord:
-        expires_at = datetime.now(timezone.utc) + timedelta(
+        expires_at = datetime.now(UTC) + timedelta(
             days=self.settings.capture_retention_days
         )
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
@@ -555,19 +623,7 @@ class CaptureService:
         groups_by_name: dict[str, GroupContextRecord],
         user_timezone: str,
     ) -> PreparedTask:
-        if not candidate.title.strip():
-            raise CandidateValidationError(
-                "invalid_title",
-                "Task title cannot be blank.",
-                candidate.title,
-            )
-        for subtask in candidate.subtasks:
-            if not subtask.title.strip():
-                raise CandidateValidationError(
-                    "invalid_subtask",
-                    "Subtask title cannot be blank.",
-                    candidate.title,
-                )
+        self._validate_candidate_text(candidate)
 
         resolved_group = self._resolve_candidate_group(
             candidate=candidate,
@@ -575,64 +631,10 @@ class CaptureService:
             groups_by_id=groups_by_id,
             groups_by_name=groups_by_name,
         )
-        tie_detected = self._has_tie(candidate)
-
-        if tie_detected or candidate.top_confidence < 0.5:
-            group_id = inbox_group.id
-            needs_review = True
-        elif resolved_group is None:
-            group_id = inbox_group.id
-            needs_review = True
-        elif candidate.top_confidence >= 0.8:
-            group_id = resolved_group.id
-            needs_review = False
-        else:
-            group_id = resolved_group.id
-            needs_review = True
-
-        recurrence_input = None
-        if candidate.recurrence is not None:
-            recurrence_input = RecurrenceInput(
-                frequency=candidate.recurrence.frequency,
-                weekday=candidate.recurrence.weekday,
-                day_of_month=candidate.recurrence.day_of_month,
-            )
-
-        try:
-            normalized = normalize_task_fields(
-                title=candidate.title,
-                due_date=candidate.due_date,
-                reminder_at=candidate.reminder_at,
-                recurrence=recurrence_input,
-                user_timezone=user_timezone,
-                # Lenient: accept AI-extracted tasks with imperfect datetime/recurrence
-                assume_utc_for_naive=True,
-                default_due_date_for_recurrence=True,
-            )
-        except ValueError as exc:
-            message = str(exc)
-            if message == "Task title cannot be blank.":
-                raise CandidateValidationError("invalid_title", message, candidate.title) from exc
-            if message == "Reminder timestamp must include a timezone.":
-                raise CandidateValidationError(
-                    "invalid_reminder",
-                    message,
-                    candidate.title,
-                ) from exc
-            if message == "Reminder requires a due date.":
-                raise CandidateValidationError(
-                    "reminder_requires_due_date", message, candidate.title
-                ) from exc
-            if message in {
-                "Recurrence payload is invalid for v1.",
-                "Recurrence requires a due date.",
-            }:
-                raise CandidateValidationError(
-                    "invalid_recurrence",
-                    message,
-                    candidate.title,
-                ) from exc
-            raise
+        group_id, needs_review = self._candidate_assignment(
+            candidate=candidate, resolved_group=resolved_group, inbox_group=inbox_group
+        )
+        normalized = self._normalize_candidate(candidate, user_timezone=user_timezone)
 
         subtasks = [subtask.title for subtask in candidate.subtasks]
         description = normalize_task_description(candidate.description, title=normalized.title)
@@ -652,6 +654,64 @@ class CaptureService:
             recurrence_month=normalized.recurrence_month,
             subtasks=[subtask.strip() for subtask in subtasks],
         )
+
+    def _validate_candidate_text(self, candidate: ExtractedTaskCandidate) -> None:
+        if not candidate.title.strip():
+            raise CandidateValidationError(
+                "invalid_title", "Task title cannot be blank.", candidate.title
+            )
+        if any(not subtask.title.strip() for subtask in candidate.subtasks):
+            raise CandidateValidationError(
+                "invalid_subtask", "Subtask title cannot be blank.", candidate.title
+            )
+
+    def _candidate_assignment(
+        self,
+        *,
+        candidate: ExtractedTaskCandidate,
+        resolved_group: GroupContextRecord | None,
+        inbox_group: GroupRecord,
+    ) -> tuple[str, bool]:
+        if self._has_tie(candidate) or candidate.top_confidence < 0.5 or resolved_group is None:
+            return inbox_group.id, True
+        return resolved_group.id, candidate.top_confidence < 0.8
+
+    def _candidate_recurrence(self, candidate: ExtractedTaskCandidate) -> RecurrenceInput | None:
+        if candidate.recurrence is None:
+            return None
+        return RecurrenceInput(
+            frequency=candidate.recurrence.frequency,
+            weekday=candidate.recurrence.weekday,
+            day_of_month=candidate.recurrence.day_of_month,
+        )
+
+    def _normalize_candidate(self, candidate: ExtractedTaskCandidate, *, user_timezone: str):
+        try:
+            return normalize_task_fields(
+                title=candidate.title,
+                due_date=candidate.due_date,
+                reminder_at=candidate.reminder_at,
+                recurrence=self._candidate_recurrence(candidate),
+                user_timezone=user_timezone,
+                assume_utc_for_naive=True,
+                default_due_date_for_recurrence=True,
+            )
+        except ValueError as exc:
+            self._raise_candidate_normalization_error(exc, candidate.title)
+            raise
+
+    def _raise_candidate_normalization_error(self, exc: ValueError, title: str) -> None:
+        message = str(exc)
+        error_codes = {
+            "Task title cannot be blank.": "invalid_title",
+            "Reminder timestamp must include a timezone.": "invalid_reminder",
+            "Reminder requires a due date.": "reminder_requires_due_date",
+            "Recurrence payload is invalid for v1.": "invalid_recurrence",
+            "Recurrence requires a due date.": "invalid_recurrence",
+        }
+        code = error_codes.get(message)
+        if code is not None:
+            raise CandidateValidationError(code, message, title) from exc
 
     def _resolve_candidate_group(
         self,

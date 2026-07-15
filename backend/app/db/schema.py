@@ -299,8 +299,7 @@ rate_limit_counters = sa.Table(
         name="ck_rate_limit_counters_subject_length",
     ),
     sa.CheckConstraint(
-        "window_seconds > 0 OR "
-        "(window_seconds = 0 AND scope LIKE 'action_lock:%')",
+        "window_seconds > 0 OR (window_seconds = 0 AND scope LIKE 'action_lock:%')",
         name="ck_rate_limit_counters_valid_window",
     ),
     sa.CheckConstraint(

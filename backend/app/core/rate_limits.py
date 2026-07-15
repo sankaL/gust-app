@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from starlette.requests import Request
 
@@ -65,9 +65,7 @@ class RequestRateLimiter:
         self.authenticated_write_user = _parse_windows(settings.rate_limit_authenticated_write_user)
         self.authenticated_get_user = _parse_windows(settings.rate_limit_authenticated_get_user)
         self.public_get_ip = _parse_windows(settings.rate_limit_public_get_ip)
-        self.unauthenticated_write_ip = _parse_windows(
-            settings.rate_limit_unauthenticated_write_ip
-        )
+        self.unauthenticated_write_ip = _parse_windows(settings.rate_limit_unauthenticated_write_ip)
         self.internal_job_ip = _parse_windows(settings.rate_limit_internal_job_ip)
 
     def evaluate_ip_request(
@@ -116,7 +114,7 @@ class RequestRateLimiter:
         cleanup_expired: bool,
     ) -> RateLimitEvaluation | None:
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         client_ip = client_ip_for_request(request, self.settings)
         primary_state: RateLimitState | None = None
         exceeded_state: RateLimitState | None = None
@@ -317,4 +315,4 @@ def _parse_windows(value: str) -> tuple[RateLimitWindow, ...]:
 def _window_start(*, now: datetime, window_seconds: int) -> datetime:
     epoch_seconds = int(now.timestamp())
     start_epoch = epoch_seconds - (epoch_seconds % window_seconds)
-    return datetime.fromtimestamp(start_epoch, tz=timezone.utc)
+    return datetime.fromtimestamp(start_epoch, tz=UTC)

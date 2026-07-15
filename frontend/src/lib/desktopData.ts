@@ -448,45 +448,15 @@ export function buildDesktopAnalytics({
     )
     .slice(0, 8)
 
-  const openByGroupId = new Map<string, TaskSummary[]>()
-  const completedByGroupId = new Map<string, number>()
-  let overdueCount = 0
-  let dueTodayCount = 0
-  let dueThisWeekCount = 0
-  let noDateCount = 0
-  let needsReviewCount = 0
-
-  for (const task of openTasks) {
-    const groupTasks = openByGroupId.get(task.group.id) ?? []
-    groupTasks.push(task)
-    openByGroupId.set(task.group.id, groupTasks)
-
-    if (!task.due_date) {
-      noDateCount += 1
-    } else {
-      if (task.due_date < todayIso) overdueCount += 1
-      if (task.due_date === todayIso) dueTodayCount += 1
-      if (task.due_date >= todayIso && task.due_date <= weekEndIso) dueThisWeekCount += 1
-    }
-    if (task.needs_review) needsReviewCount += 1
-  }
-
-  for (const task of completedTasks) {
-    completedByGroupId.set(task.group.id, (completedByGroupId.get(task.group.id) ?? 0) + 1)
-  }
-
-  const groupAnalytics = groups.map((group) => {
-    const groupOpen = openByGroupId.get(group.id) ?? []
-    return {
-      group,
-      openCount: groupOpen.length,
-      completedCount: completedByGroupId.get(group.id) ?? 0,
-      overdueCount: groupOpen.filter((task) => task.due_date && task.due_date < todayIso).length,
-      dueThisWeekCount: groupOpen.filter(
-        (task) => task.due_date && task.due_date >= todayIso && task.due_date <= weekEndIso
-      ).length,
-    }
-  })
+  const openSummary = summarizeOpenTasks(openTasks, todayIso, weekEndIso)
+  const completedByGroupId = countTasksByGroup(completedTasks)
+  const groupAnalytics = buildGroupAnalytics(
+    groups,
+    openSummary.byGroupId,
+    completedByGroupId,
+    todayIso,
+    weekEndIso
+  )
 
   return {
     todayIso,
@@ -498,13 +468,78 @@ export function buildDesktopAnalytics({
     counts: {
       open: openTasks.length,
       completed: completedTasks.length,
-      overdue: overdueCount,
-      dueToday: dueTodayCount,
-      dueThisWeek: dueThisWeekCount,
-      noDate: noDateCount,
-      needsReview: needsReviewCount,
+      ...openSummary.counts,
     },
   }
+}
+
+type OpenTaskSummary = {
+  byGroupId: Map<string, TaskSummary[]>
+  counts: Pick<DesktopAnalytics['counts'], 'overdue' | 'dueToday' | 'dueThisWeek' | 'noDate' | 'needsReview'>
+}
+
+function summarizeOpenTasks(
+  tasks: TaskSummary[],
+  todayIso: string,
+  weekEndIso: string
+): OpenTaskSummary {
+  const summary: OpenTaskSummary = {
+    byGroupId: new Map(),
+    counts: { overdue: 0, dueToday: 0, dueThisWeek: 0, noDate: 0, needsReview: 0 },
+  }
+
+  for (const task of tasks) {
+    const groupTasks = summary.byGroupId.get(task.group.id) ?? []
+    groupTasks.push(task)
+    summary.byGroupId.set(task.group.id, groupTasks)
+    updateOpenTaskCounts(summary.counts, task, todayIso, weekEndIso)
+  }
+
+  return summary
+}
+
+function updateOpenTaskCounts(
+  counts: OpenTaskSummary['counts'],
+  task: TaskSummary,
+  todayIso: string,
+  weekEndIso: string
+) {
+  if (!task.due_date) counts.noDate += 1
+  if (task.due_date && task.due_date < todayIso) counts.overdue += 1
+  if (task.due_date === todayIso) counts.dueToday += 1
+  if (task.due_date && task.due_date >= todayIso && task.due_date <= weekEndIso) {
+    counts.dueThisWeek += 1
+  }
+  if (task.needs_review) counts.needsReview += 1
+}
+
+function countTasksByGroup(tasks: TaskSummary[]) {
+  const counts = new Map<string, number>()
+  for (const task of tasks) {
+    counts.set(task.group.id, (counts.get(task.group.id) ?? 0) + 1)
+  }
+  return counts
+}
+
+function buildGroupAnalytics(
+  groups: GroupSummary[],
+  openByGroupId: Map<string, TaskSummary[]>,
+  completedByGroupId: Map<string, number>,
+  todayIso: string,
+  weekEndIso: string
+): GroupAnalytics[] {
+  return groups.map((group) => {
+    const groupOpen = openByGroupId.get(group.id) ?? []
+    return {
+      group,
+      openCount: groupOpen.length,
+      completedCount: completedByGroupId.get(group.id) ?? 0,
+      overdueCount: groupOpen.filter((task) => Boolean(task.due_date && task.due_date < todayIso)).length,
+      dueThisWeekCount: groupOpen.filter((task) =>
+        Boolean(task.due_date && task.due_date >= todayIso && task.due_date <= weekEndIso)
+      ).length,
+    }
+  })
 }
 
 export function filterDesktopTasks(
@@ -512,44 +547,41 @@ export function filterDesktopTasks(
   filters: DesktopTaskFilters
 ): TaskSummary[] {
   const search = filters.search.trim().toLowerCase()
-  let result = tasks
-  if (search) {
-    result = result.filter((task) => {
-      const haystack = [task.title, task.description, task.group.name]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(search)
-    })
-  }
-  if (filters.groupId !== 'all') {
-    result = result.filter((task) => task.group.id === filters.groupId)
-  }
-  if (filters.dueBucket !== 'all') {
-    result = result.filter((task) => task.due_bucket === filters.dueBucket)
-  }
-  if (filters.dueFrom) {
-    result = result.filter((task) => Boolean(task.due_date && task.due_date >= filters.dueFrom))
-  }
-  if (filters.dueTo) {
-    result = result.filter((task) => Boolean(task.due_date && task.due_date <= filters.dueTo))
-  }
-  if (filters.review === 'needs_review') {
-    result = result.filter((task) => task.needs_review)
-  } else if (filters.review === 'clear') {
-    result = result.filter((task) => !task.needs_review)
-  }
-  if (filters.recurrence === 'recurring') {
-    result = result.filter((task) => Boolean(task.recurrence_frequency))
-  } else if (filters.recurrence === 'one_off') {
-    result = result.filter((task) => !task.recurrence_frequency)
-  }
-  if (filters.subtasks === 'has_subtasks') {
-    result = result.filter((task) => task.subtask_count > 0)
-  } else if (filters.subtasks === 'no_subtasks') {
-    result = result.filter((task) => task.subtask_count === 0)
-  }
-  return result
+  const predicates: TaskPredicate[] = [
+    optionalTaskPredicate(Boolean(search), (task) =>
+      [task.title, task.description, task.group.name].filter(Boolean).join(' ').toLowerCase().includes(search)
+    ),
+    optionalTaskPredicate(filters.groupId !== 'all', (task) => task.group.id === filters.groupId),
+    optionalTaskPredicate(filters.dueBucket !== 'all', (task) => task.due_bucket === filters.dueBucket),
+    optionalTaskPredicate(Boolean(filters.dueFrom), (task) => Boolean(task.due_date && task.due_date >= filters.dueFrom)),
+    optionalTaskPredicate(Boolean(filters.dueTo), (task) => Boolean(task.due_date && task.due_date <= filters.dueTo)),
+    reviewPredicates[filters.review] ?? allowTask,
+    recurrencePredicates[filters.recurrence] ?? allowTask,
+    subtaskPredicates[filters.subtasks] ?? allowTask,
+  ]
+  return tasks.filter((task) => predicates.every((predicate) => predicate(task)))
+}
+
+type TaskPredicate = (task: TaskSummary) => boolean
+const allowTask: TaskPredicate = () => true
+
+function optionalTaskPredicate(enabled: boolean, predicate: TaskPredicate): TaskPredicate {
+  return enabled ? predicate : allowTask
+}
+
+const reviewPredicates: Record<string, TaskPredicate> = {
+  needs_review: (task) => task.needs_review,
+  clear: (task) => !task.needs_review,
+}
+
+const recurrencePredicates: Record<string, TaskPredicate> = {
+  recurring: (task) => Boolean(task.recurrence_frequency),
+  one_off: (task) => !task.recurrence_frequency,
+}
+
+const subtaskPredicates: Record<string, TaskPredicate> = {
+  has_subtasks: (task) => task.subtask_count > 0,
+  no_subtasks: (task) => task.subtask_count === 0,
 }
 
 export function sortDesktopTasks(tasks: TaskSummary[], sort: DesktopSortState): TaskSummary[] {
@@ -559,27 +591,28 @@ export function sortDesktopTasks(tasks: TaskSummary[], sort: DesktopSortState): 
   })
 }
 
+const desktopTaskComparators: Partial<
+  Record<DesktopSortKey, (first: TaskSummary, second: TaskSummary) => number>
+> = {
+  title: (first, second) => first.title.localeCompare(second.title),
+  group: (first, second) => first.group.name.localeCompare(second.group.name),
+  review: (first, second) => Number(first.needs_review) - Number(second.needs_review),
+  recurrence: (first, second) =>
+    (first.recurrence_frequency ?? '').localeCompare(second.recurrence_frequency ?? ''),
+}
+
 function compareDesktopTaskValue(
   first: TaskSummary,
   second: TaskSummary,
   key: DesktopSortKey,
   direction: DesktopSortDirection
 ) {
-  if (key === 'title') {
-    return first.title.localeCompare(second.title)
-  }
-  if (key === 'group') {
-    return first.group.name.localeCompare(second.group.name)
-  }
-  if (key === 'review') {
-    return Number(first.needs_review) - Number(second.needs_review)
-  }
-  if (key === 'recurrence') {
-    return (first.recurrence_frequency ?? '').localeCompare(second.recurrence_frequency ?? '')
-  }
+  const comparator = desktopTaskComparators[key]
+  if (comparator) return comparator(first, second)
 
-  const firstValue = first[key] ?? null
-  const secondValue = second[key] ?? null
+  const dateKey = key as 'due_date' | 'created_at' | 'completed_at'
+  const firstValue = first[dateKey] ?? null
+  const secondValue = second[dateKey] ?? null
   return compareNullableStrings(firstValue, secondValue, direction)
 }
 

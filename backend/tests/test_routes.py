@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 from app.core.dependencies import get_reminder_worker_service
 from app.services.reminders import INTERNAL_JOB_SECRET_HEADER, ReminderRunSummary
@@ -30,8 +30,8 @@ def test_internal_reminder_route_requires_shared_secret(client: TestClient) -> N
 
 def test_internal_reminder_route_returns_summary_when_authorized(client: TestClient) -> None:
     client.app.state.settings.internal_job_shared_secret = "phase4-secret"
-    client.app.dependency_overrides[get_reminder_worker_service] = (
-        lambda: FakeReminderWorkerService(
+    client.app.dependency_overrides[get_reminder_worker_service] = lambda: (
+        FakeReminderWorkerService(
             summary=ReminderRunSummary(
                 mode="daily",
                 users_processed=3,

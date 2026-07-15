@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "start:prod": "sh -lc 'serve -s dist -l tcp://0.0.0.0:${PORT:-4173}'",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
+    "quality:fallow": "fallow --root .. --config ../.fallowrc.json --no-cache --fail-on-issues",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --coverage.provider=istanbul --coverage.reporter=json",
     "test:watch": "vitest"
@@ -38,6 +39,7 @@
     "eslint": "^9.23.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
+    "fallow": "^3.5.0",
     "globals": "^16.0.0",
     "jsdom": "^26.1.0",
     "postcss": "^8.5.3",

@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { useNotifications } from '../components/Notifications'
 import {
@@ -31,6 +31,25 @@ function buildFriendlyMessage(error: unknown, fallback: string) {
     return error.message
   }
   return fallback
+}
+
+async function prepareDueDateMutation(queryClient: QueryClient, task: TaskSummary, dueDate: string | null) {
+  const queryKeys = [['tasks'], ['desktop', 'tasks'], ['task-detail', task.id]]
+  await Promise.all(queryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey })))
+  const snapshots = snapshotTaskQueries(queryClient, task.id)
+  const optimisticTask = dueDateTask(task, dueDate)
+  applyTaskListMutation(queryClient, (currentTask, statusSegment) => currentTask.id === task.id && statusSegment === task.status ? { ...currentTask, ...optimisticTask } : currentTask.id === task.id ? null : currentTask)
+  const detail = queryClient.getQueryData<TaskDetail>(['task-detail', task.id])
+  if (detail) updateTaskDetailCache(queryClient, dueDateDetail(detail, dueDate))
+  return { snapshots }
+}
+
+function dueDateTask(task: TaskSummary, dueDate: string | null): TaskSummary {
+  return { ...task, due_date: dueDate, reminder_at: dueDate ? task.reminder_at : null, recurrence_frequency: dueDate ? task.recurrence_frequency : null }
+}
+
+function dueDateDetail(task: TaskDetail, dueDate: string | null): TaskDetail {
+  return { ...task, due_date: dueDate, reminder_at: dueDate ? task.reminder_at : null, recurrence: dueDate ? task.recurrence : null, recurrence_frequency: dueDate ? task.recurrence_frequency : null }
 }
 
 export function useDesktopTaskActions(session: SessionStatus | undefined) {
@@ -127,37 +146,7 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
   })
 
   const moveDueDateMutation = useMutation({
-    onMutate: async ({ task, dueDate }: MoveDueDateVariables) => {
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['tasks'] }),
-        queryClient.cancelQueries({ queryKey: ['desktop', 'tasks'] }),
-        queryClient.cancelQueries({ queryKey: ['task-detail', task.id] }),
-      ])
-      const snapshots = snapshotTaskQueries(queryClient, task.id)
-      const optimisticTask: TaskSummary = {
-        ...task,
-        due_date: dueDate,
-        reminder_at: dueDate ? task.reminder_at : null,
-        recurrence_frequency: dueDate ? task.recurrence_frequency : null,
-      }
-      applyTaskListMutation(queryClient, (currentTask, statusSegment) => {
-        if (currentTask.id !== task.id) {
-          return currentTask
-        }
-        return statusSegment === task.status ? { ...currentTask, ...optimisticTask } : null
-      })
-      const currentDetail = queryClient.getQueryData<TaskDetail>(['task-detail', task.id])
-      if (currentDetail) {
-        updateTaskDetailCache(queryClient, {
-          ...currentDetail,
-          due_date: dueDate,
-          reminder_at: dueDate ? currentDetail.reminder_at : null,
-          recurrence: dueDate ? currentDetail.recurrence : null,
-          recurrence_frequency: dueDate ? currentDetail.recurrence_frequency : null,
-        })
-      }
-      return { snapshots }
-    },
+    onMutate: ({ task, dueDate }: MoveDueDateVariables) => prepareDueDateMutation(queryClient, task, dueDate),
     mutationFn: async ({ task, dueDate }: MoveDueDateVariables) => {
       const detail = await queryClient.fetchQuery({
         queryKey: ['task-detail', task.id],

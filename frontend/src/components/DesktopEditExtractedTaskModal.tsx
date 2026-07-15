@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Save, Trash2, X } from 'lucide-react'
+import { Save, X } from 'lucide-react'
 
 import {
   updateExtractedTask,
@@ -10,16 +10,11 @@ import {
 import {
   buildExtractedTaskDraft,
   buildExtractedTaskUpdates,
-  RECURRENCE_MONTHS,
-  RECURRENCE_OPTIONS,
-  RECURRENCE_WEEKDAYS,
-  recurrenceForDueDate,
   type TaskFormDraft,
 } from '../lib/taskFormModel'
-import { DatePicker } from './DatePicker'
-import { SelectDropdown } from './SelectDropdown'
-import { DesktopTaskGroupField } from './DesktopTaskGroupField'
-import { AddSubtaskInput } from './AddSubtaskInput'
+import { TaskFormFields } from './TaskFormFields'
+import { SubtaskDrafts } from './TaskFormSections'
+import { useEscapeDismiss } from '../hooks/useFloatingDismiss'
 
 type DesktopEditExtractedTaskModalProps = {
   task: ExtractedTask | null
@@ -55,14 +50,7 @@ export function DesktopEditExtractedTaskModal({
     setIsGroupDropdownOpen(false)
   }, [task, timezone])
 
-  useEffect(() => {
-    if (!isOpen) return undefined
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  useEscapeDismiss(isOpen, onClose)
 
   if (!isOpen || !task || !draft) return null
 
@@ -116,8 +104,6 @@ export function DesktopEditExtractedTaskModal({
     }
   }
 
-  const recurrenceFrequency = draft.recurrence?.frequency ?? 'none'
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-5 backdrop-blur-sm"
@@ -149,251 +135,10 @@ export function DesktopEditExtractedTaskModal({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          {error ? (
-            <div className="mb-4 rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] p-3 text-sm text-red-100">
-              {error}
-            </div>
-          ) : null}
-
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(24rem,0.95fr)]">
-            <section className="space-y-5">
-              <div>
-                <label className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                  Title
-                </label>
-                <input
-                  value={draft.title}
-                  onChange={(event) => updateDraft((current) => ({ ...current, title: event.target.value }))}
-                  className="mt-2 w-full rounded-card bg-surface/65 px-4 py-3 font-display text-2xl text-on-surface outline-none ring-1 ring-white/10 transition focus:bg-surface-container focus:ring-primary"
-                  disabled={isSaving}
-                  aria-label="Task title"
-                />
-              </div>
-
-              <div>
-                <label className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                  Context
-                </label>
-                <textarea
-                  value={draft.description}
-                  onChange={(event) =>
-                    updateDraft((current) => ({ ...current, description: event.target.value }))
-                  }
-                  rows={9}
-                  className="mt-2 w-full resize-none rounded-card bg-surface/55 px-4 py-3 font-body text-sm leading-6 text-on-surface outline-none ring-1 ring-white/10 transition placeholder:text-on-surface-variant/45 focus:bg-surface-container focus:ring-primary"
-                  placeholder="Add context that helps you act on this later"
-                  disabled={isSaving}
-                  aria-label="Task description"
-                />
-              </div>
-            </section>
-
-            <section className="space-y-4">
-              <div className="rounded-card bg-surface/35">
-                <DesktopTaskGroupField
-                  groups={groups}
-                  value={draft.groupId}
-                  isOpen={isGroupDropdownOpen}
-                  disabled={isSaving}
-                  labelWidthClass="sm:grid-cols-[9rem_minmax(0,1fr)]"
-                  onChange={(groupId) => updateDraft((current) => ({ ...current, groupId }))}
-                  onOpenChange={setIsGroupDropdownOpen}
-                />
-
-                <div className="grid border-b border-white/10 px-4 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center">
-                  <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">Due date</p>
-                  <DatePicker
-                    value={draft.dueDate || null}
-                    onChange={(value) => {
-                      if (!value) {
-                        updateDraft((current) => ({ ...current, dueDate: '', reminderAt: '', recurrence: null }))
-                      } else {
-                        updateDraft((current) => ({ ...current, dueDate: value }))
-                      }
-                    }}
-                    mode="date"
-                    disabled={isSaving}
-                    placeholder="Select a date"
-                  />
-                </div>
-
-                <div className="grid border-b border-white/10 px-4 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center">
-                  <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">Reminder</p>
-                  <DatePicker
-                    value={draft.reminderAt || null}
-                    onChange={(value) => updateDraft((current) => ({ ...current, reminderAt: value }))}
-                    mode="datetime"
-                    disabled={!draft.dueDate || isSaving}
-                    placeholder={draft.dueDate ? 'Select date & time' : 'Set a due date first'}
-                  />
-                </div>
-
-                <div className="grid px-4 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-                  <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">Recurrence</p>
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      {RECURRENCE_OPTIONS.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          disabled={!draft.dueDate || isSaving}
-                          onClick={() => {
-                            if (option.value === 'none') {
-                              updateDraft((current) => ({ ...current, recurrence: null }))
-                            } else {
-                              updateDraft((current) => ({
-                                ...current,
-                                recurrence: recurrenceForDueDate(option.value, current.dueDate),
-                              }))
-                            }
-                          }}
-                          className={[
-                            'min-w-[4.75rem] rounded-card px-3 py-2 text-center text-sm font-medium transition',
-                            recurrenceFrequency === option.value
-                              ? 'bg-primary text-surface'
-                              : 'bg-surface-dim text-on-surface-variant hover:bg-surface-container-high',
-                            !draft.dueDate ? 'opacity-50' : '',
-                          ].join(' ')}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {draft.recurrence?.frequency === 'weekly' ? (
-                      <SelectDropdown
-                        label=""
-                        options={RECURRENCE_WEEKDAYS}
-                        value={draft.recurrence.weekday ?? ''}
-                        onChange={(value) =>
-                          updateDraft((current) => ({
-                            ...current,
-                            recurrence: {
-                              frequency: 'weekly',
-                              weekday: value === '' ? null : Number(value),
-                              day_of_month: null,
-                              month: null,
-                            },
-                          }))
-                        }
-                        disabled={isSaving}
-                      />
-                    ) : null}
-
-                    {draft.recurrence?.frequency === 'monthly' || draft.recurrence?.frequency === 'yearly' ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {draft.recurrence.frequency === 'yearly' ? (
-                          <SelectDropdown
-                            label=""
-                            options={RECURRENCE_MONTHS}
-                            value={draft.recurrence.month ?? ''}
-                            onChange={(value) =>
-                              updateDraft((current) => ({
-                                ...current,
-                                recurrence: {
-                                  frequency: 'yearly',
-                                  weekday: null,
-                                  day_of_month: current.recurrence?.day_of_month ?? 1,
-                                  month: value === '' ? null : Number(value),
-                                },
-                              }))
-                            }
-                            disabled={isSaving}
-                          />
-                        ) : null}
-                        <input
-                          type="number"
-                          min={1}
-                          max={31}
-                          value={draft.recurrence.day_of_month ?? ''}
-                          onChange={(event) =>
-                            updateDraft((current) => ({
-                              ...current,
-                              recurrence: {
-                                frequency: draft.recurrence?.frequency ?? 'monthly',
-                                weekday: null,
-                                day_of_month: event.target.value ? Number(event.target.value) : null,
-                                month:
-                                  draft.recurrence?.frequency === 'yearly'
-                                    ? (draft.recurrence.month ?? 1)
-                                    : null,
-                              },
-                            }))
-                          }
-                          className="w-full rounded-card bg-surface-dim px-3 py-3 text-sm font-medium text-on-surface outline-none ring-1 ring-white/10 focus:ring-primary"
-                          disabled={isSaving}
-                          aria-label="Recurrence day of month"
-                          placeholder="Day"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <section className="rounded-card bg-surface/35 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">
-                      Subtasks
-                    </p>
-                    <p className="mt-1 font-body text-xs text-on-surface-variant">
-                      {draft.subtaskTitles.length} {draft.subtaskTitles.length === 1 ? 'subtask' : 'subtasks'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 divide-y divide-white/10 rounded-card bg-surface-dim">
-                  {draft.subtaskTitles.length === 0 ? (
-                    <p className="px-4 py-5 font-body text-sm text-on-surface-variant">No subtasks yet.</p>
-                  ) : (
-                    draft.subtaskTitles.map((subtaskTitle, index) => (
-                      <div key={`${subtaskTitle}-${index}`} className="flex items-center gap-3 px-3 py-2">
-                        <input
-                          value={subtaskTitle}
-                          onChange={(event) =>
-                            updateDraft((current) => ({
-                              ...current,
-                              subtaskTitles: current.subtaskTitles.map((title, candidateIndex) =>
-                                candidateIndex === index ? event.target.value : title
-                              ),
-                            }))
-                          }
-                          className="min-w-0 flex-1 bg-transparent py-2 font-body text-sm text-on-surface outline-none"
-                          aria-label={`Subtask ${subtaskTitle || index + 1}`}
-                          disabled={isSaving}
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateDraft((current) => ({
-                              ...current,
-                              subtaskTitles: current.subtaskTitles.filter(
-                                (_title, candidateIndex) => candidateIndex !== index
-                              ),
-                            }))
-                          }
-                          disabled={isSaving}
-                          className="rounded-full p-2 text-on-surface-variant transition hover:bg-tertiary/10 hover:text-tertiary disabled:opacity-50"
-                          aria-label={`Delete ${subtaskTitle || `subtask ${index + 1}`}`}
-                        >
-                          <Trash2 className="h-4 w-4" strokeWidth={2} />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <AddSubtaskInput
-                  value={newSubtaskTitle}
-                  disabled={isSaving}
-                  onChange={setNewSubtaskTitle}
-                  onAdd={addSubtaskDraft}
-                />
-              </section>
-            </section>
-          </div>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          {error ? <div className="rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] p-3 text-sm text-red-100">{error}</div> : null}
+          <TaskFormFields title={draft.title} description={draft.description} groupId={draft.groupId} dueDate={draft.dueDate} reminderAt={draft.reminderAt} recurrence={draft.recurrence} groups={groups} isGroupDropdownOpen={isGroupDropdownOpen} disabled={isSaving} onTitleChange={(title) => updateDraft((current) => ({ ...current, title }))} onDescriptionChange={(description) => updateDraft((current) => ({ ...current, description }))} onGroupIdChange={(groupId) => updateDraft((current) => ({ ...current, groupId }))} onDueDateChange={(dueDate) => updateDraft((current) => ({ ...current, dueDate }))} onReminderAtChange={(reminderAt) => updateDraft((current) => ({ ...current, reminderAt }))} onRecurrenceChange={(recurrence) => updateDraft((current) => ({ ...current, recurrence }))} onGroupDropdownOpenChange={setIsGroupDropdownOpen} />
+          <SubtaskDrafts titles={draft.subtaskTitles} newTitle={newSubtaskTitle} disabled={isSaving} onTitlesChange={(subtaskTitles) => updateDraft((current) => ({ ...current, subtaskTitles }))} onNewTitleChange={setNewSubtaskTitle} onAdd={addSubtaskDraft} />
         </div>
 
         <footer className="flex justify-end gap-3 border-t border-white/10 bg-[rgba(20,20,20,0.86)] px-6 py-4 backdrop-blur-xl">

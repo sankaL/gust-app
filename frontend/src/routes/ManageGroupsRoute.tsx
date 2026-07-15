@@ -11,7 +11,8 @@ import {
   deleteGroup,
   getSessionStatus,
   listGroups,
-  updateGroup
+  updateGroup,
+  type GroupSummary,
 } from '../lib/api'
 import {
   refreshTaskScreenQueries,
@@ -26,6 +27,39 @@ function buildFriendlyMessage(error: unknown, fallback: string) {
   }
 
   return fallback
+}
+
+type GroupDraft = { name: string; description: string }
+
+type ManageGroupCardProps = {
+  group: GroupSummary
+  groups: GroupSummary[]
+  draft?: GroupDraft
+  deleteTarget: string
+  onEdit: (group: GroupSummary) => void
+  onCancel: (groupId: string) => void
+  onDraftChange: (groupId: string, draft: GroupDraft) => void
+  onDeleteTargetChange: (groupId: string, targetId: string) => void
+  onSave: (groupId: string) => void
+  onDelete: (groupId: string) => void
+}
+
+function GroupCardHeader({ group, isEditing, onToggle }: { group: GroupSummary; isEditing: boolean; onToggle: () => void }) {
+  return <div className="flex items-start justify-between gap-4"><div className="min-w-0 flex-1"><h3 className="truncate font-display text-lg font-medium leading-tight text-on-surface">{group.name}</h3>{group.description ? <p className="mt-1 line-clamp-2 font-body text-xs text-on-surface-variant">{group.description}</p> : null}</div><div className="flex shrink-0 flex-col items-end gap-2"><div className="flex items-center gap-2"><span className="rounded-pill bg-surface-dim px-2 py-0.5 font-body text-[0.65rem] uppercase tracking-widest text-on-surface-variant">{group.open_task_count} TASKS</span>{group.is_system ? <span className="rounded-pill bg-primary/20 px-2 py-0.5 font-body text-[0.65rem] uppercase tracking-widest text-primary">LOCKED</span> : null}</div>{!group.is_system ? <button type="button" onClick={onToggle} className="mt-1 rounded-pill bg-surface-dim px-3 py-1 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] transition-all hover:-translate-y-0.5 active:scale-95" aria-label={isEditing ? 'Cancel editing' : 'Edit group'}>{isEditing ? 'Cancel' : 'Edit'}</button> : null}</div></div>
+}
+
+function GroupDangerZone({ groupId, groups, value, onChange, onDelete }: { groupId: string; groups: GroupSummary[]; value: string; onChange: (value: string) => void; onDelete: () => void }) {
+  const options = groups.filter((candidate) => candidate.id !== groupId).map((candidate) => ({ value: candidate.id, label: candidate.name }))
+  return <div className="rounded-card bg-surface-dim p-4"><div className="space-y-4"><p className="font-body text-[0.65rem] font-bold uppercase tracking-widest text-error">Danger Zone</p><SelectDropdown label="" value={value} onChange={(next) => onChange(String(next))} placeholder="Move all tasks to..." options={options} /><button type="button" onClick={onDelete} className="w-full rounded-pill bg-error/20 px-4 py-2 text-sm font-medium text-error shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition-all hover:-translate-y-0.5 active:scale-95">Delete Group &amp; Reassign Tasks</button></div></div>
+}
+
+function GroupEditPanel({ group, groups, draft, deleteTarget, onDraftChange, onDeleteTargetChange, onSave, onCancel, onDelete }: Omit<ManageGroupCardProps, 'onEdit'> & { draft: GroupDraft }) {
+  return <><div className="grid gap-3 border-t border-white/5 pt-4"><input value={draft.name} onChange={(event) => onDraftChange(group.id, { ...draft, name: event.target.value })} className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none transition-all placeholder:text-on-surface-variant/40 focus:ring-1 focus:ring-primary" placeholder="Group name" /><textarea value={draft.description} onChange={(event) => onDraftChange(group.id, { ...draft, description: event.target.value })} rows={3} className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none transition-all placeholder:text-on-surface-variant/40 focus:ring-1 focus:ring-primary" placeholder="Group description" /></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => onSave(group.id)} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface">Save Group</button><button type="button" onClick={() => onCancel(group.id)} className="rounded-pill border border-outline/30 px-4 py-2 text-sm text-on-surface-variant">Cancel</button></div><GroupDangerZone groupId={group.id} groups={groups} value={deleteTarget} onChange={(value) => onDeleteTargetChange(group.id, value)} onDelete={() => onDelete(group.id)} /></>
+}
+
+function ManageGroupCard(props: ManageGroupCardProps) {
+  const { group, draft } = props
+  return <section className="flex flex-col gap-4 rounded-card border border-white/5 bg-surface-container-high p-4"><GroupCardHeader group={group} isEditing={Boolean(draft)} onToggle={() => draft ? props.onCancel(group.id) : props.onEdit(group)} />{draft ? <GroupEditPanel {...props} draft={draft} /> : null}</section>
 }
 
 export function ManageGroupsRoute() {
@@ -221,161 +255,7 @@ export function ManageGroupsRoute() {
         ) : null}
 
         <div className="space-y-3">
-          {groupsQuery.data?.map((group) => {
-            const draft = drafts[group.id] ?? {
-              name: group.name,
-              description: group.description ?? ''
-            }
-            const deletionOptions = (groupsQuery.data ?? []).filter(
-              (candidate) => candidate.id !== group.id
-            )
-            const isEditing = drafts[group.id] !== undefined
-
-            return (
-              <section key={group.id} className="rounded-card bg-surface-container-high border border-white/5 p-4 flex flex-col gap-4">
-                <div className="flex items-start justify-between gap-4">
-                  {/* Left Column: Title & Metadata */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-display text-lg font-medium text-on-surface truncate leading-tight">
-                      {group.name}
-                    </h3>
-                    {group.description && (
-                      <p className="font-body text-xs text-on-surface-variant line-clamp-2 mt-1">
-                        {group.description}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Right Column: Badges & Actions */}
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-surface-dim text-on-surface-variant">
-                        {group.open_task_count > 0 ? `${group.open_task_count} TASKS` : '0 TASKS'}
-                      </span>
-                      {group.is_system && (
-                        <span className="font-body text-[0.65rem] uppercase tracking-widest px-2 py-0.5 rounded-pill bg-primary/20 text-primary">
-                          LOCKED
-                        </span>
-                      )}
-                    </div>
-
-                    {!group.is_system && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isEditing) {
-                            setDrafts((current) => {
-                              const nextDrafts = { ...current }
-                              delete nextDrafts[group.id]
-                              return nextDrafts
-                            })
-                          } else {
-                            setDrafts({
-                              ...drafts,
-                              [group.id]: {
-                                name: group.name,
-                                description: group.description ?? ''
-                              }
-                            })
-                          }
-                        }}
-                        className="rounded-pill bg-surface-dim px-3 py-1 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] hover:-translate-y-0.5 transition-all active:scale-95 mt-1"
-                        aria-label={isEditing ? 'Cancel editing' : 'Edit group'}
-                      >
-                        {isEditing ? 'Cancel' : 'Edit'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                  {isEditing ? (
-                    <>
-                      <div className="grid gap-3 pt-4 border-t border-white/5">
-                        <input
-                          value={draft.name}
-                          onChange={(event) =>
-                            setDrafts({
-                              ...drafts,
-                              [group.id]: {
-                                ...draft,
-                                name: event.target.value
-                              }
-                            })
-                          }
-                          className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40 transition-all"
-                          placeholder="Group name"
-                        />
-                        <textarea
-                          value={draft.description}
-                          onChange={(event) =>
-                            setDrafts({
-                              ...drafts,
-                              [group.id]: {
-                                ...draft,
-                                description: event.target.value
-                              }
-                            })
-                          }
-                          rows={3}
-                          className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40 transition-all"
-                          placeholder="Group description"
-                        />
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => updateGroupMutation.mutate(group.id)}
-                          className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface"
-                        >
-                          Save Group
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDrafts((current) => {
-                              const nextDrafts = { ...current }
-                              delete nextDrafts[group.id]
-                              return nextDrafts
-                            })
-                          }}
-                          className="rounded-pill border border-outline/30 px-4 py-2 text-sm text-on-surface-variant"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-
-                      <div className="rounded-card bg-surface-dim p-4">
-                        <div className="space-y-4">
-                          <p className="font-body text-[0.65rem] font-bold uppercase tracking-widest text-error">
-                            Danger Zone
-                          </p>
-                          <SelectDropdown
-                            label=""
-                            value={deleteTargets[group.id] ?? ''}
-                            onChange={(val) => 
-                              setDeleteTargets({
-                                ...deleteTargets,
-                                [group.id]: String(val)
-                              })
-                            }
-                            placeholder="Move all tasks to..."
-                            options={deletionOptions.map(c => ({ value: c.id, label: c.name }))}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => deleteGroupMutation.mutate(group.id)}
-                            className="rounded-pill bg-error/20 px-4 py-2 text-sm text-error font-medium w-full shadow-[0_4px_12px_rgba(0,0,0,0.5)] hover:-translate-y-0.5 transition-all active:scale-95"
-                          >
-                            Delete Group & Reassign Tasks
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  ) : null}
-              </section>
-            )
-          })}
+          {groupsQuery.data?.map((group) => <ManageGroupCard key={group.id} group={group} groups={groupsQuery.data ?? []} draft={drafts[group.id]} deleteTarget={deleteTargets[group.id] ?? ''} onEdit={(value) => setDrafts((current) => ({ ...current, [value.id]: { name: value.name, description: value.description ?? '' } }))} onCancel={(groupId) => setDrafts((current) => { const next = { ...current }; delete next[groupId]; return next })} onDraftChange={(groupId, value) => setDrafts((current) => ({ ...current, [groupId]: value }))} onDeleteTargetChange={(groupId, value) => setDeleteTargets((current) => ({ ...current, [groupId]: value }))} onSave={(groupId) => updateGroupMutation.mutate(groupId)} onDelete={(groupId) => deleteGroupMutation.mutate(groupId)} />)}
         </div>
       </section>
     </SessionGuard>

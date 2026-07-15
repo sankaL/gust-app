@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-
-# ruff: noqa: UP045
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from pydantic import BaseModel, field_validator
@@ -69,7 +67,7 @@ class CaptureReviewResponse(BaseModel):
 class SkippedCaptureItemResponse(BaseModel):
     code: str
     message: str
-    title: Optional[str] = None
+    title: str | None = None
 
 
 class SubmitCaptureResponse(BaseModel):
@@ -86,15 +84,15 @@ class ExtractedTaskResponse(BaseModel):
     id: str
     capture_id: str
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     group_id: str
-    group_name: Optional[str]
-    due_date: Optional[str]
-    reminder_at: Optional[str]
-    recurrence_frequency: Optional[str]
-    recurrence_weekday: Optional[int]
-    recurrence_day_of_month: Optional[int]
-    recurrence_month: Optional[int]
+    group_name: str | None
+    due_date: str | None
+    reminder_at: str | None
+    recurrence_frequency: str | None
+    recurrence_weekday: int | None
+    recurrence_day_of_month: int | None
+    recurrence_month: int | None
     top_confidence: float
     needs_review: bool
     status: str
@@ -117,27 +115,27 @@ class ReExtractRequest(BaseModel):
 
 
 class UpdateExtractedTaskRequest(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    group_id: Optional[str] = None
-    due_date: Optional[date] = None
-    reminder_at: Optional[datetime] = None  # ISO datetime string (with timezone) or null
-    recurrence_frequency: Optional[Literal["daily", "weekly", "monthly", "yearly"]] = None
-    recurrence_weekday: Optional[int] = None  # 0-6 for weekly
-    recurrence_day_of_month: Optional[int] = None  # 1-31 for monthly
-    recurrence_month: Optional[int] = None  # 1-12 for yearly
-    subtask_titles: Optional[list[str]] = None
+    title: str | None = None
+    description: str | None = None
+    group_id: str | None = None
+    due_date: date | None = None
+    reminder_at: datetime | None = None  # ISO datetime string (with timezone) or null
+    recurrence_frequency: Literal["daily", "weekly", "monthly", "yearly"] | None = None
+    recurrence_weekday: int | None = None  # 0-6 for weekly
+    recurrence_day_of_month: int | None = None  # 1-31 for monthly
+    recurrence_month: int | None = None  # 1-12 for yearly
+    subtask_titles: list[str] | None = None
 
     @field_validator("title")
     @classmethod
-    def _validate_title(cls, value: Optional[str]) -> Optional[str]:
+    def _validate_title(cls, value: str | None) -> str | None:
         if value is None:
             return None
         return validate_plain_text(value, field_name="Title", max_length=MAX_TITLE_CHARS)
 
     @field_validator("subtask_titles")
     @classmethod
-    def _validate_subtask_titles(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+    def _validate_subtask_titles(cls, value: list[str] | None) -> list[str] | None:
         if value is None:
             return None
         return [
@@ -147,7 +145,7 @@ class UpdateExtractedTaskRequest(BaseModel):
 
     @field_validator("description")
     @classmethod
-    def _validate_description(cls, value: Optional[str]) -> Optional[str]:
+    def _validate_description(cls, value: str | None) -> str | None:
         return validate_optional_plain_text(
             value,
             field_name="Description",

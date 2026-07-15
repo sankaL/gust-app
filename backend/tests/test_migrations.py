@@ -300,16 +300,12 @@ def test_phase16_migration_hardens_rls_parent_ownership_and_counter_constraints(
     assert module.revision == "0016_harden_rls_relationships"
     assert module.down_revision == "0015_completed_tasks_index"
     task_policy = next(
-        statement
-        for statement in executed_sql
-        if "CREATE POLICY tasks_actor_rls" in statement
+        statement for statement in executed_sql if "CREATE POLICY tasks_actor_rls" in statement
     )
     assert "owner_group.id = group_id" in task_policy
     assert "owner_capture.id = capture_id" in task_policy
     subtask_policy = next(
-        statement
-        for statement in executed_sql
-        if "CREATE POLICY subtasks_actor_rls" in statement
+        statement for statement in executed_sql if "CREATE POLICY subtasks_actor_rls" in statement
     )
     assert "owner_task.id = task_id" in subtask_policy
     extracted_policy = next(
@@ -325,8 +321,7 @@ def test_phase16_migration_hardens_rls_parent_ownership_and_counter_constraints(
     assert any("SET LOCAL lock_timeout = '5s'" in sql for sql in executed_sql)
     assert any("IN SHARE ROW EXCLUSIVE MODE" in sql for sql in executed_sql)
     assert any(
-        "RLS preflight failed: tasks reference cross-owner groups" in sql
-        for sql in executed_sql
+        "RLS preflight failed: tasks reference cross-owner groups" in sql for sql in executed_sql
     )
     assert sum("NOT VALID" in sql for sql in executed_sql) == 4
     assert sum("VALIDATE CONSTRAINT" in sql for sql in executed_sql) == 4

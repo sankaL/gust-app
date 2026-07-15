@@ -216,7 +216,9 @@ describe('Device-specific routing redirection', () => {
 
     const { router } = renderRoutes(['/'])
 
-    expect(await screen.findByRole('heading', { name: 'Speak it once,' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Speak it once,' }, { timeout: 5_000 })
+    ).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
     expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBeNull()
   })
@@ -320,7 +322,9 @@ describe('Device-specific routing redirection', () => {
 
     const { router } = renderRoutes(['/'])
 
-    expect(await screen.findByRole('heading', { name: 'Speak it once,' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Speak it once,' }, { timeout: 5_000 })
+    ).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
   })
 })

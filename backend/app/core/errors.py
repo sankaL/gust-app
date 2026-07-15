@@ -92,7 +92,7 @@ class InvalidConfigurationError(ApiError):
 class InvalidTimezoneError(ApiError):
     def __init__(self, message: str = "Invalid timezone provided.") -> None:
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="invalid_timezone",
             message=message,
         )
@@ -119,7 +119,7 @@ class CaptureNotFoundError(ApiError):
 class InvalidCaptureError(ApiError):
     def __init__(self, message: str = "Capture input is invalid.") -> None:
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="invalid_capture",
             message=message,
         )
@@ -167,12 +167,11 @@ class TranscriptionNoSpeechError(ApiError):
     def __init__(
         self,
         message: str = (
-            "No speech was detected. Check your microphone and try again, "
-            "or use text capture."
+            "No speech was detected. Check your microphone and try again, or use text capture."
         ),
     ) -> None:
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="transcription_no_speech",
             message=message,
         )
@@ -206,8 +205,7 @@ class TranscriptionProviderRejectedError(ApiError):
     def __init__(
         self,
         message: str = (
-            "The recording could not be transcribed. Retry with clearer audio "
-            "or use text capture."
+            "The recording could not be transcribed. Retry with clearer audio or use text capture."
         ),
     ) -> None:
         super().__init__(
@@ -271,7 +269,7 @@ class SubtaskNotFoundError(ApiError):
 class InvalidTaskError(ApiError):
     def __init__(self, message: str = "Task input is invalid.") -> None:
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="invalid_task",
             message=message,
         )
@@ -280,7 +278,7 @@ class InvalidTaskError(ApiError):
 class InvalidGroupError(ApiError):
     def __init__(self, message: str = "Group input is invalid.") -> None:
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="invalid_group",
             message=message,
         )
@@ -289,7 +287,7 @@ class InvalidGroupError(ApiError):
 class InvalidSubtaskError(ApiError):
     def __init__(self, message: str = "Subtask input is invalid.") -> None:
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="invalid_subtask",
             message=message,
         )
@@ -404,7 +402,7 @@ async def validation_exception_handler(
     )
     return build_error_response(
         request,
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         code="validation_error",
         message="Request validation failed.",
     )

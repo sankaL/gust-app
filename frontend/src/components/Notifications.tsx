@@ -79,6 +79,25 @@ function CloseIcon({ className }: IconProps) {
   )
 }
 
+function dragPresentation(deltaX: number, deltaY: number, threshold: number) {
+  const absX = Math.abs(deltaX)
+  const absY = Math.abs(deltaY)
+  if (Math.max(absX, absY) <= threshold) return null
+  const vertical = absY > absX
+  return {
+    translate: dragTranslation(vertical, deltaX, deltaY),
+    opacity: Math.max(0.3, 1 - dragDistance(vertical, absX, absY) / 300),
+  }
+}
+
+function dragTranslation(vertical: boolean, deltaX: number, deltaY: number) {
+  return vertical ? { x: deltaX * 0.2, y: deltaY } : { x: deltaX, y: deltaY * 0.2 }
+}
+
+function dragDistance(vertical: boolean, absX: number, absY: number) {
+  return vertical ? absY : absX
+}
+
 // Swipe hook for touch gestures
 function useSwipeToDismiss(
   onDismiss: () => void,
@@ -98,14 +117,10 @@ function useSwipeToDismiss(
 
   const updateDrag = useCallback((clientX: number, clientY: number, movementThreshold: number) => {
     if (!enabled || !isDragging.current || !startPos.current) return
-    const deltaX = clientX - startPos.current.x
-    const deltaY = clientY - startPos.current.y
-    const absX = Math.abs(deltaX)
-    const absY = Math.abs(deltaY)
-    if (absX <= movementThreshold && absY <= movementThreshold) return
-    const isVertical = absY > absX
-    setTranslate(isVertical ? { x: deltaX * 0.2, y: deltaY } : { x: deltaX, y: deltaY * 0.2 })
-    setOpacity(Math.max(0.3, 1 - (isVertical ? absY : absX) / 300))
+    const presentation = dragPresentation(clientX - startPos.current.x, clientY - startPos.current.y, movementThreshold)
+    if (!presentation) return
+    setTranslate(presentation.translate)
+    setOpacity(presentation.opacity)
   }, [enabled])
 
   const finishDrag = useCallback(() => {

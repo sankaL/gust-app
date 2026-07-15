@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
-from typing import Annotated, Optional
+import contextlib
+from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -53,7 +53,7 @@ LOCAL_DEV_AUTH_DISPLAY_NAME = "Local Dev User"
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 OptionalSessionContextDep = Annotated[
-    Optional[SessionContext],
+    SessionContext | None,
     Depends(get_optional_session_context),
 ]
 RequiredSessionContextDep = Annotated[SessionContext, Depends(require_csrf)]
@@ -63,15 +63,15 @@ AuthServiceDep = Annotated[SupabaseAuthService, Depends(get_auth_service)]
 class UserSummary(BaseModel):
     id: str
     email: str
-    display_name: Optional[str]
+    display_name: str | None
 
 
 class SessionStatusResponse(BaseModel):
     signed_in: bool
-    user: Optional[UserSummary] = None
-    timezone: Optional[str] = None
-    inbox_group_id: Optional[str] = None
-    csrf_token: Optional[str] = None
+    user: UserSummary | None = None
+    timezone: str | None = None
+    inbox_group_id: str | None = None
+    csrf_token: str | None = None
 
 
 class TimezoneUpdateRequest(BaseModel):
@@ -218,10 +218,8 @@ async def logout(
     clear_csrf_cookie(response, settings)
 
     if refresh_token:
-        try:
+        with contextlib.suppress(Exception):
             await auth_service.revoke_refresh_token(refresh_token=refresh_token)
-        except Exception:
-            pass
 
     return {"signed_out": True}
 

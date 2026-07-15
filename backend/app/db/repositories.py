@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
 import base64
 import json
 import uuid
@@ -349,10 +348,7 @@ def _row_to_digest_task(row: sa.Row) -> DigestTaskRecord:
 
 def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
     raw_subtasks = row.subtask_titles
-    if isinstance(raw_subtasks, list):
-        subtask_titles = [str(t) for t in raw_subtasks]
-    else:
-        subtask_titles = []
+    subtask_titles = [str(t) for t in raw_subtasks] if isinstance(raw_subtasks, list) else []
     return ExtractedTaskRecord(
         id=str(row.id),
         user_id=str(row.user_id),
@@ -930,6 +926,64 @@ def get_task(connection: Connection, *, user_id: str, task_id: str) -> TaskRecor
     return _row_to_task(row)
 
 
+def _task_list_conditions(
+    *,
+    user_id: str,
+    group_id: str | None,
+    status: str,
+    include_deleted: bool,
+    completed_start: datetime | None,
+    completed_end: datetime | None,
+) -> list[object]:
+    conditions = [tasks.c.user_id == user_id, tasks.c.status == status]
+    if group_id is not None and group_id != "all":
+        conditions.append(tasks.c.group_id == group_id)
+    if not include_deleted:
+        conditions.append(tasks.c.deleted_at.is_(None))
+    if status == "completed" and completed_start is not None:
+        conditions.append(tasks.c.completed_at >= completed_start)
+    if status == "completed" and completed_end is not None:
+        conditions.append(tasks.c.completed_at < completed_end)
+    return conditions
+
+
+def _task_cursor_condition(cursor: str | None) -> object | None:
+    if not cursor:
+        return None
+    try:
+        cursor_data = json.loads(base64.b64decode(cursor).decode("utf-8"))
+        cursor_created_at = datetime.fromisoformat(cursor_data["created_at"])
+        cursor_id = cursor_data["id"]
+    except (json.JSONDecodeError, KeyError, ValueError):
+        return None
+    return sa.or_(
+        tasks.c.created_at < cursor_created_at,
+        sa.and_(tasks.c.created_at == cursor_created_at, tasks.c.id < cursor_id),
+    )
+
+
+def _encode_task_cursor(rows: list[object], has_more: bool) -> str | None:
+    if not has_more or not rows:
+        return None
+    last_row = rows[-1]
+    cursor_data = {"created_at": last_row.created_at.isoformat(), "id": str(last_row.id)}
+    return base64.b64encode(json.dumps(cursor_data).encode("utf-8")).decode("utf-8")
+
+
+def _subtask_counts(connection: Connection, *, user_id: str, task_ids: list[str]) -> dict[str, int]:
+    if not task_ids:
+        return {}
+    count_rows = connection.execute(
+        sa.select(
+            subtasks.c.task_id,
+            sa.func.count(subtasks.c.id).label("subtask_count"),
+        )
+        .where(subtasks.c.user_id == user_id, subtasks.c.task_id.in_(task_ids))
+        .group_by(subtasks.c.task_id)
+    ).fetchall()
+    return {str(row.task_id): int(row.subtask_count) for row in count_rows}
+
+
 def list_tasks(
     connection: Connection,
     *,
@@ -943,33 +997,17 @@ def list_tasks(
     completed_end: datetime | None = None,
 ) -> tuple[list[TaskWithGroupRecord], bool, str | None]:
     """Returns (task rows with groups, has_more, next_cursor)."""
-    conditions = [tasks.c.user_id == user_id, tasks.c.status == status]
-    if group_id is not None and group_id != "all":
-        conditions.append(tasks.c.group_id == group_id)
-    if not include_deleted:
-        conditions.append(tasks.c.deleted_at.is_(None))
-    if status == "completed":
-        if completed_start is not None:
-            conditions.append(tasks.c.completed_at >= completed_start)
-        if completed_end is not None:
-            conditions.append(tasks.c.completed_at < completed_end)
-
-    # Apply cursor-based pagination if provided
-    if cursor:
-        try:
-            cursor_data = json.loads(base64.b64decode(cursor).decode("utf-8"))
-            cursor_created_at = datetime.fromisoformat(cursor_data["created_at"])
-            cursor_id = cursor_data["id"]
-            # Cursor condition: (created_at, id) < (cursor_created_at, cursor_id)
-            # i.e., items that come after the cursor in our DESC order
-            cursor_condition = sa.or_(
-                tasks.c.created_at < cursor_created_at,
-                sa.and_(tasks.c.created_at == cursor_created_at, tasks.c.id < cursor_id),
-            )
-            conditions.append(cursor_condition)
-        except (json.JSONDecodeError, KeyError, ValueError):
-            # Invalid cursor, ignore and fetch from beginning
-            pass
+    conditions = _task_list_conditions(
+        user_id=user_id,
+        group_id=group_id,
+        status=status,
+        include_deleted=include_deleted,
+        completed_start=completed_start,
+        completed_end=completed_end,
+    )
+    cursor_condition = _task_cursor_condition(cursor)
+    if cursor_condition is not None:
+        conditions.append(cursor_condition)
 
     # Fetch limit+1 to determine if there are more results.
     # The inner join to groups keeps task/group data in the same statement snapshot.
@@ -997,27 +1035,8 @@ def list_tasks(
     if has_more:
         rows = rows[:limit]
 
-    # Generate next cursor from last item
-    next_cursor = None
-    if has_more and rows:
-        last_row = rows[-1]
-        cursor_data = {"created_at": last_row.created_at.isoformat(), "id": str(last_row.id)}
-        next_cursor = base64.b64encode(json.dumps(cursor_data).encode("utf-8")).decode("utf-8")
-
     task_ids = [str(row.id) for row in rows]
-    subtask_counts_by_task_id: dict[str, int] = {}
-    if task_ids:
-        count_rows = connection.execute(
-            sa.select(
-                subtasks.c.task_id,
-                sa.func.count(subtasks.c.id).label("subtask_count"),
-            )
-            .where(subtasks.c.user_id == user_id, subtasks.c.task_id.in_(task_ids))
-            .group_by(subtasks.c.task_id)
-        ).fetchall()
-        subtask_counts_by_task_id = {
-            str(row.task_id): int(row.subtask_count) for row in count_rows
-        }
+    subtask_counts_by_task_id = _subtask_counts(connection, user_id=user_id, task_ids=task_ids)
 
     task_rows: list[TaskWithGroupRecord] = []
     for row in rows:
@@ -1025,7 +1044,7 @@ def list_tasks(
         task.subtask_count = subtask_counts_by_task_id.get(task.id, 0)
         task_rows.append(TaskWithGroupRecord(task=task, group=_row_to_joined_group(row)))
 
-    return task_rows, has_more, next_cursor
+    return task_rows, has_more, _encode_task_cursor(rows, has_more)
 
 
 def get_open_task_in_series(

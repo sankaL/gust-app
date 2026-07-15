@@ -40,6 +40,8 @@ Fallow 3.5.0's security surface moved from one medium candidate to zero verified
 
 ## Fallow Results
 
+Follow-up quality remediation on the same branch subsequently cleared the remaining 49 complexity findings, 27 duplicate groups, three lint warnings, and the bundle-size warning without changing Fallow thresholds. The final coverage-aware reports are `fallow-output-20260714-quality-final.json`, `fallow-security-20260714-quality-final.json`, and `fallow-audit-20260714-quality-final.json`; the detailed follow-up is recorded in `2026-07-14-code-quality-remediation.md`.
+
 Raw reports are stored under `docs/engineering/`.
 
 | Surface | Baseline | Security pass | Remediated |

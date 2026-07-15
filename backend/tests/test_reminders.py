@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from typing import get_args
 
 import pytest
@@ -250,7 +250,7 @@ def test_daily_digest_sends_when_only_undated_tasks_are_open(client) -> None:
     assert "Gust on the web" in request["html_body"]
     assert 'data-flat-pending-list="true"' in request["html_body"]
     assert 'data-lucide="inbox"' in request["html_body"]
-    assert 'font-size:12px;line-height:17px;' in request["html_body"]
+    assert "font-size:12px;line-height:17px;" in request["html_body"]
 
 
 def test_daily_digest_skips_empty_and_tracks_status(client) -> None:
@@ -281,7 +281,7 @@ def test_daily_digest_includes_undated_section_without_metadata_and_limits_to_fi
     today_eastern = datetime.now(DIGEST_TIMEZONE).date()
     _seed_open_task(client, title="Pay rent", due_date=today_eastern)
 
-    base_created_at = datetime(2026, 3, 27, 12, 0, tzinfo=timezone.utc)
+    base_created_at = datetime(2026, 3, 27, 12, 0, tzinfo=UTC)
     for index in range(6):
         _seed_open_task(
             client,
@@ -325,7 +325,7 @@ def test_weekly_digest_sends_completed_and_due_uncompleted_sections(client) -> N
         client,
         title="Completed item",
         due_date=week_start + timedelta(days=1),
-        completed_at_utc=completed_local.astimezone(timezone.utc),
+        completed_at_utc=completed_local.astimezone(UTC),
     )
     _seed_open_task(
         client,
@@ -399,7 +399,7 @@ def test_weekly_digest_includes_undated_section_alongside_primary_sections(clien
         client,
         title="Finish review",
         due_date=week_start + timedelta(days=2),
-        completed_at_utc=completed_local.astimezone(timezone.utc),
+        completed_at_utc=completed_local.astimezone(UTC),
     )
     _seed_open_task(client, title="Plan sprint", due_date=week_end)
     _seed_open_task(client, title="Unscheduled follow-up", due_date=None)
@@ -470,7 +470,7 @@ def test_reminder_worker_still_cleans_up_expired_captures_when_provider_unconfig
     client,
 ) -> None:
     _seed_user_and_inbox(client)
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         capture = create_capture(
@@ -508,7 +508,7 @@ def test_resolve_weekly_period_uses_monday_start_in_eastern(client) -> None:
     # 2026-04-01T15:00:00Z is Wednesday in Eastern.
     period = service._resolve_period(
         mode="weekly",
-        now_utc=datetime(2026, 4, 1, 15, 0, tzinfo=timezone.utc),
+        now_utc=datetime(2026, 4, 1, 15, 0, tzinfo=UTC),
     )
 
     assert period.start_date == date(2026, 3, 30)
@@ -523,7 +523,7 @@ def test_daily_period_is_today_in_eastern(client) -> None:
 
     period = service._resolve_period(
         mode="daily",
-        now_utc=datetime(2026, 4, 1, 3, 30, tzinfo=timezone.utc),
+        now_utc=datetime(2026, 4, 1, 3, 30, tzinfo=UTC),
     )
 
     # 03:30 UTC is still previous day in Eastern during DST.

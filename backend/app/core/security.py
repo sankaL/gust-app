@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# ruff: noqa: UP045
 import base64
 import hashlib
 import secrets

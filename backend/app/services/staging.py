@@ -41,6 +41,26 @@ from app.services.task_rules import (
 
 logger = logging.getLogger("gust.api")
 
+_EXTRACTED_TASK_UPDATE_FIELDS = {
+    "title",
+    "description",
+    "group_id",
+    "due_date",
+    "reminder_at",
+    "recurrence_frequency",
+    "recurrence_weekday",
+    "recurrence_day_of_month",
+    "recurrence_month",
+    "subtask_titles",
+}
+_RECURRENCE_FIELDS = {
+    "recurrence_frequency",
+    "recurrence_weekday",
+    "recurrence_day_of_month",
+    "recurrence_month",
+}
+_RECURRENCE_FREQUENCIES = {"daily", "weekly", "monthly", "yearly"}
+
 
 @dataclass
 class StagingResult:
@@ -205,24 +225,26 @@ class StagingService:
             ExtractedTaskNotFoundError: If extracted task cannot be resolved for this user/capture.
             ExtractedTaskStateConflictError: If extracted task has already been processed.
         """
-        with timed_stage("db.staging.approve"):
-            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-                extracted_task = get_extracted_task(
-                    connection, user_id=user_id, extracted_task_id=extracted_task_id
-                )
-                if extracted_task is None:
-                    raise ExtractedTaskNotFoundError()
-                if extracted_task.capture_id != capture_id:
-                    raise ExtractedTaskNotFoundError()
-                if extracted_task.status != "pending":
-                    raise ExtractedTaskStateConflictError()
+        with (
+            timed_stage("db.staging.approve"),
+            user_connection_scope(self.settings.database_url, user_id=user_id) as connection,
+        ):
+            extracted_task = get_extracted_task(
+                connection, user_id=user_id, extracted_task_id=extracted_task_id
+            )
+            if extracted_task is None:
+                raise ExtractedTaskNotFoundError()
+            if extracted_task.capture_id != capture_id:
+                raise ExtractedTaskNotFoundError()
+            if extracted_task.status != "pending":
+                raise ExtractedTaskStateConflictError()
 
-                task = self._approve_pending_task_in_connection(
-                    connection,
-                    user_id=user_id,
-                    capture_id=capture_id,
-                    extracted_task=extracted_task,
-                )
+            task = self._approve_pending_task_in_connection(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                extracted_task=extracted_task,
+            )
 
         logger.info(
             "staging_task_approved",
@@ -255,24 +277,26 @@ class StagingService:
             ExtractedTaskNotFoundError: If extracted task cannot be resolved for this user/capture.
             ExtractedTaskStateConflictError: If extracted task has already been processed.
         """
-        with timed_stage("db.staging.discard"):
-            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-                extracted_task = get_extracted_task(
-                    connection, user_id=user_id, extracted_task_id=extracted_task_id
-                )
-                if extracted_task is None:
-                    raise ExtractedTaskNotFoundError()
-                if extracted_task.capture_id != capture_id:
-                    raise ExtractedTaskNotFoundError()
-                if extracted_task.status != "pending":
-                    raise ExtractedTaskStateConflictError()
+        with (
+            timed_stage("db.staging.discard"),
+            user_connection_scope(self.settings.database_url, user_id=user_id) as connection,
+        ):
+            extracted_task = get_extracted_task(
+                connection, user_id=user_id, extracted_task_id=extracted_task_id
+            )
+            if extracted_task is None:
+                raise ExtractedTaskNotFoundError()
+            if extracted_task.capture_id != capture_id:
+                raise ExtractedTaskNotFoundError()
+            if extracted_task.status != "pending":
+                raise ExtractedTaskStateConflictError()
 
-                update_extracted_task_status(
-                    connection,
-                    user_id=user_id,
-                    extracted_task_id=extracted_task_id,
-                    status="discarded",
-                )
+            update_extracted_task_status(
+                connection,
+                user_id=user_id,
+                extracted_task_id=extracted_task_id,
+                status="discarded",
+            )
 
         logger.info(
             "staging_task_discarded",
@@ -362,180 +386,20 @@ class StagingService:
         Raises:
             ExtractedTaskNotFoundError: If extracted task cannot be found.
         """
-        allowed_update_fields: set[str] = {
-            "title",
-            "description",
-            "group_id",
-            "due_date",
-            "reminder_at",
-            "recurrence_frequency",
-            "recurrence_weekday",
-            "recurrence_day_of_month",
-            "recurrence_month",
-            "subtask_titles",
-        }
-        unknown_fields = set(updates.keys()) - allowed_update_fields
+        unknown_fields = set(updates) - _EXTRACTED_TASK_UPDATE_FIELDS
         if unknown_fields:
             raise InvalidTaskError("Extracted task update contains unsupported fields.")
 
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            extracted_task = get_extracted_task(
-                connection, user_id=user_id, extracted_task_id=extracted_task_id
+            extracted_task = self._pending_extracted_task(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                extracted_task_id=extracted_task_id,
             )
-            if extracted_task is None:
-                raise ExtractedTaskNotFoundError()
-            if extracted_task.capture_id != capture_id:
-                raise ExtractedTaskNotFoundError()
-            if extracted_task.status != "pending":
-                raise ExtractedTaskStateConflictError()
-
-            values: dict[str, object] = dict(updates)
-
-            if "title" in values:
-                title = values["title"]
-                if not isinstance(title, str):
-                    raise InvalidTaskError("Title must be a string.")
-                try:
-                    values["title"] = validate_plain_text(
-                        title,
-                        field_name="Title",
-                        max_length=MAX_TITLE_CHARS,
-                    )
-                except ValueError as exc:
-                    raise InvalidTaskError(str(exc)) from exc
-
-            if "description" in values:
-                values["description"] = normalize_task_description(
-                    values["description"], title=str(values.get("title", extracted_task.title))
-                )
-
-            if "group_id" in values:
-                group_id = values["group_id"]
-                if not isinstance(group_id, str) or not group_id.strip():
-                    raise InvalidTaskError("group_id is required.")
-                group = get_group(connection, user_id=user_id, group_id=group_id)
-                if group is None:
-                    raise GroupNotFoundError("Destination group could not be found.")
-                values["group_name"] = group.name
-
-            if "subtask_titles" in values:
-                subtask_titles = values["subtask_titles"]
-                if subtask_titles is None:
-                    values["subtask_titles"] = []
-                elif not isinstance(subtask_titles, list):
-                    raise InvalidTaskError("subtask_titles must be a list.")
-                else:
-                    normalized_titles: list[str] = []
-                    for title in subtask_titles:
-                        if not isinstance(title, str):
-                            raise InvalidTaskError("Subtask title must be a string.")
-                        try:
-                            normalized_titles.append(
-                                validate_plain_text(
-                                    title,
-                                    field_name="Subtask title",
-                                    max_length=MAX_TITLE_CHARS,
-                                )
-                            )
-                        except ValueError as exc:
-                            raise InvalidTaskError(str(exc)) from exc
-                    values["subtask_titles"] = normalized_titles
-
-            # If due_date is explicitly cleared, also clear reminders unless the caller
-            # explicitly provided reminder_at.
-            if values.get("due_date", object()) is None and "reminder_at" not in values:
-                values["reminder_at"] = None
-
-            resulting_due_date: date | None = (
-                values["due_date"] if "due_date" in values else extracted_task.due_date
+            values = self._normalize_extracted_task_updates(
+                connection, user_id=user_id, extracted_task=extracted_task, updates=updates
             )
-            resulting_reminder_at: datetime | None = (
-                values["reminder_at"] if "reminder_at" in values else extracted_task.reminder_at
-            )
-            if resulting_due_date is None and resulting_reminder_at is not None:
-                # Fail closed: reminders must not exist without a due date.
-                raise InvalidTaskError("A reminder requires a due date.")
-            if "reminder_at" in values and values["reminder_at"] is not None:
-                reminder_at = values["reminder_at"]
-                if not isinstance(reminder_at, datetime) or reminder_at.tzinfo is None:
-                    raise InvalidTaskError("reminder_at must be an ISO datetime with timezone.")
-
-            recurrence_fields = {
-                "recurrence_frequency",
-                "recurrence_weekday",
-                "recurrence_day_of_month",
-                "recurrence_month",
-            }
-            if recurrence_fields & values.keys():
-                allowed_frequencies = {"daily", "weekly", "monthly", "yearly"}
-                existing_frequency = (
-                    extracted_task.recurrence_frequency
-                    if extracted_task.recurrence_frequency in allowed_frequencies
-                    else None
-                )
-                next_frequency = (
-                    values["recurrence_frequency"]
-                    if "recurrence_frequency" in values
-                    else existing_frequency
-                )
-                next_weekday = (
-                    values["recurrence_weekday"]
-                    if "recurrence_weekday" in values
-                    else extracted_task.recurrence_weekday
-                )
-                next_day_of_month = (
-                    values["recurrence_day_of_month"]
-                    if "recurrence_day_of_month" in values
-                    else extracted_task.recurrence_day_of_month
-                )
-                next_month = (
-                    values["recurrence_month"]
-                    if "recurrence_month" in values
-                    else extracted_task.recurrence_month
-                )
-
-                if next_frequency is None:
-                    next_weekday = None
-                    next_day_of_month = None
-                    next_month = None
-                elif next_frequency == "daily":
-                    next_weekday = None
-                    next_day_of_month = None
-                    next_month = None
-                elif next_frequency == "weekly":
-                    if next_weekday is None or not isinstance(next_weekday, int):
-                        raise InvalidTaskError("Weekly recurrence requires a weekday (0-6).")
-                    if next_weekday < 0 or next_weekday > 6:
-                        raise InvalidTaskError("Weekly recurrence weekday must be between 0 and 6.")
-                    next_day_of_month = None
-                    next_month = None
-                elif next_frequency == "monthly":
-                    if next_day_of_month is None or not isinstance(next_day_of_month, int):
-                        raise InvalidTaskError("Monthly recurrence requires a day of month (1-31).")
-                    if next_day_of_month < 1 or next_day_of_month > 31:
-                        raise InvalidTaskError("Monthly recurrence day must be between 1 and 31.")
-                    next_weekday = None
-                    next_month = None
-                elif next_frequency == "yearly":
-                    if next_month is None or not isinstance(next_month, int):
-                        raise InvalidTaskError("Yearly recurrence requires a month (1-12).")
-                    if next_month < 1 or next_month > 12:
-                        raise InvalidTaskError("Yearly recurrence month must be between 1 and 12.")
-                    if next_day_of_month is None or not isinstance(next_day_of_month, int):
-                        raise InvalidTaskError("Yearly recurrence requires a day of month (1-31).")
-                    if next_day_of_month < 1 or next_day_of_month > 31:
-                        raise InvalidTaskError("Yearly recurrence day must be between 1 and 31.")
-                    next_weekday = None
-                else:
-                    raise InvalidTaskError(
-                        "recurrence_frequency must be one of daily, weekly, monthly, yearly, "
-                        "or null."
-                    )
-
-                values["recurrence_frequency"] = next_frequency
-                values["recurrence_weekday"] = next_weekday
-                values["recurrence_day_of_month"] = next_day_of_month
-                values["recurrence_month"] = next_month
 
             updated_task = update_extracted_task(
                 connection,
@@ -557,6 +421,157 @@ class StagingService:
         )
 
         return updated_task
+
+    def _pending_extracted_task(
+        self, connection, *, user_id: str, capture_id: str, extracted_task_id: str
+    ) -> ExtractedTaskRecord:
+        task = get_extracted_task(connection, user_id=user_id, extracted_task_id=extracted_task_id)
+        if task is None or task.capture_id != capture_id:
+            raise ExtractedTaskNotFoundError()
+        if task.status != "pending":
+            raise ExtractedTaskStateConflictError()
+        return task
+
+    def _normalize_extracted_task_updates(
+        self,
+        connection,
+        *,
+        user_id: str,
+        extracted_task: ExtractedTaskRecord,
+        updates: dict[str, object],
+    ) -> dict[str, object]:
+        values = dict(updates)
+        self._normalize_updated_title(values)
+        if "description" in values:
+            values["description"] = normalize_task_description(
+                values["description"], title=str(values.get("title", extracted_task.title))
+            )
+        self._normalize_updated_group(connection, user_id=user_id, values=values)
+        self._normalize_updated_subtasks(values)
+        self._validate_updated_schedule(values, extracted_task)
+        if _RECURRENCE_FIELDS & values.keys():
+            self._normalize_updated_recurrence(values, extracted_task)
+        return values
+
+    def _normalize_updated_title(self, values: dict[str, object]) -> None:
+        if "title" not in values:
+            return
+        title = values["title"]
+        if not isinstance(title, str):
+            raise InvalidTaskError("Title must be a string.")
+        try:
+            values["title"] = validate_plain_text(
+                title, field_name="Title", max_length=MAX_TITLE_CHARS
+            )
+        except ValueError as exc:
+            raise InvalidTaskError(str(exc)) from exc
+
+    def _normalize_updated_group(
+        self, connection, *, user_id: str, values: dict[str, object]
+    ) -> None:
+        if "group_id" not in values:
+            return
+        group_id = values["group_id"]
+        if not isinstance(group_id, str) or not group_id.strip():
+            raise InvalidTaskError("group_id is required.")
+        group = get_group(connection, user_id=user_id, group_id=group_id)
+        if group is None:
+            raise GroupNotFoundError("Destination group could not be found.")
+        values["group_name"] = group.name
+
+    def _normalize_updated_subtasks(self, values: dict[str, object]) -> None:
+        if "subtask_titles" not in values:
+            return
+        titles = values["subtask_titles"]
+        if titles is None:
+            values["subtask_titles"] = []
+            return
+        if not isinstance(titles, list):
+            raise InvalidTaskError("subtask_titles must be a list.")
+        values["subtask_titles"] = [self._normalize_subtask_title(title) for title in titles]
+
+    def _normalize_subtask_title(self, title: object) -> str:
+        if not isinstance(title, str):
+            raise InvalidTaskError("Subtask title must be a string.")
+        try:
+            return validate_plain_text(
+                title, field_name="Subtask title", max_length=MAX_TITLE_CHARS
+            )
+        except ValueError as exc:
+            raise InvalidTaskError(str(exc)) from exc
+
+    def _validate_updated_schedule(
+        self, values: dict[str, object], extracted_task: ExtractedTaskRecord
+    ) -> None:
+        if values.get("due_date", object()) is None and "reminder_at" not in values:
+            values["reminder_at"] = None
+        due_date: date | None = values.get("due_date", extracted_task.due_date)
+        reminder_at: datetime | None = values.get("reminder_at", extracted_task.reminder_at)
+        if due_date is None and reminder_at is not None:
+            raise InvalidTaskError("A reminder requires a due date.")
+        if (
+            "reminder_at" in values
+            and reminder_at is not None
+            and (not isinstance(reminder_at, datetime) or reminder_at.tzinfo is None)
+        ):
+            raise InvalidTaskError("reminder_at must be an ISO datetime with timezone.")
+
+    def _normalize_updated_recurrence(
+        self, values: dict[str, object], extracted_task: ExtractedTaskRecord
+    ) -> None:
+        existing = extracted_task.recurrence_frequency
+        existing_frequency = existing if existing in _RECURRENCE_FREQUENCIES else None
+        frequency = values.get("recurrence_frequency", existing_frequency)
+        weekday = values.get("recurrence_weekday", extracted_task.recurrence_weekday)
+        day = values.get("recurrence_day_of_month", extracted_task.recurrence_day_of_month)
+        month = values.get("recurrence_month", extracted_task.recurrence_month)
+        weekday, day, month = self._validated_recurrence_parts(
+            frequency=frequency, weekday=weekday, day=day, month=month
+        )
+        values.update(
+            recurrence_frequency=frequency,
+            recurrence_weekday=weekday,
+            recurrence_day_of_month=day,
+            recurrence_month=month,
+        )
+
+    def _validated_recurrence_parts(self, *, frequency, weekday, day, month):
+        if frequency is None or frequency == "daily":
+            return None, None, None
+        if frequency == "weekly":
+            return self._weekly_parts(weekday)
+        if frequency == "monthly":
+            return self._monthly_parts(day)
+        if frequency == "yearly":
+            return self._yearly_parts(month, day)
+        raise InvalidTaskError(
+            "recurrence_frequency must be one of daily, weekly, monthly, yearly, or null."
+        )
+
+    def _weekly_parts(self, weekday):
+        if weekday is None or not isinstance(weekday, int):
+            raise InvalidTaskError("Weekly recurrence requires a weekday (0-6).")
+        if not 0 <= weekday <= 6:
+            raise InvalidTaskError("Weekly recurrence weekday must be between 0 and 6.")
+        return weekday, None, None
+
+    def _monthly_parts(self, day):
+        if day is None or not isinstance(day, int):
+            raise InvalidTaskError("Monthly recurrence requires a day of month (1-31).")
+        if not 1 <= day <= 31:
+            raise InvalidTaskError("Monthly recurrence day must be between 1 and 31.")
+        return None, day, None
+
+    def _yearly_parts(self, month, day):
+        if month is None or not isinstance(month, int):
+            raise InvalidTaskError("Yearly recurrence requires a month (1-12).")
+        if not 1 <= month <= 12:
+            raise InvalidTaskError("Yearly recurrence month must be between 1 and 12.")
+        if day is None or not isinstance(day, int):
+            raise InvalidTaskError("Yearly recurrence requires a day of month (1-31).")
+        if not 1 <= day <= 31:
+            raise InvalidTaskError("Yearly recurrence day must be between 1 and 31.")
+        return None, day, month
 
     async def approve_all(
         self,
@@ -629,19 +644,21 @@ class StagingService:
         Returns:
             Number of tasks discarded.
         """
-        with timed_stage("db.staging.discard_all"):
-            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-                pending_tasks = list_extracted_tasks(
-                    connection, user_id=user_id, capture_id=capture_id, status="pending"
-                )
+        with (
+            timed_stage("db.staging.discard_all"),
+            user_connection_scope(self.settings.database_url, user_id=user_id) as connection,
+        ):
+            pending_tasks = list_extracted_tasks(
+                connection, user_id=user_id, capture_id=capture_id, status="pending"
+            )
 
-                for extracted_task in pending_tasks:
-                    update_extracted_task_status(
-                        connection,
-                        user_id=user_id,
-                        extracted_task_id=extracted_task.id,
-                        status="discarded",
-                    )
+            for extracted_task in pending_tasks:
+                update_extracted_task_status(
+                    connection,
+                    user_id=user_id,
+                    extracted_task_id=extracted_task.id,
+                    status="discarded",
+                )
 
         logger.info(
             "staging_discard_all_completed",
@@ -672,14 +689,16 @@ class StagingService:
         Returns:
             List of extracted tasks.
         """
-        with timed_stage("db.staging.list"):
-            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-                return list_extracted_tasks(
-                    connection,
-                    user_id=user_id,
-                    capture_id=capture_id,
-                    status=status,
-                )
+        with (
+            timed_stage("db.staging.list"),
+            user_connection_scope(self.settings.database_url, user_id=user_id) as connection,
+        ):
+            return list_extracted_tasks(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                status=status,
+            )
 
     async def get_extracted_task(
         self,

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { useFloatingDismiss } from '../hooks/useFloatingDismiss'
 
 interface SelectOption {
   value: string | number
@@ -19,7 +20,73 @@ interface SelectDropdownProps {
   labelClassName?: string
 }
 
-export function SelectDropdown({
+function useHighlightedOption(listRef: React.RefObject<HTMLUListElement | null>, highlightedIndex: number) {
+  useEffect(() => { if (highlightedIndex >= 0) (listRef.current?.children[highlightedIndex] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' }) }, [highlightedIndex, listRef])
+}
+
+function useOpenNotification(isOpen: boolean, onOpenChange?: (isOpen: boolean) => void) {
+  useEffect(() => { onOpenChange?.(isOpen) }, [isOpen, onOpenChange])
+}
+
+function useSelectEffects(listRef: React.RefObject<HTMLUListElement | null>, highlightedIndex: number, isOpen: boolean, onOpenChange?: (isOpen: boolean) => void) {
+  useHighlightedOption(listRef, highlightedIndex)
+  useOpenNotification(isOpen, onOpenChange)
+}
+
+function useDropdownViewport(isOpen: boolean, listRef: React.RefObject<HTMLUListElement | null>, triggerRef: React.RefObject<HTMLButtonElement | null>, updatePosition: () => void, close: () => void) {
+  useEffect(() => {
+    if (!isOpen) return undefined
+    function handleScroll(event: Event) {
+      const target = event.target
+      if (target instanceof Node && (listRef.current?.contains(target) || triggerRef.current?.contains(target))) return
+      close()
+    }
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', handleScroll, true)
+    return () => { window.removeEventListener('resize', updatePosition); window.removeEventListener('scroll', handleScroll, true) }
+  }, [close, isOpen, listRef, triggerRef, updatePosition])
+}
+
+function dropdownPosition(rect: DOMRect, measuredWidth: number, optionCount: number) {
+  const padding = 16
+  const width = Math.min(measuredWidth || 240, window.innerWidth - padding * 2)
+  const height = Math.min(Math.max(optionCount * 44 + 8, 120), 240)
+  const left = Math.max(padding, Math.min(rect.left, window.innerWidth - width - padding))
+  const below = Math.max(0, window.innerHeight - rect.bottom - padding)
+  const above = Math.max(0, rect.top - padding)
+  const openAbove = below < height && above > below
+  const maxHeight = Math.max(120, Math.min(height, (openAbove ? above : below) - 8))
+  return { top: openAbove ? Math.max(padding, rect.top - maxHeight - 8) : rect.bottom + 8, left, width, maxHeight }
+}
+
+function useSelectControls({ isOpen, disabled, highlightedIndex, options, onChange, updatePosition, setIsOpen, setHighlightedIndex }: { isOpen: boolean; disabled: boolean; highlightedIndex: number; options: SelectOption[]; onChange: (value: string | number) => void; updatePosition: () => void; setIsOpen: React.Dispatch<React.SetStateAction<boolean>>; setHighlightedIndex: React.Dispatch<React.SetStateAction<number>> }) {
+  function select() { const option = isOpen && highlightedIndex >= 0 ? options[highlightedIndex] : undefined; if (option) { onChange(option.value); setIsOpen(false) } else { updatePosition(); setIsOpen((current) => !current) } }
+  function down() { if (!isOpen) { updatePosition(); setIsOpen(true); setHighlightedIndex(options.length ? 0 : -1) } else if (options.length) setHighlightedIndex((previous) => Math.min(previous + 1, options.length - 1)) }
+  const handlers: Record<string, () => void> = { Enter: select, ' ': select, ArrowDown: down, ArrowUp: () => setHighlightedIndex((previous) => isOpen && options.length ? Math.max(previous - 1, 0) : previous), Escape: () => setIsOpen(false), Tab: () => setIsOpen(false) }
+  return { keyDown: (event: React.KeyboardEvent) => { const handler = handlers[event.key]; if (disabled || !handler) return; if (event.key !== 'Tab') event.preventDefault(); handler() }, selectOption: (optionValue: string | number) => { onChange(optionValue); setIsOpen(false) }, toggle: () => { if (!disabled) { updatePosition(); setIsOpen((current) => !current) } } }
+}
+
+function useSelectState() {
+  const [isOpen, setIsOpen] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, maxHeight: 240 })
+  const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  return { isOpen, setIsOpen, highlightedIndex, setHighlightedIndex, position, setPosition, containerRef, triggerRef, listRef }
+}
+
+function useDropdownPlacement(triggerRef: React.RefObject<HTMLButtonElement | null>, optionCount: number, setPosition: React.Dispatch<React.SetStateAction<{ top: number; left: number; width: number; maxHeight: number }>>, setIsOpen: React.Dispatch<React.SetStateAction<boolean>>) {
+  const close = useCallback(() => setIsOpen(false), [setIsOpen])
+  const update = useCallback(() => { if (triggerRef.current) { const rect = triggerRef.current.getBoundingClientRect(); setPosition(dropdownPosition(rect, rect.width || triggerRef.current.offsetWidth, optionCount)) } }, [optionCount, setPosition, triggerRef])
+  return { close, update }
+}
+
+export function SelectDropdown(props: SelectDropdownProps) {
+  return <SelectDropdownView {...useSelectDropdownViewProps(props)} />
+}
+
+function useSelectDropdownViewProps({
   label,
   options,
   value,
@@ -30,224 +97,48 @@ export function SelectDropdown({
   className = 'space-y-1.5',
   triggerClassName = 'px-3 py-3',
   labelClassName = 'text-sm font-medium text-on-surface-variant',
-}: SelectDropdownProps) {
+}: SelectDropdownProps): Parameters<typeof SelectDropdownView>[0] {
   const hasLabel = label.trim().length > 0
-  const [isOpen, setIsOpen] = useState(false)
-  const [highlightedIndex, setHighlightedIndex] = useState(-1)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const listRef = useRef<HTMLUListElement>(null)
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, maxHeight: 240 })
+  const { isOpen, setIsOpen, highlightedIndex, setHighlightedIndex, position, setPosition, containerRef, triggerRef, listRef } = useSelectState()
 
   const selectedOption = options.find((opt) => opt.value === value)
+  const placement = useDropdownPlacement(triggerRef, options.length, setPosition, setIsOpen)
 
-  const updatePosition = useCallback(() => {
-    if (!triggerRef.current) return
+  useFloatingDismiss(isOpen, containerRef, listRef, placement.close, placement.update)
 
-    const rect = triggerRef.current.getBoundingClientRect()
-    const viewportPadding = 16
-    const measuredWidth = rect.width || triggerRef.current.offsetWidth || 240
-    const menuWidth = Math.min(measuredWidth, window.innerWidth - viewportPadding * 2)
-    const estimatedHeight = Math.min(Math.max(options.length * 44 + 8, 120), 240)
+  useSelectEffects(listRef, highlightedIndex, isOpen, onOpenChange)
+  useDropdownViewport(isOpen, listRef, triggerRef, placement.update, placement.close)
 
-    let left = rect.left
-    if (left + menuWidth > window.innerWidth - viewportPadding) {
-      left = window.innerWidth - menuWidth - viewportPadding
-    }
-    left = Math.max(viewportPadding, left)
+  const controls = useSelectControls({ isOpen, disabled, highlightedIndex, options, onChange, updatePosition: placement.update, setIsOpen, setHighlightedIndex })
 
-    const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - viewportPadding)
-    const spaceAbove = Math.max(0, rect.top - viewportPadding)
-    const openAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow
-    const maxHeight = Math.max(
-      120,
-      Math.min(estimatedHeight, (openAbove ? spaceAbove : spaceBelow) - 8)
-    )
-    const top = openAbove
-      ? Math.max(viewportPadding, rect.top - maxHeight - 8)
-      : rect.bottom + 8
+  const listbox = isOpen ? <DropdownList listRef={listRef} label={hasLabel ? label : placeholder} options={options} value={value} highlightedIndex={highlightedIndex} position={position} onHighlight={setHighlightedIndex} onSelect={controls.selectOption} /> : null
 
-    setPosition({
-      top,
-      left,
-      width: menuWidth,
-      maxHeight,
-    })
-  }, [options.length])
+  return { label, hasLabel, placeholder, selectedLabel: selectedOption?.label, disabled, isOpen, className, triggerClassName, labelClassName, containerRef, triggerRef, listbox, onKeyDown: controls.keyDown, onToggle: controls.toggle }
+}
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(target) &&
-        listRef.current &&
-        !listRef.current.contains(target)
-      ) {
-        setIsOpen(false)
-      }
-    }
+function SelectDropdownView({ label, hasLabel, placeholder, selectedLabel, disabled, isOpen, className, triggerClassName, labelClassName, containerRef, triggerRef, listbox, onKeyDown, onToggle }: { label: string; hasLabel: boolean; placeholder: string; selectedLabel?: string; disabled: boolean; isOpen: boolean; className: string; triggerClassName: string; labelClassName: string; containerRef: React.RefObject<HTMLDivElement | null>; triggerRef: React.RefObject<HTMLButtonElement | null>; listbox: React.ReactNode; onKeyDown: (event: React.KeyboardEvent) => void; onToggle: () => void }) {
+  return <div className={className}><DropdownLabel visible={hasLabel} className={labelClassName}>{label}</DropdownLabel><DropdownTrigger containerRef={containerRef} triggerRef={triggerRef} selectedLabel={selectedLabel} placeholder={placeholder} disabled={disabled} isOpen={isOpen} triggerClassName={triggerClassName} onKeyDown={onKeyDown} onToggle={onToggle} /><DropdownPortal>{listbox}</DropdownPortal></div>
+}
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      updatePosition()
-    }
+function DropdownLabel({ visible, className, children }: { visible: boolean; className: string; children: string }) {
+  return visible ? <label className={className}>{children}</label> : null
+}
 
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isOpen, updatePosition])
+function DropdownTrigger({ containerRef, triggerRef, selectedLabel, placeholder, disabled, isOpen, triggerClassName, onKeyDown, onToggle }: Omit<Parameters<typeof SelectDropdownView>[0], 'label' | 'hasLabel' | 'className' | 'labelClassName' | 'listbox'>) {
+  const stateClass = disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-surface-container-highest focus:ring-1 focus:ring-primary'
+  return <div ref={containerRef} className="relative"><button ref={triggerRef} type="button" onClick={onToggle} onKeyDown={onKeyDown} disabled={disabled} aria-haspopup="listbox" aria-expanded={isOpen} className={`flex w-full items-center justify-between rounded-card bg-surface-dim text-left text-sm text-on-surface outline-none transition-all ${triggerClassName} ${stateClass}`}><DropdownTriggerLabel label={selectedLabel} placeholder={placeholder} /><span className={`text-[0.6rem] text-on-surface-variant transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span></button></div>
+}
 
-  useEffect(() => {
-    if (highlightedIndex >= 0 && listRef.current) {
-      const highlightedElement = listRef.current.children[highlightedIndex] as HTMLElement
-      highlightedElement?.scrollIntoView({ block: 'nearest' })
-    }
-  }, [highlightedIndex])
+function DropdownTriggerLabel({ label, placeholder }: { label?: string; placeholder: string }) { return <span className={label ? 'text-on-surface' : 'text-on-surface-variant/40'}>{label || placeholder}</span> }
 
-  useEffect(() => {
-    onOpenChange?.(isOpen)
-  }, [isOpen, onOpenChange])
+function DropdownPortal({ children }: { children: React.ReactNode }) {
+  return children && typeof document !== 'undefined' ? createPortal(children, document.body) : null
+}
 
-  useEffect(() => {
-    if (!isOpen) return
+function DropdownList({ listRef, label, options, value, highlightedIndex, position, onHighlight, onSelect }: { listRef: React.RefObject<HTMLUListElement | null>; label: string; options: SelectOption[]; value: string | number; highlightedIndex: number; position: { top: number; left: number; width: number; maxHeight: number }; onHighlight: (index: number) => void; onSelect: (value: string | number) => void }) {
+  return <ul ref={listRef} role="listbox" aria-label={label} className="fixed z-[140] overflow-y-auto rounded-card bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)] py-1 shadow-[0_18px_40px_rgba(0,0,0,0.58),_inset_0_1px_0_rgba(255,255,255,0.05)]" style={position}>{options.map((option, index) => <DropdownOption key={option.value} option={option} selected={option.value === value} highlighted={index === highlightedIndex} onHighlight={() => onHighlight(index)} onSelect={() => onSelect(option.value)} />)}</ul>
+}
 
-    function handleResize() {
-      updatePosition()
-    }
-
-    function handleScroll(event: Event) {
-      const target = event.target
-      if (
-        target instanceof Node &&
-        (listRef.current?.contains(target) || triggerRef.current?.contains(target))
-      ) {
-        return
-      }
-      setIsOpen(false)
-    }
-
-    window.addEventListener('resize', handleResize)
-    window.addEventListener('scroll', handleScroll, true)
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      window.removeEventListener('scroll', handleScroll, true)
-    }
-  }, [isOpen, updatePosition])
-
-  function handleSelectKey() {
-    const option = isOpen && highlightedIndex >= 0 ? options[highlightedIndex] : undefined
-    if (option) {
-      onChange(option.value)
-      setIsOpen(false)
-      return
-    }
-    updatePosition()
-    setIsOpen((current) => !current)
-  }
-
-  function handleArrowDown() {
-    if (!isOpen) {
-      updatePosition()
-      setIsOpen(true)
-      setHighlightedIndex(options.length > 0 ? 0 : -1)
-    } else if (options.length > 0) {
-      setHighlightedIndex((previous) => Math.min(previous + 1, options.length - 1))
-    }
-  }
-
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (disabled || !['Enter', ' ', 'ArrowDown', 'ArrowUp', 'Escape', 'Tab'].includes(event.key)) return
-    if (event.key !== 'Tab') event.preventDefault()
-    if (event.key === 'Enter' || event.key === ' ') handleSelectKey()
-    else if (event.key === 'ArrowDown') handleArrowDown()
-    else if (event.key === 'ArrowUp' && isOpen && options.length > 0) {
-      setHighlightedIndex((previous) => Math.max(previous - 1, 0))
-    } else if (event.key === 'Escape' || event.key === 'Tab') {
-      setIsOpen(false)
-    }
-  }
-
-  const handleOptionClick = (optionValue: string | number) => {
-    onChange(optionValue)
-    setIsOpen(false)
-  }
-
-  const listbox = isOpen ? (
-    <ul
-      ref={listRef}
-      role="listbox"
-      aria-label={hasLabel ? label : placeholder}
-      className="
-        fixed z-[140] overflow-y-auto rounded-card
-        bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)]
-        py-1 shadow-[0_18px_40px_rgba(0,0,0,0.58),_inset_0_1px_0_rgba(255,255,255,0.05)]
-      "
-      style={{
-        top: position.top,
-        left: position.left,
-        width: position.width,
-        maxHeight: position.maxHeight,
-      }}
-    >
-      {options.map((option, index) => (
-        <li
-          key={option.value}
-          role="option"
-          aria-selected={option.value === value}
-          onClick={() => handleOptionClick(option.value)}
-          onMouseEnter={() => setHighlightedIndex(index)}
-          className={`
-            flex cursor-pointer items-center justify-between px-3 py-2 transition-colors
-            ${index === highlightedIndex ? 'bg-surface-container-highest text-on-surface' : 'text-on-surface'}
-            ${option.value === value ? 'text-primary' : ''}
-          `}
-        >
-          <span>{option.label}</span>
-          {option.value === value && (
-            <span className="text-lg font-bold leading-none text-primary">•</span>
-          )}
-        </li>
-      ))}
-    </ul>
-  ) : null
-
-  return (
-    <div className={className}>
-      {hasLabel ? (
-        <label className={labelClassName}>{label}</label>
-      ) : null}
-      <div ref={containerRef} className="relative">
-        <button
-          ref={triggerRef}
-          type="button"
-          onClick={() => {
-            if (disabled) return
-            updatePosition()
-            setIsOpen((current) => !current)
-          }}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          aria-haspopup="listbox"
-          aria-expanded={isOpen}
-          className={`
-            w-full flex items-center justify-between rounded-card transition-all
-            bg-surface-dim text-on-surface text-left outline-none text-sm
-            ${triggerClassName}
-            ${disabled
-              ? 'cursor-not-allowed opacity-50'
-              : 'cursor-pointer hover:bg-surface-container-highest focus:ring-1 focus:ring-primary'
-            }
-          `}
-        >
-          <span className={selectedOption ? 'text-on-surface' : 'text-on-surface-variant/40'}>
-            {selectedOption?.label || placeholder}
-          </span>
-          <span className={`text-[0.6rem] text-on-surface-variant transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
-        </button>
-      </div>
-      {listbox && typeof document !== 'undefined' ? createPortal(listbox, document.body) : null}
-    </div>
-  )
+function DropdownOption({ option, selected, highlighted, onHighlight, onSelect }: { option: SelectOption; selected: boolean; highlighted: boolean; onHighlight: () => void; onSelect: () => void }) {
+  return <li role="option" aria-selected={selected} onClick={onSelect} onMouseEnter={onHighlight} className={`flex cursor-pointer items-center justify-between px-3 py-2 transition-colors ${highlighted ? 'bg-surface-container-highest text-on-surface' : 'text-on-surface'} ${selected ? 'text-primary' : ''}`}><span>{option.label}</span>{selected ? <span className="text-lg font-bold leading-none text-primary">•</span> : null}</li>
 }

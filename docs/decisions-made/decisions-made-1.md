@@ -1,5 +1,12 @@
 # Decisions Made
 
+## 2026-07-14 22:32:34 EDT
+
+- Made coverage-aware, no-cache Fallow analysis a required `make check` gate and kept every default dead-code, duplication, cyclomatic, cognitive, CRAP, and unit-size threshold unchanged; the accepted result is zero findings rather than a relaxed baseline.
+- Split frontend routes at the router boundary and decomposed page orchestration into explicit controller/view and focused hook/component contracts, reducing the initial production JavaScript entry from roughly 746 KB to 374 KB while preserving the route and query contracts.
+- Expanded backend Ruff enforcement to include cyclomatic-complexity and simplification rules, aligned automated modernization with the supported Python 3.12 runtime, and removed obsolete file-wide typing suppressions instead of grandfathering legacy syntax.
+- Kept the extraction prompt's line-length exception because its long lines are intentional model input whose whitespace is behaviorally meaningful; all executable Python remains subject to the normal Ruff rules.
+
 ## 2026-07-14 21:29:28 EDT
 
 - Kept Fallow's default dead-code, duplication, cyclomatic, cognitive, CRAP, and function-size thresholds unchanged after review showed that broader thresholds would make the remediation report misleading.

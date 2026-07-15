@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-# ruff: noqa: UP007, UP045
 import secrets
-from typing import Annotated, Optional, Union
+from typing import Annotated
 
 from fastapi import Depends, Request, Response
 
@@ -54,7 +53,7 @@ def get_auth_service(settings: SettingsDep) -> SupabaseAuthService:
 
 def get_transcription_service(
     settings: SettingsDep,
-) -> Union[MistralTranscriptionService, MockTranscriptionService]:
+) -> MistralTranscriptionService | MockTranscriptionService:
     """Return the appropriate transcription service based on environment.
 
     In dev mode (GUST_DEV_MODE=true), returns a MockTranscriptionService
@@ -73,7 +72,7 @@ def get_extraction_service(settings: SettingsDep) -> LangChainExtractionService:
 def get_capture_service(
     settings: SettingsDep,
     transcription_service: Annotated[
-        Union[MistralTranscriptionService, MockTranscriptionService],
+        MistralTranscriptionService | MockTranscriptionService,
         Depends(get_transcription_service),
     ],
     extraction_service: Annotated[
@@ -130,7 +129,7 @@ async def get_optional_session_context(
     response: Response,
     settings: SettingsDep,
     auth_service: Annotated[SupabaseAuthService, Depends(get_auth_service)],
-) -> Optional[SessionContext]:
+) -> SessionContext | None:
     access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
     prefetched_session = getattr(request.state, "prefetched_session", None)
@@ -171,17 +170,19 @@ async def get_optional_session_context(
     else:
         return None
 
-    with timed_stage("auth.session.resolve"):
-        with user_connection_scope(settings.database_url, user_id=identity.user_id) as connection:
-            if not is_email_allowed(connection, email=identity.email):
-                clear_session_cookies(response, settings)
-                clear_csrf_cookie(response, settings)
-                raise AuthEmailNotAllowedError()
-            return get_session_context(connection, identity.user_id)
+    with (
+        timed_stage("auth.session.resolve"),
+        user_connection_scope(settings.database_url, user_id=identity.user_id) as connection,
+    ):
+        if not is_email_allowed(connection, email=identity.email):
+            clear_session_cookies(response, settings)
+            clear_csrf_cookie(response, settings)
+            raise AuthEmailNotAllowedError()
+        return get_session_context(connection, identity.user_id)
 
 
 async def get_current_session_context(
-    session_context: Annotated[Optional[SessionContext], Depends(get_optional_session_context)],
+    session_context: Annotated[SessionContext | None, Depends(get_optional_session_context)],
 ) -> SessionContext:
     if session_context is None:
         raise AuthRequiredError()

@@ -3,7 +3,7 @@ import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 
 import { DesktopTaskDetailModal } from '../../components/DesktopTaskDetailModal'
-import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShell'
+import { useDesktopHeader, type DesktopOutletContext } from '../../components/DesktopShellContext'
 import { useDesktopTaskActions } from '../../hooks/useDesktopTaskActions'
 
 export function DesktopTaskDetailRoute() {

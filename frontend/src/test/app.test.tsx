@@ -1118,10 +1118,7 @@ describe('app shell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Continue with Local Test Account' }))
 
-    // Wait for the session to settle after dev login
     await screen.findByRole('link', { name: 'Tasks' })
-    // Give the session query time to update
-    await new Promise((resolve) => setTimeout(resolve, 200))
 
     await user.click(screen.getByRole('link', { name: 'Tasks' }))
     await user.click(await screen.findByRole('button', { name: /Inbox/ }))
