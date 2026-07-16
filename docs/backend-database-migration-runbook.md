@@ -306,6 +306,7 @@ Production database ownership rules:
 - do not use `supabase db push` for the application schema
 - backend deploys are expected to run `alembic upgrade head` before startup and then pass the startup revision check
 - backend predeploy/start commands must invoke `/app/.venv/bin/alembic` and `/app/.venv/bin/uvicorn` explicitly (or otherwise preserve the image virtual-environment path); do not use a login shell that resets the Docker image `PATH`
+- the Railway CLI fallback must upload the repository root for backend/frontend because those services already configure `/backend` and `/frontend` root directories; only standalone digest build directories use `--path-as-root`
 - Railway production deploys must provide `MIGRATION_DATABASE_URL` as a privileged migration/admin connection, while `DATABASE_URL` remains the least-privilege runtime connection used by the app after startup
 - run `python scripts/prod/check-postgres-rls.py --database-url "$DATABASE_URL"` against the production runtime connection string before and after rollout
 - if the runtime role reports `rolbypassrls=true`, switch the app to a non-bypass runtime role and reserve the privileged/admin connection for migrations only

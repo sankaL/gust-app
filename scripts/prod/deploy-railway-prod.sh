@@ -60,9 +60,9 @@ service_path() {
   esac
 }
 
-service_needs_no_gitignore() {
+service_uses_repository_root() {
   case "$1" in
-    frontend) printf 'true\n' ;;
+    backend|frontend) printf 'true\n' ;;
     *) printf 'false\n' ;;
   esac
 }
@@ -114,10 +114,10 @@ poll_deployment() {
 
 deploy_service() {
   local service="$1"
-  local path no_gitignore_flag sha branch message output deployment_id
+  local path repository_root sha branch message output deployment_id
 
   path="$(service_path "$service")"
-  no_gitignore_flag="$(service_needs_no_gitignore "$service")"
+  repository_root="$(service_uses_repository_root "$service")"
   sha="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
   branch="$(git -C "$REPO_ROOT" branch --show-current || true)"
   message="deploy ${branch:-detached}@${sha} ${service}"
@@ -125,18 +125,18 @@ deploy_service() {
   log "Deploying ${service} from ${path}"
 
   if [[ "$DRY_RUN" == "true" ]]; then
-    if [[ "$no_gitignore_flag" == "true" ]]; then
-      log "DRY RUN: railway up ${path} --path-as-root --no-gitignore -s ${service} -e ${ENVIRONMENT_NAME} -p ${PROJECT_ID}"
+    if [[ "$repository_root" == "true" ]]; then
+      log "DRY RUN: railway up -s ${service} -e ${ENVIRONMENT_NAME} -p ${PROJECT_ID}"
     else
       log "DRY RUN: railway up ${path} --path-as-root -s ${service} -e ${ENVIRONMENT_NAME} -p ${PROJECT_ID}"
     fi
     return 0
   fi
 
-  if [[ "$no_gitignore_flag" == "true" ]]; then
+  if [[ "$repository_root" == "true" ]]; then
     output="$(
       cd "$REPO_ROOT" &&
-      railway_cli up "$path" --path-as-root --no-gitignore -s "$service" -e "$ENVIRONMENT_NAME" -p "$PROJECT_ID" -d -m "$message" 2>&1
+      railway_cli up -s "$service" -e "$ENVIRONMENT_NAME" -p "$PROJECT_ID" -d -m "$message" 2>&1
     )"
   else
     output="$(
