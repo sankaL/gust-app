@@ -159,6 +159,7 @@ All seeded tasks start with `Status = TODO` and `Date = TBD`. Update rows in pla
 
 | Task ID | Task | Status | Date | Comments | Doc Ref |
 |---|---|---|---|---|---|
+| BUG-68 | Trusted-host middleware rejects Railway health probes | DONE | 2026-07-15 23:47 EDT | Added Railway's exact `healthcheck.railway.app` probe hostname only when Railway runtime variables are present, preserving strict public-host validation and adding regression coverage. | Runbook, Tech, AGENTS |
 | BUG-67 | Railway fallback workflow double-applies backend/frontend service roots | DONE | 2026-07-15 23:44 EDT | Changed fallback CLI uploads to send the repository root for Railway services that already define `/backend` or `/frontend`, retained path-root uploads for standalone digest images, and added dry-run regression coverage. | Runbook, Tech, AGENTS |
 | BUG-66 | Runtime startup cannot see Alembic revision metadata and hosted roles retain excess grants | DONE | 2026-07-15 23:40 EDT | Added revision `0017_harden_alembic_metadata` to revoke hosted end-user/service grants, preserve read-only runtime startup verification through a role-specific RLS policy, and extend production verification coverage. | Schema, Runbook, Tech, AGENTS |
 | BUG-65 | Railway backend predeploy cannot find Alembic after frozen `uv` installation | DONE | 2026-07-15 19:08 EDT | Replaced login-shell Railway commands with explicit `/app/.venv/bin` executables, preserving the production migration fail-closed check and adding regression coverage for the deploy manifest. | Runbook, Tech, AGENTS |

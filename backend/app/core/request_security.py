@@ -9,6 +9,7 @@ from starlette.responses import Response
 from app.core.settings import Settings
 
 LOCAL_HOSTS: tuple[str, ...] = ("localhost", "127.0.0.1", "[::1]", "testserver")
+RAILWAY_HEALTHCHECK_HOST = "healthcheck.railway.app"
 LOCAL_ORIGINS: tuple[str, ...] = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -63,6 +64,7 @@ def trusted_hosts(settings: Settings) -> list[str]:
         if normalized is not None:
             hosts.add(normalized)
     if has_railway_runtime:
+        hosts.add(RAILWAY_HEALTHCHECK_HOST)
         hosts.add("*.railway.internal")
         hosts.add("*.up.railway.app")
     return sorted(hosts)

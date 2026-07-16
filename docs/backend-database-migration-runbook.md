@@ -312,6 +312,7 @@ Production database ownership rules:
 - if the runtime role reports `rolbypassrls=true`, switch the app to a non-bypass runtime role and reserve the privileged/admin connection for migrations only
 - once the runtime role is a least-privilege non-bypass role, do not rely on that runtime `DATABASE_URL` for future DDL-bearing migrations; use `MIGRATION_DATABASE_URL` or another privileged migration-only connection path for Alembic
 - backend deploy config must carry the trusted-host list, allowed frontend/backend origins, and any explicit rate-limit overrides expected for the environment
+- Railway deployments with trusted-host enforcement must allow the exact probe hostname `healthcheck.railway.app`; public traffic remains restricted to configured Gust/Railway domains
 
 Allowlist administration:
 
