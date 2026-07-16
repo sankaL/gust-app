@@ -206,6 +206,37 @@ def main() -> int:  # noqa: C901
                 )
                 return 1
 
+            cursor.execute("SELECT count(*) FROM public.alembic_version")
+            visible_revision_rows = cursor.fetchone()[0]
+            if visible_revision_rows != 1:
+                print(
+                    "FAIL: runtime role cannot see exactly one Alembic revision row.",
+                    file=sys.stderr,
+                )
+                return 1
+
+            cursor.execute(
+                """
+                SELECT rolname,
+                       has_table_privilege(rolname, 'public.alembic_version', 'SELECT')
+                       OR has_table_privilege(rolname, 'public.alembic_version', 'INSERT')
+                       OR has_table_privilege(rolname, 'public.alembic_version', 'UPDATE')
+                       OR has_table_privilege(rolname, 'public.alembic_version', 'DELETE')
+                  FROM pg_roles
+                 WHERE rolname IN ('anon', 'authenticated')
+                """
+            )
+            exposed_revision_roles = [
+                role_name for role_name, has_privilege in cursor.fetchall() if has_privilege
+            ]
+            if exposed_revision_roles:
+                print(
+                    "FAIL: alembic_version is exposed to: "
+                    + ", ".join(sorted(exposed_revision_roles)),
+                    file=sys.stderr,
+                )
+                return 1
+
     print("RLS verification passed.")
     return 0
 

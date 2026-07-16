@@ -254,6 +254,13 @@ Deployment implication:
 - run the documented relationship and counter preflight queries before deployment so a validation failure is discovered before the maintenance window
 - after deployment, run the RLS verification script with the least-privilege runtime connection and exercise authenticated capture/task flows plus both internal digest modes
 
+Phase 17 introduces `0017_harden_alembic_metadata` as the required application revision.
+
+- remove Supabase-created end-user grants and policies from `public.alembic_version`
+- retain `SELECT` only for `gust_app_runtime`, protected by a role-specific RLS policy, so the startup revision guard can see exactly one row
+- reserve all revision writes for the privileged migration role
+- run the production RLS verifier after migration; it now fails if the runtime role cannot see one revision row or if `anon` / `authenticated` retain access
+
 ## Rollout Order
 
 For environments with existing deployments, use this order:
@@ -292,8 +299,10 @@ Production database ownership rules:
 - application schema changes are applied through Alembic only
 - Supabase Auth hook assets such as `public.allowed_users` and `public.before_user_created_allowlist(jsonb)` are versioned under `supabase/` and applied through the Supabase project workflow, not Alembic
 - hosted `anon` and `authenticated` roles must not retain table privileges on `public.allowed_users` or `public.rate_limit_counters`
+- hosted `anon`, `authenticated`, and `service_role` roles must not retain table privileges on `public.alembic_version`
 - the backend runtime role must retain only `SELECT` on `public.allowed_users`, because callback and session-refresh auth checks read that table directly
 - the backend runtime role may retain only `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `public.rate_limit_counters`
+- the backend runtime role must retain only `SELECT` on `public.alembic_version` for startup revision verification
 - do not use `supabase db push` for the application schema
 - backend deploys are expected to run `alembic upgrade head` before startup and then pass the startup revision check
 - backend predeploy/start commands must invoke `/app/.venv/bin/alembic` and `/app/.venv/bin/uvicorn` explicitly (or otherwise preserve the image virtual-environment path); do not use a login shell that resets the Docker image `PATH`
@@ -315,7 +324,7 @@ Minimum verification after applying schema-affecting changes:
 
 - Alembic reports the expected head revision.
 - Production Railway backend deploys fail closed if `APP_ENV=production` and `MIGRATION_DATABASE_URL` is missing.
-- The required revision configured for the backend matches `0016_harden_rls_relationships` or the current deployed head.
+- The required revision configured for the backend matches `0017_harden_alembic_metadata` or the current deployed head.
 - Backend startup revision check passes.
 - `scripts/prod/check-postgres-rls.py` passes against the runtime `DATABASE_URL`.
 - The current Postgres runtime role reports `rolbypassrls = false`.

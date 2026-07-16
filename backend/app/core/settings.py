@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
     )
     required_alembic_revision: str = Field(
-        default="0016_harden_rls_relationships",
+        default="0017_harden_alembic_metadata",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(

@@ -338,6 +338,45 @@ def test_phase16_migration_hardens_rls_parent_ownership_and_counter_constraints(
     assert sum("VALIDATE CONSTRAINT" in sql for sql in executed_sql) == 4
 
 
+def test_phase17_migration_hardens_alembic_version_access() -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0017_harden_alembic_metadata.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "harden_alembic_metadata", migration_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    class _Dialect:
+        name = "postgresql"
+
+    class _Bind:
+        dialect = _Dialect()
+
+    executed_sql: list[str] = []
+    module.op.get_bind = lambda: _Bind()
+    module.op.execute = lambda statement: executed_sql.append(statement)
+
+    module.upgrade()
+
+    all_sql = "\n".join(executed_sql).lower()
+    assert module.revision == "0017_harden_alembic_metadata"
+    assert len(module.revision) <= 32
+    assert module.down_revision == "0016_harden_rls_relationships"
+    assert "enable row level security" in all_sql
+    assert "from anon" in all_sql
+    assert "from authenticated" in all_sql
+    assert "from service_role" in all_sql
+    assert "grant select on table public.alembic_version to gust_app_runtime" in all_sql
+    assert "create policy alembic_version_runtime_read" in all_sql
+
+
 def test_supabase_allowlist_hardening_migration_revokes_public_roles() -> None:
     migration_path = (
         Path(__file__).resolve().parents[2]

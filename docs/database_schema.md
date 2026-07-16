@@ -395,6 +395,18 @@ Constraints and invariants:
 - Hosted `anon` and `authenticated` roles must not have table privileges on `public.rate_limit_counters`.
 - The backend runtime role may hold only the read/write privileges needed for fixed-window enforcement.
 
+### `alembic_version`
+
+Alembic-owned operational metadata containing the single deployed application-schema revision.
+
+Constraints and invariants:
+
+- Exactly one revision row is present after migration bootstrap.
+- Hosted `anon`, `authenticated`, and `service_role` roles have no table privileges.
+- The backend runtime role has `SELECT` only and an RLS policy that exposes the revision row solely for the fail-closed startup compatibility check.
+- Only the privileged migration role may insert, update, or delete revision metadata.
+- The table is not part of the application API and contains no user-owned data.
+
 ## Cross-Table Rules
 
 - `tasks.user_id`, `groups.user_id`, `subtasks.user_id`, `captures.user_id`, `reminders.user_id`, and `digest_dispatches.user_id` must all match the owning `users.id`.
@@ -403,6 +415,7 @@ Constraints and invariants:
 - `reminders.task_id` must reference a task owned by the same user.
 - `captures.id` may be referenced by tasks created from that capture for traceability and result summaries until retention cleanup removes the capture and nulls `tasks.capture_id`.
 - `rate_limit_counters` is intentionally excluded from user-owned data rules and from end-user API exposure.
+- `alembic_version` is operational migration metadata and is excluded from user-owned data rules and end-user API exposure.
 
 ## Indexing Guidance
 
