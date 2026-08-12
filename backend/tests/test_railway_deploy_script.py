@@ -9,6 +9,7 @@ def test_railway_fallback_uses_service_root_contracts() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     environment = os.environ.copy()
     environment["DRY_RUN"] = "true"
+    environment["CI"] = "true"
 
     result = subprocess.run(
         [

@@ -18,7 +18,6 @@ from app.core.errors import (
     AuthRequiredError,
     CsrfValidationError,
     InvalidTimezoneError,
-    UpstreamAuthError,
 )
 from app.core.security import (
     CSRF_COOKIE,
@@ -43,13 +42,11 @@ from app.db.repositories import (
     update_user_timezone,
     upsert_user,
 )
-from app.services.auth import AuthenticatedSession, SupabaseAuthService
+from app.services.auth import AuthenticatedSession, AuthService, LocalDevAuthService
 
 router = APIRouter()
 
 LOCAL_DEV_AUTH_EMAIL = "local-dev@gust.local"
-LOCAL_DEV_AUTH_PASSWORD = "gust-local-dev-password"
-LOCAL_DEV_AUTH_DISPLAY_NAME = "Local Dev User"
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 OptionalSessionContextDep = Annotated[
@@ -57,7 +54,7 @@ OptionalSessionContextDep = Annotated[
     Depends(get_optional_session_context),
 ]
 RequiredSessionContextDep = Annotated[SessionContext, Depends(require_csrf)]
-AuthServiceDep = Annotated[SupabaseAuthService, Depends(get_auth_service)]
+AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 
 
 class UserSummary(BaseModel):
@@ -99,6 +96,8 @@ async def start_google_sign_in(
     settings: SettingsDep,
     auth_service: AuthServiceDep,
 ) -> RedirectResponse:
+    if settings.gust_dev_mode or isinstance(auth_service, LocalDevAuthService):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
     auth_service.ensure_configured()
     pkce_challenge = generate_pkce_challenge()
     response = RedirectResponse(
@@ -118,6 +117,8 @@ async def auth_callback(
     auth_service: AuthServiceDep,
     code: str = Query(..., min_length=1, max_length=4096),
 ) -> RedirectResponse:
+    if settings.gust_dev_mode or isinstance(auth_service, LocalDevAuthService):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
     auth_service.ensure_configured()
 
     code_verifier = request.cookies.get(OAUTH_CODE_VERIFIER_COOKIE)
@@ -173,18 +174,9 @@ async def local_dev_login(
     if not settings.gust_dev_mode:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
 
-    auth_service.ensure_configured()
-    try:
-        session = await auth_service.sign_up_with_password(
-            email=LOCAL_DEV_AUTH_EMAIL,
-            password=LOCAL_DEV_AUTH_PASSWORD,
-            display_name=LOCAL_DEV_AUTH_DISPLAY_NAME,
-        )
-    except UpstreamAuthError:
-        session = await auth_service.sign_in_with_password(
-            email=LOCAL_DEV_AUTH_EMAIL,
-            password=LOCAL_DEV_AUTH_PASSWORD,
-        )
+    if not isinstance(auth_service, LocalDevAuthService):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
+    session = auth_service.create_dev_session()
 
     with user_connection_scope(
         settings.database_url,
@@ -308,7 +300,7 @@ def _build_blocked_auth_redirect_response(
 
 
 async def _best_effort_revoke_refresh_token(
-    auth_service: SupabaseAuthService,
+    auth_service: AuthService,
     refresh_token: str | None,
 ) -> None:
     if not refresh_token:

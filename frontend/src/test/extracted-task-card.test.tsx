@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ExtractedTaskCard } from '../components/ExtractedTaskCard'
 
 describe('extracted task card', () => {
-  it('groups metadata into a compact bottom row and keeps confidence visible', () => {
+  it('keeps metadata to one row with a full-detail overflow cue and keeps confidence visible', () => {
     render(
       <ExtractedTaskCard
         task={{
@@ -42,14 +42,11 @@ describe('extracted task card', () => {
       throw new Error('Expected compact metadata row')
     }
 
-    expect(metadataRow).toHaveClass('flex-nowrap')
-    expect(metadataRow).toHaveClass('overflow-hidden')
-    expect(metadataRow).toHaveClass('text-[0.62rem]')
-    expect(screen.getByText('Inbox')).toHaveClass('max-w-[44%]')
-    expect(screen.getByText('Inbox')).toHaveClass('shrink')
-    expect(screen.getByText('Inbox')).toHaveClass('truncate')
+    expect(metadataRow).not.toHaveClass('flex-wrap')
+    expect(metadataRow).toHaveClass('text-[0.58rem]')
+    expect(screen.getByText('Inbox')).toHaveClass('max-w-[42%]')
     expect(within(metadataRow).getByText(/^Due:/)).toBeInTheDocument()
-    expect(within(metadataRow).getByText('WEEKLY')).toBeInTheDocument()
+    expect(screen.getByLabelText(/More task details: Inbox · Due: 4\/3\/2026 · WEEKLY/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument()
   })

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
     )
     required_alembic_revision: str = Field(
-        default="0017_harden_alembic_metadata",
+        default="0018_ensure_allowed_users",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     supabase_anon_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("SUPABASE_ANON_KEY"),
+    )
+    local_dev_auth_secret: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LOCAL_DEV_AUTH_SECRET"),
     )
     session_cookie_secure: bool = Field(
         default=True,

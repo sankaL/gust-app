@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useSearchParams } from 'react-router-dom'
 
 import { SessionGuard } from '../components/SessionGuard'
 import { useNotifications } from '../components/Notifications'
@@ -64,7 +63,6 @@ function ManageGroupCard(props: ManageGroupCardProps) {
 
 export function ManageGroupsRoute() {
   const queryClient = useQueryClient()
-  const [searchParams] = useSearchParams()
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupDescription, setNewGroupDescription] = useState('')
   const [drafts, setDrafts] = useState<Record<string, { name: string; description: string }>>({})
@@ -162,8 +160,6 @@ export function ManageGroupsRoute() {
     }
   })
 
-  const activeGroupSearch = searchParams.get('group') ? `?group=${searchParams.get('group')}` : ''
-
   return (
     <SessionGuard
       session={sessionQuery.data}
@@ -174,16 +170,6 @@ export function ManageGroupsRoute() {
       description="Create, rename, describe, and safely delete groups without breaking Inbox protections."
     >
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-2xl text-on-surface">Manage Groups</h2>
-          <Link
-            to={`/tasks${activeGroupSearch}`}
-            className="inline-flex items-center gap-2 rounded-pill bg-primary/20 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/30"
-          >
-            &larr; Back to Tasks
-          </Link>
-        </div>
-
         <button
           type="button"
           onClick={() => setShowAddGroupModal(true)}

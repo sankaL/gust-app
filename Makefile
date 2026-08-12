@@ -3,14 +3,11 @@ SHELL := /bin/sh
 BACKEND_VENV := backend/.venv
 BACKEND_PYTHON := $(BACKEND_VENV)/bin/python
 BACKEND_PIP := $(BACKEND_VENV)/bin/pip
-SUPABASE := npx supabase@latest
 DEV_RUNTIME_DIR := .dev-runtime
 DEV_RUNTIME_ENV := $(DEV_RUNTIME_DIR)/runtime.env
-DEV_SUPABASE_DIR := $(DEV_RUNTIME_DIR)/supabase
-DEV_SUPABASE_WORKDIR := $(DEV_RUNTIME_DIR)
 DOCKER_COMPOSE := docker compose --env-file $(DEV_RUNTIME_ENV)
 
-.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-quality frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime wait-supabase-db supabase-start supabase-stop supabase-sync-local seed-dev-dashboard wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
+.PHONY: frontend-install backend-install install frontend-lint frontend-test frontend-quality frontend-build backend-lint backend-test backend-smoke check prepare-dev-runtime seed-dev-dashboard seed-dev-dashboard-if-empty wait-backend app-up app-down dev local dev-up local-down dev-down dev-local
 
 frontend-install:
 	npm --prefix frontend install
@@ -65,38 +62,14 @@ check: frontend-lint frontend-quality frontend-build backend-lint backend-test b
 prepare-dev-runtime:
 	python3 scripts/dev/prepare-runtime.py
 
-wait-supabase-db:
-	python3 scripts/dev/wait-supabase-db.py
-
-supabase-stop:
-	@if [ -d "$(DEV_SUPABASE_DIR)" ]; then \
-		$(SUPABASE) stop --workdir "$(DEV_SUPABASE_WORKDIR)"; \
-	fi
-
-supabase-start: prepare-dev-runtime
-	@set -a; \
-	. "$(DEV_RUNTIME_ENV)"; \
-	set +a; \
-	$(SUPABASE) start --workdir "$(DEV_SUPABASE_WORKDIR)"
-	@$(MAKE) wait-supabase-db || ( \
-		echo 'Supabase reported running but local Postgres is unavailable; restarting local Supabase.'; \
-		$(SUPABASE) stop --workdir "$(DEV_SUPABASE_WORKDIR)"; \
-		set -a; \
-		. "$(DEV_RUNTIME_ENV)"; \
-		set +a; \
-		$(SUPABASE) start --workdir "$(DEV_SUPABASE_WORKDIR)"; \
-		$(MAKE) wait-supabase-db \
-	)
-	$(MAKE) supabase-sync-local
-
-supabase-sync-local: prepare-dev-runtime
-	$(SUPABASE) db push --local --include-all --include-seed --workdir "$(DEV_SUPABASE_WORKDIR)" --yes
-
 seed-dev-dashboard: prepare-dev-runtime
 	$(DOCKER_COMPOSE) exec backend python -m app.dev.seed_dashboard
 
+seed-dev-dashboard-if-empty: prepare-dev-runtime
+	$(DOCKER_COMPOSE) exec backend python -m app.dev.seed_dashboard --if-empty
+
 app-up: prepare-dev-runtime
-	$(DOCKER_COMPOSE) up -d --build backend
+	$(DOCKER_COMPOSE) up -d --build postgres backend
 	$(MAKE) wait-backend
 	$(DOCKER_COMPOSE) up -d frontend
 
@@ -121,15 +94,15 @@ app-down:
 		docker compose down; \
 	fi
 
-dev-local: supabase-start frontend-install app-up
+dev-local: app-up
+	$(MAKE) seed-dev-dashboard-if-empty
 	@. "$(DEV_RUNTIME_ENV)"; \
 	LOCAL_IP=$$(ipconfig getifaddr en0 2>/dev/null || echo "unknown"); \
 	printf '%s\n' \
 		'Local dev stack is ready:' \
 		"  frontend: http://localhost:$$GUST_FRONTEND_PORT" \
 		"  backend: http://localhost:$$GUST_BACKEND_PORT" \
-		"  supabase api: http://localhost:$$GUST_SUPABASE_API_PORT" \
-		"  supabase studio: http://localhost:$$GUST_SUPABASE_STUDIO_PORT" \
+		"  postgres: localhost:$$GUST_POSTGRES_PORT" \
 		'' \
 		'Access from your phone (on the same network):' \
 		"  frontend: http://$$LOCAL_IP:$$GUST_FRONTEND_PORT" \
@@ -144,7 +117,7 @@ local: dev-local
 
 dev-up: dev-local
 
-local-down: app-down supabase-stop
+local-down: app-down
 	rm -rf "$(DEV_RUNTIME_DIR)"
 
 dev-down: local-down

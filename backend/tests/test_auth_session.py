@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 from fastapi import FastAPI
@@ -21,6 +22,7 @@ from app.services.auth import (
     AuthenticatedIdentity,
     AuthenticatedSession,
     ExpiredSignatureError,
+    LocalDevAuthService,
 )
 
 
@@ -246,7 +248,11 @@ def test_callback_rejects_missing_oauth_verifier(app: FastAPI, client: TestClien
 
 def test_local_dev_login_bootstraps_cookie_session(app: FastAPI, client: TestClient) -> None:
     app.state.settings.gust_dev_mode = True
-    _override_auth_service(app, FakeAuthService())
+    app.state.settings.local_dev_auth_secret = (
+        "test-local-dev-secret-that-is-at-least-32-characters"
+    )
+    service = LocalDevAuthService(app.state.settings)
+    _override_auth_service(app, service)
     _allow_email(client, "local-dev@gust.local")
 
     response = client.post("/auth/session/dev-login")
@@ -259,18 +265,11 @@ def test_local_dev_login_bootstraps_cookie_session(app: FastAPI, client: TestCli
     assert ACCESS_TOKEN_COOKIE in response.headers["set-cookie"]
     assert REFRESH_TOKEN_COOKIE in response.headers["set-cookie"]
 
-
-def test_local_dev_login_reuses_existing_local_account(app: FastAPI, client: TestClient) -> None:
-    app.state.settings.gust_dev_mode = True
-    service = FakeAuthService()
-    service.fail_signup = True
-    _override_auth_service(app, service)
-    _allow_email(client, "local-dev@gust.local")
-
-    response = client.post("/auth/session/dev-login")
-
-    assert response.status_code == 200
-    assert response.json()["user"]["email"] == "local-dev@gust.local"
+    session = service.create_dev_session()
+    identity = service.validate_access_token(session.tokens.access_token)
+    refreshed = asyncio.run(service.refresh_session(refresh_token=session.tokens.refresh_token))
+    assert identity.user_id == LocalDevAuthService.USER_ID
+    assert refreshed.identity.email == "local-dev@gust.local"
 
 
 def test_local_dev_login_is_hidden_outside_dev_mode(app: FastAPI, client: TestClient) -> None:

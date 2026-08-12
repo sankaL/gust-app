@@ -35,4 +35,8 @@ else
     echo "Database already at Alembic revision $head_revision."
 fi
 
+if [ "${GUST_DEV_MODE:-false}" = "true" ]; then
+    python -m app.dev.seed_auth
+fi
+
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

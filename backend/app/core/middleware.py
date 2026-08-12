@@ -15,7 +15,7 @@ from app.core.request_security import set_response_security_headers
 from app.core.security import ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE
 from app.core.settings import Settings
 from app.core.timing import begin_request_timing, record_timing, reset_request_timing
-from app.services.auth import ExpiredSignatureError, SupabaseAuthService
+from app.services.auth import ExpiredSignatureError, build_auth_service
 
 logger = logging.getLogger("gust.api")
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
@@ -26,7 +26,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.settings = settings
         self.rate_limiter = RequestRateLimiter(settings)
-        self.auth_service = SupabaseAuthService(settings)
+        self.auth_service = build_auth_service(settings)
 
     async def dispatch(self, request: Request, call_next) -> Response:
         request_id = _safe_request_id(request.headers.get("X-Request-ID"))

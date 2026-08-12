@@ -33,6 +33,8 @@ interface TaskFormProps {
   defaultGroupId?: string
   onSave: (data: TaskFormData) => Promise<void> | void
   onCancel?: () => void
+  formId?: string
+  showActions?: boolean
   isSaving?: boolean
   error?: string | null
   onErrorChange?: (error: string | null) => void
@@ -48,6 +50,8 @@ type TaskFormViewProps = {
   isCreateMode: boolean
   isGroupDropdownOpen: boolean
   error: string | null | undefined
+  formId?: string
+  showActions: boolean
   onCancel?: () => void
   setters: {
     title: (value: string) => void
@@ -113,6 +117,8 @@ function useTaskFormViewProps({
   defaultGroupId,
   onSave,
   onCancel,
+  formId,
+  showActions = true,
   isSaving,
   error: externalError,
   onErrorChange,
@@ -138,12 +144,12 @@ function useTaskFormViewProps({
   function addSubtaskDraft() { const next = newSubtaskTitle.trim(); if (next) { setSubtaskTitles((current) => [...current, next]); setNewSubtaskTitle('') } }
   const handleSubmit = () => submitTaskForm({ values: { title, description, groupId, dueDate, reminderAt, recurrence }, subtasks: subtaskTitles, showSubtasks, isCreateMode, onSave, onError: setInternalError })
 
-  return { groups, values: { title, description, groupId, dueDate, reminderAt, recurrence }, subtaskTitles, newSubtaskTitle, showSubtasks, isSaving, isCreateMode, isGroupDropdownOpen, error, onCancel, setters: { title: setTitle, description: setDescription, groupId: setGroupId, dueDate: setDueDate, reminderAt: setReminderAt, recurrence: setRecurrence, groupOpen: setIsGroupDropdownOpen, subtasks: setSubtaskTitles, newSubtask: setNewSubtaskTitle }, onAddSubtask: addSubtaskDraft, onSubmit: () => void handleSubmit() }
+  return { groups, values: { title, description, groupId, dueDate, reminderAt, recurrence }, subtaskTitles, newSubtaskTitle, showSubtasks, isSaving, isCreateMode, isGroupDropdownOpen, error, formId, showActions, onCancel, setters: { title: setTitle, description: setDescription, groupId: setGroupId, dueDate: setDueDate, reminderAt: setReminderAt, recurrence: setRecurrence, groupOpen: setIsGroupDropdownOpen, subtasks: setSubtaskTitles, newSubtask: setNewSubtaskTitle }, onAddSubtask: addSubtaskDraft, onSubmit: () => void handleSubmit() }
 }
 
-function TaskFormView({ groups, values, subtaskTitles, newSubtaskTitle, showSubtasks, isSaving, isCreateMode, isGroupDropdownOpen, error, onCancel, setters, onAddSubtask, onSubmit }: TaskFormViewProps) {
+function TaskFormView({ groups, values, subtaskTitles, newSubtaskTitle, showSubtasks, isSaving, isCreateMode, isGroupDropdownOpen, error, formId, showActions, onCancel, setters, onAddSubtask, onSubmit }: TaskFormViewProps) {
   return (
-    <div className="space-y-5">
+    <form id={formId} className="space-y-5" onSubmit={(event) => { event.preventDefault(); onSubmit() }}>
       {/* Error display */}
       {error && (
         <div className="rounded-lg border border-error/35 bg-[rgba(80,18,18,0.92)] p-3 text-sm text-red-100 shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
@@ -168,7 +174,7 @@ function TaskFormView({ groups, values, subtaskTitles, newSubtaskTitle, showSubt
       {showSubtasks ? <SubtaskDrafts titles={subtaskTitles} newTitle={newSubtaskTitle} disabled={isSaving} onTitlesChange={setters.subtasks} onNewTitleChange={setters.newSubtask} onAdd={onAddSubtask} /> : null}
 
       {/* Action Buttons (for standalone mode) */}
-      {onCancel ? <TaskFormActions isSaving={isSaving} isCreateMode={isCreateMode} onCancel={onCancel} onSave={onSubmit} /> : null}
-    </div>
+      {showActions && onCancel ? <TaskFormActions isSaving={isSaving} isCreateMode={isCreateMode} onCancel={onCancel} onSave={onSubmit} /> : null}
+    </form>
   )
 }

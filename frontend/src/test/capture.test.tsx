@@ -29,7 +29,7 @@ function requestUrl(input: RequestInfo | URL) {
   return input.url
 }
 
-function renderCaptureRoute() {
+function renderCaptureRoute(initialEntry = '/capture') {
   sessionStorage.clear()
   sessionStorage.setItem(DEVICE_REDIRECT_OVERRIDE_KEY, 'true')
 
@@ -45,7 +45,7 @@ function renderCaptureRoute() {
         children: [{ path: 'capture', element: <CaptureRoute /> }]
       }
     ],
-    { initialEntries: ['/capture'] }
+    { initialEntries: [initialEntry] }
   )
 
   return render(
@@ -322,6 +322,18 @@ describe('capture route', () => {
     expect(await screen.findByText('Write it instead')).toBeInTheDocument()
   })
 
+  it('opens the written-task composer from the quick-add capture link', async () => {
+    stubSignedInFetch()
+
+    renderCaptureRoute('/capture?compose=1')
+
+    expect(await screen.findByPlaceholderText('Type or paste here...')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Add a new task' })).toHaveAttribute(
+      'href',
+      '/capture?compose=1'
+    )
+  })
+
   it('shows loading state for the latest capture instead of an empty review state', async () => {
     let resolveExtractedTasks: ((value: Response) => void) | null = null
     const fetchMock: FetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -376,8 +388,7 @@ describe('capture route', () => {
     await user.click(await screen.findByRole('button', { name: 'Start recording' }))
     await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
 
-    expect(await screen.findByText('Organizing your tasks')).toBeInTheDocument()
-    expect(screen.getByText('Loading extracted tasks...')).toBeInTheDocument()
+    expect(await screen.findByText('Analyzing your voice...')).toBeInTheDocument()
     expect(screen.queryByText('No newly captured tasks to review')).not.toBeInTheDocument()
 
     if (resolveExtractedTasks) {

@@ -1,5 +1,7 @@
-import { useState, type RefObject } from 'react'
+import { useMemo, useState, type RefObject } from 'react'
 import {
+  AlertTriangle,
+  BellRing,
   BarChart3,
   CheckCircle2,
   ChevronDown,
@@ -16,7 +18,8 @@ import {
 } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 
-import type { GroupSummary, SessionStatus } from '../lib/api'
+import type { GroupSummary, SessionStatus, TaskSummary } from '../lib/api'
+import { buildGroupNavigationSignals, type GroupNavigationSignal } from '../lib/desktopData'
 import { markDeviceRedirectOverride } from '../hooks/useDeviceRedirect'
 import type { DesktopHeaderContent, DesktopOutletContext } from './DesktopShellContext'
 
@@ -35,8 +38,8 @@ const accountNavigation = [
 
 type LogoutAction = { mutate: () => void; isPending: boolean }
 
-function groupAriaLabel(name: string, count: number) {
-  return `${name} group, ${count} open task${count === 1 ? '' : 's'}`
+function groupAriaLabel(name: string, count: number, signal?: GroupNavigationSignal) {
+  return `${name} group, ${count} open task${count === 1 ? '' : 's'}${signal ? `, ${signal.label}` : ''}`
 }
 
 function NavigationItems({ collapsed }: { collapsed: boolean }) {
@@ -46,19 +49,41 @@ function NavigationItems({ collapsed }: { collapsed: boolean }) {
         <NavLink key={to} to={to} end={end} aria-label={collapsed ? label : undefined}
           title={collapsed ? label : undefined}
           className={({ isActive }) => [
-            'flex items-center gap-3 rounded-soft px-3 py-2.5 font-body text-sm transition duration-200 active:scale-[0.98]',
+            'flex items-center gap-3 rounded-soft px-3 py-2.5 font-body text-sm transition-[background-color,color,transform] duration-200 active:scale-[0.98]',
             collapsed ? 'justify-center' : '',
             isActive ? 'bg-surface-container-highest text-primary shadow-ambient' : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
           ].join(' ')}>
           <Icon className="h-4 w-4 shrink-0" strokeWidth={1.8} />
-          <span className={collapsed ? 'sr-only' : ''}>{label}</span>
+          <span className={['overflow-hidden whitespace-nowrap transition-[opacity,transform,max-width] duration-200 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]', collapsed ? 'max-w-0 -translate-x-1 opacity-0' : 'max-w-32 translate-x-0 opacity-100'].join(' ')}>{label}</span>
         </NavLink>
       ))}
     </nav>
   )
 }
 
-function GroupNavigation({ groups, collapsed }: { groups: GroupSummary[]; collapsed: boolean }) {
+const signalStyles: Record<GroupNavigationSignal['tone'], { className: string; icon: typeof AlertTriangle }> = {
+  overdue: { className: 'bg-error/15 text-error', icon: AlertTriangle },
+  review: { className: 'bg-warning/15 text-warning', icon: AlertTriangle },
+  reminder: { className: 'bg-info/15 text-info', icon: BellRing },
+  clear: { className: 'bg-success/15 text-success', icon: CheckCircle2 },
+}
+
+function GroupStatusBreadcrumb({ signal, collapsed }: { signal?: GroupNavigationSignal; collapsed: boolean }) {
+  if (!signal || collapsed) return null
+  const { className, icon: Icon } = signalStyles[signal.tone]
+  return <span title={signal.label} aria-label={signal.label} className={['inline-flex h-6 shrink-0 items-center justify-center gap-1.5 rounded-pill px-2 font-body font-semibold tabular-nums', className].join(' ')}>
+    <Icon className="h-3 w-3" strokeWidth={2.25} aria-hidden="true" />
+    <span className="text-[0.65rem] leading-none">{signal.label}</span>
+  </span>
+}
+
+function GroupStatusDot({ signal, collapsed }: { signal?: GroupNavigationSignal; collapsed: boolean }) {
+  if (!collapsed || !signal || signal.tone === 'clear') return null
+  const color = { overdue: 'bg-error', review: 'bg-warning', reminder: 'bg-info', clear: 'bg-success' }[signal.tone]
+  return <span aria-hidden="true" className={`absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full ring-2 ring-surface-dim ${color}`} />
+}
+
+function GroupNavigation({ groups, collapsed, signals }: { groups: GroupSummary[]; collapsed: boolean; signals: Map<string, GroupNavigationSignal> }) {
   return (
     <div className="mt-8 min-h-0 flex-1">
       <div className={['mb-3 flex items-center px-3', collapsed ? 'justify-center' : 'justify-between'].join(' ')}>
@@ -68,18 +93,19 @@ function GroupNavigation({ groups, collapsed }: { groups: GroupSummary[]; collap
       <div className="max-h-[42vh] space-y-1 overflow-y-auto pr-1">
         {groups.map((group) => (
           <NavLink key={group.id} to={`/desktop/groups/${group.id}`}
-            aria-label={collapsed ? groupAriaLabel(group.name, group.open_task_count) : undefined}
+            aria-label={collapsed ? groupAriaLabel(group.name, group.open_task_count, signals.get(group.id)) : undefined}
             title={collapsed ? group.name : undefined}
             className={({ isActive }) => [
-              'flex items-center gap-3 rounded-card px-3 py-2 font-body text-sm transition duration-200 active:scale-[0.98]',
+              'flex items-center gap-3 rounded-card px-3 py-2 font-body text-sm transition-[background-color,color,transform] duration-200 active:scale-[0.98]',
               collapsed ? 'justify-center' : 'justify-between',
               isActive ? 'bg-surface-container-high text-on-surface' : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
             ].join(' ')}>
             <span className={['flex min-w-0 items-center gap-2', collapsed ? 'justify-center' : ''].join(' ')}>
-              <FolderKanban className="h-4 w-4 shrink-0" strokeWidth={1.8} />
-              <span className={collapsed ? 'sr-only' : 'truncate'}>{group.name}</span>
+              <span className="relative shrink-0"><FolderKanban className="h-4 w-4" strokeWidth={1.8} /><GroupStatusDot signal={signals.get(group.id)} collapsed={collapsed} /></span>
+              <span className={['overflow-hidden whitespace-nowrap transition-[opacity,transform,max-width] duration-200 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]', collapsed ? 'max-w-0 -translate-x-1 opacity-0' : 'max-w-32 translate-x-0 opacity-100'].join(' ')}>{group.name}</span>
             </span>
-            {collapsed ? null : <span className="shrink-0 rounded-pill bg-surface-container-highest px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">{group.open_task_count}</span>}
+            <span className={['flex items-center transition-[opacity,transform] duration-200', collapsed ? 'absolute translate-x-1 opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'].join(' ')}><span className="shrink-0 rounded-pill bg-surface-container-highest px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">{group.open_task_count}</span></span>
+            <GroupStatusBreadcrumb signal={signals.get(group.id)} collapsed={collapsed} />
           </NavLink>
         ))}
       </div>
@@ -87,14 +113,14 @@ function GroupNavigation({ groups, collapsed }: { groups: GroupSummary[]; collap
   )
 }
 
-function DesktopSidebar({ groups, logout, collapsed, onToggle }: { groups: GroupSummary[]; logout: LogoutAction; collapsed: boolean; onToggle: () => void }) {
+function DesktopSidebar({ groups, signals, logout, collapsed, onToggle }: { groups: GroupSummary[]; signals: Map<string, GroupNavigationSignal>; logout: LogoutAction; collapsed: boolean; onToggle: () => void }) {
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose
   return (
-    <aside id="desktop-sidebar" className={['sticky top-0 flex h-[100dvh] flex-col border-r border-white/10 bg-surface-dim/85 py-5 backdrop-blur-xl transition-[padding,width] duration-300 max-lg:hidden', collapsed ? 'px-3' : 'px-4'].join(' ')}>
+    <aside id="desktop-sidebar" className={['sticky top-0 flex h-[100dvh] flex-col border-r border-white/10 bg-surface-dim/85 py-5 backdrop-blur-xl transition-[padding] duration-300 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] max-lg:hidden', collapsed ? 'px-3' : 'px-4'].join(' ')}>
       <div className={['flex items-center', collapsed ? 'flex-col gap-3' : 'justify-between gap-3'].join(' ')}>
         <Link to="/desktop" className={['flex min-w-0 items-center gap-3 px-2', collapsed ? 'justify-center' : ''].join(' ')} aria-label="Gust mission control" title={collapsed ? 'Gust' : undefined}>
           <img src="/logos/gust-wind-electric.svg" alt="" className="h-8 w-8 shrink-0" />
-          {collapsed ? null : <div className="min-w-0"><p className="font-display text-2xl leading-none text-on-surface">Gust</p><p className="truncate font-body text-[0.68rem] uppercase tracking-[0.18em] text-on-surface-variant">Mission Control</p></div>}
+          <div className={['min-w-0 overflow-hidden whitespace-nowrap transition-[opacity,transform,max-width] duration-200 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]', collapsed ? 'max-w-0 -translate-x-2 opacity-0' : 'max-w-36 translate-x-0 opacity-100'].join(' ')}><p className="font-display text-2xl leading-none text-on-surface">Gust</p><p className="truncate font-body text-[0.68rem] uppercase tracking-[0.18em] text-on-surface-variant">Mission Control</p></div>
         </Link>
         <button type="button" aria-controls="desktop-sidebar" aria-expanded={!collapsed}
           aria-label={collapsed ? 'Expand desktop sidebar' : 'Collapse desktop sidebar'}
@@ -104,7 +130,7 @@ function DesktopSidebar({ groups, logout, collapsed, onToggle }: { groups: Group
         </button>
       </div>
       <NavigationItems collapsed={collapsed} />
-      <GroupNavigation groups={groups} collapsed={collapsed} />
+      <GroupNavigation groups={groups} collapsed={collapsed} signals={signals} />
       <button type="button" onClick={logout.mutate} disabled={logout.isPending}
         aria-label={collapsed ? 'Logout' : undefined} title={collapsed ? 'Logout' : undefined}
         className="mt-5 flex w-full items-center justify-center gap-2 px-3 py-2 font-body text-sm font-semibold text-red-400 transition hover:text-red-300 disabled:opacity-60">
@@ -169,6 +195,8 @@ type DesktopShellLayoutProps = {
   session: SessionStatus
   groups: GroupSummary[]
   isGroupsLoading: boolean
+  openTasks: TaskSummary[]
+  areNavigationSignalsLoading: boolean
   header: DesktopHeaderContent
   setHeader: DesktopOutletContext['setDesktopHeader']
   logout: LogoutAction
@@ -176,7 +204,8 @@ type DesktopShellLayoutProps = {
   recorder: { isRecording: boolean; isLoading: boolean; isSaving: boolean; start: () => Promise<void>; stop: () => void }
 }
 
-export function DesktopShellLayout({ session, groups, isGroupsLoading, header, setHeader, logout, account, recorder }: DesktopShellLayoutProps) {
+export function DesktopShellLayout({ session, groups, isGroupsLoading, openTasks, areNavigationSignalsLoading, header, setHeader, logout, account, recorder }: DesktopShellLayoutProps) {
   const [collapsed, setCollapsed] = useState(false)
-  return <div className="min-h-[100dvh] bg-surface text-on-surface"><div className={['grid min-h-[100dvh] max-lg:grid-cols-1', collapsed ? 'grid-cols-[5.75rem_minmax(0,1fr)]' : 'grid-cols-[18rem_minmax(0,1fr)]'].join(' ')}><DesktopSidebar groups={groups} logout={logout} collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} /><div className="min-w-0"><DesktopTopBar header={header} logout={logout} {...account} /><main className="min-h-[calc(100dvh-73px)] overflow-x-hidden px-6 py-6 max-lg:px-4"><Outlet context={{ session, groups, isGroupsLoading, setDesktopHeader: setHeader }} /></main></div></div><QuickActions {...recorder} /></div>
+  const signals = useMemo(() => areNavigationSignalsLoading ? new Map<string, GroupNavigationSignal>() : buildGroupNavigationSignals(groups, openTasks, session.timezone), [areNavigationSignalsLoading, groups, openTasks, session.timezone])
+  return <div className="min-h-[100dvh] bg-surface text-on-surface"><div className={['grid min-h-[100dvh] transition-[grid-template-columns] duration-300 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] max-lg:grid-cols-1', collapsed ? 'grid-cols-[5.75rem_minmax(0,1fr)]' : 'grid-cols-[18rem_minmax(0,1fr)]'].join(' ')}><DesktopSidebar groups={groups} signals={signals} logout={logout} collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} /><div className="min-w-0"><DesktopTopBar header={header} logout={logout} {...account} /><main className="min-h-[calc(100dvh-73px)] overflow-x-hidden px-6 py-6 max-lg:px-4"><Outlet context={{ session, groups, isGroupsLoading, setDesktopHeader: setHeader }} /></main></div></div><QuickActions {...recorder} /></div>
 }

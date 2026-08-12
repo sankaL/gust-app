@@ -22,14 +22,17 @@ def upgrade() -> None:
     if bind.dialect.name != "postgresql":
         return
 
-    op.execute(
-        "REVOKE ALL PRIVILEGES ON TABLE public.rate_limit_counters "
-        "FROM PUBLIC, anon, authenticated"
-    )
+    op.execute("REVOKE ALL PRIVILEGES ON TABLE public.rate_limit_counters FROM PUBLIC")
     op.execute(
         """
         DO $$
         BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+            REVOKE ALL PRIVILEGES ON TABLE public.rate_limit_counters FROM anon;
+          END IF;
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+            REVOKE ALL PRIVILEGES ON TABLE public.rate_limit_counters FROM authenticated;
+          END IF;
           IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gust_app_runtime') THEN
             GRANT SELECT, INSERT, UPDATE, DELETE
             ON TABLE public.rate_limit_counters
@@ -46,11 +49,16 @@ def downgrade() -> None:
     if bind.dialect.name != "postgresql":
         return
 
-    op.execute("GRANT ALL PRIVILEGES ON TABLE public.rate_limit_counters TO anon, authenticated")
     op.execute(
         """
         DO $$
         BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+            GRANT ALL PRIVILEGES ON TABLE public.rate_limit_counters TO anon;
+          END IF;
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+            GRANT ALL PRIVILEGES ON TABLE public.rate_limit_counters TO authenticated;
+          END IF;
           IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gust_app_runtime') THEN
             GRANT SELECT, INSERT, UPDATE, DELETE
             ON TABLE public.rate_limit_counters

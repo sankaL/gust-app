@@ -11,6 +11,7 @@ describe('open task card metadata layout', () => {
 
     render(
       <OpenTaskCard
+        todayIso="2026-04-03"
         task={{
           id: 'task-1',
           title: 'Check on Loku Caters orders page',
@@ -36,6 +37,8 @@ describe('open task card metadata layout', () => {
       />
     )
 
+    expect(screen.getByText(/Due: Today/i)).toBeInTheDocument()
+
     const cardButton = screen.getByText('Check on Loku Caters orders page').closest('[role="button"]')
     if (!cardButton) {
       throw new Error('Expected task card button')
@@ -54,6 +57,7 @@ describe('open task card metadata layout', () => {
 
     render(
       <OpenTaskCard
+        todayIso="2026-04-03"
         task={{
           id: 'task-1',
           title: 'Check on Loku Caters orders page',
@@ -103,6 +107,7 @@ describe('open task card metadata layout', () => {
 
     render(
       <OpenTaskCard
+        todayIso="2026-04-03"
         task={{
           id: 'task-1',
           title: 'Check on Loku Caters orders page',

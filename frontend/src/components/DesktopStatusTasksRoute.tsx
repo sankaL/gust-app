@@ -4,7 +4,7 @@ import { useOutletContext } from 'react-router-dom'
 
 import { useDesktopTaskActions } from '../hooks/useDesktopTaskActions'
 import { useDesktopTaskPreview } from '../hooks/useDesktopTaskPreview'
-import { fetchAllDesktopTasks, type DesktopTaskStatus } from '../lib/desktopData'
+import { fetchAllDesktopTasks, getTodayIsoDate, type DesktopTaskStatus } from '../lib/desktopData'
 import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/taskScreenCache'
 import { DesktopTaskDetailModal } from './DesktopTaskDetailModal'
 import { useDesktopHeader, type DesktopOutletContext } from './DesktopShellContext'
@@ -30,7 +30,7 @@ function StatusTaskContent({ status, title, tasks, groups, session, taskActions,
   const detailActions = open
     ? { onComplete: (task: (typeof tasks)[number]) => { taskActions.completeTask(task); preview.closeTaskPreview() } }
     : { onRestore: (task: (typeof tasks)[number]) => { taskActions.reopenTask(task); preview.closeTaskPreview() } }
-  return <><DesktopTaskTable title={title} tasks={tasks} groups={groups} status={status} hideHeader busyTaskIds={taskActions.busyTaskIds} onTaskOpen={preview.openTaskPreview} onVisibleCountChange={onVisibleCountChange} {...tableActions} /><DesktopTaskDetailModal taskId={preview.selectedTaskId} isOpen={Boolean(preview.selectedTaskId)} onClose={preview.closeTaskPreview} session={session} groups={groups} busyTaskIds={taskActions.busyTaskIds} {...detailActions} /></>
+  return <><DesktopTaskTable title={title} tasks={tasks} groups={groups} status={status} todayIso={getTodayIsoDate(session.timezone)} hideHeader busyTaskIds={taskActions.busyTaskIds} onTaskOpen={preview.openTaskPreview} onVisibleCountChange={onVisibleCountChange} {...tableActions} /><DesktopTaskDetailModal taskId={preview.selectedTaskId} isOpen={Boolean(preview.selectedTaskId)} onClose={preview.closeTaskPreview} session={session} groups={groups} busyTaskIds={taskActions.busyTaskIds} {...detailActions} /></>
 }
 
 export function DesktopStatusTasksRoute({

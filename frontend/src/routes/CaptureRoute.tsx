@@ -1,3 +1,6 @@
+import { useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
+
 import { ExtractingLoader } from '../components/ExtractingLoader'
 import {
   CaptureEditModal,
@@ -18,7 +21,12 @@ export function CaptureRoute() {
 }
 
 function SignedInCapture({ controller }: { controller: ReturnType<typeof useCaptureController> }) {
+  const [searchParams] = useSearchParams()
   const { state, queries, mutations, recorder, review } = controller
+  const { setTextExpanded } = state
+  useEffect(() => {
+    if (searchParams.get('compose') === '1') setTextExpanded(true)
+  }, [searchParams, setTextExpanded])
   const isBusy = recorder.isLoading || mutations.voice.isPending || mutations.text.isPending
   return (
     <section className="space-y-4">
@@ -34,7 +42,7 @@ function SignedInCapture({ controller }: { controller: ReturnType<typeof useCapt
         onDismissError={() => state.setTranscriptionError(null)}
       />
       <TextCapturePanel expanded={state.textExpanded} draft={state.textDraft} error={mutations.text.isError ? state.textCaptureError : null} isPending={mutations.text.isPending} onExpanded={state.setTextExpanded} onDraft={state.setTextDraft} onSubmit={() => mutations.text.mutate(state.textDraft)} />
-      <MutationProgress voice={mutations.voice.isPending} text={mutations.text.isPending} />
+      <MutationProgress text={mutations.text.isPending} />
       <CaptureSummary summary={state.summary} onReset={() => { state.setSummary(null); state.setTranscriptionError(null); recorder.setError(null); state.setTextCaptureError(null) }} />
       <LatestCaptureReview controller={controller} />
       <OlderPendingReview controller={controller} />
@@ -48,8 +56,8 @@ function toggleRecorder(controller: ReturnType<typeof useCaptureController>) {
   else void controller.startRecording()
 }
 
-function MutationProgress({ voice, text }: { voice: boolean; text: boolean }) {
-  return voice || text ? <ExtractingLoader variant="tasks" /> : null
+function MutationProgress({ text }: { text: boolean }) {
+  return text ? <ExtractingLoader variant="tasks" /> : null
 }
 
 function LatestCaptureReview({ controller }: { controller: ReturnType<typeof useCaptureController> }) {

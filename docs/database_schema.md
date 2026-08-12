@@ -134,7 +134,9 @@ Constraints and invariants:
 
 ### `allowed_users`
 
-Supabase-auth allowlist table for private-access gating.
+Application auth allowlist table for private-access gating. Alembic ensures the table
+exists in every application database; hosted Supabase migrations separately attach the
+Supabase Auth hook and harden provider-specific grants.
 
 | Column | Type | Null | Notes |
 |---|---|---|---|

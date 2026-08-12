@@ -34,7 +34,7 @@ export function AllTasksView({ userTimezone, onTaskOpen, onTaskPrepareOpen, onTa
       <div className="flex flex-col gap-3">
         <div ref={model.scrollRef} className="relative overflow-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
           <div style={{ height: `${model.virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
-            <VirtualTaskRows rows={model.virtualizer.getVirtualItems()} items={model.items} busyTaskIds={busyTaskIds} measure={model.virtualizer.measureElement} onOpen={onTaskOpen} onPrepareOpen={onTaskPrepareOpen} onComplete={onTaskComplete} onDelete={onTaskDelete} />
+            <VirtualTaskRows rows={model.virtualizer.getVirtualItems()} items={model.items} todayIso={model.todayIso} busyTaskIds={busyTaskIds} measure={model.virtualizer.measureElement} onOpen={onTaskOpen} onPrepareOpen={onTaskPrepareOpen} onComplete={onTaskComplete} onDelete={onTaskDelete} />
           </div>
           <div ref={model.loadMoreRef} className="h-1" />
         </div>

@@ -36,7 +36,7 @@ function BulkActionButtons({
 }: BulkActionButtonsProps) {
   return (
     <div className={className}>
-      <Button size="sm" variant="solid" onClick={onApprove} disabled={disabled} className="w-full justify-center sm:w-auto">
+      <Button size="sm" variant="solid" onClick={onApprove} disabled={disabled} className="min-w-max flex-1 justify-center whitespace-nowrap sm:flex-none">
         {isApproving ? '...' : 'Approve All'}
       </Button>
       <Button
@@ -44,7 +44,7 @@ function BulkActionButtons({
         variant="ghost"
         onClick={onDiscard}
         disabled={disabled}
-        className="w-full justify-center text-tertiary hover:bg-tertiary/10 hover:text-tertiary sm:w-auto"
+        className="min-w-max flex-1 justify-center whitespace-nowrap text-tertiary hover:bg-tertiary/10 hover:text-tertiary sm:flex-none"
       >
         {isDiscarding ? '...' : 'Discard All'}
       </Button>
@@ -69,7 +69,7 @@ function StagingHeader({ variant, title, subtext, pendingCount, reviewCount, act
   if (variant === 'desktop') {
     return <div className="flex items-center justify-between gap-3 border-b border-outline/60 pb-3"><h2 className="sr-only">{title} ({pendingCount})</h2><div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 font-body text-xs text-on-surface-variant"><span>{pendingCount} pending</span><ReviewCount count={reviewCount} className="font-semibold text-warning" /></div><BulkActionButtons {...actions} className="flex flex-col gap-2 sm:flex-row sm:shrink-0 sm:items-center" /></div>
   }
-  return <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0 flex-1"><h2 className="truncate font-display text-base text-on-surface">{title} <span className="font-body text-on-surface-variant">({pendingCount})</span></h2>{subtext ? <p className="mt-1.5 text-xs leading-relaxed text-on-surface-variant">{subtext}</p> : null}<ReviewCount count={reviewCount} className="mt-1 block text-xs text-warning" /></div><BulkActionButtons {...actions} className="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0" /></div>
+  return <div className="space-y-3"><div className="min-w-0"><h2 className="truncate font-display text-base text-on-surface">{title} <span className="font-body text-on-surface-variant">({pendingCount})</span></h2>{subtext ? <p className="mt-1.5 text-xs leading-relaxed text-on-surface-variant">{subtext}</p> : null}<ReviewCount count={reviewCount} className="mt-1 block text-xs text-warning" /></div><BulkActionButtons {...actions} className="flex w-full items-stretch gap-2" /></div>
 }
 
 function StagedTaskCards({ tasks, variant, onApprove, onDiscard, onTaskClick }: Pick<StagingTableProps, 'tasks' | 'variant' | 'onApprove' | 'onDiscard' | 'onTaskClick'>) {

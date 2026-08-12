@@ -4,6 +4,7 @@ import type { GroupSummary, TaskSummary } from '../lib/api'
 import type { useDesktopTaskActions } from '../hooks/useDesktopTaskActions'
 import { DesktopTaskDetailModal } from './DesktopTaskDetailModal'
 import type { DesktopOutletContext } from './DesktopShellContext'
+import { getTodayIsoDate } from '../lib/desktopData'
 import { DesktopTaskTable } from './DesktopTaskTable'
 
 function SummaryCard({ label, value, icon, background, foreground }: { label: string; value: number; icon: 'open' | 'due' | 'completed' | 'review'; background: string; foreground: string }) {
@@ -16,5 +17,5 @@ function GroupSummary({ openTasks, completedTasks, dueThisWeek }: { openTasks: T
 }
 
 export function DesktopGroupDetailView({ group, openTasks, completedTasks, dueThisWeek, groups, session, actions, selectedTaskId, onOpen, onClose }: { group: GroupSummary; openTasks: TaskSummary[]; completedTasks: TaskSummary[]; dueThisWeek: number; groups: GroupSummary[]; session: DesktopOutletContext['session']; actions: ReturnType<typeof useDesktopTaskActions>; selectedTaskId: string | null; onOpen: (taskId: string) => void; onClose: () => void }) {
-  return <div className="space-y-6"><GroupSummary openTasks={openTasks} completedTasks={completedTasks} dueThisWeek={dueThisWeek} /><DesktopTaskTable title={`${group.name} Tasks`} tasks={[...openTasks, ...completedTasks]} groups={groups} status="all" lockedGroupId={group.id} hideHeader busyTaskIds={actions.busyTaskIds} onComplete={actions.completeTask} onMoveDueDate={actions.moveTaskDueDate} onReopen={actions.reopenTask} onTaskOpen={onOpen} /><DesktopTaskDetailModal taskId={selectedTaskId} isOpen={Boolean(selectedTaskId)} onClose={onClose} session={session} groups={groups} onComplete={(task) => { actions.completeTask(task); onClose() }} onRestore={(task) => { actions.reopenTask(task); onClose() }} busyTaskIds={actions.busyTaskIds} /></div>
+  return <div className="space-y-6"><GroupSummary openTasks={openTasks} completedTasks={completedTasks} dueThisWeek={dueThisWeek} /><DesktopTaskTable title={`${group.name} Tasks`} tasks={[...openTasks, ...completedTasks]} groups={groups} status="all" todayIso={getTodayIsoDate(session.timezone)} lockedGroupId={group.id} hideHeader busyTaskIds={actions.busyTaskIds} onComplete={actions.completeTask} onMoveDueDate={actions.moveTaskDueDate} onReopen={actions.reopenTask} onTaskOpen={onOpen} /><DesktopTaskDetailModal taskId={selectedTaskId} isOpen={Boolean(selectedTaskId)} onClose={onClose} session={session} groups={groups} onComplete={(task) => { actions.completeTask(task); onClose() }} onRestore={(task) => { actions.reopenTask(task); onClose() }} busyTaskIds={actions.busyTaskIds} /></div>
 }

@@ -1,40 +1,25 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import shutil
 import socket
-import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 ROOT_ENV_PATH = ROOT / ".env"
 RUNTIME_DIR = ROOT / ".dev-runtime"
-SUPABASE_TEMPLATE_DIR = ROOT / "supabase"
-SUPABASE_RUNTIME_DIR = RUNTIME_DIR / "supabase"
 RUNTIME_ENV_PATH = RUNTIME_DIR / "runtime.env"
 
 PORT_DEFAULTS = {
     "GUST_FRONTEND_PORT": 3000,
     "GUST_BACKEND_PORT": 8000,
-    "GUST_SUPABASE_API_PORT": 54321,
-    "GUST_SUPABASE_DB_PORT": 54322,
-    "GUST_SUPABASE_STUDIO_PORT": 54323,
-    "GUST_SUPABASE_MAIL_PORT": 54324,
-    "GUST_SUPABASE_SHADOW_PORT": 54320,
-    "GUST_SUPABASE_POOLER_PORT": 54329,
+    "GUST_POSTGRES_PORT": 5432,
 }
-
-LOCAL_SUPABASE_ANON_KEY = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9."
-    "CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
-)
 
 LOCAL_ENV_DEFAULTS = {
     "APP_ENV": "development",
     "GUST_DEV_MODE": "true",
-    "REQUIRED_ALEMBIC_REVISION": "0016_harden_rls_relationships",
+    "REQUIRED_ALEMBIC_REVISION": "0018_ensure_allowed_users",
     "RUN_STARTUP_CHECKS": "true",
     "LOG_LEVEL": "INFO",
     "SESSION_COOKIE_SECURE": "false",
@@ -55,9 +40,6 @@ LOCAL_ENV_DEFAULTS = {
     "REMINDER_BATCH_SIZE": "50",
     "REMINDER_CLAIM_TIMEOUT_SECONDS": "600",
     "REMINDER_REQUEST_TIMEOUT_SECONDS": "10",
-    "SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED": "false",
-    "SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID": "",
-    "SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET": "",
     "VITE_GUST_DEV_MODE": "true",
     "VITE_ADMIN_EMAIL": "sanka.lokuliyana@gmail.com",
 }
@@ -73,6 +55,7 @@ RUNTIME_KEYS = (
     "BACKEND_PUBLIC_URL",
     "SUPABASE_URL",
     "SUPABASE_ANON_KEY",
+    "LOCAL_DEV_AUTH_SECRET",
     "SESSION_COOKIE_SECURE",
     "SESSION_COOKIE_DOMAIN",
     "CAPTURE_RETENTION_DAYS",
@@ -91,9 +74,6 @@ RUNTIME_KEYS = (
     "REMINDER_BATCH_SIZE",
     "REMINDER_CLAIM_TIMEOUT_SECONDS",
     "REMINDER_REQUEST_TIMEOUT_SECONDS",
-    "SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED",
-    "SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID",
-    "SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET",
     "VITE_GUST_DEV_MODE",
     "VITE_API_BASE_URL",
     "VITE_ADMIN_EMAIL",
@@ -140,65 +120,6 @@ def choose_port(default_port: int, reserved: set[int]) -> int:
         return candidate
 
 
-def render_supabase_config(
-    config_template: str,
-    ports: dict[str, int],
-    runtime_values: dict[str, str | int],
-) -> str:
-    frontend_url = f"http://localhost:{ports['GUST_FRONTEND_PORT']}"
-    backend_callback_url = (
-        f"http://localhost:{ports['GUST_BACKEND_PORT']}/auth/session/callback"
-    )
-    google_enabled = str(
-        runtime_values.get("SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED", "false")
-    ).lower() in {"1", "true", "yes", "on"}
-
-    replacements = {
-        "port = 54321": f"port = {ports['GUST_SUPABASE_API_PORT']}",
-        "shadow_port = 54320": f"shadow_port = {ports['GUST_SUPABASE_SHADOW_PORT']}",
-        "port = 54322": f"port = {ports['GUST_SUPABASE_DB_PORT']}",
-        "port = 54329": f"port = {ports['GUST_SUPABASE_POOLER_PORT']}",
-        "port = 54323": f"port = {ports['GUST_SUPABASE_STUDIO_PORT']}",
-        "port = 54324": f"port = {ports['GUST_SUPABASE_MAIL_PORT']}",
-        'site_url = "https://gustapp.ca"': f'site_url = "{frontend_url}"',
-        'additional_redirect_urls = ["https://gustapp.ca", "https://api.gustapp.ca/auth/session/callback"]': (
-            f'additional_redirect_urls = ["{frontend_url}", "{backend_callback_url}"]'
-        ),
-    }
-
-    rendered = config_template
-    for needle, replacement in replacements.items():
-        rendered = rendered.replace(needle, replacement)
-
-    google_section_pattern = re.compile(
-        r"(^\[auth\.external\.google\]\s*$.*?^\s*enabled\s*=\s*)(?:true|false)\s*$",
-        re.MULTILINE | re.DOTALL,
-    )
-    rendered, google_updates = google_section_pattern.subn(
-        lambda match: f"{match.group(1)}{'true' if google_enabled else 'false'}",
-        rendered,
-        count=1,
-    )
-    if google_updates != 1:
-        raise RuntimeError("Could not set auth.external.google.enabled in Supabase config.")
-
-    skip_nonce_pattern = re.compile(
-        r"(^\[auth\.external\.google\]\s*$.*?^\s*skip_nonce_check\s*=\s*)(?:true|false)\s*$",
-        re.MULTILINE | re.DOTALL,
-    )
-    rendered, nonce_updates = skip_nonce_pattern.subn(
-        lambda match: f"{match.group(1)}{'true' if google_enabled else 'false'}",
-        rendered,
-        count=1,
-    )
-    if nonce_updates != 1:
-        raise RuntimeError(
-            "Could not set auth.external.google.skip_nonce_check in Supabase config."
-        )
-
-    return rendered
-
-
 def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
     """Return ports, keeping an existing runtime stable across repeated starts."""
     reserved: set[int] = set()
@@ -211,7 +132,10 @@ def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
                 candidate = int(existing)
             except ValueError:
                 candidate = default_port
-            if candidate not in reserved and port_is_available(candidate):
+            # Preserve an established runtime even while its own containers occupy the
+            # ports. Availability is only relevant when selecting a port for the first
+            # time; reallocation during a restart would desynchronize service URLs.
+            if candidate not in reserved:
                 reserved.add(candidate)
                 resolved[key] = candidate
                 continue
@@ -223,8 +147,6 @@ def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
 def build_runtime_values(
     env_values: dict[str, str],
     ports: dict[str, int],
-    *,
-    supabase_anon_key: str,
 ) -> dict[str, str | int]:
     frontend_url = f"http://localhost:{ports['GUST_FRONTEND_PORT']}"
     backend_url = f"http://localhost:{ports['GUST_BACKEND_PORT']}"
@@ -232,14 +154,13 @@ def build_runtime_values(
     runtime_values: dict[str, str | int] = {
         **ports,
         "DATABASE_URL": (
-            "postgresql+psycopg://postgres:postgres@host.docker.internal:"
-            f"{ports['GUST_SUPABASE_DB_PORT']}/postgres"
+            "postgresql+psycopg://postgres:postgres@postgres:5432/postgres"
         ),
         "REQUIRED_ALEMBIC_REVISION": LOCAL_ENV_DEFAULTS["REQUIRED_ALEMBIC_REVISION"],
         "FRONTEND_APP_URL": frontend_url,
         "BACKEND_PUBLIC_URL": backend_url,
-        "SUPABASE_URL": f"http://host.docker.internal:{ports['GUST_SUPABASE_API_PORT']}",
-        "SUPABASE_ANON_KEY": supabase_anon_key,
+        "SUPABASE_URL": "",
+        "SUPABASE_ANON_KEY": "",
         "VITE_API_BASE_URL": backend_url,
     }
     for key in RUNTIME_KEYS:
@@ -256,34 +177,12 @@ def write_runtime_env(runtime_values: dict[str, str | int]) -> None:
 
 def main() -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    SUPABASE_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 
     root_env_values = parse_env_file(ROOT_ENV_PATH)
     existing_runtime_values = parse_env_file(RUNTIME_ENV_PATH)
     ports = resolve_ports(existing_runtime_values)
-    supabase_anon_key = (
-        existing_runtime_values.get("SUPABASE_ANON_KEY")
-        or existing_runtime_values.get("GUST_SUPABASE_ANON_KEY")
-        or LOCAL_SUPABASE_ANON_KEY
-    )
-    runtime_values = build_runtime_values(
-        root_env_values,
-        ports,
-        supabase_anon_key=supabase_anon_key,
-    )
+    runtime_values = build_runtime_values(root_env_values, ports)
     write_runtime_env(runtime_values)
-    shutil.rmtree(SUPABASE_RUNTIME_DIR / "migrations", ignore_errors=True)
-    if (SUPABASE_TEMPLATE_DIR / "migrations").exists():
-        shutil.copytree(
-            SUPABASE_TEMPLATE_DIR / "migrations",
-            SUPABASE_RUNTIME_DIR / "migrations",
-            dirs_exist_ok=True,
-        )
-    shutil.copy2(SUPABASE_TEMPLATE_DIR / "seed.sql", SUPABASE_RUNTIME_DIR / "seed.sql")
-
-    config_template = (SUPABASE_TEMPLATE_DIR / "config.toml").read_text(encoding="utf-8")
-    rendered_config = render_supabase_config(config_template, ports, runtime_values)
-    (SUPABASE_RUNTIME_DIR / "config.toml").write_text(rendered_config, encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ def clear_settings_cache() -> Generator[None, None, None]:
 def app(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Generator:
     database_path = tmp_path / "gust-test.db"
     monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("GUST_DEV_MODE", "false")
     monkeypatch.setenv("DATABASE_URL", f"sqlite+pysqlite:///{database_path}")
     monkeypatch.setenv("RUN_STARTUP_CHECKS", "false")
     monkeypatch.setenv("FRONTEND_APP_URL", "http://frontend.test")

@@ -167,6 +167,12 @@ Frontend security contract:
 
 Supabase Auth handles Google OAuth.
 
+Routine local development deliberately does not run Supabase Auth. With
+`GUST_DEV_MODE=true`, the backend issues signed access and refresh cookies for the fixed
+`local-dev@gust.local` identity using `LOCAL_DEV_AUTH_SECRET`. This path remains subject
+to the application allowlist, CSRF, origin validation, throttling, and explicit user
+scoping. Production and deployed integration environments continue to use Supabase Auth.
+
 Private-access contract:
 
 - Google sign-in is restricted to emails present in `public.allowed_users`.
@@ -194,7 +200,7 @@ Unsuccessful or blocked OAuth callbacks redirect to the landing entry with a san
 On each authenticated request, the backend:
 
 1. reads the access token from the secure cookie
-2. validates it against Supabase
+2. validates it against Supabase in deployed environments or the local signed-session issuer in dev mode
 3. resolves the authenticated user ID
 4. rejects the request if validation fails
 
@@ -475,7 +481,8 @@ Required automated coverage:
 Required end-to-end coverage:
 
 - Google sign-in happy path in a test environment
-- local dev Google sign-in through local Supabase OAuth config, with optional backend-mediated local test-account fallback
+- local dev signed-session login without external auth services
+- Supabase Google OAuth in a dedicated deployed integration environment
 - voice capture with mocked transcription response
 - text capture fallback
 - digest job flow with mocked Resend provider

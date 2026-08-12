@@ -28,9 +28,10 @@ from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
 from app.db.repositories import SessionContext, get_session_context, is_email_allowed
 from app.services.auth import (
+    AuthService,
     ExpiredSignatureError,
     InvalidTokenError,
-    SupabaseAuthService,
+    build_auth_service,
 )
 from app.services.capture import CaptureService
 from app.services.extraction import LangChainExtractionService
@@ -47,8 +48,8 @@ from app.services.transcription import MistralTranscriptionService, MockTranscri
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-def get_auth_service(settings: SettingsDep) -> SupabaseAuthService:
-    return SupabaseAuthService(settings)
+def get_auth_service(settings: SettingsDep) -> AuthService:
+    return build_auth_service(settings)
 
 
 def get_transcription_service(
@@ -128,7 +129,7 @@ async def get_optional_session_context(
     request: Request,
     response: Response,
     settings: SettingsDep,
-    auth_service: Annotated[SupabaseAuthService, Depends(get_auth_service)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> SessionContext | None:
     access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)

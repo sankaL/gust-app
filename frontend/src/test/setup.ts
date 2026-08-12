@@ -1,6 +1,9 @@
 import '@testing-library/jest-dom/vitest'
 import { vi } from 'vitest'
 
+// Keep date-sensitive fixtures deterministic; individual timezone tests override Intl explicitly.
+process.env.TZ = 'UTC'
+
 if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
