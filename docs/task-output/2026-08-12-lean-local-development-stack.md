@@ -12,6 +12,8 @@ Storage, Realtime, Analytics, or Edge Runtime.
 - `/auth/session/dev-login` issues short-lived access and bounded refresh cookies for the
   fixed `local-dev@gust.local` identity.
 - `LOCAL_DEV_AUTH_SECRET` is required and must contain at least 32 characters.
+- `APP_ENV=production` rejects `GUST_DEV_MODE=true` during settings validation, and the
+  local issuer repeats the check as defense in depth.
 - Backend startup adds the fixed identity email to `allowed_users` after Alembic reaches
   head.
 - Allowlisting, CSRF, same-origin validation, throttling, cookie protections, and explicit
@@ -26,6 +28,8 @@ Storage, Realtime, Analytics, or Edge Runtime.
   shared `allowed_users` table exists; hosted Supabase migrations still own the provider
   hook and provider-role grants.
 - The generated runtime contains stable frontend, backend, and PostgreSQL host ports.
+  Occupied ports remain stable when published by the current Compose project, while
+  stale ports claimed by another process are replaced with free ports.
 - `make dev-down` stops the containers without deleting the database volume.
 - `make dev` seeds deterministic dashboard sample data for the local test account only
   when that account has no tasks; the existing `seed-dev-dashboard` target remains
@@ -33,9 +37,11 @@ Storage, Realtime, Analytics, or Edge Runtime.
 
 ## Verification
 
-- All 218 backend tests and all 152 frontend tests pass.
+- All 226 backend tests and all 164 frontend tests pass.
 - Frontend login/routing coverage verifies local-only sign-in in dev mode and Google-only
   sign-in outside dev mode.
+- Timezone synchronization coverage verifies bounded timeout, abort-on-unmount, retry,
+  and cache refresh behavior; quick-add coverage verifies repeat use after dismissal.
 - Docker Compose configuration, Python compilation, frontend lint/build, strict Fallow,
   backend Ruff, backend smoke import, and the complete `make check` gate pass.
 - A clean Docker bootstrap migrated plain PostgreSQL through revision

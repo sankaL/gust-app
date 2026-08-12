@@ -134,6 +134,7 @@ export function BottomNavigation() {
         </div>
         <Link
           to="/capture?compose=1"
+          replace
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-card bg-[radial-gradient(circle_at_top,_rgba(196,181,253,0.98),_rgba(124,58,237,0.96))] text-white shadow-[0_5px_0_#4c1d95,_0_10px_20px_rgba(0,0,0,0.34),_0_0_24px_rgba(186,158,255,0.3)] transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_6px_0_#4c1d95,_0_12px_22px_rgba(0,0,0,0.38),_0_0_30px_rgba(186,158,255,0.38)] active:translate-y-[4px] active:shadow-[0_1px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.34)]"
           aria-label="Add a new task"
         >

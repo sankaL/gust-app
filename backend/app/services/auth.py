@@ -319,6 +319,8 @@ class LocalDevAuthService:
         self.settings = settings
 
     def ensure_configured(self) -> None:
+        if self.settings.app_env.strip().lower() == "production":
+            raise ConfigurationError("Local development auth is unavailable in production.")
         if not self.settings.gust_dev_mode:
             raise ConfigurationError("Local development auth is disabled.")
         if not self.settings.local_dev_auth_secret:

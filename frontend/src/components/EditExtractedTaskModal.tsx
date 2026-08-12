@@ -29,6 +29,28 @@ interface TaskFormData {
   subtaskTitles?: string[]
 }
 
+function EditTaskModalFooter({
+  formId,
+  isCreateMode,
+  isSaving,
+  onClose,
+}: {
+  formId: string
+  isCreateMode: boolean
+  isSaving: boolean
+  onClose: () => void
+}) {
+  const submitLabel = isSaving ? 'Saving...' : isCreateMode ? 'Add Task' : 'Save Changes'
+  return (
+    <div className="shrink-0 border-t border-white/10 bg-surface-container/95 px-5 py-4 backdrop-blur-xl sm:px-6">
+      <div className="grid grid-cols-2 gap-3">
+        <button type="button" onClick={onClose} disabled={isSaving} className="w-full rounded-pill border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-medium text-on-surface transition-colors hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-white/5">Cancel</button>
+        <button type="submit" form={formId} disabled={isSaving} className="w-full rounded-pill bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_8px_0_#4c1d95,_0_16px_22px_rgba(0,0,0,0.35),_inset_0_2px_3px_rgba(255,255,255,0.38)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] active:shadow-[0_0px_0_#4c1d95,_0_4px_10px_rgba(0,0,0,0.35),_inset_0_2px_4px_rgba(255,255,255,0.18)] disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0 disabled:active:translate-y-0">{submitLabel}</button>
+      </div>
+    </div>
+  )
+}
+
 export function EditExtractedTaskModal({
   task,
   groups,
@@ -163,12 +185,7 @@ export function EditExtractedTaskModal({
               showActions={false}
             />
           </div>
-          <div className="shrink-0 border-t border-white/10 bg-surface-container/95 px-5 py-4 backdrop-blur-xl sm:px-6">
-            <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={onClose} disabled={isSaving} className="w-full rounded-pill border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-medium text-on-surface transition-colors hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-white/5">Cancel</button>
-              <button type="submit" form={formId} disabled={isSaving} className="w-full rounded-pill bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_8px_0_#4c1d95,_0_16px_22px_rgba(0,0,0,0.35),_inset_0_2px_3px_rgba(255,255,255,0.38)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] active:shadow-[0_0px_0_#4c1d95,_0_4px_10px_rgba(0,0,0,0.35),_inset_0_2px_4px_rgba(255,255,255,0.18)] disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0 disabled:active:translate-y-0">{isSaving ? 'Saving...' : isCreateMode ? 'Add Task' : 'Save Changes'}</button>
-            </div>
-          </div>
+          <EditTaskModalFooter formId={formId} isCreateMode={isCreateMode} isSaving={isSaving} onClose={onClose} />
         </div>
       </div>
     </div>

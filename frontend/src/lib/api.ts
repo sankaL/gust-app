@@ -197,13 +197,15 @@ export function getSessionStatus(): Promise<SessionStatus> {
 
 export function updateSessionTimezone(
   timezone: string,
-  csrfToken: string
+  csrfToken: string,
+  signal?: AbortSignal
 ): Promise<SessionStatus> {
   return apiRequest<SessionStatus>(
     '/auth/session/timezone',
     {
       method: 'PUT',
-      body: JSON.stringify({ timezone })
+      body: JSON.stringify({ timezone }),
+      signal
     },
     csrfToken
   )

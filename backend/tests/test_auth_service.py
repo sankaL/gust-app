@@ -1,5 +1,8 @@
+import pytest
+
+from app.core.errors import ConfigurationError
 from app.core.settings import Settings
-from app.services.auth import SupabaseAuthService
+from app.services.auth import LocalDevAuthService, SupabaseAuthService
 
 
 def test_dev_mode_accepts_local_supabase_issuer_aliases() -> None:
@@ -36,3 +39,16 @@ def test_non_dev_mode_uses_only_configured_issuer() -> None:
     service = SupabaseAuthService(settings)
 
     assert service.accepted_issuers() == {"http://host.docker.internal:54321/auth/v1"}
+
+
+def test_local_dev_auth_defense_in_depth_rejects_production() -> None:
+    settings = Settings(
+        APP_ENV="development",
+        GUST_DEV_MODE=True,
+        DATABASE_URL="sqlite+pysqlite:///:memory:",
+        LOCAL_DEV_AUTH_SECRET="test-local-dev-secret-that-is-at-least-32-characters",
+    )
+    settings.app_env = "production"
+
+    with pytest.raises(ConfigurationError, match="unavailable in production"):
+        LocalDevAuthService(settings).ensure_configured()

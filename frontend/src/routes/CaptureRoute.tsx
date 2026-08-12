@@ -21,12 +21,16 @@ export function CaptureRoute() {
 }
 
 function SignedInCapture({ controller }: { controller: ReturnType<typeof useCaptureController> }) {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { state, queries, mutations, recorder, review } = controller
   const { setTextExpanded } = state
   useEffect(() => {
-    if (searchParams.get('compose') === '1') setTextExpanded(true)
-  }, [searchParams, setTextExpanded])
+    if (searchParams.get('compose') !== '1') return
+    setTextExpanded(true)
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.delete('compose')
+    setSearchParams(nextSearchParams, { replace: true })
+  }, [searchParams, setSearchParams, setTextExpanded])
   const isBusy = recorder.isLoading || mutations.voice.isPending || mutations.text.isPending
   return (
     <section className="space-y-4">

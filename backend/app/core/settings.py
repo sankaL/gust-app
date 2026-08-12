@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.input_safety import (
@@ -257,6 +257,12 @@ class Settings(BaseSettings):
         default=10.0,
         validation_alias=AliasChoices("REMINDER_REQUEST_TIMEOUT_SECONDS"),
     )
+
+    @model_validator(mode="after")
+    def _reject_production_dev_mode(self) -> Settings:
+        if self.app_env.strip().lower() == "production" and self.gust_dev_mode:
+            raise ValueError("GUST_DEV_MODE must be disabled in production.")
+        return self
 
     @property
     def alembic_database_url(self) -> str:

@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import socket
+import subprocess
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[2]
 ROOT_ENV_PATH = ROOT / ".env"
@@ -14,6 +14,12 @@ PORT_DEFAULTS = {
     "GUST_FRONTEND_PORT": 3000,
     "GUST_BACKEND_PORT": 8000,
     "GUST_POSTGRES_PORT": 5432,
+}
+
+COMPOSE_SERVICE_PORTS = {
+    "GUST_FRONTEND_PORT": ("frontend", 3000),
+    "GUST_BACKEND_PORT": ("backend", 8000),
+    "GUST_POSTGRES_PORT": ("postgres", 5432),
 }
 
 LOCAL_ENV_DEFAULTS = {
@@ -120,8 +126,47 @@ def choose_port(default_port: int, reserved: set[int]) -> int:
         return candidate
 
 
-def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
+def get_compose_owned_ports() -> set[int]:
+    if not RUNTIME_ENV_PATH.exists():
+        return set()
+
+    owned_ports: set[int] = set()
+    for service, container_port in COMPOSE_SERVICE_PORTS.values():
+        try:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "compose",
+                    "--env-file",
+                    str(RUNTIME_ENV_PATH),
+                    "port",
+                    service,
+                    str(container_port),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            return set()
+        if result.returncode != 0:
+            continue
+        for line in result.stdout.splitlines():
+            try:
+                owned_ports.add(int(line.rsplit(":", 1)[1]))
+            except (IndexError, ValueError):
+                continue
+    return owned_ports
+
+
+def resolve_ports(
+    existing_values: dict[str, str],
+    *,
+    compose_owned_ports: set[int] | None = None,
+) -> dict[str, int]:
     """Return ports, keeping an existing runtime stable across repeated starts."""
+    owned_ports = compose_owned_ports or set()
     reserved: set[int] = set()
     resolved: dict[str, int] = {}
 
@@ -132,10 +177,11 @@ def resolve_ports(existing_values: dict[str, str]) -> dict[str, int]:
                 candidate = int(existing)
             except ValueError:
                 candidate = default_port
-            # Preserve an established runtime even while its own containers occupy the
-            # ports. Availability is only relevant when selecting a port for the first
-            # time; reallocation during a restart would desynchronize service URLs.
-            if candidate not in reserved:
+            if (
+                1 <= candidate <= 65535
+                and candidate not in reserved
+                and (candidate in owned_ports or port_is_available(candidate))
+            ):
                 reserved.add(candidate)
                 resolved[key] = candidate
                 continue
@@ -180,7 +226,10 @@ def main() -> None:
 
     root_env_values = parse_env_file(ROOT_ENV_PATH)
     existing_runtime_values = parse_env_file(RUNTIME_ENV_PATH)
-    ports = resolve_ports(existing_runtime_values)
+    ports = resolve_ports(
+        existing_runtime_values,
+        compose_owned_ports=get_compose_owned_ports(),
+    )
     runtime_values = build_runtime_values(root_env_values, ports)
     write_runtime_env(runtime_values)
 
