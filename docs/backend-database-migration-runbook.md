@@ -1,7 +1,7 @@
 # Gust Backend and Database Migration Runbook
 
-**Version:** 1.10
-**Last Updated:** 2026-04-02
+**Version:** 1.11
+**Last Updated:** 2026-08-12
 
 This runbook governs schema bootstrap, migration rollout, rollback safety, and verification for Gust v1. It applies to local development, CI, and deployed environments.
 
@@ -16,14 +16,15 @@ This runbook governs schema bootstrap, migration rollout, rollback safety, and v
 
 ## Local Bootstrap Order
 
-Local development uses a Makefile-managed Docker stack plus local Supabase CLI services.
+Local development uses a Makefile-managed Docker stack containing only PostgreSQL, the
+backend, and the frontend. The Supabase CLI is not part of the routine local stack.
 
 Bootstrap sequence:
 
 1. Ensure `GUST_DEV_MODE=true` in local env files.
 2. Start the local stack through the Makefile entrypoint (`make dev`, `make local`, or `make dev local`).
-3. If the default local ports are already occupied, assign alternate free host ports for the frontend, backend, and local Supabase services before startup.
-4. Reuse the existing local Supabase database state; do not reset or rebuild the database for routine restarts.
+3. If a default port is occupied, let the runtime generator choose an alternate free host port for that service before startup.
+4. Reuse the named local PostgreSQL volume; do not reset or rebuild it for routine restarts.
 5. Check the current Alembic revision against the repo head and run `alembic upgrade head` only when the local database is behind.
 6. Start the backend app only after migration verification succeeds.
 7. Start the frontend app against the backend base URL for the local stack.
@@ -31,11 +32,12 @@ Bootstrap sequence:
 Guardrails:
 
 - Local development must not connect to hosted production Supabase Auth or the production database.
-- Dev mode changes infrastructure targets only. It must not bypass auth or validation behavior in application code.
-- Local auth testing in dev mode should use Google OAuth through the local Supabase provider config; the backend-mediated local test-account flow is an optional fallback and must still issue the same backend cookie session.
-- The local backend must target the current required application revision and local Supabase Auth endpoints before it serves traffic.
-- The local runtime env must carry the active local Supabase anon key before the backend starts, or local sign-in flows will fail.
-- When local Google OAuth is enabled, the local runtime env must also carry valid Google client credentials before `supabase start`.
+- Dev mode uses a backend-issued local test-account session; it does not disable authentication, allowlisting, CSRF, origin validation, or explicit user scoping.
+- `LOCAL_DEV_AUTH_SECRET` must contain at least 32 characters. Missing or short values fail closed.
+- The dev-only issuer and `/auth/session/dev-login` endpoint must remain unavailable unless `GUST_DEV_MODE=true`.
+- Google OAuth and its callback are intentionally unavailable in local dev mode. Test the production Supabase OAuth lifecycle in a dedicated non-local integration environment.
+- The local backend must target the current required Alembic revision before it serves traffic.
+- Backend startup seeds the local test identity and Inbox. `make dev` then seeds the deterministic dashboard fixture only when the local test account has no tasks; existing local data is preserved on later starts. The explicit dashboard seed target remains available when a reset of the fixture is desired.
 - The startup entrypoint must print the chosen local URLs when it falls back to non-default ports.
 
 ## Environment Contract

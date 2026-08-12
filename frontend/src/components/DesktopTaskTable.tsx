@@ -6,7 +6,7 @@ import { DesktopTaskTableView } from './DesktopTaskTableView'
 
 type DesktopTaskTableProps = {
   title: string; tasks: TaskSummary[]; groups: GroupSummary[]; status: 'open' | 'completed' | 'all'
-  lockedGroupId?: string; hideHeader?: boolean; busyTaskIds?: string[]
+  lockedGroupId?: string; hideHeader?: boolean; busyTaskIds?: string[]; todayIso?: string
   onComplete?: (task: TaskSummary) => void; onReopen?: (task: TaskSummary) => void
   onMoveDueDate?: (task: TaskSummary, dueDate: string | null) => void
   onTaskOpen?: (taskId: string) => void
@@ -14,11 +14,11 @@ type DesktopTaskTableProps = {
 }
 
 export function DesktopTaskTable({ title, tasks, groups, status, lockedGroupId, hideHeader = false,
-  busyTaskIds = [], onComplete, onReopen, onMoveDueDate, onTaskOpen, onVisibleCountChange }: DesktopTaskTableProps) {
+  busyTaskIds = [], todayIso, onComplete, onReopen, onMoveDueDate, onTaskOpen, onVisibleCountChange }: DesktopTaskTableProps) {
   const state = useDesktopTaskTableState(tasks, status, lockedGroupId)
   useEffect(() => onVisibleCountChange?.(state.visibleTasks.length, tasks.length),
     [onVisibleCountChange, state.visibleTasks.length, tasks.length])
   return <DesktopTaskTableView title={title} total={tasks.length} hideHeader={hideHeader}
     groups={groups} status={status} lockedGroupId={lockedGroupId} state={state}
-    actions={{ busyTaskIds, onComplete, onReopen, onMoveDueDate, onTaskOpen }} />
+    todayIso={todayIso} actions={{ busyTaskIds, onComplete, onReopen, onMoveDueDate, onTaskOpen }} />
 }

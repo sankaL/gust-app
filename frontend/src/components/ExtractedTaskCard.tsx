@@ -57,15 +57,15 @@ function DesktopCard(props: ViewProps) {
 
 function MobileCard(props: ViewProps) {
   return (
-    <Card interactive onClick={props.onOpen} className="bg-surface-container-high">
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="line-clamp-2 min-w-0 flex-1 font-display text-base font-medium leading-tight text-on-surface">{props.task.title}</h3>
+    <Card interactive onClick={props.onOpen} padding="small" className="bg-surface-container-high">
+      <div className="space-y-2.5">
+        <div className="flex items-start justify-between gap-2.5">
+          <h3 className="line-clamp-2 min-w-0 flex-1 font-display text-[0.95rem] font-medium leading-tight text-on-surface">{props.task.title}</h3>
           <ConfidenceBadge confidence={props.task.top_confidence} />
         </div>
-        {props.task.description ? <p className="line-clamp-2 text-[0.78rem] leading-5 text-on-surface-variant">{props.task.description}</p> : null}
+        {props.task.description ? <p className="line-clamp-1 text-[0.75rem] leading-5 text-on-surface-variant">{props.task.description}</p> : null}
         {props.task.needs_review ? <NeedsReview /> : null}
-        <div className="flex items-end justify-between gap-3">
+        <div className="flex items-center justify-between gap-2.5">
           <TaskBadges task={props.task} />
           <TaskActions {...props} />
         </div>
@@ -76,20 +76,22 @@ function MobileCard(props: ViewProps) {
 
 function TaskBadges({ task, compact = false }: { task: ExtractedTask; compact?: boolean }) {
   const recurrence = task.recurrence_frequency && task.recurrence_frequency !== 'none' ? task.recurrence_frequency : null
+  const details = `${task.group_name || 'Inbox'} · Due: ${formatDueDate(task.due_date)} · ${recurrence ? recurrence.toUpperCase() : 'One-off'}`
   return (
-    <div className={compact ? 'flex flex-wrap items-center gap-1.5' : 'flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden text-[0.62rem] uppercase tracking-[0.12em]'}>
+    <div className={compact ? 'flex flex-wrap items-center gap-1.5' : 'flex min-w-0 flex-1 items-center gap-1 text-[0.58rem] uppercase tracking-[0.1em]'}>
       {compact && task.needs_review ? <NeedsReview /> : null}
       {compact ? <ConfidenceBadge confidence={task.top_confidence} /> : null}
-      <span className="max-w-[44%] shrink truncate rounded-pill bg-black/20 px-2 py-0.5 text-on-surface-variant">{task.group_name || 'Inbox'}</span>
-      {task.due_date || !compact ? <span className={`shrink-0 rounded-pill bg-black/20 px-2 py-0.5 font-bold ${dueDateColor(task.due_date)}`}>Due: {formatDueDate(task.due_date)}</span> : null}
-      <span className="recurrence-badge shrink-0" title={recurrence ? `Recurring: ${recurrence}` : 'No recurrence'}>{recurrence ? recurrence.toUpperCase() : 'ONE-OFF'}</span>
+      <span className="max-w-[42%] shrink truncate rounded-pill bg-black/20 px-2 py-0.5 text-on-surface-variant">{task.group_name || 'Inbox'}</span>
+      {task.due_date || !compact ? <span className={`shrink-0 whitespace-nowrap rounded-pill bg-black/20 px-2 py-0.5 font-bold ${dueDateColor(task.due_date)}`}>Due: {formatDueDate(task.due_date)}</span> : null}
+      {!compact && <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-black/20 font-body text-sm leading-none text-on-surface-variant" title={details} aria-label={`More task details: ${details}`}>…</span>}
+      {compact && <span className="recurrence-badge shrink-0" title={recurrence ? `Recurring: ${recurrence}` : 'No recurrence'}>{recurrence ? recurrence.toUpperCase() : 'ONE-OFF'}</span>}
     </div>
   )
 }
 
 function TaskActions(props: ViewProps & { desktop?: boolean }) {
   const disabled = props.isApproving || props.isDiscarding
-  const size = props.desktop ? 'h-9 w-9' : 'h-8 w-8'
+  const size = props.desktop ? 'h-9 w-9' : 'h-9 w-9'
   return (
     <div className="flex shrink-0 items-center gap-2" onClick={(event) => event.stopPropagation()}>
       <ActionButton label="Approve" className={`${size} text-primary`} pending={props.isApproving} disabled={disabled} onClick={props.onApprove}><CheckCircle2 className="h-5 w-5" strokeWidth={2} /></ActionButton>

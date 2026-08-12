@@ -84,10 +84,40 @@ function CompletionTrend({ analytics, range, onRangeChange }: { analytics: Analy
   return <section className="flex flex-col rounded-soft bg-surface-container p-4 shadow-ambient lg:col-span-3"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" strokeWidth={1.8} /><h2 className="font-display text-base text-on-surface">Completion Trend</h2><span className="font-body text-xs text-on-surface-variant">{trend.total} completed</span></div><TrendRangePicker value={range} onChange={onRangeChange} /></div><CompletionChart analytics={analytics} range={range} /></section>
 }
 
+function kanbanColumnTone(column: WeeklyBoardColumn) {
+  if (column.key === OVERDUE_COLUMN_KEY) {
+    return {
+      surface: 'bg-error/15 shadow-[inset_0_0_0_1px_rgba(239,83,80,0.24)]',
+      heading: 'text-error',
+      count: 'bg-error/15 text-error',
+    }
+  }
+  if (column.label === 'Today') {
+    return {
+      surface: 'bg-warning/15 shadow-[inset_0_0_0_1px_rgba(255,167,38,0.24)]',
+      heading: 'text-warning',
+      count: 'bg-warning/15 text-warning',
+    }
+  }
+  if (column.key === 'no-date') {
+    return {
+      surface: 'bg-surface-container/60 shadow-[inset_0_0_0_1px_rgba(173,170,170,0.1)]',
+      heading: 'text-on-surface-variant',
+      count: 'bg-surface-container-high/80 text-on-surface-variant',
+    }
+  }
+  return {
+    surface: 'bg-surface-dim',
+    heading: 'text-on-surface',
+    count: 'bg-surface-container-high text-on-surface-variant',
+  }
+}
+
 function WeeklyKanbanColumn({ column, children }: { column: WeeklyBoardColumn; children: ReactNode }) {
   const canReceiveDrops = column.key !== OVERDUE_COLUMN_KEY
   const { ref, isDropTarget } = useDroppable({ id: column.key, type: 'weekly-kanban-column', accept: canReceiveDrops ? KANBAN_TASK_TYPE : () => false, collisionPriority: 1, data: { columnKey: column.key } })
-  return <div ref={ref} className={`min-h-80 rounded-card bg-surface-dim p-3 transition duration-200 xl:p-2 ${isDropTarget ? 'bg-surface-container-high/40 ring-1 ring-primary/70' : ''}`}><div className="mb-3 flex items-center justify-between gap-2"><h3 className="min-w-0 truncate font-body text-sm font-semibold text-on-surface xl:text-xs">{column.label}</h3><span className="shrink-0 rounded-pill bg-surface-container-high px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">{column.tasks.length}</span></div><div className="space-y-2">{children}</div></div>
+  const tone = kanbanColumnTone(column)
+  return <div ref={ref} className={`min-h-80 rounded-card p-3 transition-[background-color,box-shadow] duration-200 xl:p-2 ${tone.surface} ${isDropTarget ? 'bg-surface-container-high/40 ring-1 ring-primary/70' : ''}`}><div className="mb-3 flex items-center justify-between gap-2"><h3 className={`min-w-0 truncate font-body text-sm font-semibold xl:text-xs ${tone.heading}`}>{column.label}</h3><span className={`shrink-0 rounded-pill px-2 py-0.5 font-body text-[0.68rem] tabular-nums ${tone.count}`}>{column.tasks.length}</span></div><div className="space-y-2">{children}</div></div>
 }
 
 function WeeklyKanbanTaskCard({ task, taskActions, onOpen }: { task: TaskSummary; taskActions: TaskActions; onOpen: (taskId: string) => void }) {
@@ -96,7 +126,7 @@ function WeeklyKanbanTaskCard({ task, taskActions, onOpen }: { task: TaskSummary
 }
 
 function WeeklyKanban({ columns, taskActions, onOpen, onDragEnd }: { columns: WeeklyBoardColumn[]; taskActions: TaskActions; onOpen: (taskId: string) => void; onDragEnd: (event: DragEndEvent) => void }) {
-  return <section><div className="mb-4 flex items-center justify-between gap-4"><div><h2 className="font-display text-2xl text-on-surface">Weekly Kanban</h2><p className="font-body text-sm text-on-surface-variant">Drag cards across date columns or complete work in place.</p></div><CalendarDays className="h-5 w-5 text-primary" strokeWidth={1.8} /></div><DragDropProvider onDragEnd={onDragEnd}><div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(9,minmax(0,1fr))] xl:gap-2">{columns.map((column) => <WeeklyKanbanColumn key={column.key} column={column}>{column.tasks.slice(0, 12).map((task) => <WeeklyKanbanTaskCard key={task.id} task={task} taskActions={taskActions} onOpen={onOpen} />)}{column.tasks.length === 0 ? <p className="rounded-card bg-surface-container/50 p-3 font-body text-xs leading-5 text-on-surface-variant xl:p-2 xl:text-[0.68rem]">Nothing scheduled here.</p> : null}</WeeklyKanbanColumn>)}</div></DragDropProvider></section>
+  return <section><div className="mb-4 flex items-center justify-between gap-4"><div><h2 className="font-display text-2xl text-on-surface">Weekly Kanban</h2><p className="font-body text-sm text-on-surface-variant">Drag cards across date columns or complete work in place.</p></div><CalendarDays className="h-5 w-5 text-primary" strokeWidth={1.8} /></div><DragDropProvider onDragEnd={onDragEnd}><div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(7,minmax(0,1fr))] xl:gap-2">{columns.map((column) => <WeeklyKanbanColumn key={column.key} column={column}>{column.tasks.slice(0, 12).map((task) => <WeeklyKanbanTaskCard key={task.id} task={task} taskActions={taskActions} onOpen={onOpen} />)}{column.tasks.length === 0 ? <p className="rounded-card bg-surface-container/50 p-3 font-body text-xs leading-5 text-on-surface-variant xl:p-2 xl:text-[0.68rem]">Nothing scheduled here.</p> : null}</WeeklyKanbanColumn>)}</div></DragDropProvider></section>
 }
 
 export function DesktopDashboardView({ analytics, columns, range, onRangeChange, taskActions, onOpen, onDragEnd, detail }: { analytics: Analytics; columns: WeeklyBoardColumn[]; range: CompletionTrendRange; onRangeChange: (range: CompletionTrendRange) => void; taskActions: TaskActions; onOpen: (taskId: string) => void; onDragEnd: (event: DragEndEvent) => void; detail: ReactNode }) {

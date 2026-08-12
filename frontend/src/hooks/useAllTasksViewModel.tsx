@@ -98,7 +98,8 @@ export function useAllTasksViewModel(userTimezone: string | null) {
   })
   const refresh = useCallback(() => refreshTaskScreenQueries(queryClient, { statuses: ['open'], includeAllOpen: true }), [queryClient])
   const tasks = useMemo(() => query.data?.pages.flatMap((page) => page.items) ?? [], [query.data])
-  const items = useMemo(() => buildVirtualItems(tasks, getTodayIsoDate(userTimezone)), [tasks, userTimezone])
+  const todayIso = getTodayIsoDate(userTimezone)
+  const items = useMemo(() => buildVirtualItems(tasks, todayIso), [tasks, todayIso])
   const virtualizer = useTaskVirtualizer(items, scrollRef)
   const isRefreshing = query.isFetching && !query.isFetchingNextPage
 
@@ -106,5 +107,5 @@ export function useAllTasksViewModel(userTimezone: string | null) {
   const loadMore = useCallback(() => query.fetchNextPage(), [query])
   useLoadMoreObserver({ loadMoreRef, scrollRef, enabled: Boolean(query.hasNextPage) && !query.isFetchingNextPage, loadMore })
 
-  return { query, tasks, items, virtualizer, loadMoreRef, scrollRef, refresh, isRefreshing, hasMore: Boolean(query.hasNextPage) }
+  return { query, tasks, items, todayIso, virtualizer, loadMoreRef, scrollRef, refresh, isRefreshing, hasMore: Boolean(query.hasNextPage) }
 }

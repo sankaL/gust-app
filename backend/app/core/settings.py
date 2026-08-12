@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.input_safety import (
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
     )
     required_alembic_revision: str = Field(
-        default="0017_harden_alembic_metadata",
+        default="0018_ensure_allowed_users",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     supabase_anon_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("SUPABASE_ANON_KEY"),
+    )
+    local_dev_auth_secret: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LOCAL_DEV_AUTH_SECRET"),
     )
     session_cookie_secure: bool = Field(
         default=True,
@@ -253,6 +257,12 @@ class Settings(BaseSettings):
         default=10.0,
         validation_alias=AliasChoices("REMINDER_REQUEST_TIMEOUT_SECONDS"),
     )
+
+    @model_validator(mode="after")
+    def _reject_production_dev_mode(self) -> Settings:
+        if self.app_env.strip().lower() == "production" and self.gust_dev_mode:
+            raise ValueError("GUST_DEV_MODE must be disabled in production.")
+        return self
 
     @property
     def alembic_database_url(self) -> str:

@@ -377,6 +377,56 @@ def test_phase17_migration_hardens_alembic_version_access() -> None:
     assert "create policy alembic_version_runtime_read" in all_sql
 
 
+def test_phase18_migration_creates_and_hardens_allowed_users(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0018_ensure_allowed_users.py"
+    )
+    spec = importlib.util.spec_from_file_location("ensure_allowed_users", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    class _Dialect:
+        name = "postgresql"
+
+    class _Bind:
+        dialect = _Dialect()
+
+    class _Inspector:
+        def has_table(self, table_name: str, *, schema: str | None = None) -> bool:
+            assert table_name == "allowed_users"
+            assert schema == "public"
+            return False
+
+    created_tables: list[str] = []
+    executed_sql: list[str] = []
+    monkeypatch.setattr(module.op, "get_bind", lambda: _Bind())
+    monkeypatch.setattr(module.sa, "inspect", lambda _bind: _Inspector())
+    monkeypatch.setattr(
+        module.op,
+        "create_table",
+        lambda table_name, *_args, **_kwargs: created_tables.append(table_name),
+    )
+    monkeypatch.setattr(module.op, "execute", lambda statement: executed_sql.append(statement))
+
+    module.upgrade()
+
+    all_sql = "\n".join(executed_sql).lower()
+    assert module.revision == "0018_ensure_allowed_users"
+    assert module.down_revision == "0017_harden_alembic_metadata"
+    assert created_tables == ["allowed_users"]
+    assert "from public" in all_sql
+    assert "from anon" in all_sql
+    assert "from authenticated" in all_sql
+    assert "grant select on table public.allowed_users to gust_app_runtime" in all_sql
+
+
 def test_supabase_allowlist_hardening_migration_revokes_public_roles() -> None:
     migration_path = (
         Path(__file__).resolve().parents[2]

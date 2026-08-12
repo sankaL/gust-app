@@ -6,6 +6,7 @@ import { useAccountMenu, useDesktopRecorder, useDesktopSession } from '../hooks/
 import { resolveLoginPath } from '../lib/sessionPresentation'
 import { DesktopShellLayout } from './DesktopShellLayout'
 import { DEFAULT_DESKTOP_HEADER, type DesktopHeaderContent } from './DesktopShellContext'
+import { TimezoneSyncGate } from './TimezoneSyncGate'
 
 function DesktopSessionLoading() {
   return (
@@ -25,13 +26,14 @@ export function DesktopShell() {
   useDeviceRedirect()
   const location = useLocation()
   const [header, setHeader] = useState<DesktopHeaderContent>(DEFAULT_DESKTOP_HEADER)
-  const { sessionQuery, groupsQuery, logoutMutation, accountInitials } = useDesktopSession()
+  const { sessionQuery, timezoneSync, groupsQuery, openTasksQuery, logoutMutation, accountInitials } = useDesktopSession()
   const accountMenu = useAccountMenu()
   const recorder = useDesktopRecorder(sessionQuery.data)
 
   if (sessionQuery.isLoading) return <DesktopSessionLoading />
   const loginPath = resolveLoginPath(sessionQuery, location.pathname, location.search)
   if (loginPath) return <Navigate to={loginPath} replace />
+  if (!timezoneSync.isReady) return <TimezoneSyncGate desktop isError={timezoneSync.isError} onRetry={() => void timezoneSync.retry()} />
   const session = sessionQuery.data!
 
   return (
@@ -39,6 +41,8 @@ export function DesktopShell() {
       session={session}
       groups={groupsQuery.data ?? []}
       isGroupsLoading={groupsQuery.isLoading}
+      openTasks={openTasksQuery.data ?? []}
+      areNavigationSignalsLoading={openTasksQuery.isLoading || openTasksQuery.isError}
       header={header}
       setHeader={setHeader}
       logout={logoutMutation}

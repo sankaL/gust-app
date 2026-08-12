@@ -6,6 +6,7 @@ import { OpenTaskCardContent } from './OpenTaskCardContent'
 
 type OpenTaskCardProps = {
   task: TaskSummary
+  todayIso: string
   onOpen: (taskId: string) => void
   onPrepareOpen?: (taskId: string) => void
   onComplete: (task: TaskSummary) => void
@@ -66,6 +67,7 @@ function useTaskCardSwipe({ task, onComplete, isBusy, enabled }: SwipeOptions) {
 
 function OpenTaskCardInner({
   task,
+  todayIso,
   onOpen,
   onPrepareOpen,
   onComplete,
@@ -114,6 +116,7 @@ function OpenTaskCardInner({
       >
         <OpenTaskCardContent
           task={task}
+          todayIso={todayIso}
           isExpanded={isExpanded}
           isBusy={isBusy}
           showCollapsedGroupLabel={showCollapsedGroupLabel}

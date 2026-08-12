@@ -39,7 +39,7 @@ export function SessionRequiredCard({ errorMessage = null }: SessionRequiredCard
           <p className="font-body text-sm leading-6 text-red-100">{errorMessage}</p>
         </div>
       ) : null}
-      <div>
+      {!devMode ? <div>
         <a
           href={getAuthStartUrl()}
           className="group relative w-full flex items-center justify-between rounded-card transition-all duration-200 outline-none select-none px-5 py-4 bg-[radial-gradient(circle_at_top_left,_#ffffff_10%,_#e5e5e5_90%)] text-black shadow-[0_6px_0_#a1a1aa,_0_8px_15px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.8)] hover:-translate-y-[1px] hover:shadow-[0_7px_0_#a1a1aa,_0_12px_20px_rgba(0,0,0,0.5),_inset_0_1px_2px_rgba(255,255,255,0.8)] active:translate-y-[6px] active:shadow-[0_0px_0_#a1a1aa,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_6px_rgba(0,0,0,0.1)]"
@@ -62,7 +62,7 @@ export function SessionRequiredCard({ errorMessage = null }: SessionRequiredCard
             </svg>
           </div>
         </a>
-      </div>
+      </div> : null}
 
       {devMode ? (
         <div className="pt-2">
@@ -92,7 +92,7 @@ export function SessionRequiredCard({ errorMessage = null }: SessionRequiredCard
               <p className="font-body text-sm leading-6 text-red-100">
                 {buildFriendlyMessage(
                   localDevSignInMutation.error,
-                  'Local test sign-in failed. Check the local Supabase and backend services.'
+                  'Local test sign-in failed. Check the local backend and database services.'
                 )}
               </p>
             </div>

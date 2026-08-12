@@ -195,6 +195,22 @@ export function getSessionStatus(): Promise<SessionStatus> {
   return apiRequest<SessionStatus>('/auth/session')
 }
 
+export function updateSessionTimezone(
+  timezone: string,
+  csrfToken: string,
+  signal?: AbortSignal
+): Promise<SessionStatus> {
+  return apiRequest<SessionStatus>(
+    '/auth/session/timezone',
+    {
+      method: 'PUT',
+      body: JSON.stringify({ timezone }),
+      signal
+    },
+    csrfToken
+  )
+}
+
 export function signInWithLocalDevAccount(): Promise<SessionStatus> {
   return apiRequest<SessionStatus>('/auth/session/dev-login', { method: 'POST' })
 }

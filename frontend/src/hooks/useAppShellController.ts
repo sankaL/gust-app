@@ -7,6 +7,7 @@ import { ApiError, getSessionStatus, logoutSession } from '../lib/api'
 import { buildAvatarLabel } from '../lib/sessionPresentation'
 import { markDeviceRedirectOverride } from './useDeviceRedirect'
 import { useNotifications } from '../components/Notifications'
+import { useSessionTimezoneSync } from './useSessionTimezoneSync'
 
 function isIosDevice() {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
@@ -106,6 +107,7 @@ export function useAppShellController() {
   const navigate = useNavigate()
   const { notifyError } = useNotifications()
   const sessionQuery = useQuery({ queryKey: ['session-status'], queryFn: getSessionStatus, retry: false })
+  const timezoneSync = useSessionTimezoneSync(sessionQuery.data)
   const install = useInstallState()
   const pwa = usePwaStatus()
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
@@ -122,6 +124,7 @@ export function useAppShellController() {
 
   return {
     sessionQuery,
+    timezoneSync,
     install,
     needRefresh: pwa.needRefresh,
     offlineReady: pwa.offlineReady,

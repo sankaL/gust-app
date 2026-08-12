@@ -1,5 +1,14 @@
 # Decisions Made
 
+## 2026-08-12 12:17:00 EDT
+
+- Reduced the routine local environment to three Docker services: PostgreSQL 17, the FastAPI backend, and the Vite frontend. Supabase CLI, Studio, Inbucket, Storage, Realtime, Analytics, and Edge Runtime are no longer local-development dependencies.
+- Kept production authentication unchanged on Supabase Google OAuth, while making `GUST_DEV_MODE=true` select a separate backend-issued signed session for the fixed `local-dev@gust.local` identity.
+- Required a local-only secret of at least 32 characters and retained backend cookie storage, access/refresh expiry, allowlist enforcement, CSRF, origin validation, request throttling, and explicit database user scoping; dev mode changes the identity issuer rather than bypassing auth.
+- Kept production OAuth lifecycle coverage as a deployed integration concern instead of making every local startup reproduce the managed auth provider.
+- Standardized application schema startup on Alembic and a persistent plain-Postgres volume; Supabase SQL remains versioned only for hosted Supabase Auth hooks and hosted-role grant management.
+- Seeded the fixed local test user, Inbox, and deterministic dashboard fixture automatically on `make dev` only when that user has no tasks, keeping repeat starts non-destructive while making a fresh database immediately useful for UI testing.
+
 ## 2026-07-14 22:32:34 EDT
 
 - Made coverage-aware, no-cache Fallow analysis a required `make check` gate and kept every default dead-code, duplication, cyclomatic, cognitive, CRAP, and unit-size threshold unchanged; the accepted result is zero findings rather than a relaxed baseline.

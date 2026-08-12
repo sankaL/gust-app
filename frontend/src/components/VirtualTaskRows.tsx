@@ -24,9 +24,10 @@ function SectionHeaderRow({ row, item, measure }: { row: VirtualItem; item: Extr
   )
 }
 
-function TaskRow({ row, item, measure, busy, onOpen, onPrepareOpen, onComplete, onDelete }: {
+function TaskRow({ row, item, todayIso, measure, busy, onOpen, onPrepareOpen, onComplete, onDelete }: {
   row: VirtualItem
   item: Extract<VirtualTaskItem, { type: 'task' }>
+  todayIso: string
   measure: (node: Element | null) => void
   busy: boolean
   onOpen: (taskId: string) => void
@@ -36,14 +37,15 @@ function TaskRow({ row, item, measure, busy, onOpen, onPrepareOpen, onComplete, 
 }) {
   return (
     <div key={row.key} data-index={row.index} ref={measure} style={rowStyle(row.start)} className="px-1 py-1">
-      <OpenTaskCard task={item.task} onOpen={onOpen} onPrepareOpen={onPrepareOpen} onComplete={onComplete} onDelete={onDelete} isBusy={busy} showCollapsedGroupLabel />
+      <OpenTaskCard task={item.task} todayIso={todayIso} onOpen={onOpen} onPrepareOpen={onPrepareOpen} onComplete={onComplete} onDelete={onDelete} isBusy={busy} showCollapsedGroupLabel />
     </div>
   )
 }
 
-export function VirtualTaskRows({ rows, items, busyTaskIds, measure, onOpen, onPrepareOpen, onComplete, onDelete }: {
+export function VirtualTaskRows({ rows, items, todayIso, busyTaskIds, measure, onOpen, onPrepareOpen, onComplete, onDelete }: {
   rows: VirtualItem[]
   items: VirtualTaskItem[]
+  todayIso: string
   busyTaskIds: string[]
   measure: (node: Element | null) => void
   onOpen: (taskId: string) => void
@@ -55,6 +57,6 @@ export function VirtualTaskRows({ rows, items, busyTaskIds, measure, onOpen, onP
     const item = items[row.index]
     if (!item) return null
     if (item.type === 'header') return <SectionHeaderRow key={row.key} row={row} item={item} measure={measure} />
-    return <TaskRow key={row.key} row={row} item={item} measure={measure} busy={busyTaskIds.includes(item.task.id)} onOpen={onOpen} onPrepareOpen={onPrepareOpen} onComplete={onComplete} onDelete={onDelete} />
+    return <TaskRow key={row.key} row={row} item={item} todayIso={todayIso} measure={measure} busy={busyTaskIds.includes(item.task.id)} onOpen={onOpen} onPrepareOpen={onPrepareOpen} onComplete={onComplete} onDelete={onDelete} />
   })
 }

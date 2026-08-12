@@ -25,14 +25,14 @@ export function ExtractingLoader({ variant }: ExtractingLoaderProps) {
 
   if (variant === 'voice') {
     return (
-      <div className="w-full space-y-6 rounded-soft bg-surface-container py-10 shadow-ambient flex flex-col items-center justify-center">
-        <div className="relative">
-          <div className="h-16 w-16 animate-pulse rounded-full bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.4),_rgba(132,85,239,0.2))] shadow-[0_0_40px_rgba(186,158,255,0.4)]" />
-          <div className="absolute inset-0 h-16 w-16 animate-ping rounded-full bg-primary/20" />
+      <div className="flex w-full items-center justify-center rounded-soft bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.24),_rgba(16,16,16,0.94)_58%)] px-4 py-10 shadow-ambient" role="status" aria-label="Transcribing voice">
+        <div className="relative h-36 w-36" aria-hidden="true">
+          <div className="absolute inset-0 animate-pulse rounded-full bg-[radial-gradient(circle_at_top,_rgba(196,181,253,0.9),_rgba(124,58,237,0.88))] shadow-[0_8px_0_#4c1d95,_0_15px_20px_rgba(0,0,0,0.4),_inset_0_2px_3px_rgba(255,255,255,0.6)]" />
+          <div className="absolute inset-3 animate-ping rounded-full bg-primary/20" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="h-11 w-11 animate-spin rounded-full border-2 border-white/85 border-r-transparent" />
+          </div>
         </div>
-        <p className="font-display text-lg text-primary transition-opacity duration-300">
-          Transcribing voice...
-        </p>
       </div>
     )
   }

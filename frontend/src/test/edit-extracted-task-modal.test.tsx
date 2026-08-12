@@ -77,6 +77,10 @@ describe('EditExtractedTaskModal', () => {
     )
 
     expect(screen.getByText('Subtasks')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toHaveAttribute(
+      'form',
+      'edit-extracted-task-form-extracted-1'
+    )
 
     await user.click(screen.getByRole('button', { name: 'Delete Remove lint screen' }))
     await user.type(screen.getByPlaceholderText('Add a subtask...'), 'Confirm outside vent airflow')

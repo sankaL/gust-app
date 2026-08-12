@@ -350,6 +350,55 @@ afterEach(() => {
 })
 
 describe('app shell', () => {
+  it('blocks mobile task requests when timezone synchronization fails', async () => {
+    const resolvedOptions = new Intl.DateTimeFormat().resolvedOptions()
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      ...resolvedOptions,
+      timeZone: 'America/Toronto',
+    })
+    const requests: string[] = []
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      requests.push(`${init?.method ?? 'GET'} ${url}`)
+      if (url.includes('/auth/session/timezone')) return Promise.reject(new TypeError('offline'))
+      if (url.includes('/auth/session')) return Promise.resolve(jsonResponse(signedInSession()))
+      return Promise.resolve(jsonResponse({}))
+    }))
+
+    renderWithRoute(['/tasks'])
+
+    expect(await screen.findByText('Could not confirm your timezone')).toBeInTheDocument()
+    expect(requests.some((request) => request.includes('/tasks?'))).toBe(false)
+  })
+
+  it('synchronizes the desktop timezone before requesting task data', async () => {
+    const resolvedOptions = new Intl.DateTimeFormat().resolvedOptions()
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      ...resolvedOptions,
+      timeZone: 'America/Toronto',
+    })
+    const requests: string[] = []
+    const updatedSession = { ...signedInSession(), timezone: 'America/Toronto' }
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const request = `${init?.method ?? 'GET'} ${url}`
+      requests.push(request)
+      if (url.includes('/auth/session/timezone')) return Promise.resolve(jsonResponse(updatedSession))
+      if (url.includes('/auth/session')) return Promise.resolve(jsonResponse(signedInSession()))
+      if (url.includes('/groups')) return Promise.resolve(jsonResponse([]))
+      if (url.includes('/tasks?')) return Promise.resolve(jsonResponse({ items: [], has_more: false, next_cursor: null }))
+      return Promise.resolve(jsonResponse({}))
+    }))
+
+    renderWithRoute(['/desktop'])
+
+    expect(await screen.findByRole('heading', { name: 'Weekly overview' })).toBeInTheDocument()
+    const timezoneRequest = requests.findIndex((request) => request.includes('/auth/session/timezone'))
+    const firstTaskRequest = requests.findIndex((request) => request.includes('/tasks?'))
+    expect(timezoneRequest).toBeGreaterThanOrEqual(0)
+    expect(firstTaskRequest).toBeGreaterThan(timezoneRequest)
+  })
+
   it('renders the public landing page on / when signed out', async () => {
     vi.stubEnv('VITE_ADMIN_EMAIL', 'admingust@example.com')
     vi.stubGlobal(
@@ -543,7 +592,7 @@ describe('app shell', () => {
     expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
   })
 
-  it('shows Google sign-in and local fallback on /login in dev mode', async () => {
+  it('shows only local sign-in on /login in dev mode', async () => {
     vi.stubEnv('VITE_GUST_DEV_MODE', 'true')
     vi.stubGlobal(
       'fetch',
@@ -560,9 +609,9 @@ describe('app shell', () => {
 
     renderWithRoute(['/login'])
 
-    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Sign in with Google' })).not.toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Continue with Local Test Account' })
+      await screen.findByRole('button', { name: 'Continue with Local Test Account' })
     ).toBeInTheDocument()
   })
 
@@ -775,7 +824,7 @@ describe('app shell', () => {
 
     expect(await screen.findByRole('heading', { name: 'Weekly overview' })).toBeInTheDocument()
     expect(screen.getAllByRole('heading', { name: 'Weekly overview' })).toHaveLength(1)
-    expect(screen.getByRole('heading', { name: 'Completion Trend' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Completion Trend' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Week' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Month' })).toBeInTheDocument()
@@ -802,9 +851,9 @@ describe('app shell', () => {
       'aria-expanded',
       'false'
     )
-    expect(screen.queryByText('Gust')).not.toBeInTheDocument()
+    expect(screen.getByText('Gust').parentElement).toHaveClass('max-w-0')
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Inbox group, 1 open task' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^Inbox group, 1 open task/ })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Expand desktop sidebar' }))
 
@@ -1114,7 +1163,9 @@ describe('app shell', () => {
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Open account menu' }))
     await user.click(screen.getByRole('menuitem', { name: 'Logout' }))
-    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: 'Continue with Local Test Account' })
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Continue with Local Test Account' }))
 

@@ -300,7 +300,10 @@ def due_bucket_for_date(
     if due_date is None:
         return "no_date"
 
-    reference = now or datetime.now(ZoneInfo(user_timezone))
+    local_timezone = ZoneInfo(user_timezone)
+    if now is not None and now.tzinfo is None:
+        raise ValueError("Current timestamp must include a timezone.")
+    reference = now.astimezone(local_timezone) if now is not None else datetime.now(local_timezone)
     today = reference.date()
     if due_date < today:
         return "overdue"

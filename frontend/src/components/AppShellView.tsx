@@ -1,14 +1,15 @@
 import type { ReactNode, RefObject } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import { ListTodo, Mic, Plus, UsersRound } from 'lucide-react'
 
 import type { SessionStatus } from '../lib/api'
 import { Button } from './Button'
 import { Card } from './Card'
 
 const navigation = [
-  { to: '/capture', label: 'Capture', end: true },
-  { to: '/tasks', label: 'Tasks', end: true },
-  { to: '/tasks/groups', label: 'Groups', end: false },
+  { to: '/capture', label: 'Capture', icon: Mic, end: true },
+  { to: '/tasks', label: 'Tasks', icon: ListTodo, end: true },
+  { to: '/tasks/groups', label: 'Groups', icon: UsersRound, end: false },
 ]
 
 type AccountMenuProps = {
@@ -108,12 +109,38 @@ function UpdateNotice({ onUpdate }: { onUpdate: () => void }) {
   )
 }
 
-function PrimaryNavigation() {
+export function BottomNavigation() {
   return (
-    <nav aria-label="Primary" className="grid grid-cols-3 gap-2 rounded-soft bg-surface-container p-1.5">
-      {navigation.map((item) => (
-        <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => ['rounded-soft px-3 py-2 text-center font-body text-sm transition', isActive ? 'bg-surface-container-highest text-primary shadow-ambient' : 'text-on-surface-variant hover:bg-surface-container-high'].join(' ')}>{item.label}</NavLink>
-      ))}
+    <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(var(--safe-area-bottom)+0.75rem)]">
+      <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3">
+        <div className="grid min-w-0 flex-1 grid-cols-3 gap-1 rounded-soft bg-surface-container-highest/95 p-1.5 ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.52),_0_0_28px_rgba(132,85,239,0.2),_inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl">
+          {navigation.map((item) => {
+            const Icon = item.icon
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) => [
+                  'flex h-12 min-w-0 items-center justify-center rounded-card px-2 font-body transition-[background-color,color,transform] duration-200 active:scale-[0.97]',
+                  isActive ? 'bg-surface-container-highest text-primary shadow-ambient' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
+                ].join(' ')}
+              >
+                <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+                <span className="sr-only">{item.label}</span>
+              </NavLink>
+            )
+          })}
+        </div>
+        <Link
+          to="/capture?compose=1"
+          replace
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-card bg-[radial-gradient(circle_at_top,_rgba(196,181,253,0.98),_rgba(124,58,237,0.96))] text-white shadow-[0_5px_0_#4c1d95,_0_10px_20px_rgba(0,0,0,0.34),_0_0_24px_rgba(186,158,255,0.3)] transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_6px_0_#4c1d95,_0_12px_22px_rgba(0,0,0,0.38),_0_0_30px_rgba(186,158,255,0.38)] active:translate-y-[4px] active:shadow-[0_1px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.34)]"
+          aria-label="Add a new task"
+        >
+          <Plus className="h-6 w-6" strokeWidth={2.2} aria-hidden="true" />
+        </Link>
+      </div>
     </nav>
   )
 }
@@ -140,7 +167,7 @@ export type AppShellHeaderProps = {
 
 export function AppShellHeader(props: AppShellHeaderProps) {
   return (
-    <header className="safe-area-sticky-top sticky z-50 mb-4 space-y-5 bg-surface/95 pt-2 backdrop-blur-sm">
+    <header className="safe-area-sticky-top sticky z-50 mb-4 space-y-4 bg-surface/95 pt-2 backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <Link to="/capture" className="flex items-center gap-2"><img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-6 w-6" /><h1 className="font-display text-2xl leading-none text-on-surface">Gust</h1></Link>
         <div className="flex items-center gap-2">
@@ -152,7 +179,6 @@ export function AppShellHeader(props: AppShellHeaderProps) {
       {props.showIosInstallHelp && <InstallNotice />}
       {props.needRefresh && <UpdateNotice onUpdate={props.onUpdate} />}
       {props.offlineReady && <Card className="overflow-hidden bg-surface-container-high/90"><p className="font-body text-sm leading-6 text-on-surface-variant">App shell cached for faster launches.</p></Card>}
-      <PrimaryNavigation />
     </header>
   )
 }

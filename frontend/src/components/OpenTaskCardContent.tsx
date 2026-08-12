@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
 
 import type { TaskSummary } from '../lib/api'
+import { addDaysIso } from '../lib/desktopData'
 
 type OpenTaskCardContentProps = {
   task: TaskSummary
+  todayIso: string
   isExpanded: boolean
   isBusy: boolean
   showCollapsedGroupLabel: boolean
@@ -12,22 +14,13 @@ type OpenTaskCardContentProps = {
   onDelete?: () => void
 }
 
-function dateDistanceInDays(dueDate: string) {
-  const today = new Date()
-  const due = new Date(`${dueDate}T00:00:00`)
-  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
-  const dueDay = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) / 86400000
-  return { diffDays: dueDay - todayDay, due }
-}
-
-function buildDuePresentation(dueDate: string | null) {
+function buildDuePresentation(dueDate: string | null, todayIso: string) {
   if (!dueDate) return { label: '--', tone: 'text-on-surface-variant/55' }
-  const { diffDays, due } = dateDistanceInDays(dueDate)
-  if (diffDays < 0) return { label: 'Overdue', tone: 'text-error' }
-  if (diffDays === 0) return { label: 'Today', tone: 'text-warning' }
-  if (diffDays === 1) return { label: 'Tomorrow', tone: 'text-primary' }
+  if (dueDate < todayIso) return { label: 'Overdue', tone: 'text-error' }
+  if (dueDate === todayIso) return { label: 'Today', tone: 'text-warning' }
+  if (dueDate === addDaysIso(todayIso, 1)) return { label: 'Tomorrow', tone: 'text-primary' }
   return {
-    label: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(due),
+    label: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(`${dueDate}T12:00:00`)),
     tone: 'text-primary',
   }
 }
@@ -44,14 +37,16 @@ function formatReminder(reminderAt: string | null) {
 
 function TaskBadges({
   task,
+  todayIso,
   expanded,
   showGroup,
 }: {
   task: TaskSummary
+  todayIso: string
   expanded: boolean
   showGroup: boolean
 }) {
-  const due = useMemo(() => buildDuePresentation(task.due_date), [task.due_date])
+  const due = useMemo(() => buildDuePresentation(task.due_date, todayIso), [task.due_date, todayIso])
   const recurrence = task.recurrence_frequency?.toUpperCase() ?? 'ONE-OFF'
   return (
     <div
@@ -99,7 +94,7 @@ function SubtaskBadge({ count }: { count: number }) {
   )
 }
 
-function ExpandedDetails({ task }: { task: TaskSummary }) {
+function ExpandedDetails({ task, todayIso }: { task: TaskSummary; todayIso: string }) {
   const count = task.subtask_count ?? 0
   return (
     <div className="flex flex-1 flex-col gap-3">
@@ -115,16 +110,16 @@ function ExpandedDetails({ task }: { task: TaskSummary }) {
         <span className="shrink-0 text-on-surface-variant/40">•</span>
         <span className="min-w-0 truncate text-on-surface-variant/85">Reminder: {formatReminder(task.reminder_at)}</span>
       </div>
-      <TaskBadges task={task} expanded showGroup />
+      <TaskBadges task={task} todayIso={todayIso} expanded showGroup />
     </div>
   )
 }
 
-function CollapsedDetails({ task, showGroup }: { task: TaskSummary; showGroup: boolean }) {
+function CollapsedDetails({ task, todayIso, showGroup }: { task: TaskSummary; todayIso: string; showGroup: boolean }) {
   return (
     <div className="flex flex-col gap-1.5">
       <h3 className="min-w-0 truncate pr-2 font-display text-[0.98rem] font-medium leading-tight text-on-surface" title={task.title}>{task.title}</h3>
-      <TaskBadges task={task} expanded={false} showGroup={showGroup} />
+      <TaskBadges task={task} todayIso={todayIso} expanded={false} showGroup={showGroup} />
     </div>
   )
 }
@@ -166,11 +161,11 @@ function ExpandedActions({ task, isBusy, onComplete, onDelete }: Pick<OpenTaskCa
   )
 }
 
-export function OpenTaskCardContent({ task, isExpanded, isBusy, showCollapsedGroupLabel, onToggleExpanded, onComplete, onDelete }: OpenTaskCardContentProps) {
+export function OpenTaskCardContent({ task, todayIso, isExpanded, isBusy, showCollapsedGroupLabel, onToggleExpanded, onComplete, onDelete }: OpenTaskCardContentProps) {
   return (
     <div className={`flex ${isExpanded ? 'items-stretch gap-3' : 'items-start gap-2'}`}>
       <div className={`min-w-0 flex-1 ${isExpanded ? 'flex flex-col' : ''}`}>
-        {isExpanded ? <ExpandedDetails task={task} /> : <CollapsedDetails task={task} showGroup={showCollapsedGroupLabel} />}
+        {isExpanded ? <ExpandedDetails task={task} todayIso={todayIso} /> : <CollapsedDetails task={task} todayIso={todayIso} showGroup={showCollapsedGroupLabel} />}
       </div>
       <TaskActions task={task} expanded={isExpanded} isBusy={isBusy} onToggle={onToggleExpanded} onComplete={onComplete} onDelete={onDelete} />
     </div>

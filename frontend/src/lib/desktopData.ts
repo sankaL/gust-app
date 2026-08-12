@@ -61,6 +61,11 @@ export type GroupAnalytics = {
   dueThisWeekCount: number
 }
 
+export type GroupNavigationSignal = {
+  tone: 'overdue' | 'review' | 'reminder' | 'clear'
+  label: string
+}
+
 export type DesktopAnalytics = {
   todayIso: string
   weekEndIso: string
@@ -158,6 +163,35 @@ export function getTodayIsoDate(timezone: string | null): string {
   }
 
   return `${year}-${month}-${day}`
+}
+
+export function buildGroupNavigationSignals(
+  groups: GroupSummary[],
+  openTasks: TaskSummary[],
+  timezone: string | null
+): Map<string, GroupNavigationSignal> {
+  const todayIso = getTodayIsoDate(timezone)
+  const tasksByGroup = new Map<string, TaskSummary[]>()
+
+  for (const task of openTasks) {
+    const groupTasks = tasksByGroup.get(task.group.id) ?? []
+    groupTasks.push(task)
+    tasksByGroup.set(task.group.id, groupTasks)
+  }
+
+  return new Map<string, GroupNavigationSignal>(groups.map((group): [string, GroupNavigationSignal] => {
+    const tasks = tasksByGroup.get(group.id) ?? []
+    const overdueCount = tasks.filter((task) => task.due_date && task.due_date < todayIso).length
+    if (overdueCount) return [group.id, { tone: 'overdue', label: `${overdueCount} overdue` }]
+
+    const reviewCount = tasks.filter((task) => task.needs_review).length
+    if (reviewCount) return [group.id, { tone: 'review', label: `${reviewCount} need review` }]
+
+    const reminderCount = tasks.filter((task) => task.reminder_at).length
+    if (reminderCount) return [group.id, { tone: 'reminder', label: `${reminderCount} reminder${reminderCount === 1 ? '' : 's'} set` }]
+
+    return [group.id, { tone: 'clear', label: tasks.length ? 'On track' : 'Clear' }]
+  }))
 }
 
 export function addDaysIso(isoDate: string, days: number): string {
@@ -390,7 +424,7 @@ export function buildWeeklyBoardColumns(
   timezone: string | null
 ): WeeklyBoardColumn[] {
   const todayIso = getTodayIsoDate(timezone)
-  const datedColumns: WeeklyBoardColumn[] = Array.from({ length: 7 }, (_, index) => {
+  const datedColumns: WeeklyBoardColumn[] = Array.from({ length: 5 }, (_, index) => {
     const date = addDaysIso(todayIso, index)
     return {
       key: `date-${date}`,

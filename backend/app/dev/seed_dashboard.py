@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
 
@@ -13,7 +14,7 @@ LOCAL_DEV_AUTH_EMAIL = "local-dev@gust.local"
 SEED_MARKER = "[dev-seed:desktop-dashboard]"
 
 
-def main() -> None:
+def main(*, only_if_empty: bool = False) -> None:
     settings = get_settings()
     if not settings.gust_dev_mode:
         raise RuntimeError("Refusing to seed dashboard data outside GUST_DEV_MODE=true.")
@@ -31,6 +32,10 @@ def main() -> None:
         )
 
     user_id = str(user_row.id)
+    if only_if_empty and _has_local_data(user_id=user_id, database_url=settings.database_url):
+        print(f"Skipped dashboard seed for {LOCAL_DEV_AUTH_EMAIL}; local data already exists.")
+        return
+
     today = date.today()
     with user_connection_scope(settings.database_url, user_id=user_id) as connection:
         group_ids = _ensure_seed_groups(connection, user_id=user_id)
@@ -46,6 +51,14 @@ def main() -> None:
         f"Seeded {inserted_count} dashboard tasks for {LOCAL_DEV_AUTH_EMAIL} "
         f"from {today.isoformat()} through {(today + timedelta(days=6)).isoformat()}."
     )
+
+
+def _has_local_data(*, user_id: str, database_url: str) -> bool:
+    with user_connection_scope(database_url, user_id=user_id) as connection:
+        row = connection.execute(
+            sa.select(tasks.c.id).where(tasks.c.user_id == user_id).limit(1)
+        ).first()
+    return row is not None
 
 
 def _ensure_seed_groups(connection, *, user_id: str) -> dict[str, str]:
@@ -230,4 +243,4 @@ def _task_row(
 
 
 if __name__ == "__main__":
-    main()
+    main(only_if_empty="--if-empty" in sys.argv[1:])

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse
 
@@ -303,10 +305,146 @@ class SupabaseAuthService:
         return AUTH_EMAIL_NOT_ALLOWED_MESSAGE.lower() in error_message.strip().lower()
 
 
+class LocalDevAuthService:
+    """Issue signed local-only sessions without an external identity provider."""
+
+    ISSUER = "gust-local-dev"
+    USER_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "gust:local-dev:user"))
+    EMAIL = "local-dev@gust.local"
+    DISPLAY_NAME = "Local Dev User"
+    ACCESS_TOKEN_TTL = timedelta(hours=1)
+    REFRESH_TOKEN_TTL = timedelta(days=30)
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    def ensure_configured(self) -> None:
+        if self.settings.app_env.strip().lower() == "production":
+            raise ConfigurationError("Local development auth is unavailable in production.")
+        if not self.settings.gust_dev_mode:
+            raise ConfigurationError("Local development auth is disabled.")
+        if not self.settings.local_dev_auth_secret:
+            raise ConfigurationError("Local development auth secret is missing.")
+        if len(self.settings.local_dev_auth_secret) < 32:
+            raise ConfigurationError(
+                "Local development auth secret must contain at least 32 characters."
+            )
+
+    def create_dev_session(self) -> AuthenticatedSession:
+        self.ensure_configured()
+        identity = AuthenticatedIdentity(
+            user_id=self.USER_ID,
+            email=self.EMAIL,
+            display_name=self.DISPLAY_NAME,
+        )
+        return AuthenticatedSession(tokens=self._issue_tokens(identity), identity=identity)
+
+    async def refresh_session(self, *, refresh_token: str) -> AuthenticatedSession:
+        identity = self._validate_token(refresh_token, token_type="refresh")
+        return AuthenticatedSession(tokens=self._issue_tokens(identity), identity=identity)
+
+    async def revoke_refresh_token(self, *, refresh_token: str) -> None:
+        self._validate_token(refresh_token, token_type="refresh")
+
+    def validate_access_token(
+        self,
+        access_token: str,
+        *,
+        allow_expired: bool = False,
+    ) -> AuthenticatedIdentity:
+        return self._validate_token(
+            access_token,
+            token_type="access",
+            allow_expired=allow_expired,
+        )
+
+    def _issue_tokens(self, identity: AuthenticatedIdentity) -> TokenBundle:
+        now = datetime.now(UTC)
+        return TokenBundle(
+            access_token=self._encode_token(
+                identity,
+                token_type="access",
+                issued_at=now,
+                expires_at=now + self.ACCESS_TOKEN_TTL,
+            ),
+            refresh_token=self._encode_token(
+                identity,
+                token_type="refresh",
+                issued_at=now,
+                expires_at=now + self.REFRESH_TOKEN_TTL,
+            ),
+            expires_in=int(self.ACCESS_TOKEN_TTL.total_seconds()),
+        )
+
+    def _encode_token(
+        self,
+        identity: AuthenticatedIdentity,
+        *,
+        token_type: str,
+        issued_at: datetime,
+        expires_at: datetime,
+    ) -> str:
+        self.ensure_configured()
+        return jwt.encode(
+            {
+                "iss": self.ISSUER,
+                "sub": identity.user_id,
+                "email": identity.email,
+                "display_name": identity.display_name,
+                "token_type": token_type,
+                "iat": issued_at,
+                "exp": expires_at,
+                "jti": str(uuid.uuid4()),
+            },
+            self.settings.local_dev_auth_secret,
+            algorithm="HS256",
+        )
+
+    def _validate_token(
+        self,
+        token: str,
+        *,
+        token_type: str,
+        allow_expired: bool = False,
+    ) -> AuthenticatedIdentity:
+        self.ensure_configured()
+        claims = jwt.decode(
+            token,
+            self.settings.local_dev_auth_secret,
+            algorithms=["HS256"],
+            issuer=self.ISSUER,
+            options={
+                "require": ["exp", "iat", "iss", "sub", "email", "token_type"],
+                "verify_exp": not allow_expired,
+            },
+        )
+        if claims.get("token_type") != token_type:
+            raise InvalidTokenError("Local development token type did not match.")
+        if claims.get("sub") != self.USER_ID or claims.get("email") != self.EMAIL:
+            raise InvalidTokenError("Local development token identity did not match.")
+        return AuthenticatedIdentity(
+            user_id=self.USER_ID,
+            email=self.EMAIL,
+            display_name=self.DISPLAY_NAME,
+        )
+
+
+AuthService = SupabaseAuthService | LocalDevAuthService
+
+
+def build_auth_service(settings: Settings) -> AuthService:
+    if settings.gust_dev_mode:
+        return LocalDevAuthService(settings)
+    return SupabaseAuthService(settings)
+
+
 __all__ = [
     "AuthenticatedIdentity",
     "AuthenticatedSession",
+    "AuthService",
     "ExpiredSignatureError",
     "InvalidTokenError",
+    "LocalDevAuthService",
     "SupabaseAuthService",
+    "build_auth_service",
 ]

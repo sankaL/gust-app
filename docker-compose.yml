@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - gust-postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${GUST_POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+
   frontend:
     build:
       context: .
@@ -15,7 +31,7 @@ services:
       - "${GUST_FRONTEND_PORT:-3000}:3000"
     depends_on:
       - backend
-    command: sh -lc "npm install && npm run dev"
+    command: sh -lc "npm ci && npm run dev"
 
   backend:
     build:
@@ -33,6 +49,7 @@ services:
       BACKEND_PUBLIC_URL: "${BACKEND_PUBLIC_URL}"
       SUPABASE_URL: "${SUPABASE_URL}"
       SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY}"
+      LOCAL_DEV_AUTH_SECRET: "${LOCAL_DEV_AUTH_SECRET}"
       SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE}"
       SESSION_COOKIE_DOMAIN: "${SESSION_COOKIE_DOMAIN}"
       CAPTURE_RETENTION_DAYS: "${CAPTURE_RETENTION_DAYS}"
@@ -57,7 +74,11 @@ services:
       - "${GUST_BACKEND_PORT:-8000}:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
     command: sh -lc "sh /workspace/scripts/dev/backend-start.sh"
 
 volumes:
   frontend-node-modules:
+  gust-postgres-data:

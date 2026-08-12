@@ -41,6 +41,15 @@ def test_alembic_database_url_prefers_migration_database_url(
     assert settings.alembic_database_url == "postgresql+psycopg://admin@db/admin"
 
 
+def test_settings_reject_production_dev_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("GUST_DEV_MODE", "true")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://runtime@db/runtime")
+
+    with pytest.raises(ValidationError, match="GUST_DEV_MODE must be disabled"):
+        Settings(_env_file=None)
+
+
 def test_trusted_hosts_include_railway_runtime_domains(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

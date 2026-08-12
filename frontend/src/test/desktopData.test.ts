@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  buildGroupNavigationSignals,
   buildDesktopAnalytics,
+  buildWeeklyBoardColumns,
   EMPTY_DESKTOP_FILTERS,
   filterDesktopTasks,
   sortDesktopTasks,
+  getTodayIsoDate,
   type CompletionTrendPoint,
 } from '../lib/desktopData'
 import type { TaskSummary } from '../lib/api'
@@ -48,6 +51,25 @@ afterEach(() => {
 })
 
 describe('desktop analytics', () => {
+  it('uses the Toronto calendar date across the UTC rollover boundary', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-13T02:00:00Z'))
+
+    expect(getTodayIsoDate('America/Toronto')).toBe('2026-08-12')
+    expect(getTodayIsoDate('UTC')).toBe('2026-08-13')
+
+    const dueToday = {
+      ...completedTask('due-today', '2026-08-12T12:00:00Z'),
+      status: 'open' as const,
+      due_date: '2026-08-12',
+      due_bucket: 'due_soon' as const,
+      completed_at: null,
+    }
+    const columns = buildWeeklyBoardColumns([dueToday], 'America/Toronto')
+    expect(columns.find((column) => column.label === 'Today')?.tasks).toEqual([dueToday])
+    expect(columns.find((column) => column.label === 'Overdue')?.tasks).toEqual([])
+  })
+
   it('uses the trailing seven days through today for the weekly completion trend', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-03T12:00:00Z'))
@@ -176,6 +198,48 @@ describe('desktop analytics', () => {
 
     expect(maySecond?.count).toBe(1)
     expect(mayThird?.count).toBe(1)
+  })
+})
+
+describe('desktop group navigation signals', () => {
+  it('prioritizes overdue work, then review, then reminders', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-03T12:00:00Z'))
+    const groups = [
+      { id: 'inbox-1', name: 'Inbox', description: null, is_system: true, system_key: 'inbox', open_task_count: 2, completed_task_count: 0 },
+      { id: 'work', name: 'Work', description: null, is_system: false, system_key: null, open_task_count: 1, completed_task_count: 0 },
+      { id: 'home', name: 'Home', description: null, is_system: false, system_key: null, open_task_count: 1, completed_task_count: 0 },
+      { id: 'clear', name: 'Clear', description: null, is_system: false, system_key: null, open_task_count: 0, completed_task_count: 0 },
+    ]
+    const overdue = { ...completedTask('overdue', '2026-05-01T12:00:00Z'), status: 'open' as const, due_date: '2026-05-02', group: { id: 'inbox-1', name: 'Inbox', is_system: true } }
+    const review = { ...completedTask('review', '2026-05-01T12:00:00Z'), status: 'open' as const, needs_review: true, reminder_at: '2026-05-03T15:00:00Z', group: { id: 'work', name: 'Work', is_system: false } }
+    const reminder = { ...completedTask('reminder', '2026-05-01T12:00:00Z'), status: 'open' as const, reminder_at: '2026-05-03T15:00:00Z', group: { id: 'home', name: 'Home', is_system: false } }
+
+    const signals = buildGroupNavigationSignals(groups, [overdue, review, reminder], 'UTC')
+
+    expect(signals.get('inbox-1')).toEqual({ tone: 'overdue', label: '1 overdue' })
+    expect(signals.get('work')).toEqual({ tone: 'review', label: '1 need review' })
+    expect(signals.get('home')).toEqual({ tone: 'reminder', label: '1 reminder set' })
+    expect(signals.get('clear')).toEqual({ tone: 'clear', label: 'Clear' })
+  })
+})
+
+describe('desktop weekly board', () => {
+  it('shows overdue, today, four future days, and no-date work', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-03T12:00:00Z'))
+
+    const columns = buildWeeklyBoardColumns([], 'UTC')
+
+    expect(columns.map((column) => column.key)).toEqual([
+      'overdue',
+      'date-2026-05-03',
+      'date-2026-05-04',
+      'date-2026-05-05',
+      'date-2026-05-06',
+      'date-2026-05-07',
+      'no-date',
+    ])
   })
 })
 

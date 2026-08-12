@@ -13,6 +13,9 @@ import { classifyMicrophoneError, createAudioRecorder, stopMediaStream } from '.
 import { buildAvatarLabel } from '../lib/sessionPresentation'
 import { useNotifications } from '../components/Notifications'
 import { useSessionGroups } from './useSessionGroups'
+import { fetchAllDesktopTasks } from '../lib/desktopData'
+import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/taskScreenCache'
+import { useSessionTimezoneSync } from './useSessionTimezoneSync'
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback
@@ -23,7 +26,15 @@ export function useDesktopSession() {
   const queryClient = useQueryClient()
   const { notifyError } = useNotifications()
   const sessionQuery = useQuery({ queryKey: ['session-status'], queryFn: getSessionStatus, retry: false })
+  const timezoneSync = useSessionTimezoneSync(sessionQuery.data)
   const groupsQuery = useSessionGroups(sessionQuery.data)
+  const openTasksQuery = useQuery({
+    queryKey: ['desktop', 'tasks', 'all', 'open'],
+    queryFn: () => fetchAllDesktopTasks('open'),
+    enabled: sessionQuery.data?.signed_in === true && timezoneSync.isReady,
+    staleTime: TASK_SCREEN_STALE_TIME_MS,
+    gcTime: TASK_SCREEN_GC_TIME_MS,
+  })
   const logoutMutation = useMutation({
     mutationFn: () => {
       const csrfToken = sessionQuery.data?.csrf_token
@@ -41,7 +52,7 @@ export function useDesktopSession() {
     () => (user ? buildAvatarLabel(user.display_name, user.email) : 'G'),
     [user]
   )
-  return { sessionQuery, groupsQuery, logoutMutation, accountInitials }
+  return { sessionQuery, timezoneSync, groupsQuery, openTasksQuery, logoutMutation, accountInitials }
 }
 
 function useVoiceCaptureMutation(session: SessionStatus | undefined) {
