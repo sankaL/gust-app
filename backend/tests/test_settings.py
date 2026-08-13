@@ -41,6 +41,18 @@ def test_alembic_database_url_prefers_migration_database_url(
     assert settings.alembic_database_url == "postgresql+psycopg://admin@db/admin"
 
 
+def test_extraction_model_defaults_to_gpt_5_6_luna(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.delenv("OPENROUTER_EXTRACTION_MODEL", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.openrouter_extraction_model == "openai/gpt-5.6-luna"
+
+
 def test_settings_reject_production_dev_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("GUST_DEV_MODE", "true")

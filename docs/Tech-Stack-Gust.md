@@ -295,6 +295,10 @@ Use Mistral's audio transcription endpoint as the initial speech-to-text provide
 
 Current default model alias: `voxtral-mini-latest`.
 
+Local development and production both use the real Mistral provider. Dev mode changes
+authentication and local infrastructure behavior, but it does not mock transcription;
+local voice capture therefore requires valid Mistral credentials.
+
 Operational contract:
 
 - audio is uploaded from backend to provider
@@ -313,7 +317,7 @@ Model selection is an operational setting, not a product contract. The required 
 - JSON-schema structured outputs
 - acceptable latency for synchronous task creation
 
-Current default model: `openai/gpt-5.4-mini`.
+Current default model: `openai/gpt-5.6-luna`.
 
 Backend behavior:
 

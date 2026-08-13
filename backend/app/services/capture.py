@@ -71,8 +71,6 @@ from app.services.task_rules import (
     normalize_task_fields,
 )
 from app.services.transcription import (
-    MistralTranscriptionService,
-    MockTranscriptionService,
     TranscriptionResult,
     TranscriptionServiceError,
 )
@@ -154,7 +152,7 @@ class CaptureService:
         self,
         *,
         settings: Settings,
-        transcription_service: MistralTranscriptionService | MockTranscriptionService,
+        transcription_service: TranscriptionClient,
         extraction_service: ExtractionClient,
         staging_service: StagingService,
     ) -> None:

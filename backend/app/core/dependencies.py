@@ -43,7 +43,7 @@ from app.services.reminders import (
 )
 from app.services.staging import StagingService
 from app.services.task_service import TaskService
-from app.services.transcription import MistralTranscriptionService, MockTranscriptionService
+from app.services.transcription import MistralTranscriptionService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -54,15 +54,8 @@ def get_auth_service(settings: SettingsDep) -> AuthService:
 
 def get_transcription_service(
     settings: SettingsDep,
-) -> MistralTranscriptionService | MockTranscriptionService:
-    """Return the appropriate transcription service based on environment.
-
-    In dev mode (GUST_DEV_MODE=true), returns a MockTranscriptionService
-    to avoid calling external APIs during local development.
-    In production, returns the real MistralTranscriptionService.
-    """
-    if settings.gust_dev_mode:
-        return MockTranscriptionService()
+) -> MistralTranscriptionService:
+    """Return the Mistral transcription service in every environment."""
     return MistralTranscriptionService(settings)
 
 
@@ -73,7 +66,7 @@ def get_extraction_service(settings: SettingsDep) -> LangChainExtractionService:
 def get_capture_service(
     settings: SettingsDep,
     transcription_service: Annotated[
-        MistralTranscriptionService | MockTranscriptionService,
+        MistralTranscriptionService,
         Depends(get_transcription_service),
     ],
     extraction_service: Annotated[
