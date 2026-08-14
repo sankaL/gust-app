@@ -48,6 +48,7 @@ export function AppShell() {
         </AppShellActionsContext.Provider>
         <BottomNavigation
           isRecording={controller.isRecording}
+          isRecordingActionDisabled={controller.isRecordingActionDisabled}
           onToggleRecording={controller.onToggleRecording}
         />
       </div>

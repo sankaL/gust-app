@@ -137,12 +137,18 @@ function UpdateNotice({ onUpdate }: { onUpdate: () => void }) {
 
 export function BottomNavigation({
   isRecording = false,
+  isRecordingActionDisabled = false,
   onToggleRecording,
 }: {
   isRecording?: boolean
+  isRecordingActionDisabled?: boolean
   onToggleRecording?: (() => void) | null
 }) {
   const handleActionClick = (event: React.MouseEvent) => {
+    if (isRecordingActionDisabled) {
+      event.preventDefault()
+      return
+    }
     if (onToggleRecording) {
       event.preventDefault()
       onToggleRecording()
@@ -195,11 +201,13 @@ export function BottomNavigation({
           onClick={handleActionClick}
           className={[
             'pointer-events-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition-all duration-300 active:scale-95 outline-none',
+            isRecordingActionDisabled ? 'cursor-not-allowed opacity-50' : '',
             isRecording
               ? 'bg-[radial-gradient(circle_at_42%_32%,_#fda4af_0%,_#f43f5e_30%,_#e11d48_60%,_#9f1239_85%,_#881337_100%)] text-white shadow-[0_0_28px_rgba(244,63,94,0.65),_0_0_50px_rgba(225,29,72,0.35),_inset_0_1.5px_2px_rgba(255,255,255,0.7)] border border-rose-300/30 animate-pulse'
               : 'bg-[radial-gradient(circle_at_35%_28%,_#c084fc_0%,_#8b5cf6_40%,_#6d28d9_75%,_#4c1d95_100%)] text-white shadow-[0_12px_28px_rgba(139,92,246,0.45),_0_4px_12px_rgba(0,0,0,0.6),_inset_0_1.5px_2px_rgba(255,255,255,0.6),_inset_0_-2px_4px_rgba(0,0,0,0.4)] border border-purple-300/30 hover:scale-105 hover:shadow-[0_16px_32px_rgba(147,51,234,0.55),_0_6px_16px_rgba(0,0,0,0.5),_inset_0_2px_3px_rgba(255,255,255,0.7)]',
           ].join(' ')}
           aria-label={isRecording ? 'Stop recording' : 'Add a new task'}
+          aria-disabled={isRecordingActionDisabled || undefined}
         >
           {isRecording ? (
             <svg className="h-6 w-6 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" fill="currentColor" viewBox="0 0 24 24">

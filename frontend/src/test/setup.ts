@@ -24,6 +24,10 @@ if (typeof window !== 'undefined') {
   if (typeof window.scrollTo !== 'function' || !vi.isMockFunction(window.scrollTo)) {
     window.scrollTo = vi.fn()
   }
+
+  if (typeof HTMLElement.prototype.scrollIntoView !== 'function') {
+    HTMLElement.prototype.scrollIntoView = vi.fn()
+  }
 }
 
 if (typeof globalThis.ResizeObserver === 'undefined') {

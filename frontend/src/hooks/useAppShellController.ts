@@ -113,11 +113,12 @@ export function useAppShellController() {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
   const [topBarAction, setTopBarAction] = useState<ReactNode | null>(null)
   const [isRecording, setIsRecording] = useState(false)
+  const [isRecordingActionDisabled, setIsRecordingActionDisabled] = useState(false)
   const [onToggleRecording, setOnToggleRecording] = useState<(() => void) | null>(null)
   const closeMenu = useCallback(() => setIsAccountMenuOpen(false), [])
   const accountMenuRef = useDismissibleMenu(isAccountMenuOpen, closeMenu)
   const shellActions = useMemo(
-    () => ({ setTopBarAction, setIsRecording, setOnToggleRecording }),
+    () => ({ setTopBarAction, setIsRecording, setIsRecordingActionDisabled, setOnToggleRecording }),
     []
   )
   const logout = useLogout({ token: sessionQuery.data?.csrf_token, closeMenu, onError: notifyError })
@@ -136,6 +137,7 @@ export function useAppShellController() {
     isAccountMenuOpen,
     topBarAction,
     isRecording,
+    isRecordingActionDisabled,
     onToggleRecording,
     accountMenuRef,
     shellActions,

@@ -1,19 +1,23 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { EditExtractedTaskModal } from '../components/EditExtractedTaskModal'
-import { updateExtractedTask, type ExtractedTask, type GroupSummary } from '../lib/api'
+import { createSubtask, createTask, updateExtractedTask, type ExtractedTask, type GroupSummary } from '../lib/api'
 
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
   return {
     ...actual,
+    createTask: vi.fn(),
+    createSubtask: vi.fn(),
     updateExtractedTask: vi.fn(),
   }
 })
 
 const mockedUpdateExtractedTask = vi.mocked(updateExtractedTask)
+const mockedCreateTask = vi.mocked(createTask)
+const mockedCreateSubtask = vi.mocked(createSubtask)
 
 const groups: GroupSummary[] = [
   {
@@ -195,5 +199,78 @@ describe('EditExtractedTaskModal', () => {
 
     expect(subtaskInputs[0]).toHaveValue('Newest subtask')
     expect(subtaskInputs[0]).toHaveClass('bg-transparent')
+  })
+
+  it('validates recurrence before submitting an extracted-task update', async () => {
+    const user = userEvent.setup()
+    const task = buildExtractedTask({
+      due_date: '2026-05-17',
+      recurrence_frequency: 'weekly',
+      recurrence_weekday: 6,
+    })
+
+    render(
+      <EditExtractedTaskModal
+        task={task}
+        groups={groups}
+        isOpen
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        csrfToken="csrf-token"
+      />
+    )
+
+    await user.click(screen.getByText('Weekly'))
+    await user.click(screen.getByRole('button', { name: /Saturday/ }))
+    await user.click(screen.getByRole('option', { name: 'Select a day' }))
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    expect(await screen.findByText('Please select a day of the week for weekly recurrence')).toBeInTheDocument()
+    expect(mockedUpdateExtractedTask).not.toHaveBeenCalled()
+  })
+
+  it('filters blank subtasks and resumes a failed create without duplicating the parent task', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    mockedCreateTask.mockResolvedValue({ id: 'task-1' } as Awaited<ReturnType<typeof createTask>>)
+    mockedCreateSubtask
+      .mockResolvedValueOnce({ id: 'subtask-1' } as Awaited<ReturnType<typeof createSubtask>>)
+      .mockRejectedValueOnce(new Error('Subtask request failed'))
+      .mockResolvedValueOnce({ id: 'subtask-2' } as Awaited<ReturnType<typeof createSubtask>>)
+
+    render(
+      <EditExtractedTaskModal
+        task={null}
+        groups={groups}
+        isOpen
+        onClose={vi.fn()}
+        onSave={onSave}
+        csrfToken="csrf-token"
+      />
+    )
+
+    await user.type(screen.getByLabelText('Task title'), 'Create ventilation task')
+    await user.type(screen.getByPlaceholderText('Add a subtask...'), 'First subtask')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.type(screen.getByPlaceholderText('Add a subtask...'), 'Retry subtask')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.type(screen.getByPlaceholderText('Add a subtask...'), 'Blank subtask')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    const draftRows = screen.getAllByRole('textbox').filter((input) => input.getAttribute('aria-label')?.startsWith('Subtask '))
+    await user.clear(draftRows[0])
+    await user.click(screen.getByRole('button', { name: 'Add Task' }))
+
+    expect(await screen.findByText('Subtask request failed')).toBeInTheDocument()
+    expect(mockedCreateTask).toHaveBeenCalledTimes(1)
+    expect(mockedCreateSubtask).toHaveBeenCalledWith('task-1', 'First subtask', 'csrf-token')
+    expect(mockedCreateSubtask).toHaveBeenCalledWith('task-1', 'Retry subtask', 'csrf-token')
+
+    await user.click(screen.getByRole('button', { name: 'Add Task' }))
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith('task-1', { title: 'Create ventilation task' }))
+    expect(mockedCreateTask).toHaveBeenCalledTimes(1)
+    expect(mockedCreateSubtask).toHaveBeenCalledTimes(3)
+    expect(mockedCreateSubtask).not.toHaveBeenCalledWith('task-1', '', 'csrf-token')
   })
 })

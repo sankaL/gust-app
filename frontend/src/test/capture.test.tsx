@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, vi } from 'vitest'
@@ -351,6 +351,33 @@ describe('capture route', () => {
 
     expect(await screen.findByRole('button', { name: 'Stop recording' })).toBeInTheDocument()
     await waitFor(() => expect(router.state.location.search).toBe(''))
+  })
+
+  it('disables the shell mic action while microphone startup is pending', async () => {
+    stubSignedInFetch()
+    let resolveMicrophone: ((stream: MediaStream) => void) | undefined
+    const getUserMedia = vi.fn(
+      () => new Promise<MediaStream>((resolve) => { resolveMicrophone = resolve })
+    )
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    })
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+    const shellMic = screen.getByRole('link', { name: 'Add a new task' })
+    await waitFor(() => expect(shellMic).toHaveAttribute('aria-disabled', 'true'))
+
+    await user.click(shellMic)
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveMicrophone?.({ getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack] } as MediaStream)
+      await Promise.resolve()
+    })
   })
 
   it('shows loading state for the latest capture instead of an empty review state', async () => {

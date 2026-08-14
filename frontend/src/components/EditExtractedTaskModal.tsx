@@ -7,6 +7,7 @@ import {
   buildExtractedTaskDraft,
   buildExtractedTaskUpdates,
   recurrenceForDueDate,
+  validateTaskFormDraft,
   type TaskFormDraft,
 } from '../lib/taskFormModel'
 import { formatDate, formatDateTime, formatRecurrence } from '../lib/taskFormatters'
@@ -28,6 +29,12 @@ interface EditExtractedTaskModalProps {
 }
 
 type EditableSection = 'title' | 'context' | 'dueDate' | 'reminder' | 'group' | 'recurrence' | 'subtasks'
+type PendingTaskCreation = {
+  taskId: string
+  title: string
+  subtaskTitles: string[]
+  nextSubtaskIndex: number
+}
 
 const sectionIcons: Record<Exclude<EditableSection, 'title'>, LucideIcon> = {
   context: TextQuote,
@@ -244,6 +251,7 @@ export function EditExtractedTaskModal({
   const [error, setError] = useState<string | null>(null)
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false)
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
+  const [pendingTaskCreation, setPendingTaskCreation] = useState<PendingTaskCreation | null>(null)
 
   const initialDraft: TaskFormDraft = useMemo(
     () =>
@@ -270,6 +278,7 @@ export function EditExtractedTaskModal({
     setError(null)
     setNewSubtaskTitle('')
     setIsGroupDropdownOpen(false)
+    setPendingTaskCreation(null)
   }, [task, initialDraft, isCreateMode])
 
   const isDirty = useMemo(() => {
@@ -325,8 +334,9 @@ export function EditExtractedTaskModal({
   }
 
   const handleSave = async () => {
-    if (!draft.title.trim()) {
-      setError('Please enter a task title')
+    const validationError = validateTaskFormDraft(draft, isCreateMode)
+    if (validationError) {
+      setError(validationError)
       return
     }
 
@@ -335,23 +345,34 @@ export function EditExtractedTaskModal({
 
     try {
       if (isCreateMode) {
-        const created = await createTask(
-          {
+        let pending = pendingTaskCreation
+        if (!pending) {
+          const created = await createTask(
+            {
+              title: draft.title.trim(),
+              description: draft.description.trim() || null,
+              group_id: draft.groupId,
+              due_date: draft.dueDate || null,
+              reminder_at: draft.reminderAt ? new Date(draft.reminderAt).toISOString() : null,
+              recurrence: draft.recurrence,
+            },
+            csrfToken
+          )
+          pending = {
+            taskId: created.id,
             title: draft.title.trim(),
-            description: draft.description.trim() || null,
-            group_id: draft.groupId,
-            due_date: draft.dueDate || null,
-            reminder_at: draft.reminderAt ? new Date(draft.reminderAt).toISOString() : null,
-            recurrence: draft.recurrence,
-          },
-          csrfToken
-        )
-        if (draft.subtaskTitles.length > 0) {
-          for (const subtaskTitle of draft.subtaskTitles) {
-            await createSubtask(created.id, subtaskTitle, csrfToken)
+            subtaskTitles: draft.subtaskTitles.map((title) => title.trim()).filter(Boolean),
+            nextSubtaskIndex: 0,
           }
+          setPendingTaskCreation(pending)
         }
-        await onSave(created.id, { title: draft.title.trim() })
+        while (pending.nextSubtaskIndex < pending.subtaskTitles.length) {
+          await createSubtask(pending.taskId, pending.subtaskTitles[pending.nextSubtaskIndex], csrfToken)
+          pending = { ...pending, nextSubtaskIndex: pending.nextSubtaskIndex + 1 }
+          setPendingTaskCreation(pending)
+        }
+        await onSave(pending.taskId, { title: pending.title })
+        setPendingTaskCreation(null)
       } else {
         const cleanUpdates = buildExtractedTaskUpdates(task, {
           ...draft,
