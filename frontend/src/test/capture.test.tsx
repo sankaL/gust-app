@@ -323,9 +323,8 @@ describe('capture route', () => {
     expect(await screen.findByText('Write it instead')).toBeInTheDocument()
   })
 
-  it('opens the written-task composer from the quick-add capture link', async () => {
+  it('opens the written-task composer when navigating to compose=1', async () => {
     stubSignedInFetch()
-    const user = userEvent.setup()
 
     const { router } = renderCaptureRoute('/capture?compose=1')
 
@@ -333,14 +332,24 @@ describe('capture route', () => {
     await waitFor(() => expect(router.state.location.search).toBe(''))
     expect(screen.getByRole('link', { name: 'Add a new task' })).toHaveAttribute(
       'href',
-      '/capture?compose=1'
+      '/capture?record=1'
     )
+  })
 
-    await user.click(screen.getByRole('button', { name: 'Collapse text input' }))
-    expect(screen.queryByPlaceholderText('Type or paste here...')).not.toBeInTheDocument()
+  it('starts recording when clicking the quick-add capture link or opening with record=1', async () => {
+    stubSignedInFetch()
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
 
-    await user.click(screen.getByRole('link', { name: 'Add a new task' }))
-    expect(await screen.findByPlaceholderText('Type or paste here...')).toBeInTheDocument()
+    const { router } = renderCaptureRoute('/capture?record=1')
+
+    expect(await screen.findByRole('button', { name: 'Stop recording' })).toBeInTheDocument()
     await waitFor(() => expect(router.state.location.search).toBe(''))
   })
 

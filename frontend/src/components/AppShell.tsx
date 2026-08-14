@@ -23,7 +23,7 @@ export function AppShell() {
   return (
     <div className="safe-area-shell min-h-screen bg-surface text-on-surface">
       <PortraitOrientationGuard />
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-[calc(var(--safe-area-bottom)+6.5rem)] pt-3">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-4 pb-[calc(var(--safe-area-bottom)+6.5rem)] pt-3">
         <AppShellHeader
           session={session}
           topBarAction={controller.topBarAction}
@@ -46,7 +46,10 @@ export function AppShell() {
         <AppShellActionsContext.Provider value={controller.shellActions}>
           <main className="flex-1"><Outlet /></main>
         </AppShellActionsContext.Provider>
-        <BottomNavigation />
+        <BottomNavigation
+          isRecording={controller.isRecording}
+          onToggleRecording={controller.onToggleRecording}
+        />
       </div>
     </div>
   )

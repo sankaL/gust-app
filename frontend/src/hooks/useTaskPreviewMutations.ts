@@ -7,7 +7,7 @@ import { requireCsrfToken } from '../lib/sessionSecurity'
 
 type ErrorSetter = (message: string | null) => void
 type SnapshotContext = { snapshots?: ReturnType<typeof snapshotTaskQueries> }
-type SaveMutationArgs = { queryClient: QueryClient; taskId: string | null; task?: TaskDetail; draft: TaskDetailDraft | null; groups: GroupSummary[]; session?: SessionStatus; setDraft: (draft: TaskDetailDraft) => void; setDraftTaskId: (id: string) => void; setDirty: (dirty: boolean) => void; setError: ErrorSetter; friendlyError: (error: unknown, fallback: string) => string }
+type SaveMutationArgs = { queryClient: QueryClient; taskId: string | null; task?: TaskDetail; draft: TaskDetailDraft | null; groups: GroupSummary[]; session?: SessionStatus; setDraft: (draft: TaskDetailDraft) => void; setDraftTaskId: (id: string) => void; setDirty: (dirty: boolean) => void; setError: ErrorSetter; setSaveNotice: (message: string | null) => void; friendlyError: (error: unknown, fallback: string) => string }
 
 async function cancelPreviewQueries(queryClient: QueryClient, taskId: string, includeGroups = false) {
   const cancellations = [queryClient.cancelQueries({ queryKey: ['tasks'] }), queryClient.cancelQueries({ queryKey: ['task-detail', taskId] })]
@@ -81,7 +81,7 @@ function savePayload(draft: TaskDetailDraft, timezone?: string | null) {
 }
 
 function usePreviewSaveMutation(args: SaveMutationArgs) {
-  const { queryClient, taskId, draft, session, setDraft, setDraftTaskId, setDirty, setError, friendlyError } = args
+  const { queryClient, taskId, draft, session, setDraft, setDraftTaskId, setDirty, setError, setSaveNotice, friendlyError } = args
   return useMutation({
     onMutate: () => preparePreviewSave(args),
     mutationFn: async (release: () => void) => {
@@ -91,6 +91,7 @@ function usePreviewSaveMutation(args: SaveMutationArgs) {
     },
     onSuccess: (updated) => {
       setDraft(buildTaskDetailDraft(updated, session?.timezone)); setDraftTaskId(updated.id); setDirty(false)
+      setSaveNotice('Changes saved')
       updateTaskDetailCache(queryClient, updated)
       void queryClient.invalidateQueries({ queryKey: ['tasks'] }); void queryClient.invalidateQueries({ queryKey: ['groups'] })
     },
@@ -133,7 +134,7 @@ function usePreviewDeleteSubtaskMutation({ queryClient, taskId, task, session, s
   })
 }
 
-export function useTaskPreviewMutations(args: { queryClient: QueryClient; taskId: string | null; task?: TaskDetail; draft: TaskDetailDraft | null; groups: GroupSummary[]; session?: SessionStatus; title: string; setDraft: (draft: TaskDetailDraft) => void; setDraftTaskId: (id: string) => void; setDirty: (dirty: boolean) => void; setTitle: (title: string) => void; setError: ErrorSetter; friendlyError: (error: unknown, fallback: string) => string }) {
+export function useTaskPreviewMutations(args: { queryClient: QueryClient; taskId: string | null; task?: TaskDetail; draft: TaskDetailDraft | null; groups: GroupSummary[]; session?: SessionStatus; title: string; setDraft: (draft: TaskDetailDraft) => void; setDraftTaskId: (id: string) => void; setDirty: (dirty: boolean) => void; setTitle: (title: string) => void; setError: ErrorSetter; setSaveNotice: (message: string | null) => void; friendlyError: (error: unknown, fallback: string) => string }) {
   const save = usePreviewSaveMutation(args)
   const create = usePreviewCreateSubtaskMutation(args)
   const remove = usePreviewDeleteSubtaskMutation(args)

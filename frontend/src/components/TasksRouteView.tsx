@@ -60,7 +60,7 @@ export function TasksRouteView(props: TasksRouteViewProps) {
       <section className="space-y-4">
         {props.groups.length > 0 && <TaskGroupTabs groups={props.groups} inboxGroupId={props.session?.inbox_group_id} selectedGroupId={props.effectiveGroupId} onSelectGroup={props.onSelectGroup} />}
         <TasksList {...props} />
-        <div className="mb-20 mt-8 flex justify-center pb-8"><Link to={{ pathname: '/tasks/completed', search: `?group=${props.effectiveGroupId}` }} className="inline-flex items-center gap-2 rounded-pill border border-outline/20 bg-surface-container px-4 py-2 text-sm font-medium text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface hover:shadow-ambient">View Completed Tasks</Link></div>
+        <div className="mt-6 mb-2 flex justify-center"><Link to={{ pathname: '/tasks/completed', search: `?group=${props.effectiveGroupId}` }} className="inline-flex items-center gap-2 rounded-pill border border-outline/20 bg-surface-container px-4 py-2 text-sm font-medium text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface hover:shadow-ambient">View Completed Tasks</Link></div>
       </section>
       <TaskOverlays {...props} />
     </SessionGuard>

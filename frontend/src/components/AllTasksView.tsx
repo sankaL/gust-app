@@ -30,16 +30,24 @@ export function AllTasksView({ userTimezone, onTaskOpen, onTaskPrepareOpen, onTa
   if (model.query.isError) return <TaskLoadError error={model.query.error} />
   if (model.tasks.length === 0) return <EmptyTasks refreshing={model.isRefreshing} refresh={model.refresh} />
   return (
-    <PullToRefresh isRefreshing={model.isRefreshing} onRefresh={model.refresh} getScrollTop={() => model.scrollRef.current?.scrollTop ?? window.scrollY}>
+    <PullToRefresh isRefreshing={model.isRefreshing} onRefresh={model.refresh} getScrollTop={() => window.scrollY}>
       <div className="flex flex-col gap-3">
-        <div ref={model.scrollRef} className="relative overflow-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-          <div style={{ height: `${model.virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
-            <VirtualTaskRows rows={model.virtualizer.getVirtualItems()} items={model.items} todayIso={model.todayIso} busyTaskIds={busyTaskIds} measure={model.virtualizer.measureElement} onOpen={onTaskOpen} onPrepareOpen={onTaskPrepareOpen} onComplete={onTaskComplete} onDelete={onTaskDelete} />
-          </div>
-          <div ref={model.loadMoreRef} className="h-1" />
+        <div ref={model.listRef} style={{ height: `${model.virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+          <VirtualTaskRows
+            rows={model.virtualizer.getVirtualItems()}
+            items={model.items}
+            todayIso={model.todayIso}
+            busyTaskIds={busyTaskIds}
+            measure={model.virtualizer.measureElement}
+            onOpen={onTaskOpen}
+            onPrepareOpen={onTaskPrepareOpen}
+            onComplete={onTaskComplete}
+            onDelete={onTaskDelete}
+            scrollMargin={model.virtualizer.options.scrollMargin ?? 0}
+          />
         </div>
+        <div ref={model.loadMoreRef} className="h-1" />
         {(model.query.isFetching || model.query.isFetchingNextPage) && <div className="py-2 text-center text-sm text-on-surface-variant">Loading more tasks...</div>}
-        {!model.hasMore && <div className="py-2 text-center text-sm text-on-surface-variant">All tasks loaded</div>}
       </div>
     </PullToRefresh>
   )

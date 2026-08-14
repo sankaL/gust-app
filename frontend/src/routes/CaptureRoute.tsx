@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { useAppShellActions } from '../components/AppShellActions'
 import { ExtractingLoader } from '../components/ExtractingLoader'
 import {
   CaptureEditModal,
@@ -21,19 +22,42 @@ export function CaptureRoute() {
 }
 
 function SignedInCapture({ controller }: { controller: ReturnType<typeof useCaptureController> }) {
+  const shellActions = useAppShellActions()
   const [searchParams, setSearchParams] = useSearchParams()
   const { state, queries, mutations, recorder, review } = controller
   const { setTextExpanded } = state
+  const controllerRef = useRef(controller)
+  controllerRef.current = controller
+
+  const isRecording = recorder.isRecording
   useEffect(() => {
-    if (searchParams.get('compose') !== '1') return
-    setTextExpanded(true)
-    const nextSearchParams = new URLSearchParams(searchParams)
-    nextSearchParams.delete('compose')
-    setSearchParams(nextSearchParams, { replace: true })
-  }, [searchParams, setSearchParams, setTextExpanded])
+    shellActions?.setIsRecording?.(isRecording)
+    shellActions?.setOnToggleRecording?.(() => () => toggleRecorder(controllerRef.current))
+    return () => {
+      shellActions?.setIsRecording?.(false)
+      shellActions?.setOnToggleRecording?.(null)
+    }
+  }, [isRecording, shellActions])
+
+  useEffect(() => {
+    if (searchParams.get('compose') === '1') {
+      setTextExpanded(true)
+      const nextSearchParams = new URLSearchParams(searchParams)
+      nextSearchParams.delete('compose')
+      setSearchParams(nextSearchParams, { replace: true })
+    }
+    if (searchParams.get('record') === '1') {
+      const nextSearchParams = new URLSearchParams(searchParams)
+      nextSearchParams.delete('record')
+      setSearchParams(nextSearchParams, { replace: true })
+      if (!recorder.isRecording && !recorder.isLoading) {
+        void controller.startRecording()
+      }
+    }
+  }, [searchParams, setSearchParams, setTextExpanded, recorder.isRecording, recorder.isLoading, controller])
   const isBusy = recorder.isLoading || mutations.voice.isPending || mutations.text.isPending
   return (
-    <section className="space-y-4">
+    <section className="space-y-5">
       <VoiceCaptureCard
         isRecording={recorder.isRecording}
         isBusy={isBusy}

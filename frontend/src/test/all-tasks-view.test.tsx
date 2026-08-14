@@ -6,86 +6,92 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@tanstack/react-virtual', async () => {
   const React = await vi.importActual<typeof import('react')>('react')
 
-  return {
-    useVirtualizer: ({
-      count,
-      estimateSize,
-      getItemKey,
-    }: {
-      count: number
-      estimateSize: (index: number) => number
-      getItemKey?: (index: number) => string
-    }) => {
-      const cacheRef = React.useRef(new Map<string, number>())
-      const [revision, setRevision] = React.useState(0)
-      const measureElement = React.useMemo(() => vi.fn(), [])
-      const keys = React.useMemo(
-        () => Array.from({ length: count }, (_, index) => String(getItemKey?.(index) ?? index)),
-        [count, getItemKey]
-      )
-      const sizes = React.useMemo(
-        () => Array.from({ length: count }, (_, index) => estimateSize(index)),
-        [count, estimateSize]
-      )
-      const totalSize = React.useMemo(
-        () => sizes.reduce((sum, size) => sum + size, 0),
-        [sizes]
-      )
+  const useMockVirtualizer = ({
+    count,
+    estimateSize,
+    getItemKey,
+    scrollMargin = 0,
+  }: {
+    count: number
+    estimateSize: (index: number) => number
+    getItemKey?: (index: number) => string
+    scrollMargin?: number
+  }) => {
+    const cacheRef = React.useRef(new Map<string, number>())
+    const [revision, setRevision] = React.useState(0)
+    const measureElement = React.useMemo(() => vi.fn(), [])
+    const keys = React.useMemo(
+      () => Array.from({ length: count }, (_, index) => String(getItemKey?.(index) ?? index)),
+      [count, getItemKey]
+    )
+    const sizes = React.useMemo(
+      () => Array.from({ length: count }, (_, index) => estimateSize(index)),
+      [count, estimateSize]
+    )
+    const totalSize = React.useMemo(
+      () => sizes.reduce((sum, size) => sum + size, 0),
+      [sizes]
+    )
 
-      React.useEffect(() => {
-        if (cacheRef.current.size > 0 || keys.length === 0) {
-          return
-        }
+    React.useEffect(() => {
+      if (cacheRef.current.size > 0 || keys.length === 0) {
+        return
+      }
 
-        let offset = 0
-        const nextCache = new Map<string, number>()
-        keys.forEach((key, index) => {
-          nextCache.set(key, offset)
-          offset += sizes[index]
-        })
-        cacheRef.current = nextCache
-      }, [keys, sizes])
-
-      const measure = React.useCallback(() => {
-        mockVirtualizerMeasureCallCount += 1
-        let offset = 0
-        const nextCache = new Map<string, number>()
-        keys.forEach((key, index) => {
-          nextCache.set(key, offset)
-          offset += sizes[index]
-        })
-        cacheRef.current = nextCache
-        setRevision((current) => current + 1)
-      }, [keys, sizes])
-
-      const virtualItems = React.useMemo(() => {
-        // The mock mirrors the real virtualizer: measuring invalidates cached offsets.
-        void revision
-        let fallbackOffset = 0
-        return keys.map((key, index) => {
-          const start = cacheRef.current.get(key) ?? fallbackOffset
-          fallbackOffset += sizes[index]
-          return {
-            index,
-            key,
-            start,
-          }
-        })
-      }, [keys, sizes, revision])
-
-      const instanceRef = React.useRef({
-        getTotalSize: () => totalSize,
-        getVirtualItems: () => virtualItems,
-        measureElement,
-        measure,
+      let offset = 0
+      const nextCache = new Map<string, number>()
+      keys.forEach((key, index) => {
+        nextCache.set(key, offset)
+        offset += sizes[index]
       })
+      cacheRef.current = nextCache
+    }, [keys, sizes])
 
-      instanceRef.current.getTotalSize = () => totalSize
-      instanceRef.current.getVirtualItems = () => virtualItems
-      instanceRef.current.measure = measure
+    const measure = React.useCallback(() => {
+      mockVirtualizerMeasureCallCount += 1
+      let offset = 0
+      const nextCache = new Map<string, number>()
+      keys.forEach((key, index) => {
+        nextCache.set(key, offset)
+        offset += sizes[index]
+      })
+      cacheRef.current = nextCache
+      setRevision((current) => current + 1)
+    }, [keys, sizes])
 
-      return instanceRef.current
-    },
+    const virtualItems = React.useMemo(() => {
+      void revision
+      let fallbackOffset = 0
+      return keys.map((key, index) => {
+        const start = cacheRef.current.get(key) ?? fallbackOffset
+        fallbackOffset += sizes[index]
+        return {
+          index,
+          key,
+          start,
+        }
+      })
+    }, [keys, sizes, revision])
+
+    const instanceRef = React.useRef({
+      getTotalSize: () => totalSize,
+      getVirtualItems: () => virtualItems,
+      measureElement,
+      measure,
+      options: { scrollMargin },
+    })
+
+    instanceRef.current.getTotalSize = () => totalSize
+    instanceRef.current.getVirtualItems = () => virtualItems
+    instanceRef.current.measure = measure
+    instanceRef.current.options = { scrollMargin }
+
+    return instanceRef.current
+  }
+
+  return {
+    useVirtualizer: useMockVirtualizer,
+    useWindowVirtualizer: useMockVirtualizer,
   }
 })
 
@@ -227,7 +233,7 @@ describe('AllTasksView', () => {
     expect(onTaskOpen).toHaveBeenCalledWith('task-1')
   })
 
-  it('observes the load-more sentinel within the internal scroll container', async () => {
+  it('observes the load-more sentinel within the viewport', async () => {
     mockedListAllTasks
       .mockResolvedValueOnce({
         items: [
@@ -275,9 +281,8 @@ describe('AllTasksView', () => {
     const sentinel = observer.observed[0] as HTMLElement | undefined
     const root = observer.options?.root as HTMLElement | null | undefined
 
-    expect(root).toBeTruthy()
+    expect(root).toBeUndefined()
     expect(sentinel).toBeTruthy()
-    expect(root?.contains(sentinel ?? null)).toBe(true)
 
     observer.callback(
       [

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { useWindowVirtualizer } from '@tanstack/react-virtual'
 
 import { useAppShellActions } from '../components/AppShellActions'
 import { TaskScreenRefreshButton } from '../components/TaskScreenRefresh'
@@ -52,42 +52,46 @@ function useAllTasksRefreshButton(shellActions: ReturnType<typeof useAppShellAct
   }, [isRefreshing, refresh, shellActions])
 }
 
-function useTaskVirtualizer(items: VirtualTaskItem[], scrollRef: React.RefObject<HTMLDivElement | null>) {
+function useTaskVirtualizer(items: VirtualTaskItem[], listRef: React.RefObject<HTMLDivElement | null>) {
   const getItemKey = useCallback((index: number) => virtualItemKey(items, index), [items])
   const estimateSize = useCallback((index: number) => virtualItemSize(items, index), [items])
-  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scrollRef.current, getItemKey, estimateSize, overscan: 5, measureElement: (element) => element.getBoundingClientRect().height })
+  const virtualizer = useWindowVirtualizer({
+    count: items.length,
+    getItemKey,
+    estimateSize,
+    overscan: 5,
+    scrollMargin: listRef.current?.offsetTop ?? 0,
+    measureElement: (element) => element.getBoundingClientRect().height,
+  })
   useEffect(() => { void virtualizer.measure() }, [items.length, virtualizer])
   return virtualizer
 }
 
 function useLoadMoreObserver({
   loadMoreRef,
-  scrollRef,
   enabled,
   loadMore,
 }: {
   loadMoreRef: React.RefObject<HTMLDivElement | null>
-  scrollRef: React.RefObject<HTMLDivElement | null>
   enabled: boolean
   loadMore: () => Promise<unknown>
 }) {
   useEffect(() => {
     const target = loadMoreRef.current
-    const root = scrollRef.current
-    if (!target || !root || !enabled) return
+    if (!target || !enabled) return
     const observer = new IntersectionObserver((entries) => {
       if (entries[0]?.isIntersecting) void loadMore()
-    }, { root, rootMargin: '200px 0px' })
+    }, { rootMargin: '300px 0px' })
     observer.observe(target)
     return () => observer.disconnect()
-  }, [enabled, loadMore, loadMoreRef, scrollRef])
+  }, [enabled, loadMore, loadMoreRef])
 }
 
 export function useAllTasksViewModel(userTimezone: string | null) {
   const queryClient = useQueryClient()
   const shellActions = useAppShellActions()
   const loadMoreRef = useRef<HTMLDivElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const query = useInfiniteQuery({
     queryKey: QUERY_KEY,
     queryFn: ({ pageParam }) => listAllTasks('open', pageParam ?? null, PAGE_SIZE),
@@ -100,12 +104,12 @@ export function useAllTasksViewModel(userTimezone: string | null) {
   const tasks = useMemo(() => query.data?.pages.flatMap((page) => page.items) ?? [], [query.data])
   const todayIso = getTodayIsoDate(userTimezone)
   const items = useMemo(() => buildVirtualItems(tasks, todayIso), [tasks, todayIso])
-  const virtualizer = useTaskVirtualizer(items, scrollRef)
+  const virtualizer = useTaskVirtualizer(items, listRef)
   const isRefreshing = query.isFetching && !query.isFetchingNextPage
 
   useAllTasksRefreshButton(shellActions, isRefreshing, refresh)
   const loadMore = useCallback(() => query.fetchNextPage(), [query])
-  useLoadMoreObserver({ loadMoreRef, scrollRef, enabled: Boolean(query.hasNextPage) && !query.isFetchingNextPage, loadMore })
+  useLoadMoreObserver({ loadMoreRef, enabled: Boolean(query.hasNextPage) && !query.isFetchingNextPage, loadMore })
 
-  return { query, tasks, items, todayIso, virtualizer, loadMoreRef, scrollRef, refresh, isRefreshing, hasMore: Boolean(query.hasNextPage) }
+  return { query, tasks, items, todayIso, virtualizer, loadMoreRef, listRef, refresh, isRefreshing, hasMore: Boolean(query.hasNextPage) }
 }

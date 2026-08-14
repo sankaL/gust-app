@@ -101,7 +101,7 @@ describe('open task card metadata layout', () => {
     expect(screen.getByText('12')).toBeInTheDocument()
   })
 
-  it('keeps expanded metadata rows single-line with truncation and preserves action buttons', async () => {
+  it('wraps expanded metadata before the action rail and preserves action buttons', async () => {
     const groupName = 'Operations and Long-Running Cross-Team Planning Group'
     const user = userEvent.setup()
 
@@ -151,8 +151,10 @@ describe('open task card metadata layout', () => {
       throw new Error('Expected group, due date, recurrence row')
     }
 
-    expect(bottomMetadataRow).toHaveClass('flex-nowrap')
-    expect(bottomMetadataRow).toHaveClass('overflow-hidden')
+    expect(bottomMetadataRow).toHaveClass('flex-wrap')
+    expect(bottomMetadataRow).toHaveClass('justify-start')
+    expect(bottomMetadataRow).toHaveClass('overflow-visible')
+    expect(bottomMetadataRow).not.toHaveClass('flex-nowrap')
     expect(bottomMetadataRow.className).toContain('text-[0.62rem]')
     expect(screen.getByText(groupName)).toHaveClass('max-w-[44%]')
     expect(screen.getByText(groupName)).toHaveClass('shrink')

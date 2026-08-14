@@ -112,9 +112,14 @@ export function useAppShellController() {
   const pwa = usePwaStatus()
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
   const [topBarAction, setTopBarAction] = useState<ReactNode | null>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [onToggleRecording, setOnToggleRecording] = useState<(() => void) | null>(null)
   const closeMenu = useCallback(() => setIsAccountMenuOpen(false), [])
   const accountMenuRef = useDismissibleMenu(isAccountMenuOpen, closeMenu)
-  const shellActions = useMemo(() => ({ setTopBarAction }), [])
+  const shellActions = useMemo(
+    () => ({ setTopBarAction, setIsRecording, setOnToggleRecording }),
+    []
+  )
   const logout = useLogout({ token: sessionQuery.data?.csrf_token, closeMenu, onError: notifyError })
   const user = sessionQuery.data?.user
   const accountInitials = user ? buildAvatarLabel(user.display_name, user.email) : 'G'
@@ -130,6 +135,8 @@ export function useAppShellController() {
     offlineReady: pwa.offlineReady,
     isAccountMenuOpen,
     topBarAction,
+    isRecording,
+    onToggleRecording,
     accountMenuRef,
     shellActions,
     accountInitials,

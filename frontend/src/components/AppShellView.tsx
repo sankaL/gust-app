@@ -1,6 +1,6 @@
 import type { ReactNode, RefObject } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { ListTodo, Mic, Plus, UsersRound } from 'lucide-react'
+import { CheckCircle2, Folder, Laptop, ListTodo, LogOut, Mic, Plus } from 'lucide-react'
 
 import type { SessionStatus } from '../lib/api'
 import { Button } from './Button'
@@ -9,7 +9,7 @@ import { Card } from './Card'
 const navigation = [
   { to: '/capture', label: 'Capture', icon: Mic, end: true },
   { to: '/tasks', label: 'Tasks', icon: ListTodo, end: true },
-  { to: '/tasks/groups', label: 'Groups', icon: UsersRound, end: false },
+  { to: '/tasks/groups', label: 'Groups', icon: Folder, end: false },
 ]
 
 type AccountMenuProps = {
@@ -39,7 +39,7 @@ function AccountMenu({
     <div className="relative" ref={menuRef}>
       <button
         type="button"
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,_#ffffff_10%,_#e5e5e5_90%)] font-body text-xs font-bold uppercase tracking-[0.08em] text-black shadow-[0_4px_0_#a1a1aa,_0_6px_10px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.8)] transition-all duration-200 outline-none hover:-translate-y-[1px] hover:shadow-[0_5px_0_#a1a1aa,_0_8px_12px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.8)] active:translate-y-[4px] active:shadow-[0_0px_0_#a1a1aa,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_4px_rgba(0,0,0,0.1)]"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-b from-white to-neutral-200 font-body text-xs font-bold uppercase tracking-[0.08em] text-black shadow-[0_0_18px_rgba(168,85,247,0.55),_0_0_32px_rgba(139,92,246,0.25)] ring-1 ring-white/40 transition-all duration-200 outline-none hover:scale-105 active:scale-95"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label="Open account menu"
@@ -67,21 +67,47 @@ function AccountMenuPanel({
   onDesktopMode,
   onLogout,
 }: Omit<AccountMenuProps, 'accountInitials' | 'isOpen' | 'menuRef' | 'onToggle'>) {
-  const menuItemClass =
-    'flex w-full items-center gap-3 px-3 py-2 text-left font-body text-sm transition-colors hover:bg-surface-container-highest'
   return (
     <div
       role="menu"
-      className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-card bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)] py-1 shadow-[0_18px_40px_rgba(0,0,0,0.58),_inset_0_1px_0_rgba(255,255,255,0.05)]"
+      className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-2xl border border-purple-500/30 bg-black p-2 shadow-[0_20px_50px_rgba(0,0,0,0.95),_0_0_25px_rgba(139,92,246,0.2),_inset_0_2px_3px_rgba(255,255,255,0.22),_inset_0_1px_1px_rgba(216,180,254,0.35),_inset_0_-4px_8px_rgba(0,0,0,0.9)] transition-all duration-200"
     >
-      <div className="mb-1 bg-white/[0.03] px-3 py-3">
-        <p className="font-body text-[0.65rem] uppercase tracking-[0.15em] text-on-surface-variant">Signed in</p>
-        <p className="truncate font-body text-sm text-on-surface">{email}</p>
+      <div className="mb-1.5 rounded-xl border border-purple-400/20 bg-[#140b29] px-3.5 py-3 shadow-[inset_0_1px_2px_rgba(255,255,255,0.18),_inset_0_-2px_4px_rgba(0,0,0,0.7)]">
+        <p className="font-body text-[0.65rem] font-bold uppercase tracking-[0.18em] text-purple-300">
+          Signed in
+        </p>
+        <p className="truncate font-body text-sm font-semibold text-white mt-0.5">{email}</p>
       </div>
-      <div className="flex flex-col">
-        <button type="button" role="menuitem" onClick={onCompletedTasks} className={`${menuItemClass} text-on-surface`}>Completed Tasks</button>
-        <button type="button" role="menuitem" onClick={onDesktopMode} className={`${menuItemClass} text-on-surface`}>Desktop Mode</button>
-        <button type="button" role="menuitem" onClick={onLogout} disabled={isLoggingOut} className={`${menuItemClass} text-tertiary disabled:opacity-60`}>{isLoggingOut ? 'Logging out...' : 'Logout'}</button>
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          role="menuitem"
+          onClick={onCompletedTasks}
+          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-body text-sm font-medium text-zinc-200 transition-all hover:bg-[#1a1136] hover:text-white active:scale-[0.98]"
+        >
+          <CheckCircle2 className="h-4 w-4 text-purple-400 transition-colors group-hover:text-purple-300" strokeWidth={1.9} />
+          <span>Completed Tasks</span>
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={onDesktopMode}
+          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-body text-sm font-medium text-zinc-200 transition-all hover:bg-[#1a1136] hover:text-white active:scale-[0.98]"
+        >
+          <Laptop className="h-4 w-4 text-purple-400 transition-colors group-hover:text-purple-300" strokeWidth={1.9} />
+          <span>Desktop Mode</span>
+        </button>
+        <div className="my-0.5 h-px bg-purple-500/20" />
+        <button
+          type="button"
+          role="menuitem"
+          onClick={onLogout}
+          disabled={isLoggingOut}
+          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-body text-sm font-medium text-rose-300 transition-all hover:bg-[#2b0c16] hover:text-rose-200 active:scale-[0.98] disabled:opacity-60"
+        >
+          <LogOut className="h-4 w-4 text-rose-400 transition-colors group-hover:text-rose-300" strokeWidth={1.9} />
+          <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
+        </button>
       </div>
     </div>
   )
@@ -109,11 +135,25 @@ function UpdateNotice({ onUpdate }: { onUpdate: () => void }) {
   )
 }
 
-export function BottomNavigation() {
+export function BottomNavigation({
+  isRecording = false,
+  onToggleRecording,
+}: {
+  isRecording?: boolean
+  onToggleRecording?: (() => void) | null
+}) {
+  const handleActionClick = (event: React.MouseEvent) => {
+    if (onToggleRecording) {
+      event.preventDefault()
+      onToggleRecording()
+    }
+  }
+
   return (
-    <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(var(--safe-area-bottom)+0.75rem)]">
-      <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3">
-        <div className="grid min-w-0 flex-1 grid-cols-3 gap-1 rounded-soft bg-surface-container-highest/95 p-1.5 ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.52),_0_0_28px_rgba(132,85,239,0.2),_inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl">
+    <nav aria-label="Primary" className="pointer-events-none fixed inset-x-0 bottom-0 z-50 bg-transparent px-4 pb-[calc(var(--safe-area-bottom)+0.75rem)] pt-2">
+      <div className="mx-auto flex w-full max-w-md items-center gap-3">
+        {/* Left Pill Container with sleek black obsidian & dark purple floating styling */}
+        <div className="clay-obsidian pointer-events-auto flex h-14 flex-1 items-center justify-around rounded-[2rem] px-3">
           {navigation.map((item) => {
             const Icon = item.icon
             return (
@@ -122,23 +162,52 @@ export function BottomNavigation() {
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) => [
-                  'flex h-12 min-w-0 items-center justify-center rounded-card px-2 font-body transition-[background-color,color,transform] duration-200 active:scale-[0.97]',
-                  isActive ? 'bg-surface-container-highest text-primary shadow-ambient' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
+                  'group relative flex h-full flex-1 flex-col items-center justify-center transition-all duration-200 outline-none',
+                  isActive
+                    ? 'text-white'
+                    : 'text-zinc-400/50 hover:text-purple-200 active:scale-95',
                 ].join(' ')}
               >
-                <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
-                <span className="sr-only">{item.label}</span>
+                {({ isActive }) => (
+                  <>
+                    <Icon
+                      className={`h-6 w-6 transition-transform duration-200 ${
+                        isActive ? 'scale-110 drop-shadow-[0_0_10px_rgba(186,158,255,0.5)]' : ''
+                      }`}
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                    {isActive && (
+                      <span className="absolute bottom-1.5 h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_#a855f7,_0_0_12px_#ba9eff]" />
+                    )}
+                    <span className="sr-only">{item.label}</span>
+                  </>
+                )}
               </NavLink>
             )
           })}
         </div>
+
+        {/* Right Circular Action Button */}
         <Link
-          to="/capture?compose=1"
+          to="/capture?record=1"
           replace
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-card bg-[radial-gradient(circle_at_top,_rgba(196,181,253,0.98),_rgba(124,58,237,0.96))] text-white shadow-[0_5px_0_#4c1d95,_0_10px_20px_rgba(0,0,0,0.34),_0_0_24px_rgba(186,158,255,0.3)] transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_6px_0_#4c1d95,_0_12px_22px_rgba(0,0,0,0.38),_0_0_30px_rgba(186,158,255,0.38)] active:translate-y-[4px] active:shadow-[0_1px_0_#4c1d95,_0_4px_8px_rgba(0,0,0,0.34)]"
-          aria-label="Add a new task"
+          onClick={handleActionClick}
+          className={[
+            'pointer-events-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition-all duration-300 active:scale-95 outline-none',
+            isRecording
+              ? 'bg-[radial-gradient(circle_at_42%_32%,_#fda4af_0%,_#f43f5e_30%,_#e11d48_60%,_#9f1239_85%,_#881337_100%)] text-white shadow-[0_0_28px_rgba(244,63,94,0.65),_0_0_50px_rgba(225,29,72,0.35),_inset_0_1.5px_2px_rgba(255,255,255,0.7)] border border-rose-300/30 animate-pulse'
+              : 'bg-[radial-gradient(circle_at_35%_28%,_#c084fc_0%,_#8b5cf6_40%,_#6d28d9_75%,_#4c1d95_100%)] text-white shadow-[0_12px_28px_rgba(139,92,246,0.45),_0_4px_12px_rgba(0,0,0,0.6),_inset_0_1.5px_2px_rgba(255,255,255,0.6),_inset_0_-2px_4px_rgba(0,0,0,0.4)] border border-purple-300/30 hover:scale-105 hover:shadow-[0_16px_32px_rgba(147,51,234,0.55),_0_6px_16px_rgba(0,0,0,0.5),_inset_0_2px_3px_rgba(255,255,255,0.7)]',
+          ].join(' ')}
+          aria-label={isRecording ? 'Stop recording' : 'Add a new task'}
         >
-          <Plus className="h-6 w-6" strokeWidth={2.2} aria-hidden="true" />
+          {isRecording ? (
+            <svg className="h-6 w-6 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="6" width="12" height="12" rx="2.5" />
+            </svg>
+          ) : (
+            <Plus className="h-7 w-7 text-white drop-shadow-sm" strokeWidth={2.4} aria-hidden="true" />
+          )}
         </Link>
       </div>
     </nav>
@@ -167,10 +236,13 @@ export type AppShellHeaderProps = {
 
 export function AppShellHeader(props: AppShellHeaderProps) {
   return (
-    <header className="safe-area-sticky-top sticky z-50 mb-4 space-y-4 bg-surface/95 pt-2 backdrop-blur-sm">
+    <header className="safe-area-sticky-top sticky top-0 z-40 -mx-4 -mt-3 mb-3 px-4 pt-3 pb-3 bg-[#090614]/90 backdrop-blur-xl border-b border-purple-500/15 shadow-[0_8px_24px_rgba(0,0,0,0.6)] transition-all">
       <div className="flex items-center justify-between gap-3">
-        <Link to="/capture" className="flex items-center gap-2"><img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-6 w-6" /><h1 className="font-display text-2xl leading-none text-on-surface">Gust</h1></Link>
-        <div className="flex items-center gap-2">
+        <Link to="/capture" className="flex items-center gap-2.5 transition-opacity hover:opacity-90">
+          <img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-6 w-6 drop-shadow-[0_0_8px_rgba(186,158,255,0.4)]" />
+          <h1 className="font-display text-2xl font-bold tracking-tight text-on-surface">Gust</h1>
+        </Link>
+        <div className="flex items-center gap-3">
           {props.shouldShowInstallButton && <Button type="button" variant="primary" size="sm" onClick={props.onInstall} aria-label={props.hasInstallPrompt ? 'Install Gust app' : 'Show iPhone install instructions'}>{props.hasInstallPrompt ? 'Install' : 'Add to Home'}</Button>}
           {props.topBarAction}
           <AccountMenu accountInitials={props.accountInitials} email={props.session.user?.email} isOpen={props.isAccountMenuOpen} isLoggingOut={props.isLoggingOut} menuRef={props.accountMenuRef} onToggle={props.onToggleAccountMenu} onCompletedTasks={props.onCompletedTasks} onDesktopMode={props.onDesktopMode} onLogout={props.onLogout} />
