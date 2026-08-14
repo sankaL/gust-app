@@ -284,7 +284,12 @@ describe('tasks flow', () => {
 
     renderTaskRoute(['/tasks'])
 
-    expect(await screen.findByText('All tasks loaded')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/tasks?'),
+        expect.any(Object)
+      )
+    })
     expect(fetchedGroupTaskUrls).toEqual([])
   })
 
@@ -671,7 +676,7 @@ describe('tasks flow', () => {
       expect(router.state.location.search).toContain('task=task-1')
     })
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByLabelText('Task title')).toHaveValue('Review extraction contract')
+    expect(screen.getByRole('heading', { name: 'Review extraction contract', level: 2 })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/tasks')
     expect(router.state.location.search).toContain('task=task-1')
   })
@@ -796,9 +801,6 @@ describe('tasks flow', () => {
         expect.any(Object)
       )
     })
-
-    // Verify the "All tasks loaded" footer is shown (means data loaded)
-    expect(await screen.findByText('All tasks loaded')).toBeInTheDocument()
   })
 
   it('derives the all-tasks today section without changing the shared task bucket', async () => {
@@ -888,9 +890,6 @@ describe('tasks flow', () => {
         expect.any(Object)
       )
     })
-
-    // Verify the "All tasks loaded" footer is shown (means data loaded)
-    expect(await screen.findByText('All tasks loaded')).toBeInTheDocument()
   })
 
   it('loads the all-tasks view when a legacy paginated cache entry exists for the old key', async () => {
@@ -969,8 +968,9 @@ describe('tasks flow', () => {
 
     renderTaskRouteWithClient(['/tasks?group=all'], client)
 
-    // The cached data should be used immediately, showing "All tasks loaded"
-    expect(await screen.findByText('All tasks loaded')).toBeInTheDocument()
+    // The cached data should be used immediately
+    expect(client.getQueryState(['tasks', 'all', 'open', 'infinite'])?.status).toBe('success')
+    expect(await screen.findByRole('link', { name: /View Completed Tasks/i })).toBeInTheDocument()
   })
 
   it('clears reminder and recurrence when saving a task with no due date and returns to the filtered task list', async () => {
@@ -1099,6 +1099,11 @@ describe('tasks flow', () => {
     
     // Check Personal group is also shown
     expect(screen.getByText('Personal')).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Edit group' }))
+    const saveGroupButton = await screen.findByRole('button', { name: 'Save Group' })
+    expect(saveGroupButton.parentElement).toHaveClass('justify-end')
   })
 
   it('opens non-review task detail in read mode first and enters edit mode from the sticky dock', async () => {

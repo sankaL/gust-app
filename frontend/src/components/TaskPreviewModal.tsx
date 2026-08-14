@@ -65,7 +65,8 @@ function usePreviewState() {
   const [isDraftDirty, setIsDraftDirty] = useState(false)
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
-  return { draft, setDraft, draftTaskId, setDraftTaskId, isDraftDirty, setIsDraftDirty, newSubtaskTitle, setNewSubtaskTitle, saveError, setSaveError }
+  const [saveNotice, setSaveNotice] = useState<string | null>(null)
+  return { draft, setDraft, draftTaskId, setDraftTaskId, isDraftDirty, setIsDraftDirty, newSubtaskTitle, setNewSubtaskTitle, saveError, setSaveError, saveNotice, setSaveNotice }
 }
 
 export function TaskPreviewModal(props: TaskPreviewModalProps) {
@@ -75,11 +76,11 @@ export function TaskPreviewModal(props: TaskPreviewModalProps) {
 
 function useTaskPreviewController({ taskId, isOpen, onClose, onComplete, onRestore, onRequestDelete, busyTaskIds = [], session, groups = [] }: TaskPreviewModalProps) {
   const queryClient = useQueryClient()
-  const { draft, setDraft, draftTaskId, setDraftTaskId, isDraftDirty, setIsDraftDirty, newSubtaskTitle, setNewSubtaskTitle, saveError, setSaveError } = usePreviewState()
+  const { draft, setDraft, draftTaskId, setDraftTaskId, isDraftDirty, setIsDraftDirty, newSubtaskTitle, setNewSubtaskTitle, saveError, setSaveError, saveNotice, setSaveNotice } = usePreviewState()
   const { isLocked, acquire } = useLocalMutationLock(setSaveError)
   const taskQuery = useQuery({ queryKey: ['task-detail', taskId], queryFn: () => getTaskDetail(taskId as string), enabled: isOpen && Boolean(taskId), staleTime: TASK_SCREEN_STALE_TIME_MS, gcTime: TASK_SCREEN_GC_TIME_MS })
   const task = taskQuery.data
-  const mutations = useTaskPreviewMutations({ queryClient, taskId, task, draft, groups, session, title: newSubtaskTitle, setDraft, setDraftTaskId, setDirty: setIsDraftDirty, setTitle: setNewSubtaskTitle, setError: setSaveError, friendlyError: buildFriendlyMessage })
+  const mutations = useTaskPreviewMutations({ queryClient, taskId, task, draft, groups, session, title: newSubtaskTitle, setDraft, setDraftTaskId, setDirty: setIsDraftDirty, setTitle: setNewSubtaskTitle, setError: setSaveError, setSaveNotice, friendlyError: buildFriendlyMessage })
   const { save: saveMutation, create: createMutation, remove: deleteMutation } = mutations
   const mutationPending = isLocked || saveMutation.isPending || createMutation.isPending || deleteMutation.isPending
   const isBusy = Boolean(task && busyTaskIds.includes(task.id)) || mutationPending
@@ -92,5 +93,5 @@ function useTaskPreviewController({ taskId, isOpen, onClose, onComplete, onResto
 
   usePreviewDraftSync({ isOpen, task, timezone: session?.timezone ?? undefined, draftTaskId, isDirty: isDraftDirty, setDraft, setDraftTaskId, setDirty: setIsDraftDirty, setTitle: setNewSubtaskTitle, setError: setSaveError })
   useEscapeClose(isOpen, requests.close)
-  return { visible: Boolean(isOpen && taskId), view: { task, draft, groups, isLoading: taskQuery.isLoading, error: taskQuery.error, isEditable, isBusy, saveError, newSubtaskTitle, onDraftChange: updateDraft, onNewSubtaskTitleChange: setNewSubtaskTitle, onClose: requests.close, onSave: requests.saveTask, onCreateSubtask: requests.createSubtask, onDeleteSubtask: requests.deleteSubtask, onComplete: requests.complete, onRestore: requests.restore, onDelete: requests.deleteTask, friendlyError: buildFriendlyMessage } }
+  return { visible: Boolean(isOpen && taskId), view: { task, draft, groups, isLoading: taskQuery.isLoading, error: taskQuery.error, isEditable, isBusy, isDirty: isDraftDirty, saveError, saveNotice, newSubtaskTitle, onDraftChange: updateDraft, onNewSubtaskTitleChange: setNewSubtaskTitle, onDismissSaveNotice: () => setSaveNotice(null), onClose: requests.close, onSave: requests.saveTask, onCreateSubtask: requests.createSubtask, onDeleteSubtask: requests.deleteSubtask, onComplete: requests.complete, onRestore: requests.restore, onDelete: requests.deleteTask, friendlyError: buildFriendlyMessage } }
 }

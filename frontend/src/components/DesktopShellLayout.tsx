@@ -62,19 +62,30 @@ function NavigationItems({ collapsed }: { collapsed: boolean }) {
 }
 
 const signalStyles: Record<GroupNavigationSignal['tone'], { className: string; icon: typeof AlertTriangle }> = {
-  overdue: { className: 'bg-error/15 text-error', icon: AlertTriangle },
-  review: { className: 'bg-warning/15 text-warning', icon: AlertTriangle },
-  reminder: { className: 'bg-info/15 text-info', icon: BellRing },
-  clear: { className: 'bg-success/15 text-success', icon: CheckCircle2 },
+  overdue: { className: 'bg-red-500 text-white shadow-[0_1px_6px_rgba(239,68,68,0.45)]', icon: AlertTriangle },
+  review: { className: 'bg-amber-500 text-white shadow-[0_1px_6px_rgba(245,158,11,0.45)]', icon: AlertTriangle },
+  reminder: { className: 'bg-sky-500 text-white shadow-[0_1px_6px_rgba(14,165,233,0.45)]', icon: BellRing },
+  clear: { className: 'bg-emerald-500 text-white shadow-[0_1px_6px_rgba(16,185,129,0.45)]', icon: CheckCircle2 },
 }
 
 function GroupStatusBreadcrumb({ signal, collapsed }: { signal?: GroupNavigationSignal; collapsed: boolean }) {
-  if (!signal || collapsed) return null
+  if (!signal || collapsed || signal.tone === 'clear') return null
+  const count = parseInt(signal.label, 10) || null
+  if (!count) return null
   const { className, icon: Icon } = signalStyles[signal.tone]
-  return <span title={signal.label} aria-label={signal.label} className={['inline-flex h-6 shrink-0 items-center justify-center gap-1.5 rounded-pill px-2 font-body font-semibold tabular-nums', className].join(' ')}>
-    <Icon className="h-3 w-3" strokeWidth={2.25} aria-hidden="true" />
-    <span className="text-[0.65rem] leading-none">{signal.label}</span>
-  </span>
+  return (
+    <span
+      title={signal.label}
+      aria-label={signal.label}
+      className={[
+        'inline-flex h-5 shrink-0 items-center justify-center gap-1 rounded-full px-2 font-body text-xs font-bold tabular-nums',
+        className,
+      ].join(' ')}
+    >
+      <Icon className="h-3 w-3 shrink-0 text-white" strokeWidth={2.5} aria-hidden="true" />
+      <span className="text-[0.68rem] font-bold leading-none text-white">{count}</span>
+    </span>
+  )
 }
 
 function GroupStatusDot({ signal, collapsed }: { signal?: GroupNavigationSignal; collapsed: boolean }) {
@@ -91,23 +102,45 @@ function GroupNavigation({ groups, collapsed, signals }: { groups: GroupSummary[
         <BarChart3 className="h-3.5 w-3.5 text-on-surface-variant" strokeWidth={1.8} />
       </div>
       <div className="max-h-[42vh] space-y-1 overflow-y-auto pr-1">
-        {groups.map((group) => (
-          <NavLink key={group.id} to={`/desktop/groups/${group.id}`}
-            aria-label={collapsed ? groupAriaLabel(group.name, group.open_task_count, signals.get(group.id)) : undefined}
-            title={collapsed ? group.name : undefined}
-            className={({ isActive }) => [
-              'flex items-center gap-3 rounded-card px-3 py-2 font-body text-sm transition-[background-color,color,transform] duration-200 active:scale-[0.98]',
-              collapsed ? 'justify-center' : 'justify-between',
-              isActive ? 'bg-surface-container-high text-on-surface' : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
-            ].join(' ')}>
-            <span className={['flex min-w-0 items-center gap-2', collapsed ? 'justify-center' : ''].join(' ')}>
-              <span className="relative shrink-0"><FolderKanban className="h-4 w-4" strokeWidth={1.8} /><GroupStatusDot signal={signals.get(group.id)} collapsed={collapsed} /></span>
-              <span className={['overflow-hidden whitespace-nowrap transition-[opacity,transform,max-width] duration-200 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]', collapsed ? 'max-w-0 -translate-x-1 opacity-0' : 'max-w-32 translate-x-0 opacity-100'].join(' ')}>{group.name}</span>
-            </span>
-            <span className={['flex items-center transition-[opacity,transform] duration-200', collapsed ? 'absolute translate-x-1 opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'].join(' ')}><span className="shrink-0 rounded-pill bg-surface-container-highest px-2 py-0.5 font-body text-[0.68rem] text-on-surface-variant">{group.open_task_count}</span></span>
-            <GroupStatusBreadcrumb signal={signals.get(group.id)} collapsed={collapsed} />
-          </NavLink>
-        ))}
+        {groups.map((group) => {
+          const signal = signals.get(group.id)
+          return (
+            <NavLink
+              key={group.id}
+              to={`/desktop/groups/${group.id}`}
+              aria-label={collapsed ? groupAriaLabel(group.name, group.open_task_count, signal) : undefined}
+              title={collapsed ? group.name : undefined}
+              className={({ isActive }) => [
+                'flex items-center gap-3 rounded-card px-3 py-2 font-body text-sm transition-[background-color,color,transform] duration-200 active:scale-[0.98]',
+                collapsed ? 'justify-center' : 'justify-between',
+                isActive ? 'bg-surface-container-high text-on-surface' : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
+              ].join(' ')}
+            >
+              <span className={['flex min-w-0 items-center gap-2.5', collapsed ? 'justify-center' : ''].join(' ')}>
+                <span className="relative shrink-0">
+                  <FolderKanban className="h-4 w-4" strokeWidth={1.8} />
+                  <GroupStatusDot signal={signal} collapsed={collapsed} />
+                </span>
+                <span
+                  className={[
+                    'truncate overflow-hidden whitespace-nowrap transition-[opacity,transform,max-width] duration-200 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]',
+                    collapsed ? 'max-w-0 -translate-x-1 opacity-0' : 'max-w-28 translate-x-0 opacity-100',
+                  ].join(' ')}
+                >
+                  {group.name}
+                </span>
+              </span>
+              {!collapsed && (
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-surface-container-highest px-1.5 font-body text-[0.68rem] font-semibold text-on-surface-variant">
+                    {group.open_task_count}
+                  </span>
+                  <GroupStatusBreadcrumb signal={signal} collapsed={collapsed} />
+                </div>
+              )}
+            </NavLink>
+          )
+        })}
       </div>
     </div>
   )

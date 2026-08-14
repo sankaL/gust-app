@@ -1172,7 +1172,7 @@ describe('app shell', () => {
     await screen.findByRole('link', { name: 'Tasks' })
 
     await user.click(screen.getByRole('link', { name: 'Tasks' }))
-    await user.click(await screen.findByRole('button', { name: /Inbox/ }))
+    await user.click(await screen.findByRole('button', { name: /Inbox •/ }))
     expect(await screen.findByText('Task for user B')).toBeInTheDocument()
 
     // Verify the fetch was called for user B's tasks (cache was cleared and refetched)

@@ -52,7 +52,7 @@ function TaskBadges({
     <div
       className={`flex w-full min-w-0 items-center ${
         expanded
-          ? 'mt-2 flex-nowrap gap-1.5 overflow-hidden text-[0.62rem] tracking-[0.12em]'
+          ? 'mt-2 flex-wrap justify-start gap-x-1.5 gap-y-1 overflow-visible text-[0.62rem] tracking-[0.12em]'
           : 'flex-nowrap gap-1 overflow-hidden text-[0.58rem] tracking-[0.12em] sm:text-[0.6rem]'
       } uppercase`}
     >

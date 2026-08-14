@@ -34,6 +34,7 @@ async function openRecorder(callbacks: RecorderCallbacks) {
 export function useCaptureRecorder(onAudio: (audio: RecordedAudio) => void) {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const isStartingRef = useRef(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,9 +46,12 @@ export function useCaptureRecorder(onAudio: (audio: RecordedAudio) => void) {
     setIsRecording(false)
   }, [])
   const start = useCallback(async () => {
+    if (isStartingRef.current || recorderRef.current?.state === 'recording') return true
+    isStartingRef.current = true
     setError(null)
     if (!navigator.mediaDevices?.getUserMedia) {
       setError('Microphone capture is unavailable. You can still use text capture.')
+      isStartingRef.current = false
       return false
     }
     setIsLoading(true)
@@ -65,6 +69,7 @@ export function useCaptureRecorder(onAudio: (audio: RecordedAudio) => void) {
       setError(classifyMicrophoneError(reason, { mentionTextCaptureForUnsupported: true }))
       return false
     } finally {
+      isStartingRef.current = false
       setIsLoading(false)
     }
   }, [clearRecorder, onAudio])

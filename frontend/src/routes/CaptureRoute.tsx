@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { useAppShellActions } from '../components/AppShellActions'
 import { ExtractingLoader } from '../components/ExtractingLoader'
 import {
   CaptureEditModal,
@@ -21,19 +22,45 @@ export function CaptureRoute() {
 }
 
 function SignedInCapture({ controller }: { controller: ReturnType<typeof useCaptureController> }) {
+  const shellActions = useAppShellActions()
   const [searchParams, setSearchParams] = useSearchParams()
   const { state, queries, mutations, recorder, review } = controller
   const { setTextExpanded } = state
-  useEffect(() => {
-    if (searchParams.get('compose') !== '1') return
-    setTextExpanded(true)
-    const nextSearchParams = new URLSearchParams(searchParams)
-    nextSearchParams.delete('compose')
-    setSearchParams(nextSearchParams, { replace: true })
-  }, [searchParams, setSearchParams, setTextExpanded])
+  const controllerRef = useRef(controller)
+  controllerRef.current = controller
+
+  const isRecording = recorder.isRecording
   const isBusy = recorder.isLoading || mutations.voice.isPending || mutations.text.isPending
+  const isRecordingActionDisabled = !isRecording && isBusy
+  useEffect(() => {
+    shellActions?.setIsRecording?.(isRecording)
+    shellActions?.setIsRecordingActionDisabled?.(isRecordingActionDisabled)
+    shellActions?.setOnToggleRecording?.(() => () => toggleRecorder(controllerRef.current))
+    return () => {
+      shellActions?.setIsRecording?.(false)
+      shellActions?.setIsRecordingActionDisabled?.(false)
+      shellActions?.setOnToggleRecording?.(null)
+    }
+  }, [isRecording, isRecordingActionDisabled, shellActions])
+
+  useEffect(() => {
+    if (searchParams.get('compose') === '1') {
+      setTextExpanded(true)
+      const nextSearchParams = new URLSearchParams(searchParams)
+      nextSearchParams.delete('compose')
+      setSearchParams(nextSearchParams, { replace: true })
+    }
+    if (searchParams.get('record') === '1') {
+      const nextSearchParams = new URLSearchParams(searchParams)
+      nextSearchParams.delete('record')
+      setSearchParams(nextSearchParams, { replace: true })
+      if (!isRecordingActionDisabled) {
+        void controller.startRecording()
+      }
+    }
+  }, [searchParams, setSearchParams, setTextExpanded, isRecordingActionDisabled, controller])
   return (
-    <section className="space-y-4">
+    <section className="space-y-5">
       <VoiceCaptureCard
         isRecording={recorder.isRecording}
         isBusy={isBusy}
@@ -57,7 +84,7 @@ function SignedInCapture({ controller }: { controller: ReturnType<typeof useCapt
 
 function toggleRecorder(controller: ReturnType<typeof useCaptureController>) {
   if (controller.recorder.isRecording) controller.recorder.stop()
-  else void controller.startRecording()
+  else if (!controller.recorder.isLoading && !controller.mutations.voice.isPending && !controller.mutations.text.isPending) void controller.startRecording()
 }
 
 function MutationProgress({ text }: { text: boolean }) {

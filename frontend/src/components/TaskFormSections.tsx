@@ -25,8 +25,9 @@ export function SubtaskDrafts({
       <p className="mt-1 font-body text-xs text-on-surface-variant">
         {titles.length} {titles.length === 1 ? 'subtask' : 'subtasks'}
       </p>
-      <div className="mt-3 space-y-2">
-        {titles.length === 0 ? <EmptySubtasks /> : titles.map((title, index) => (
+      <AddSubtaskInput value={newTitle} disabled={disabled} onChange={onNewTitleChange} onAdd={onAdd} />
+      <div className="mt-3 space-y-1">
+        {titles.length === 0 ? <EmptySubtasks /> : titles.map((title, index) => ({ title, index })).reverse().map(({ title, index }) => (
           <SubtaskDraftRow
             key={`${title}-${index}`}
             title={title}
@@ -37,13 +38,12 @@ export function SubtaskDrafts({
           />
         ))}
       </div>
-      <AddSubtaskInput value={newTitle} disabled={disabled} onChange={onNewTitleChange} onAdd={onAdd} />
     </section>
   )
 }
 
 function EmptySubtasks() {
-  return <div className="rounded-card bg-surface-dim px-4 py-4 text-sm text-on-surface-variant">No subtasks yet.</div>
+  return <p className="px-0 py-2 text-sm text-on-surface-variant">No subtasks yet.</p>
 }
 
 function SubtaskDraftRow({
@@ -61,11 +61,11 @@ function SubtaskDraftRow({
 }) {
   const label = title || `subtask ${index + 1}`
   return (
-    <div className="flex items-center gap-2 rounded-card bg-surface-dim p-2">
+    <div className="flex items-center gap-3 py-1">
       <input
         value={title}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 rounded-card bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:bg-surface-container-high"
+        className="min-w-0 flex-1 border-b border-white/10 bg-transparent px-0 py-2.5 text-sm text-on-surface outline-none transition-colors focus:border-primary"
         aria-label={`Subtask ${label}`}
         disabled={disabled}
       />

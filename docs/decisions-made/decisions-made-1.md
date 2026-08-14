@@ -1,5 +1,16 @@
 # Decisions Made
 
+## 2026-08-13 19:13:24 EDT
+
+- Standardized voice capture on the real Mistral transcription provider in both local development and production; `GUST_DEV_MODE` now changes local authentication and infrastructure behavior without substituting a mock transcript.
+- Kept automated tests provider-independent through dependency-injected fakes, so regression coverage remains deterministic and does not spend provider quota or require external availability.
+
+## 2026-08-13 19:03:11 EDT
+
+- Standardized task extraction on OpenRouter `openai/gpt-5.6-luna` for both local and production environments, replacing the prior environment-specific GPT-5.4 Mini and Gemini defaults.
+- Preserved the existing Chat Completions integration, strict JSON-schema structured-output contract, prompt, retry, and validation behavior because GPT-5.6 Luna supports the endpoint and structured outputs required by the extraction workflow.
+- Set an explicit Railway production override instead of relying only on the compiled backend fallback; backend deployment `c1334aa6-7daf-497c-b6f1-2bc549b13679` completed successfully and the public health endpoint remained healthy.
+
 ## 2026-08-12 12:17:00 EDT
 
 - Reduced the routine local environment to three Docker services: PostgreSQL 17, the FastAPI backend, and the Vite frontend. Supabase CLI, Studio, Inbucket, Storage, Realtime, Analytics, and Edge Runtime are no longer local-development dependencies.

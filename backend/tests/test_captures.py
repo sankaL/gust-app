@@ -31,7 +31,11 @@ from app.db.schema import captures, extracted_tasks, groups, reminders, tasks
 from app.services.auth import AuthenticatedIdentity
 from app.services.extraction import ExtractorMalformedResponseError
 from app.services.staging import ApproveResult, StagingService
-from app.services.transcription import TranscriptionResult, TranscriptionServiceError
+from app.services.transcription import (
+    MistralTranscriptionService,
+    TranscriptionResult,
+    TranscriptionServiceError,
+)
 
 
 @dataclass
@@ -109,6 +113,15 @@ def _override_transcription_service(app: FastAPI, service: FakeTranscriptionServ
 
 def _override_extraction_service(app: FastAPI, service: FakeExtractionService) -> None:
     app.dependency_overrides[get_extraction_service] = lambda: service
+
+
+def test_transcription_dependency_uses_mistral_in_dev_mode() -> None:
+    settings = SimpleNamespace(gust_dev_mode=True)
+
+    service = get_transcription_service(settings)
+
+    assert isinstance(service, MistralTranscriptionService)
+    assert service.settings is settings
 
 
 async def _fixed_rate_limit_user_id(self, request) -> str:

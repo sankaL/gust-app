@@ -109,16 +109,67 @@ describe('TaskPreviewModal', () => {
   it('renders loading and then loaded task information architecture', async () => {
     mockedGetTaskDetail.mockResolvedValue(buildTask())
 
-    renderModal()
+    renderModal({
+      session: {
+        signed_in: true,
+        user: { id: 'user-1', email: 'user@example.com', display_name: null },
+        timezone: 'America/Toronto',
+        inbox_group_id: 'inbox-1',
+        csrf_token: 'csrf-token',
+      },
+      groups: [
+        {
+          id: 'inbox-1',
+          name: 'Inbox',
+          description: null,
+          is_system: true,
+          system_key: 'inbox',
+          open_task_count: 1,
+          completed_task_count: 0,
+        },
+      ],
+    })
 
     expect(screen.getByText('Loading task')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Review extraction contract' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Review extraction contract' })).toHaveClass('pl-3.5')
     expect(screen.getByText('Needs review')).toBeInTheDocument()
     expect(screen.getByText('Inbox')).toBeInTheDocument()
     expect(screen.getByText('Check the structured output rules before rollout.')).toBeInTheDocument()
     expect(screen.getAllByText('2 subtasks')).toHaveLength(2)
     expect(screen.getByText('Check retry contract')).toBeInTheDocument()
     expect(screen.getByText('Confirm review badge copy')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+  })
+
+  it('edits the title directly from the preview heading', async () => {
+    const user = userEvent.setup()
+    mockedGetTaskDetail.mockResolvedValue(buildTask())
+
+    renderModal({
+      session: {
+        signed_in: true,
+        user: { id: 'user-1', email: 'user@example.com', display_name: null },
+        timezone: 'America/Toronto',
+        inbox_group_id: 'inbox-1',
+        csrf_token: 'csrf-token',
+      },
+      groups: [
+        {
+          id: 'inbox-1',
+          name: 'Inbox',
+          description: null,
+          is_system: true,
+          system_key: 'inbox',
+          open_task_count: 1,
+          completed_task_count: 0,
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Review extraction contract' }))
+    expect(screen.getByRole('textbox', { name: 'Task title' })).toHaveValue('Review extraction contract')
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()
   })
 
   it('shows a sanitized error state when detail loading fails', async () => {
@@ -137,6 +188,7 @@ describe('TaskPreviewModal', () => {
     renderModal({ onClose })
 
     await screen.findByRole('heading', { name: 'Review extraction contract' })
+    expect(screen.getByRole('button', { name: 'Close task preview' })).toHaveClass('clay-obsidian')
     await user.keyboard('{Escape}')
     expect(onClose).toHaveBeenCalledTimes(1)
 
@@ -211,5 +263,52 @@ describe('TaskPreviewModal', () => {
     await user.click(await screen.findByRole('button', { name: 'Delete Check retry contract' }))
 
     expect(mockedDeleteSubtask).toHaveBeenCalledWith('task-1', 'subtask-1', 'csrf-token')
+  })
+
+  it('enters edit mode on double-clicking context and enables Save Changes upon editing', async () => {
+    const user = userEvent.setup()
+    mockedGetTaskDetail.mockResolvedValue(buildTask())
+
+    renderModal({
+      session: {
+        signed_in: true,
+        user: { id: 'user-1', email: 'user@example.com', display_name: null },
+        timezone: 'America/Toronto',
+        inbox_group_id: 'inbox-1',
+        csrf_token: 'csrf-token',
+      },
+      groups: [
+        {
+          id: 'inbox-1',
+          name: 'Inbox',
+          description: null,
+          is_system: true,
+          system_key: 'inbox',
+          open_task_count: 1,
+          completed_task_count: 0,
+        },
+      ],
+    })
+
+    await screen.findByRole('heading', { name: 'Review extraction contract' })
+    expect(screen.queryByLabelText('Task title')).not.toBeInTheDocument()
+
+    // Double-click on the context card to enter edit mode
+    await user.dblClick(screen.getByText('Check the structured output rules before rollout.'))
+
+    // Now editable task inputs are rendered
+    const titleInput = screen.getByLabelText('Task title')
+    expect(titleInput).toBeInTheDocument()
+
+    // Save Changes button is disabled when not dirty
+    const saveButton = screen.getByRole('button', { name: 'Save changes' })
+    expect(saveButton).toBeDisabled()
+
+    // Edit title
+    await user.clear(titleInput)
+    await user.type(titleInput, 'Updated extraction contract')
+
+    // Save button is now enabled
+    expect(saveButton).toBeEnabled()
   })
 })

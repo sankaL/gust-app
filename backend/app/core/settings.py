@@ -202,7 +202,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("OPENROUTER_API_KEY"),
     )
     openrouter_extraction_model: str = Field(
-        default="google/gemini-3-flash-preview",
+        default="openai/gpt-5.6-luna",
         validation_alias=AliasChoices("OPENROUTER_EXTRACTION_MODEL"),
     )
     extraction_timeout_seconds: float = Field(
