@@ -43,7 +43,7 @@ function recurrenceFrequency(draft: TaskDetailDraft) {
 }
 
 function buildOptimisticTask(task: TaskDetail, draft: TaskDetailDraft, groups: GroupSummary[], timezone?: string | null): TaskDetail {
-  return { ...task, title: draft.title, description: nullableText(draft.description), group: selectedGroup(groups, draft, task), due_date: nullableText(draft.dueDate), reminder_at: dateTimeLocalToIso(draft.reminderAt, timezone), recurrence: draft.recurrence, recurrence_frequency: recurrenceFrequency(draft), needs_review: optimisticReview(task, draft) }
+  return { ...task, title: draft.title, description: nullableText(draft.description), group: selectedGroup(groups, draft, task), due_date: nullableText(draft.dueDate), reminder_at: dateTimeLocalToIso(draft.reminderAt, timezone), reminder_date: nullableText(draft.reminderDate), recurrence: draft.recurrence, recurrence_frequency: recurrenceFrequency(draft), needs_review: optimisticReview(task, draft) }
 }
 
 function applyOptimisticTask(queryClient: QueryClient, original: TaskDetail, optimistic: TaskDetail) {
@@ -77,7 +77,7 @@ function requireSave(taskId: string | null, draft: TaskDetailDraft | null) {
 }
 
 function savePayload(draft: TaskDetailDraft, timezone?: string | null) {
-  return { title: draft.title.trim(), description: nullableText(draft.description.trim()), group_id: draft.groupId, due_date: nullableText(draft.dueDate), reminder_at: dateTimeLocalToIso(draft.reminderAt, timezone), recurrence: draft.recurrence }
+  return { title: draft.title.trim(), description: nullableText(draft.description.trim()), group_id: draft.groupId, due_date: nullableText(draft.dueDate), reminder_at: dateTimeLocalToIso(draft.reminderAt, timezone), reminder_date: nullableText(draft.reminderDate), recurrence: draft.recurrence }
 }
 
 function usePreviewSaveMutation(args: SaveMutationArgs) {

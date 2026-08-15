@@ -110,7 +110,7 @@ Group management is reached from the Tasks area and is not a primary navigation 
 Users sign in with Google. During private access, only explicitly allowlisted email addresses may create or restore a Gust session. All application data is scoped per user.
 Authentication uses a dedicated `/login` screen and redirects signed-out access away from protected task/capture routes. Unsuccessful sign-in attempts return to the landing page with a sanitized access notice.
 The backend binds the Google callback to the browser that started it with a short-lived PKCE verifier and rejects missing or invalid callback proof.
-The authenticated shell includes a top-right account avatar menu with entries for `Completed Tasks`, `Desktop Mode`, and `Logout`.
+The authenticated shell includes a top-right account avatar menu with entries for `Completed Tasks`, `Desktop Mode`, `Settings`, and `Logout`.
 
 ### 5. Email Digests
 
@@ -119,7 +119,14 @@ Users receive exactly two digest email types from this workflow:
 - Daily brief per user at 8:30 AM Eastern with open tasks due today, overdue open tasks, and a small pending list for open tasks without due dates
 - Weekly summary per user on Sunday at 9:00 AM Eastern with tasks completed this week, due-this-week tasks still open, and a small pending list for open tasks without due dates
 
-No other reminder or digest email type is sent from this flow.
+Users can independently disable either email digest in Settings. No other reminder email type is sent from this flow.
+
+### 5a. Pushover and Task Reminders
+
+- Pushover is optional. A user connects a Pushover destination through its subscription flow or a validated manual user key; Gust stores only encrypted key material and a masked hint.
+- A master Pushover switch and independent task-reminder, daily-brief, and weekly-summary switches preserve user control without affecting email preferences.
+- Exact-time reminders send about 30 minutes before their target; date-only reminders send at the user's selected local time (8:00 AM by default). Exact-time values remain fixed instants; date-only values follow the current user timezone.
+- Explicit reminder language and clearly scheduled events can create reminder metadata. Ordinary timed errands must not create a reminder automatically. Ambiguous or past extracted reminders are flagged for review.
 
 ### 6. Installable PWA
 
@@ -410,11 +417,11 @@ Subtasks:
   - completed tasks with `completed_at` in the Monday-Sunday Eastern window
   - open tasks with `due_date` in that Monday-Sunday Eastern window
   - up to 5 open tasks without due dates in a compact secondary section
-- Digest sending is idempotent per `user + digest_type + period`.
+- Digest sending is idempotent per `user + digest_type + period + channel`, where channel is email or Pushover.
 - Empty digests are not sent and must be tracked as skipped; a digest with undated open tasks is not considered empty.
 - Retryable delivery failures may retry without duplicate-send; terminal provider failures must not duplicate-send.
 - No per-task reminder emails are sent in v1 from this workflow.
-- No push notifications in v1.
+- Pushover push digests mirror the Eastern email schedule and are compact (counts plus up to five task titles).
 
 ## Recurrence Contract
 

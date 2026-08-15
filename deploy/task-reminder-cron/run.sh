@@ -7,4 +7,4 @@ set -eu
 curl --fail --show-error --silent --max-time 30 \
   -X POST \
   -H "X-Internal-Job-Secret: ${INTERNAL_JOB_SHARED_SECRET}" \
-  "${BACKEND_PUBLIC_URL%/}/internal/reminders/run?mode=weekly"
+  "${BACKEND_PUBLIC_URL%/}/internal/reminders/run?mode=task"

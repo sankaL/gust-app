@@ -1,5 +1,10 @@
 # Decisions Made
 
+## 2026-08-15 12:00:00 EDT
+
+- Chose Pushover as an optional per-user channel: retained independent email digests, encrypted only Pushover user keys server-side, and use the provider subscription redirect with manual-key fallback.
+- Chose one five-minute Railway task cron backed by transactional reminder claims and bounded retries instead of an always-running scheduler. Exact-time reminders are fixed instants; date-only reminders follow the current user timezone and preference time.
+
 ## 2026-08-13 19:13:24 EDT
 
 - Standardized voice capture on the real Mistral transcription provider in both local development and production; `GUST_DEV_MODE` now changes local authentication and infrastructure behavior without substituting a mock transcript.

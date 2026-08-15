@@ -263,6 +263,7 @@ export function EditExtractedTaskModal({
             groupId: defaultGroupId ?? groups[0]?.id ?? '',
             dueDate: '',
             reminderAt: '',
+            reminderDate: '',
             recurrence: null,
             subtaskTitles: [],
           },
@@ -291,6 +292,7 @@ export function EditExtractedTaskModal({
     if (draft.groupId !== initialDraft.groupId) return true
     if ((draft.dueDate || '') !== (initialDraft.dueDate || '')) return true
     if ((draft.reminderAt || '') !== (initialDraft.reminderAt || '')) return true
+    if ((draft.reminderDate || '') !== (initialDraft.reminderDate || '')) return true
     if (JSON.stringify(draft.recurrence) !== JSON.stringify(initialDraft.recurrence)) return true
     if (JSON.stringify(draft.subtaskTitles) !== JSON.stringify(initialDraft.subtaskTitles)) return true
     return false
@@ -311,7 +313,7 @@ export function EditExtractedTaskModal({
 
   const updateDueDate = (dueDate: string) => {
     updateDraft((prev) => {
-      if (!dueDate) return { ...prev, dueDate: '', reminderAt: '', recurrence: null }
+      if (!dueDate) return { ...prev, dueDate: '', reminderAt: '', reminderDate: '', recurrence: null }
       const frequency = prev.recurrence?.frequency
       return {
         ...prev,
@@ -354,6 +356,7 @@ export function EditExtractedTaskModal({
               group_id: draft.groupId,
               due_date: draft.dueDate || null,
               reminder_at: draft.reminderAt ? new Date(draft.reminderAt).toISOString() : null,
+              reminder_date: draft.reminderDate || null,
               recurrence: draft.recurrence,
             },
             csrfToken
@@ -489,6 +492,7 @@ export function EditExtractedTaskModal({
                 groupId={draft.groupId}
                 dueDate={draft.dueDate}
                 reminderAt={draft.reminderAt}
+                reminderDate={draft.reminderDate}
                 recurrence={draft.recurrence}
                 groups={groups}
                 isGroupDropdownOpen={isGroupDropdownOpen}
@@ -501,6 +505,9 @@ export function EditExtractedTaskModal({
                 onDueDateChange={(dueDate) => updateDraft((prev) => ({ ...prev, dueDate }))}
                 onReminderAtChange={(reminderAt) =>
                   updateDraft((prev) => ({ ...prev, reminderAt }))
+                }
+                onReminderDateChange={(reminderDate) =>
+                  updateDraft((prev) => ({ ...prev, reminderDate }))
                 }
                 onRecurrenceChange={(recurrence) =>
                   updateDraft((prev) => ({ ...prev, recurrence }))

@@ -22,7 +22,7 @@ function localDateTime(value: string | null) {
 }
 
 function buildDraft(task: TaskDetail): TaskDetailDraft {
-  return { title: task.title, description: task.description ?? '', groupId: task.group.id, dueDate: task.due_date ?? '', reminderAt: localDateTime(task.reminder_at), recurrence: task.recurrence }
+  return { title: task.title, description: task.description ?? '', groupId: task.group.id, dueDate: task.due_date ?? '', reminderAt: localDateTime(task.reminder_at), reminderDate: task.reminder_date ?? '', recurrence: task.recurrence }
 }
 
 function returnPath(pathname: string, search: URLSearchParams) {
@@ -169,7 +169,7 @@ function readyTaskDraft(base: Base) {
 
 function saveTask(base: Base) {
   const { taskId, draft } = readyTaskDraft(base)
-  const payload = { title: draft.title, description: nullable(draft.description), group_id: draft.groupId, due_date: nullable(draft.dueDate), reminder_at: reminderIso(draft.reminderAt), recurrence: draft.recurrence }
+  const payload = { title: draft.title, description: nullable(draft.description), group_id: draft.groupId, due_date: nullable(draft.dueDate), reminder_at: reminderIso(draft.reminderAt), reminder_date: nullable(draft.reminderDate), recurrence: draft.recurrence }
   return updateTask(taskId, payload, requireCsrfToken(base.session.data))
 }
 

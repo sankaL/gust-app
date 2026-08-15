@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from app.core.dependencies import get_current_session_context, get_task_service, require_csrf
 from app.core.errors import InvalidTaskError
@@ -61,6 +61,7 @@ class TaskSummaryResponse(BaseModel):
     needs_review: bool
     due_date: date | None
     reminder_at: datetime | None
+    reminder_date: date | None
     due_bucket: str
     group: GroupSummaryResponse
     completed_at: datetime | None
@@ -81,6 +82,7 @@ class UpdateTaskRequest(BaseModel):
     group_id: str
     due_date: date | None = None
     reminder_at: datetime | None = None
+    reminder_date: date | None = None
     recurrence: RecurrenceResponse | None = None
 
     @field_validator("title")
@@ -96,6 +98,12 @@ class UpdateTaskRequest(BaseModel):
             field_name="Task description",
             max_length=MAX_TASK_DESCRIPTION_CHARS,
         )
+
+    @model_validator(mode="after")
+    def _validate_reminder_precision(self) -> UpdateTaskRequest:
+        if self.reminder_at is not None and self.reminder_date is not None:
+            raise ValueError("Choose either a date-only reminder or a date-and-time reminder.")
+        return self
 
 
 class CreateTaskRequest(BaseModel):
@@ -104,6 +112,7 @@ class CreateTaskRequest(BaseModel):
     group_id: str
     due_date: date | None = None
     reminder_at: datetime | None = None
+    reminder_date: date | None = None
     recurrence: RecurrenceResponse | None = None
 
     @field_validator("title")
@@ -119,6 +128,12 @@ class CreateTaskRequest(BaseModel):
             field_name="Task description",
             max_length=MAX_TASK_DESCRIPTION_CHARS,
         )
+
+    @model_validator(mode="after")
+    def _validate_reminder_precision(self) -> CreateTaskRequest:
+        if self.reminder_at is not None and self.reminder_date is not None:
+            raise ValueError("Choose either a date-only reminder or a date-and-time reminder.")
+        return self
 
 
 class CreateSubtaskRequest(BaseModel):
@@ -192,6 +207,7 @@ def create_task_route(
             group_id=payload.group_id,
             due_date=payload.due_date,
             reminder_at=payload.reminder_at,
+            reminder_date=payload.reminder_date,
             recurrence=_build_recurrence_input(payload.recurrence),
         ),
     )
@@ -226,6 +242,8 @@ def update_task_route(
             group_id=payload.group_id,
             due_date=payload.due_date,
             reminder_at=payload.reminder_at,
+            reminder_date=payload.reminder_date,
+            reminder_date_provided="reminder_date" in payload.model_fields_set,
             recurrence=_build_recurrence_input(payload.recurrence),
         ),
     )
@@ -366,6 +384,7 @@ def _build_task_summary(item: TaskListItem) -> TaskSummaryResponse:
         needs_review=item.task.needs_review,
         due_date=item.task.due_date,
         reminder_at=item.task.reminder_at,
+        reminder_date=item.task.reminder_date,
         due_bucket=item.due_bucket,
         group=GroupSummaryResponse(
             id=item.group.id,
@@ -394,6 +413,7 @@ def _build_task_detail(detail: TaskDetail, user_timezone: str) -> TaskDetailResp
         needs_review=detail.task.needs_review,
         due_date=detail.task.due_date,
         reminder_at=detail.task.reminder_at,
+        reminder_date=detail.task.reminder_date,
         due_bucket=due_bucket,
         group=GroupSummaryResponse(
             id=detail.group.id,

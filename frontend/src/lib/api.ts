@@ -72,6 +72,7 @@ export type TaskSummary = {
   needs_review: boolean
   due_date: string | null
   reminder_at: string | null
+  reminder_date?: string | null
   due_bucket: 'overdue' | 'due_soon' | 'no_date'
   group: TaskGroupRef
   completed_at: string | null
@@ -97,6 +98,7 @@ export type ExtractedTask = {
   group_name: string | null
   due_date: string | null
   reminder_at: string | null
+  reminder_date?: string | null
   recurrence_frequency: string | null
   recurrence_weekday: number | null
   recurrence_day_of_month: number | null
@@ -369,6 +371,7 @@ export function updateTask(
     group_id: string
     due_date: string | null
     reminder_at: string | null
+    reminder_date?: string | null
     recurrence: TaskRecurrence | null
   },
   csrfToken: string
@@ -390,6 +393,7 @@ export function createTask(
     group_id: string
     due_date: string | null
     reminder_at: string | null
+    reminder_date?: string | null
     recurrence: TaskRecurrence | null
   },
   csrfToken: string
@@ -555,6 +559,7 @@ export type ExtractedTaskUpdates = {
   group_id?: string
   due_date?: string | null
   reminder_at?: string | null
+  reminder_date?: string | null
   recurrence_frequency?: string | null
   recurrence_weekday?: number | null
   recurrence_day_of_month?: number | null
@@ -576,4 +581,46 @@ export function updateExtractedTask(
     },
     csrfToken
   )
+}
+
+export type NotificationSettings = {
+  email_daily_enabled: boolean
+  email_weekly_enabled: boolean
+  pushover_enabled: boolean
+  pushover_task_reminders_enabled: boolean
+  pushover_daily_digest_enabled: boolean
+  pushover_weekly_digest_enabled: boolean
+  date_only_reminder_time: string
+  timezone: string
+  pushover_connected: boolean
+  pushover_user_key_hint: string | null
+  pushover_connection_error_code: string | null
+  pushover_available: boolean
+}
+
+export function getNotificationSettings(): Promise<NotificationSettings> {
+  return apiRequest<NotificationSettings>('/settings/notifications')
+}
+
+export function updateNotificationSettings(
+  payload: Partial<Pick<NotificationSettings, 'email_daily_enabled' | 'email_weekly_enabled' | 'pushover_enabled' | 'pushover_task_reminders_enabled' | 'pushover_daily_digest_enabled' | 'pushover_weekly_digest_enabled' | 'date_only_reminder_time'>>,
+  csrfToken: string
+): Promise<NotificationSettings> {
+  return apiRequest<NotificationSettings>('/settings/notifications', { method: 'PATCH', body: JSON.stringify(payload) }, csrfToken)
+}
+
+export function connectPushover(csrfToken: string, returnPath: '/settings' | '/desktop/settings'): Promise<{ subscription_url: string }> {
+  return apiRequest<{ subscription_url: string }>(`/settings/notifications/pushover/connect?return_path=${encodeURIComponent(returnPath)}`, { method: 'POST' }, csrfToken)
+}
+
+export function savePushoverKey(userKey: string, csrfToken: string): Promise<NotificationSettings> {
+  return apiRequest<NotificationSettings>('/settings/notifications/pushover/key', { method: 'PUT', body: JSON.stringify({ user_key: userKey }) }, csrfToken)
+}
+
+export function testPushover(csrfToken: string): Promise<void> {
+  return apiRequest<void>('/settings/notifications/pushover/test', { method: 'POST' }, csrfToken)
+}
+
+export function disconnectPushover(csrfToken: string): Promise<NotificationSettings> {
+  return apiRequest<NotificationSettings>('/settings/notifications/pushover', { method: 'DELETE' }, csrfToken)
 }

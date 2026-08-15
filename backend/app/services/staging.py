@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from app.core.errors import (
     ExtractedTaskNotFoundError,
@@ -27,6 +27,7 @@ from app.db.repositories import (
     delete_extracted_tasks_by_capture,
     get_extracted_task,
     get_group,
+    get_user,
     list_extracted_tasks,
     update_extracted_task,
     update_extracted_task_due_date,
@@ -38,6 +39,7 @@ from app.services.task_rules import (
     normalize_task_description,
     normalize_task_fields,
 )
+from app.services.task_service import TaskService
 
 logger = logging.getLogger("gust.api")
 
@@ -47,6 +49,7 @@ _EXTRACTED_TASK_UPDATE_FIELDS = {
     "group_id",
     "due_date",
     "reminder_at",
+    "reminder_date",
     "recurrence_frequency",
     "recurrence_weekday",
     "recurrence_day_of_month",
@@ -134,6 +137,7 @@ class StagingService:
                             title=candidate.title,
                             due_date=candidate.due_date,
                             reminder_at=candidate.reminder_at,
+                            reminder_date=candidate.reminder_date,
                             recurrence=recurrence_input,
                             user_timezone=user_timezone,
                             # Lenient: accept AI-extracted tasks with imperfect datetime/recurrence
@@ -169,6 +173,7 @@ class StagingService:
                         group_name=resolved_group.name if resolved_group else inbox_group.name,
                         due_date=normalized.due_date,
                         reminder_at=normalized.reminder_at,
+                        reminder_date=normalized.reminder_date,
                         recurrence_frequency=normalized.recurrence_frequency,
                         recurrence_weekday=normalized.recurrence_weekday,
                         recurrence_day_of_month=normalized.recurrence_day_of_month,
@@ -238,12 +243,16 @@ class StagingService:
                 raise ExtractedTaskNotFoundError()
             if extracted_task.status != "pending":
                 raise ExtractedTaskStateConflictError()
+            user = get_user(connection, user_id)
+            if user is None:
+                raise ExtractedTaskNotFoundError()
 
             task = self._approve_pending_task_in_connection(
                 connection,
                 user_id=user_id,
                 capture_id=capture_id,
                 extracted_task=extracted_task,
+                user_timezone=user.timezone,
             )
 
         logger.info(
@@ -503,12 +512,12 @@ class StagingService:
     def _validate_updated_schedule(
         self, values: dict[str, object], extracted_task: ExtractedTaskRecord
     ) -> None:
-        if values.get("due_date", object()) is None and "reminder_at" not in values:
-            values["reminder_at"] = None
-        due_date: date | None = values.get("due_date", extracted_task.due_date)
         reminder_at: datetime | None = values.get("reminder_at", extracted_task.reminder_at)
-        if due_date is None and reminder_at is not None:
-            raise InvalidTaskError("A reminder requires a due date.")
+        reminder_date: date | None = values.get("reminder_date", extracted_task.reminder_date)
+        if reminder_at is not None and reminder_date is not None:
+            raise InvalidTaskError(
+                "Choose either a date-only reminder or a date-and-time reminder."
+            )
         if (
             "reminder_at" in values
             and reminder_at is not None
@@ -729,6 +738,7 @@ class StagingService:
         user_id: str,
         capture_id: str,
         extracted_task: ExtractedTaskRecord,
+        user_timezone: str,
     ) -> TaskRecord:
         if extracted_task.capture_id != capture_id:
             raise ExtractedTaskNotFoundError()
@@ -745,10 +755,19 @@ class StagingService:
             description=extracted_task.description,
             due_date=extracted_task.due_date,
             reminder_at=extracted_task.reminder_at,
+            reminder_date=extracted_task.reminder_date,
             recurrence_frequency=extracted_task.recurrence_frequency,
             recurrence_weekday=extracted_task.recurrence_weekday,
             recurrence_day_of_month=extracted_task.recurrence_day_of_month,
             recurrence_month=extracted_task.recurrence_month,
+        )
+        TaskService._sync_task_reminder(
+            connection,
+            settings=self.settings,
+            user_id=user_id,
+            task=task,
+            user_timezone=user_timezone,
+            now=datetime.now(UTC),
         )
 
         if extracted_task.subtask_titles:

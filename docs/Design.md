@@ -80,6 +80,10 @@ In the "Digital Void," shadows represent ambient light from the accent colors, n
 ### Don't
 * **DON'T** use pure black (#000000) for anything other than `surface_container_lowest`. It kills the depth of the "Void."
 * **DON'T** use standard "checkboxes." Instead, use custom-styled circular toggles that fill with `primary` color when completed.
+
+### Notification Settings
+
+Notification settings use grouped tonal cards, 44px minimum toggle rows, explicit saved/error feedback, and accessible names/states. Pushover child controls remain visible but disabled until a connected master switch is enabled; the manual-key fallback is disclosed progressively so the primary connection path remains low-friction.
 * **DON'T** use 90-degree corners. Everything must have a minimum roundedness of `sm` (0.5rem) to maintain the "approachable" vibe.
 
 ---

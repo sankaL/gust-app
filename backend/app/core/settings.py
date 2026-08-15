@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
     )
     required_alembic_revision: str = Field(
-        default="0018_ensure_allowed_users",
+        default="0019_notification_preferences_pushover_reminders",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -256,6 +256,30 @@ class Settings(BaseSettings):
     reminder_request_timeout_seconds: float = Field(
         default=10.0,
         validation_alias=AliasChoices("REMINDER_REQUEST_TIMEOUT_SECONDS"),
+    )
+    pushover_notifications_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PUSHOVER_NOTIFICATIONS_ENABLED"),
+    )
+    pushover_app_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PUSHOVER_APP_TOKEN"),
+    )
+    pushover_subscription_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PUSHOVER_SUBSCRIPTION_URL"),
+    )
+    pushover_credential_encryption_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PUSHOVER_CREDENTIAL_ENCRYPTION_KEY"),
+    )
+    pushover_api_url: str = Field(
+        default="https://api.pushover.net/1",
+        validation_alias=AliasChoices("PUSHOVER_API_URL"),
+    )
+    pushover_request_timeout_seconds: float = Field(
+        default=10.0,
+        validation_alias=AliasChoices("PUSHOVER_REQUEST_TIMEOUT_SECONDS"),
     )
 
     @model_validator(mode="after")

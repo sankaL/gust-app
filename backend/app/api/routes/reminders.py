@@ -19,6 +19,9 @@ class RunRemindersResponse(BaseModel):
     skipped_empty: int
     failed: int
     captures_deleted: int
+    attempted: int = 0
+    retried: int = 0
+    skipped: int = 0
 
 
 @router.post("/run", response_model=RunRemindersResponse)

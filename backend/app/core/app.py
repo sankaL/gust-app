@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api.routes import auth, captures, groups, health, reminders, tasks
+from app.api.routes import auth, captures, groups, health, notifications, reminders, tasks
 from app.core.errors import (
     ApiError,
     api_error_handler,
@@ -68,6 +68,11 @@ def create_app() -> FastAPI:
     app.include_router(captures.router, prefix="/captures", tags=["captures"])
     app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
     app.include_router(groups.router, prefix="/groups", tags=["groups"])
+    app.include_router(
+        notifications.router,
+        prefix="/settings/notifications",
+        tags=["notification-settings"],
+    )
     app.include_router(
         reminders.router,
         prefix="/internal/reminders",

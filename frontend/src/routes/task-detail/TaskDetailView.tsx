@@ -8,6 +8,7 @@ export type TaskDetailDraft = {
   groupId: string
   dueDate: string
   reminderAt: string
+  reminderDate: string
   recurrence: TaskRecurrence | null
 }
 
@@ -78,12 +79,12 @@ type TaskEditorProps = {
 }
 
 function TaskEditor(props: TaskEditorProps) {
-  const dueDateChange = (dueDate: string) => props.onDraft(dueDate ? { dueDate } : { dueDate: '', reminderAt: '', recurrence: null })
-  return <TaskFormFields title={props.draft.title} description={props.draft.description} groupId={props.draft.groupId} dueDate={props.draft.dueDate} reminderAt={props.draft.reminderAt} recurrence={props.draft.recurrence} groups={props.groups} isGroupDropdownOpen={props.isGroupDropdownOpen} disabled={props.isBusy} onTitleChange={(title) => props.onDraft({ title })} onDescriptionChange={(description) => props.onDraft({ description })} onGroupIdChange={(groupId) => props.onDraft({ groupId })} onDueDateChange={dueDateChange} onReminderAtChange={(reminderAt) => props.onDraft({ reminderAt })} onRecurrenceChange={(recurrence) => props.onDraft({ recurrence })} onGroupDropdownOpenChange={props.onGroupDropdown} />
+  const dueDateChange = (dueDate: string) => props.onDraft(dueDate ? { dueDate } : { dueDate: '', reminderAt: '', reminderDate: '', recurrence: null })
+  return <TaskFormFields title={props.draft.title} description={props.draft.description} groupId={props.draft.groupId} dueDate={props.draft.dueDate} reminderAt={props.draft.reminderAt} reminderDate={props.draft.reminderDate} recurrence={props.draft.recurrence} groups={props.groups} isGroupDropdownOpen={props.isGroupDropdownOpen} disabled={props.isBusy} onTitleChange={(title) => props.onDraft({ title })} onDescriptionChange={(description) => props.onDraft({ description })} onGroupIdChange={(groupId) => props.onDraft({ groupId })} onDueDateChange={dueDateChange} onReminderAtChange={(reminderAt) => props.onDraft({ reminderAt })} onReminderDateChange={(reminderDate) => props.onDraft({ reminderDate })} onRecurrenceChange={(recurrence) => props.onDraft({ recurrence })} onGroupDropdownOpenChange={props.onGroupDropdown} />
 }
 
 function ReadOnlySummary(props: { draft: TaskDetailDraft; groupName: string }) {
-  return <div className="space-y-4"><h2 className="font-display text-[2.15rem] leading-tight text-on-surface">{props.draft.title}</h2><p className="text-sm leading-6 text-on-surface-variant">{props.draft.description || 'No additional context yet. Edit this task to add the detail that helps you act faster later.'}</p><div className="grid gap-3 sm:grid-cols-2"><Metadata label="Due date" value={formatDate(props.draft.dueDate, 'No due date')} /><Metadata label="Reminder" value={formatDate(props.draft.reminderAt, 'No reminder')} /><Metadata label="Group" value={props.groupName} /><Metadata label="Recurrence" value={recurrenceLabel(props.draft.recurrence)} /></div><div className="rounded-[1.35rem] bg-surface/45 p-4 text-sm text-on-surface-variant">Open edit mode when you want to change details. Delete still asks for confirmation before it removes this task.</div></div>
+  return <div className="space-y-4"><h2 className="font-display text-[2.15rem] leading-tight text-on-surface">{props.draft.title}</h2><p className="text-sm leading-6 text-on-surface-variant">{props.draft.description || 'No additional context yet. Edit this task to add the detail that helps you act faster later.'}</p><div className="grid gap-3 sm:grid-cols-2"><Metadata label="Due date" value={formatDate(props.draft.dueDate, 'No due date')} /><Metadata label="Reminder" value={formatDate(props.draft.reminderAt || props.draft.reminderDate, 'No reminder')} /><Metadata label="Group" value={props.groupName} /><Metadata label="Recurrence" value={recurrenceLabel(props.draft.recurrence)} /></div><div className="rounded-[1.35rem] bg-surface/45 p-4 text-sm text-on-surface-variant">Open edit mode when you want to change details. Delete still asks for confirmation before it removes this task.</div></div>
 }
 
 function Metadata({ label, value }: { label: string; value: string }) {

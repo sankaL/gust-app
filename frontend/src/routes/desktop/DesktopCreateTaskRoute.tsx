@@ -14,6 +14,7 @@ type TaskFormData = {
   groupId: string
   dueDate: string
   reminderAt: string
+  reminderDate: string
   recurrence: TaskRecurrence | null
 }
 
@@ -55,6 +56,7 @@ export function DesktopCreateTaskRoute() {
           group_id: data.groupId,
           due_date: data.dueDate || null,
           reminder_at: dateTimeLocalToIso(data.reminderAt, session.timezone),
+          reminder_date: data.reminderDate || null,
           recurrence: data.recurrence,
         },
         csrfToken

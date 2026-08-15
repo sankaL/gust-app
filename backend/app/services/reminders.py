@@ -15,16 +15,27 @@ from app.db.engine import internal_job_connection_scope
 from app.db.repositories import (
     DigestTaskRecord,
     UserRecord,
+    cancel_claimed_reminder,
+    claim_due_reminders,
     delete_expired_captures,
+    fail_claimed_reminder,
     get_digest_dispatch,
+    get_notification_preferences,
+    get_task,
+    get_user,
     list_completed_tasks_between,
     list_open_tasks_due_between_dates,
     list_open_tasks_due_on_date,
     list_open_tasks_overdue_before_date,
     list_open_tasks_without_due_date,
     list_users,
+    mark_reminder_sent,
+    requeue_claimed_reminder,
+    requeue_expired_claims,
+    update_notification_preferences,
     upsert_digest_dispatch,
 )
+from app.services.pushover import PushoverDeliveryError, PushoverService
 
 logger = logging.getLogger("gust.api")
 
@@ -39,7 +50,7 @@ COLOR_GREEN = "#4F7942"
 COLOR_BLUE = "#4682B4"
 COLOR_PURPLE = "#A684FF"
 
-DigestMode = Literal["daily", "weekly"]
+DigestMode = Literal["daily", "weekly", "task"]
 DigestDispatchStatus = Literal["sent", "failed", "skipped_empty"]
 
 
@@ -64,6 +75,9 @@ class ReminderRunSummary:
     skipped_empty: int = 0
     failed: int = 0
     captures_deleted: int = 0
+    attempted: int = 0
+    retried: int = 0
+    skipped: int = 0
 
     def to_dict(self) -> dict[str, int | str]:
         return asdict(self)
@@ -162,13 +176,18 @@ class ReminderWorkerService:
         *,
         settings: Settings,
         reminder_delivery_service: ResendReminderService,
+        pushover_service: PushoverService | None = None,
     ) -> None:
         self.settings = settings
         self.reminder_delivery_service = reminder_delivery_service
+        self.pushover_service = pushover_service or PushoverService(settings)
 
     async def run_due_work(self, *, mode: DigestMode) -> ReminderRunSummary:
         now_utc = datetime.now(UTC)
         summary = ReminderRunSummary(mode=mode)
+
+        if mode == "task":
+            return await self._run_task_reminders(summary=summary, now_utc=now_utc)
 
         with internal_job_connection_scope(self.settings.database_url) as connection:
             summary.captures_deleted = delete_expired_captures(
@@ -199,7 +218,109 @@ class ReminderWorkerService:
 
         return summary
 
-    async def _process_user_digest(
+    async def _run_task_reminders(
+        self,
+        *,
+        summary: ReminderRunSummary,
+        now_utc: datetime,
+    ) -> ReminderRunSummary:
+        if not self.pushover_service.is_enabled:
+            return summary
+        self.pushover_service.ensure_configured()
+        with internal_job_connection_scope(self.settings.database_url) as connection:
+            requeue_expired_claims(connection, now=now_utc)
+            claimed = claim_due_reminders(
+                connection,
+                now=now_utc,
+                limit=self.settings.reminder_batch_size,
+                claim_timeout_seconds=self.settings.reminder_claim_timeout_seconds,
+            )
+        for reminder in claimed:
+            summary.attempted += 1
+            with internal_job_connection_scope(self.settings.database_url) as connection:
+                preferences = get_notification_preferences(connection, user_id=reminder.user_id)
+                task = get_task(connection, user_id=reminder.user_id, task_id=reminder.task_id)
+                user = get_user(connection, reminder.user_id)
+                if (
+                    task is None
+                    or not preferences.pushover_enabled
+                    or not preferences.pushover_task_reminders_enabled
+                    or not preferences.pushover_user_key_encrypted
+                    or user is None
+                ):
+                    cancel_claimed_reminder(
+                        connection, reminder_id=reminder.id, claim_token=reminder.claim_token or ""
+                    )
+                    summary.skipped += 1
+                    continue
+                if task.reminder_at is not None and now_utc > task.reminder_at:
+                    cancel_claimed_reminder(
+                        connection, reminder_id=reminder.id, claim_token=reminder.claim_token or ""
+                    )
+                    summary.skipped += 1
+                    continue
+                if (
+                    task.reminder_date is not None
+                    and now_utc.astimezone(ZoneInfo(user.timezone)).date() > task.reminder_date
+                ):
+                    cancel_claimed_reminder(
+                        connection, reminder_id=reminder.id, claim_token=reminder.claim_token or ""
+                    )
+                    summary.skipped += 1
+                    continue
+                encrypted_key = preferences.pushover_user_key_encrypted
+                title = task.title
+            try:
+                user_key = self.pushover_service.decrypt_user_key(encrypted_key)
+                task_url = (
+                    f"{(self.settings.frontend_app_url or '').rstrip('/')}/tasks/{reminder.task_id}"
+                )
+                result = await self.pushover_service.send(
+                    user_key=user_key,
+                    title="Gust task reminder",
+                    message=f"{title} — about 30 minutes before.",
+                    url=task_url,
+                    ttl_seconds=6 * 60 * 60 if task.reminder_at is not None else 24 * 60 * 60,
+                )
+            except PushoverDeliveryError as exc:
+                with internal_job_connection_scope(self.settings.database_url) as connection:
+                    if exc.retryable and reminder.send_attempt_count < 2:
+                        delay_minutes = 5 if reminder.send_attempt_count == 0 else 15
+                        requeue_claimed_reminder(
+                            connection,
+                            reminder_id=reminder.id,
+                            claim_token=reminder.claim_token or "",
+                            error_code=exc.error_code,
+                            next_attempt_at=now_utc + timedelta(minutes=delay_minutes),
+                        )
+                        summary.retried += 1
+                    else:
+                        fail_claimed_reminder(
+                            connection,
+                            reminder_id=reminder.id,
+                            claim_token=reminder.claim_token or "",
+                            error_code=exc.error_code,
+                        )
+                        if exc.invalid_user_key:
+                            update_notification_preferences(
+                                connection,
+                                user_id=reminder.user_id,
+                                values={"pushover_connection_error_code": "reconnect_required"},
+                            )
+                        summary.failed += 1
+                continue
+            with internal_job_connection_scope(self.settings.database_url) as connection:
+                mark_reminder_sent(
+                    connection,
+                    reminder_id=reminder.id,
+                    claim_token=reminder.claim_token or "",
+                    provider_message_id=result.request_id,
+                    sent_at=now_utc,
+                )
+            summary.sent += 1
+        return summary
+
+    async def _process_user_digest(  # noqa: C901
         self,
         *,
         mode: DigestMode,
@@ -207,20 +328,54 @@ class ReminderWorkerService:
         user: UserRecord,
         now_utc: datetime,
     ) -> Literal["sent", "failed", "skipped_empty", "already_processed"]:
-        idempotency_key = (
+        email_idempotency_key = (
             f"digest:{mode}:user:{user.id}:"
-            f"start:{period.start_date.isoformat()}:end:{period.end_date.isoformat()}"
+            f"start:{period.start_date.isoformat()}:end:{period.end_date.isoformat()}:channel:email"
         )
+        push_idempotency_key = email_idempotency_key.rsplit(":", 1)[0] + ":pushover"
 
         with internal_job_connection_scope(self.settings.database_url) as connection:
-            existing = get_digest_dispatch(
+            preferences = get_notification_preferences(connection, user_id=user.id)
+            email_enabled = (
+                preferences.email_daily_enabled
+                if mode == "daily"
+                else preferences.email_weekly_enabled
+            )
+            push_enabled = (
+                self.pushover_service.is_enabled
+                and preferences.pushover_enabled
+                and preferences.pushover_user_key_encrypted is not None
+                and (
+                    preferences.pushover_daily_digest_enabled
+                    if mode == "daily"
+                    else preferences.pushover_weekly_digest_enabled
+                )
+            )
+            email_dispatch = get_digest_dispatch(
                 connection,
                 user_id=user.id,
                 digest_type=mode,
                 period_start_date=period.start_date,
                 period_end_date=period.end_date,
+                channel="email",
             )
-        if existing is not None and existing.status in {"sent", "skipped_empty"}:
+            push_dispatch = get_digest_dispatch(
+                connection,
+                user_id=user.id,
+                digest_type=mode,
+                period_start_date=period.start_date,
+                period_end_date=period.end_date,
+                channel="pushover",
+            )
+        if not email_enabled and not push_enabled:
+            return "already_processed"
+        email_pending = email_enabled and (
+            email_dispatch is None or email_dispatch.status not in {"sent", "skipped_empty"}
+        )
+        push_pending = push_enabled and (
+            push_dispatch is None or push_dispatch.status not in {"sent", "skipped_empty"}
+        )
+        if not email_pending and not push_pending:
             return "already_processed"
 
         if mode == "daily":
@@ -242,16 +397,29 @@ class ReminderWorkerService:
                 )
 
             if not due_today and not overdue and not undated_open:
-                self._upsert_dispatch(
-                    user=user,
-                    mode=mode,
-                    period=period,
-                    status="skipped_empty",
-                    idempotency_key=idempotency_key,
-                    attempted_at=now_utc,
-                    provider_message_id=None,
-                    last_error_code=None,
-                )
+                if email_pending:
+                    self._upsert_dispatch(
+                        user=user,
+                        mode=mode,
+                        period=period,
+                        status="skipped_empty",
+                        idempotency_key=email_idempotency_key,
+                        attempted_at=now_utc,
+                        provider_message_id=None,
+                        last_error_code=None,
+                    )
+                if push_pending:
+                    self._upsert_dispatch(
+                        user=user,
+                        mode=mode,
+                        period=period,
+                        channel="pushover",
+                        status="skipped_empty",
+                        idempotency_key=push_idempotency_key,
+                        attempted_at=now_utc,
+                        provider_message_id=None,
+                        last_error_code=None,
+                    )
                 return "skipped_empty"
 
             subject = f"Gust Daily Brief - {period.start_date.isoformat()} (Eastern)"
@@ -293,16 +461,29 @@ class ReminderWorkerService:
                 )
 
             if not completed and not due_uncompleted and not undated_open:
-                self._upsert_dispatch(
-                    user=user,
-                    mode=mode,
-                    period=period,
-                    status="skipped_empty",
-                    idempotency_key=idempotency_key,
-                    attempted_at=now_utc,
-                    provider_message_id=None,
-                    last_error_code=None,
-                )
+                if email_pending:
+                    self._upsert_dispatch(
+                        user=user,
+                        mode=mode,
+                        period=period,
+                        status="skipped_empty",
+                        idempotency_key=email_idempotency_key,
+                        attempted_at=now_utc,
+                        provider_message_id=None,
+                        last_error_code=None,
+                    )
+                if push_pending:
+                    self._upsert_dispatch(
+                        user=user,
+                        mode=mode,
+                        period=period,
+                        channel="pushover",
+                        status="skipped_empty",
+                        idempotency_key=push_idempotency_key,
+                        attempted_at=now_utc,
+                        provider_message_id=None,
+                        last_error_code=None,
+                    )
                 return "skipped_empty"
 
             subject = (
@@ -324,14 +505,16 @@ class ReminderWorkerService:
                 undated_open=undated_open,
             )
 
+        email_result: ReminderSendResult | None = None
         try:
-            result = await self.reminder_delivery_service.send_digest(
-                to_email=user.email,
-                subject=subject,
-                text_body=text_body,
-                html_body=html_body,
-                idempotency_key=idempotency_key,
-            )
+            if email_pending:
+                email_result = await self.reminder_delivery_service.send_digest(
+                    to_email=user.email,
+                    subject=subject,
+                    text_body=text_body,
+                    html_body=html_body,
+                    idempotency_key=email_idempotency_key,
+                )
         except ReminderDeliveryError as exc:
             logger.warning(
                 "digest_delivery_failed",
@@ -347,23 +530,59 @@ class ReminderWorkerService:
                 mode=mode,
                 period=period,
                 status="failed",
-                idempotency_key=idempotency_key,
+                idempotency_key=email_idempotency_key,
                 attempted_at=now_utc,
                 provider_message_id=None,
                 last_error_code=exc.error_code,
             )
             return "failed"
 
-        self._upsert_dispatch(
-            user=user,
-            mode=mode,
-            period=period,
-            status="sent",
-            idempotency_key=idempotency_key,
-            attempted_at=now_utc,
-            provider_message_id=result.provider_message_id,
-            last_error_code=None,
-        )
+        if email_result is not None:
+            self._upsert_dispatch(
+                user=user,
+                mode=mode,
+                period=period,
+                channel="email",
+                status="sent",
+                idempotency_key=email_idempotency_key,
+                attempted_at=now_utc,
+                provider_message_id=email_result.provider_message_id,
+                last_error_code=None,
+            )
+        if push_pending:
+            try:
+                push_result = await self.pushover_service.send(
+                    user_key=self.pushover_service.decrypt_user_key(
+                        preferences.pushover_user_key_encrypted or ""
+                    ),
+                    title="Gust Daily Brief" if mode == "daily" else "Gust Weekly Summary",
+                    message=self._compact_push_digest(text_body),
+                    url=self._frontend_tasks_url() or "https://gust.app/tasks",
+                    ttl_seconds=24 * 60 * 60 if mode == "daily" else 7 * 24 * 60 * 60,
+                )
+                self._upsert_dispatch(
+                    user=user,
+                    mode=mode,
+                    period=period,
+                    channel="pushover",
+                    status="sent",
+                    idempotency_key=push_idempotency_key,
+                    attempted_at=now_utc,
+                    provider_message_id=push_result.request_id,
+                    last_error_code=None,
+                )
+            except PushoverDeliveryError as exc:
+                self._upsert_dispatch(
+                    user=user,
+                    mode=mode,
+                    period=period,
+                    channel="pushover",
+                    status="failed",
+                    idempotency_key=push_idempotency_key,
+                    attempted_at=now_utc,
+                    provider_message_id=None,
+                    last_error_code=exc.error_code,
+                )
         logger.info(
             "digest_sent",
             extra={
@@ -380,6 +599,7 @@ class ReminderWorkerService:
         user: UserRecord,
         mode: DigestMode,
         period: DigestPeriod,
+        channel: Literal["email", "pushover"] = "email",
         status: DigestDispatchStatus,
         idempotency_key: str,
         attempted_at: datetime,
@@ -391,6 +611,7 @@ class ReminderWorkerService:
                 connection,
                 user_id=user.id,
                 digest_type=mode,
+                channel=channel,
                 period_start_date=period.start_date,
                 period_end_date=period.end_date,
                 status=status,
@@ -399,6 +620,11 @@ class ReminderWorkerService:
                 provider_message_id=provider_message_id,
                 last_error_code=last_error_code,
             )
+
+    @staticmethod
+    def _compact_push_digest(text_body: str) -> str:
+        lines = [line for line in text_body.splitlines() if line and not line.startswith("User:")]
+        return "\n".join(lines)[:1024]
 
     def _resolve_period(self, *, mode: DigestMode, now_utc: datetime) -> DigestPeriod:
         now_local = now_utc.astimezone(DIGEST_TIMEZONE)

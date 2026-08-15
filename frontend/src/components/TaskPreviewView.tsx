@@ -177,6 +177,7 @@ function EditableTask({
       onGroupIdChange={(groupId) => onChange((current) => ({ ...current, groupId }))}
       onDueDateChange={(dueDate) => onChange((current) => ({ ...current, dueDate }))}
       onReminderAtChange={(reminderAt) => onChange((current) => ({ ...current, reminderAt }))}
+      onReminderDateChange={(reminderDate) => onChange((current) => ({ ...current, reminderDate }))}
       onRecurrenceChange={(recurrence) => onChange((current) => ({ ...current, recurrence }))}
       onGroupDropdownOpenChange={setIsGroupDropdownOpen}
     />

@@ -15,6 +15,7 @@ interface TaskFormData {
   groupId: string
   dueDate: string
   reminderAt: string
+  reminderDate: string
   recurrence: TaskRecurrence | null
   subtaskTitles?: string[]
 }
@@ -26,6 +27,7 @@ interface TaskFormProps {
   initialGroupId?: string
   initialDueDate?: string
   initialReminderAt?: string
+  initialReminderDate?: string
   initialRecurrence?: TaskRecurrence | null
   initialSubtaskTitles?: string[]
   showSubtasks?: boolean
@@ -59,6 +61,7 @@ type TaskFormViewProps = {
     groupId: (value: string) => void
     dueDate: (value: string) => void
     reminderAt: (value: string) => void
+    reminderDate: (value: string) => void
     recurrence: (value: TaskRecurrence | null) => void
     groupOpen: (value: boolean) => void
     subtasks: (value: string[]) => void
@@ -82,10 +85,10 @@ function useTaskFormSynchronization({ internalError, onErrorChange, isCreateMode
   useEffect(() => { setSubtasks(initialSubtasks); setNewSubtask('') }, [initialSubtasks, setNewSubtask, setSubtasks])
 }
 
-type TaskFormDefaults = Required<Pick<TaskFormProps, 'initialTitle' | 'initialDescription' | 'initialGroupId' | 'initialDueDate' | 'initialReminderAt' | 'initialRecurrence' | 'initialSubtaskTitles' | 'showSubtasks' | 'isSaving'>>
+type TaskFormDefaults = Required<Pick<TaskFormProps, 'initialTitle' | 'initialDescription' | 'initialGroupId' | 'initialDueDate' | 'initialReminderAt' | 'initialReminderDate' | 'initialRecurrence' | 'initialSubtaskTitles' | 'showSubtasks' | 'isSaving'>>
 
 const TASK_FORM_DEFAULTS: TaskFormDefaults = {
-  initialTitle: '', initialDescription: '', initialGroupId: '', initialDueDate: '', initialReminderAt: '', initialRecurrence: null, initialSubtaskTitles: [], showSubtasks: false, isSaving: false,
+  initialTitle: '', initialDescription: '', initialGroupId: '', initialDueDate: '', initialReminderAt: '', initialReminderDate: '', initialRecurrence: null, initialSubtaskTitles: [], showSubtasks: false, isSaving: false,
 }
 
 async function submitTaskForm({ values, subtasks, showSubtasks, isCreateMode, onSave, onError }: { values: Omit<TaskFormData, 'subtaskTitles'>; subtasks: string[]; showSubtasks: boolean; isCreateMode: boolean; onSave: TaskFormProps['onSave']; onError: (error: string | null) => void }) {
@@ -110,6 +113,7 @@ function useTaskFormViewProps({
   initialGroupId,
   initialDueDate,
   initialReminderAt,
+  initialReminderDate,
   initialRecurrence,
   initialSubtaskTitles,
   showSubtasks,
@@ -131,6 +135,7 @@ function useTaskFormViewProps({
   const [groupId, setGroupId] = useState(initialGroupId || defaultGroupIdFinal)
   const [dueDate, setDueDate] = useState(initialDueDate)
   const [reminderAt, setReminderAt] = useState(toDateTimeLocalValue(initialReminderAt))
+  const [reminderDate, setReminderDate] = useState(initialReminderDate)
   const [recurrence, setRecurrence] = useState<TaskRecurrence | null>(initialRecurrence)
   const [subtaskTitles, setSubtaskTitles] = useState<string[]>(initialSubtaskTitles)
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
@@ -142,9 +147,9 @@ function useTaskFormViewProps({
   useTaskFormSynchronization({ internalError, onErrorChange, isCreateMode, groupId, defaultGroupId: defaultGroupIdFinal, setGroupId, initialSubtasks: initialSubtaskTitles, setSubtasks: setSubtaskTitles, setNewSubtask: setNewSubtaskTitle })
 
   function addSubtaskDraft() { const next = newSubtaskTitle.trim(); if (next) { setSubtaskTitles((current) => [...current, next]); setNewSubtaskTitle('') } }
-  const handleSubmit = () => submitTaskForm({ values: { title, description, groupId, dueDate, reminderAt, recurrence }, subtasks: subtaskTitles, showSubtasks, isCreateMode, onSave, onError: setInternalError })
+  const handleSubmit = () => submitTaskForm({ values: { title, description, groupId, dueDate, reminderAt, reminderDate, recurrence }, subtasks: subtaskTitles, showSubtasks, isCreateMode, onSave, onError: setInternalError })
 
-  return { groups, values: { title, description, groupId, dueDate, reminderAt, recurrence }, subtaskTitles, newSubtaskTitle, showSubtasks, isSaving, isCreateMode, isGroupDropdownOpen, error, formId, showActions, onCancel, setters: { title: setTitle, description: setDescription, groupId: setGroupId, dueDate: setDueDate, reminderAt: setReminderAt, recurrence: setRecurrence, groupOpen: setIsGroupDropdownOpen, subtasks: setSubtaskTitles, newSubtask: setNewSubtaskTitle }, onAddSubtask: addSubtaskDraft, onSubmit: () => void handleSubmit() }
+  return { groups, values: { title, description, groupId, dueDate, reminderAt, reminderDate, recurrence }, subtaskTitles, newSubtaskTitle, showSubtasks, isSaving, isCreateMode, isGroupDropdownOpen, error, formId, showActions, onCancel, setters: { title: setTitle, description: setDescription, groupId: setGroupId, dueDate: setDueDate, reminderAt: setReminderAt, reminderDate: setReminderDate, recurrence: setRecurrence, groupOpen: setIsGroupDropdownOpen, subtasks: setSubtaskTitles, newSubtask: setNewSubtaskTitle }, onAddSubtask: addSubtaskDraft, onSubmit: () => void handleSubmit() }
 }
 
 function TaskFormView({ groups, values, subtaskTitles, newSubtaskTitle, showSubtasks, isSaving, isCreateMode, isGroupDropdownOpen, error, formId, showActions, onCancel, setters, onAddSubtask, onSubmit }: TaskFormViewProps) {
@@ -167,6 +172,7 @@ function TaskFormView({ groups, values, subtaskTitles, newSubtaskTitle, showSubt
         onGroupIdChange={setters.groupId}
         onDueDateChange={setters.dueDate}
         onReminderAtChange={setters.reminderAt}
+        onReminderDateChange={setters.reminderDate}
         onRecurrenceChange={setters.recurrence}
         onGroupDropdownOpenChange={setters.groupOpen}
       />

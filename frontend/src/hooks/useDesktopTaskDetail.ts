@@ -49,7 +49,7 @@ function useSaveTask(shared: Shared, setDraft: (draft: TaskDetailDraft) => void)
       await Promise.all([client.cancelQueries({ queryKey: ['tasks'] }), client.cancelQueries({ queryKey: ['desktop', 'tasks'] }), client.cancelQueries({ queryKey: ['task-detail', taskId] })])
       const optimistic = { ...task, title: draft.title, description: draft.description || null,
         group: shared.groups.find((group) => group.id === draft.groupId) ?? task.group,
-        due_date: draft.dueDate || null, reminder_at: dateTimeLocalToIso(draft.reminderAt, shared.session?.timezone),
+        due_date: draft.dueDate || null, reminder_at: dateTimeLocalToIso(draft.reminderAt, shared.session?.timezone), reminder_date: draft.reminderDate || null,
         recurrence: draft.recurrence, recurrence_frequency: draft.recurrence?.frequency ?? null,
         needs_review: draft.groupId !== task.group.id ? false : task.needs_review }
       const snapshots = snapshotTaskQueries(client, taskId); syncCaches(client, optimistic); return { snapshots }
@@ -57,7 +57,7 @@ function useSaveTask(shared: Shared, setDraft: (draft: TaskDetailDraft) => void)
     mutationFn: async (release: () => void) => { void release; const { taskId, draft } = shared
       if (!taskId || !draft) throw new Error('Task detail is not ready.')
       return updateTask(taskId, { title: draft.title, description: draft.description || null, group_id: draft.groupId,
-        due_date: draft.dueDate || null, reminder_at: dateTimeLocalToIso(draft.reminderAt, shared.session?.timezone), recurrence: draft.recurrence }, requireCsrfToken(shared.session)) },
+        due_date: draft.dueDate || null, reminder_at: dateTimeLocalToIso(draft.reminderAt, shared.session?.timezone), reminder_date: draft.reminderDate || null, recurrence: draft.recurrence }, requireCsrfToken(shared.session)) },
     onSuccess: (task) => { syncCaches(client, task); setDraft(buildTaskDetailDraft(task, shared.session?.timezone)); notifySuccess('Task saved.'); shared.refresh(task) },
     onError: (error, _release, context) => { if (context?.snapshots) restoreQuerySnapshots(client, context.snapshots); notifyError(message(error, 'Task changes could not be saved.')) },
     onSettled: (_data, _error, release) => release?.(),
