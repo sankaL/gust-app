@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -66,5 +67,34 @@ describe('SettingsRoute', () => {
     await waitFor(() => expect(router.state.location.search).toBe(''))
     expect(mockedGetNotificationSettings).toHaveBeenCalled()
     expect(screen.getByText('Connected as ••••abcd')).toBeInTheDocument()
+  })
+
+  it('surfaces a failed Pushover callback refresh and allows retrying', async () => {
+    const user = userEvent.setup()
+    mockedGetNotificationSettings.mockRejectedValue(new Error('network unavailable'))
+    const router = createMemoryRouter(
+      [{ path: '/settings', element: <SettingsRoute /> }],
+      { initialEntries: ['/settings?pushover=connected'] }
+    )
+
+    render(
+      <AppProviders>
+        <RouterProvider router={router} />
+      </AppProviders>
+    )
+
+    expect(
+      await screen.findByText(
+        'Could not refresh notification settings. Your Pushover connection may be saved, but Gust cannot confirm its current state.',
+        {},
+        { timeout: 3_000 }
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText('Pushover connected, but Gust could not refresh your settings. Try again.')).toBeInTheDocument()
+
+    mockedGetNotificationSettings.mockResolvedValue(settings)
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText('Connected as ••••abcd')).toBeInTheDocument()
   })
 })
