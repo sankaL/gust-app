@@ -329,6 +329,7 @@ Backend behavior:
 - run a deterministic guarded-intent completeness check for medical calls, appointments, communication tasks, and similar standalone errands
 - perform one bounded corrective re-extraction when a guarded intent is missing from the extracted tasks (including subtasks)
 - synthesize a low-confidence Inbox review task when the guarded intent still cannot be recovered after the corrective retry
+- inspect extracted reminders against the current time (`UTC` for timestamp reminders and user timezone for date-only reminders): clear `reminder_at`, `reminder_date`, and `reminder_offset_minutes` and set `needs_review = true` when an extracted reminder is in the past
 
 Do not rely on regex cleanup or permissive JSON repair as the main parsing strategy.
 

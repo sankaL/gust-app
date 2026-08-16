@@ -346,7 +346,7 @@ Assignment rules:
 
 - High confidence: top group score `>= 0.80`
   - assign to top group
-  - `needs_review = false`
+  - `needs_review = false` (unless overridden by past reminder detection)
 - Ambiguous: top group score `0.50` to `0.79`
   - assign to top group
   - `needs_review = true`
@@ -356,6 +356,12 @@ Assignment rules:
 - Tie: two or more groups within `0.10` of each other and both `>= 0.50`
   - assign to Inbox
   - `needs_review = true`
+
+Past reminder review routing:
+
+- If an extracted reminder timestamp or date is in the past relative to the current time (`reminder_at <= now` in UTC or `reminder_date < current date` in the user's timezone):
+  - clear `reminder_at`, `reminder_date`, and `reminder_offset_minutes`
+  - force `needs_review = true` regardless of group confidence
 
 The user is not interrupted during capture. Review happens after the write.
 

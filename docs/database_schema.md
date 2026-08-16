@@ -280,7 +280,7 @@ Constraints and invariants:
 
 - `status` must be one of: `pending`, `approved`, `discarded`.
 - `top_confidence` must be between 0.0 and 1.0.
-- `needs_review` is `true` when `top_confidence < 0.7`.
+- `needs_review` is `true` when `top_confidence < 0.7` or when an extracted reminder falls in the past (clearing reminder fields).
 - `description` is nullable and should be null when extraction does not produce meaningful extra context beyond the title.
 - `subtask_titles` is a JSON array of non-empty strings; null means no subtasks were extracted.
 - When an extracted task is approved, its `subtask_titles` are written as rows to the `subtasks` table linked to the new `task_id`.

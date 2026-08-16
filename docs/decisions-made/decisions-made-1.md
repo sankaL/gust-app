@@ -1,5 +1,10 @@
 # Decisions Made
 
+## 2026-08-16 19:26:00 EDT
+
+- Routed AI-extracted tasks with past reminder timestamps or dates to review (`needs_review = true`) and cleared their reminder fields (`reminder_at`, `reminder_date`, `reminder_offset_minutes`).
+- Avoided scheduling stale, undeliverable reminder records while ensuring the user is explicitly notified in the task list/staging queue to review and pick an appropriate future reminder.
+
 ## 2026-08-15 12:00:00 EDT
 
 - Chose Pushover as an optional per-user channel: retained independent email digests, encrypted only Pushover user keys server-side, and use the provider subscription redirect with manual-key fallback.
