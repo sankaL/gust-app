@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Check, KeyRound, Mail, Send, Unplug } from 'lucide-react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { useNotifications } from '../components/Notifications'
 import {
@@ -21,13 +21,38 @@ function Toggle({ label, checked, disabled, onChange }: { label: string; checked
 
 export function SettingsRoute() {
   const location = useLocation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { notifyError, notifySuccess } = useNotifications()
   const [manualKey, setManualKey] = useState('')
-  const settingsQuery = useQuery({ queryKey: ['notification-settings'], queryFn: getNotificationSettings })
+  const hasHandledPushoverCallback = useRef(false)
+  const { data: settings, refetch: refetchSettings } = useQuery({
+    queryKey: ['notification-settings'],
+    queryFn: getNotificationSettings,
+  })
   const sessionQuery = useQuery({ queryKey: ['session'], queryFn: getSessionStatus })
   const csrfToken = sessionQuery.data?.csrf_token
-  const settings = settingsQuery.data
+
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('pushover') !== 'connected') {
+      hasHandledPushoverCallback.current = false
+      return
+    }
+    if (hasHandledPushoverCallback.current) return
+
+    hasHandledPushoverCallback.current = true
+    void refetchSettings()
+    notifySuccess('Pushover connected.')
+    const searchParams = new URLSearchParams(location.search)
+    searchParams.delete('pushover')
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: searchParams.size > 0 ? `?${searchParams.toString()}` : '',
+      },
+      { replace: true }
+    )
+  }, [location.pathname, location.search, navigate, notifySuccess, refetchSettings])
   const save = useMutation({
     mutationFn: (payload: Partial<NotificationSettings>) => updateNotificationSettings(payload, csrfToken ?? ''),
     onSuccess: (next) => { queryClient.setQueryData(['notification-settings'], next); notifySuccess('Notification settings saved.') },

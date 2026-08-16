@@ -216,6 +216,9 @@ async def complete_pushover_connect(
     pushover_service: PushoverServiceDep,
     settings: Annotated[Settings, Depends(get_settings)],
     state: Annotated[str, Query()],
+    pushover_user_key: Annotated[str | None, Query()] = None,
+    # Accept the original incorrect parameter temporarily for subscriptions
+    # already in flight when this fix is deployed.
     user: Annotated[str | None, Query()] = None,
     return_path: Annotated[str, Query()] = "/settings",
 ) -> RedirectResponse:
@@ -230,14 +233,15 @@ async def complete_pushover_connect(
             "pushover_state_invalid",
             "Pushover connection could not be verified.",
         )
-    if not user:
+    returned_user_key = pushover_user_key or user
+    if not returned_user_key:
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "pushover_user_key_missing",
             "Pushover did not return a user key.",
         )
     try:
-        await pushover_service.validate_user_key(user_key=user)
+        await pushover_service.validate_user_key(user_key=returned_user_key)
     except PushoverDeliveryError as exc:
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT, exc.error_code, "Pushover user key is invalid."
@@ -249,8 +253,8 @@ async def complete_pushover_connect(
             connection,
             user_id=session_context.user.id,
             values={
-                "pushover_user_key_encrypted": pushover_service.encrypt_user_key(user),
-                "pushover_user_key_hint": user_key_hint(user),
+                "pushover_user_key_encrypted": pushover_service.encrypt_user_key(returned_user_key),
+                "pushover_user_key_hint": user_key_hint(returned_user_key),
                 "pushover_verified_at": datetime.now(UTC),
                 "pushover_connection_error_code": None,
             },
