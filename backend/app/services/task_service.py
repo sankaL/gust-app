@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -31,6 +31,7 @@ from app.db.repositories import (
     create_subtasks,
     create_task,
     get_group,
+    get_notification_preferences,
     get_open_task_in_series,
     get_subtask,
     get_task,
@@ -39,6 +40,7 @@ from app.db.repositories import (
     list_tasks,
     update_subtask,
     update_task,
+    upsert_reminder,
 )
 from app.services.task_rules import (
     RecurrenceInput,
@@ -81,6 +83,8 @@ class TaskUpdateInput:
     group_id: str
     due_date: date | None
     reminder_at: datetime | None
+    reminder_date: date | None
+    reminder_date_provided: bool
     recurrence: RecurrenceInput | None
 
 
@@ -91,6 +95,7 @@ class TaskCreateInput:
     group_id: str
     due_date: date | None
     reminder_at: datetime | None
+    reminder_date: date | None
     recurrence: RecurrenceInput | None
 
 
@@ -189,6 +194,7 @@ class TaskService:
                 title=payload.title,
                 due_date=payload.due_date,
                 reminder_at=payload.reminder_at,
+                reminder_date=payload.reminder_date,
                 recurrence=payload.recurrence,
                 user_timezone=user_timezone,
                 current_series_id=None,
@@ -204,6 +210,7 @@ class TaskService:
                 description=normalize_task_description(payload.description, title=normalized.title),
                 due_date=normalized.due_date,
                 reminder_at=normalized.reminder_at,
+                reminder_date=normalized.reminder_date,
                 reminder_offset_minutes=normalized.reminder_offset_minutes,
                 recurrence_frequency=normalized.recurrence_frequency,
                 recurrence_interval=normalized.recurrence_interval,
@@ -216,6 +223,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task=created,
+                user_timezone=user_timezone,
                 now=datetime.now(UTC),
             )
             group = get_group(connection, user_id=user_id, group_id=created.group_id)
@@ -240,10 +248,14 @@ class TaskService:
             if destination_group is None:
                 raise GroupNotFoundError("Destination group could not be found.")
 
+            reminder_date = payload.reminder_date
+            if not payload.reminder_date_provided and payload.reminder_at is None:
+                reminder_date = existing.reminder_date
             normalized = self._normalize_fields(
                 title=payload.title,
                 due_date=payload.due_date,
                 reminder_at=payload.reminder_at,
+                reminder_date=reminder_date,
                 recurrence=payload.recurrence,
                 user_timezone=user_timezone,
                 current_series_id=existing.series_id,
@@ -257,6 +269,7 @@ class TaskService:
                 ),
                 "due_date": normalized.due_date,
                 "reminder_at": normalized.reminder_at,
+                "reminder_date": normalized.reminder_date,
                 "reminder_offset_minutes": normalized.reminder_offset_minutes,
                 "recurrence_frequency": normalized.recurrence_frequency,
                 "recurrence_interval": normalized.recurrence_interval,
@@ -276,6 +289,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task=updated,
+                user_timezone=user_timezone,
                 now=datetime.now(UTC),
             )
             group = get_group(connection, user_id=user_id, group_id=updated.group_id)
@@ -366,6 +380,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task=updated,
+                user_timezone=user_timezone,
                 now=datetime.now(UTC),
             )
             group = get_group(connection, user_id=user_id, group_id=updated.group_id)
@@ -488,6 +503,7 @@ class TaskService:
                 connection,
                 user_id=user_id,
                 task=updated,
+                user_timezone=user_timezone,
                 now=datetime.now(UTC),
             )
             group = get_group(connection, user_id=user_id, group_id=updated.group_id)
@@ -609,15 +625,25 @@ class TaskService:
         title: str,
         due_date: date | None,
         reminder_at: datetime | None,
+        reminder_date: date | None,
         recurrence: RecurrenceInput | None,
         user_timezone: str,
         current_series_id: str | None,
     ):
         try:
+            now = datetime.now(UTC)
+            if (
+                reminder_date is not None
+                and reminder_date < now.astimezone(ZoneInfo(user_timezone)).date()
+            ):
+                raise ValueError("Date-only reminder cannot be in the past.")
+            if reminder_at is not None and reminder_at <= now:
+                raise ValueError("Date-and-time reminder must be in the future.")
             return normalize_task_fields(
                 title=title,
                 due_date=due_date,
                 reminder_at=reminder_at,
+                reminder_date=reminder_date,
                 recurrence=recurrence,
                 user_timezone=user_timezone,
                 current_series_id=current_series_id,
@@ -632,11 +658,53 @@ class TaskService:
         user_id: str,
         task: TaskRecord,
         now: datetime,
+        user_timezone: str,
     ) -> None:
-        # Digest-only rollout: keep reminder fields but stop creating/updating
-        # per-task reminder rows; cancel any existing legacy row.
-        del now
-        cancel_reminder(connection, user_id=user_id, task_id=task.id)
+        self._sync_task_reminder(
+            connection,
+            settings=self.settings,
+            user_id=user_id,
+            task=task,
+            user_timezone=user_timezone,
+            now=now,
+        )
+
+
+    @staticmethod
+    def _sync_task_reminder(
+        connection: sa.Connection,
+        *,
+        settings: Settings,
+        user_id: str,
+        task: TaskRecord,
+        user_timezone: str,
+        now: datetime,
+    ) -> None:
+        preferences = get_notification_preferences(connection, user_id=user_id)
+        if (
+            not settings.pushover_notifications_enabled
+            or not preferences.pushover_enabled
+            or not preferences.pushover_task_reminders_enabled
+            or not preferences.pushover_user_key_encrypted
+            or (task.reminder_at is None and task.reminder_date is None)
+        ):
+            cancel_reminder(connection, user_id=user_id, task_id=task.id)
+            return
+        if task.reminder_at is not None:
+            scheduled_for = task.reminder_at - timedelta(minutes=30)
+            if scheduled_for < now:
+                scheduled_for = now
+        else:
+            assert task.reminder_date is not None
+            local_target = datetime.combine(
+                task.reminder_date,
+                preferences.date_only_reminder_time,
+                tzinfo=ZoneInfo(user_timezone),
+            )
+            scheduled_for = local_target.astimezone(UTC)
+            if scheduled_for < now:
+                scheduled_for = now
+        upsert_reminder(connection, user_id=user_id, task_id=task.id, scheduled_for=scheduled_for)
 
     def _create_next_occurrence_on_completion(
         self,
@@ -688,6 +756,11 @@ class TaskService:
             description=task.description,
             due_date=next_due_date,
             reminder_at=next_reminder_at,
+            reminder_date=(
+                next_due_date + (task.reminder_date - task.due_date)
+                if task.reminder_date is not None and task.due_date is not None
+                else None
+            ),
             reminder_offset_minutes=task.reminder_offset_minutes,
             recurrence_frequency=task.recurrence_frequency,
             recurrence_interval=task.recurrence_interval,
@@ -712,7 +785,13 @@ class TaskService:
                 titles=[subtask.title for subtask in source_subtasks],
             )
 
-        self._sync_reminder(connection, user_id=user_id, task=next_task, now=completed_at)
+        self._sync_reminder(
+            connection,
+            user_id=user_id,
+            task=next_task,
+            now=completed_at,
+            user_timezone=user_timezone,
+        )
 
     def _create_next_occurrence_on_delete(
         self,
@@ -767,6 +846,11 @@ class TaskService:
             description=task.description,
             due_date=next_due_date,
             reminder_at=next_reminder_at,
+            reminder_date=(
+                next_due_date + (task.reminder_date - task.due_date)
+                if task.reminder_date is not None and task.due_date is not None
+                else None
+            ),
             reminder_offset_minutes=task.reminder_offset_minutes,
             recurrence_frequency=task.recurrence_frequency,
             recurrence_interval=task.recurrence_interval,
@@ -791,7 +875,9 @@ class TaskService:
                 titles=[subtask.title for subtask in source_subtasks],
             )
 
-        self._sync_reminder(connection, user_id=user_id, task=next_task, now=deleted_at)
+        self._sync_reminder(
+            connection, user_id=user_id, task=next_task, now=deleted_at, user_timezone=user_timezone
+        )
 
     def _reconcile_series_on_reopen(
         self,

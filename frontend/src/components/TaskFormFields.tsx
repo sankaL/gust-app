@@ -12,6 +12,7 @@ type Props = {
   groupId: string
   dueDate: string
   reminderAt: string
+  reminderDate?: string
   recurrence: TaskRecurrence | null
   groups: Group[]
   isGroupDropdownOpen: boolean
@@ -21,6 +22,7 @@ type Props = {
   onGroupIdChange: (value: string) => void
   onDueDateChange: (value: string) => void
   onReminderAtChange: (value: string) => void
+  onReminderDateChange?: (value: string) => void
   onRecurrenceChange: (recurrence: TaskRecurrence | null) => void
   onGroupDropdownOpenChange: (isOpen: boolean) => void
 }
@@ -30,7 +32,6 @@ export function TaskFormFields(props: Props) {
   function handleDueDateChange(dueDate: string) {
     props.onDueDateChange(dueDate)
     if (!dueDate) {
-      props.onReminderAtChange('')
       props.onRecurrenceChange(null)
       return
     }
@@ -56,12 +57,20 @@ function TaskIdentityFields({ title, description, disabled, onTitleChange, onDes
 }
 
 function TaskScheduleFields(props: Props & { disabled: boolean }) {
+  const reminderMode = props.reminderAt ? 'datetime' : props.reminderDate ? 'date' : 'none'
+  const setReminderMode = (mode: string) => {
+    if (mode === 'none') { props.onReminderAtChange(''); props.onReminderDateChange?.('') }
+    if (mode === 'date') props.onReminderAtChange('')
+    if (mode === 'datetime') props.onReminderDateChange?.('')
+  }
   return (
     <div className="grid min-w-0 gap-3 sm:grid-cols-2">
       <ScheduleField label="Due date"><DatePicker value={props.dueDate || null} onChange={props.onDueDateChange} mode="date" disabled={props.disabled} placeholder="Select a date" /></ScheduleField>
       <ScheduleField label="Reminder">
-        <DatePicker value={props.reminderAt || null} onChange={props.onReminderAtChange} mode="datetime" disabled={!props.dueDate || props.disabled} placeholder="Select date & time" />
-        {!props.dueDate ? <p className="mt-2 text-xs text-on-surface-variant/60">Set a due date first</p> : null}
+        <select aria-label="Reminder type" value={reminderMode} disabled={props.disabled} onChange={(event) => setReminderMode(event.target.value)} className="w-full rounded-soft bg-surface px-3 py-2 text-sm text-on-surface"><option value="none">No reminder</option><option value="date">Date only</option><option value="datetime">Date and time</option></select>
+        {reminderMode === 'date' ? <div className="mt-2"><DatePicker value={props.reminderDate || null} onChange={(value) => props.onReminderDateChange?.(value)} mode="date" disabled={props.disabled} placeholder="Select a date" /></div> : null}
+        {reminderMode === 'datetime' ? <div className="mt-2"><DatePicker value={props.reminderAt || null} onChange={props.onReminderAtChange} mode="datetime" disabled={props.disabled} placeholder="Select date & time" /></div> : null}
+        {reminderMode === 'date' ? <p className="mt-2 text-xs text-on-surface-variant/60">Notification time is set in Settings.</p> : null}
       </ScheduleField>
       <ScheduleField label="Group" isOpen={props.isGroupDropdownOpen}>
         <SelectDropdown label="" options={props.groups.map((group) => ({ value: group.id, label: group.name }))} value={props.groupId} onChange={(value) => props.onGroupIdChange(String(value))} onOpenChange={props.onGroupDropdownOpenChange} placeholder="No Group" disabled={props.disabled} />

@@ -533,7 +533,7 @@ def test_daily_period_is_today_in_eastern(client) -> None:
 
 def test_digest_mode_type_alias_is_str_literal() -> None:
     # Smoke check that the mode alias remains constrained.
-    assert get_args(DigestMode) == ("daily", "weekly")
+    assert get_args(DigestMode) == ("daily", "weekly", "task")
 
 
 def test_resend_service_still_exposes_configuration_guard(client) -> None:

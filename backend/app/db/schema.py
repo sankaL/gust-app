@@ -37,6 +37,7 @@ digest_dispatch_status = sa.Enum(
     name="digest_dispatch_status",
     native_enum=False,
 )
+notification_channel = sa.Enum("email", "pushover", name="notification_channel", native_enum=False)
 recurrence_frequency = sa.Enum(
     "daily",
     "weekly",
@@ -55,6 +56,35 @@ users = sa.Table(
     sa.Column("email", sa.Text(), nullable=False, unique=True),
     sa.Column("display_name", sa.Text(), nullable=True),
     sa.Column("timezone", sa.Text(), nullable=False),
+    sa.Column(
+        "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+    sa.Column(
+        "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+)
+
+notification_preferences = sa.Table(
+    "notification_preferences",
+    metadata,
+    sa.Column("user_id", sa.Uuid(as_uuid=False), sa.ForeignKey("users.id"), primary_key=True),
+    sa.Column("email_daily_enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
+    sa.Column("email_weekly_enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
+    sa.Column("pushover_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
+    sa.Column(
+        "pushover_task_reminders_enabled", sa.Boolean(), nullable=False, server_default=sa.false()
+    ),
+    sa.Column(
+        "pushover_daily_digest_enabled", sa.Boolean(), nullable=False, server_default=sa.false()
+    ),
+    sa.Column(
+        "pushover_weekly_digest_enabled", sa.Boolean(), nullable=False, server_default=sa.false()
+    ),
+    sa.Column("date_only_reminder_time", sa.Time(), nullable=False, server_default="08:00:00"),
+    sa.Column("pushover_user_key_encrypted", sa.Text(), nullable=True),
+    sa.Column("pushover_user_key_hint", sa.Text(), nullable=True),
+    sa.Column("pushover_verified_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("pushover_connection_error_code", sa.Text(), nullable=True),
     sa.Column(
         "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
     ),
@@ -108,6 +138,7 @@ tasks = sa.Table(
     sa.Column("needs_review", sa.Boolean(), nullable=False, server_default=sa.false()),
     sa.Column("due_date", sa.Date(), nullable=True),
     sa.Column("reminder_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("reminder_date", sa.Date(), nullable=True),
     sa.Column("reminder_offset_minutes", sa.Integer(), nullable=True),
     sa.Column("recurrence_frequency", recurrence_frequency, nullable=True),
     sa.Column("recurrence_interval", sa.Integer(), nullable=True),
@@ -142,6 +173,10 @@ tasks = sa.Table(
         "OR (recurrence_frequency = 'yearly' AND recurrence_weekday IS NULL "
         "AND recurrence_day_of_month IS NOT NULL AND recurrence_month IS NOT NULL)))",
         name="ck_tasks_recurrence_shape",
+    ),
+    sa.CheckConstraint(
+        "NOT (reminder_at IS NOT NULL AND reminder_date IS NOT NULL)",
+        name="ck_tasks_reminder_precision",
     ),
 )
 
@@ -200,6 +235,7 @@ extracted_tasks = sa.Table(
     sa.Column("group_name", sa.Text(), nullable=True),
     sa.Column("due_date", sa.Date(), nullable=True),
     sa.Column("reminder_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("reminder_date", sa.Date(), nullable=True),
     sa.Column("recurrence_frequency", sa.Text(), nullable=True),
     sa.Column("recurrence_weekday", sa.SmallInteger(), nullable=True),
     sa.Column("recurrence_day_of_month", sa.SmallInteger(), nullable=True),
@@ -222,6 +258,10 @@ extracted_tasks = sa.Table(
         name="ck_extracted_tasks_confidence_range",
     ),
     sa.CheckConstraint(
+        "NOT (reminder_at IS NOT NULL AND reminder_date IS NOT NULL)",
+        name="ck_extracted_tasks_reminder_precision",
+    ),
+    sa.CheckConstraint(
         "status IN ('pending', 'approved', 'discarded')",
         name="ck_extracted_tasks_status_valid",
     ),
@@ -236,6 +276,7 @@ reminders = sa.Table(
         "task_id", sa.Uuid(as_uuid=False), sa.ForeignKey("tasks.id"), nullable=False, unique=True
     ),
     sa.Column("scheduled_for", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("status", reminder_status, nullable=False),
     sa.Column("idempotency_key", sa.Text(), nullable=False, unique=True),
     sa.Column("claim_token", sa.Uuid(as_uuid=False), nullable=True),
@@ -260,6 +301,7 @@ digest_dispatches = sa.Table(
     sa.Column("id", sa.Uuid(as_uuid=False), primary_key=True),
     sa.Column("user_id", sa.Uuid(as_uuid=False), sa.ForeignKey("users.id"), nullable=False),
     sa.Column("digest_type", digest_type, nullable=False),
+    sa.Column("channel", notification_channel, nullable=False, server_default="email"),
     sa.Column("period_start_date", sa.Date(), nullable=False),
     sa.Column("period_end_date", sa.Date(), nullable=False),
     sa.Column("status", digest_dispatch_status, nullable=False),
@@ -338,6 +380,7 @@ sa.Index("ix_subtasks_task_id", subtasks.c.task_id)
 sa.Index("ix_captures_user_created_at", captures.c.user_id, captures.c.created_at.desc())
 sa.Index("ix_captures_expires_at", captures.c.expires_at)
 sa.Index("ix_reminders_status_scheduled_for", reminders.c.status, reminders.c.scheduled_for)
+sa.Index("ix_reminders_status_next_attempt_at", reminders.c.status, reminders.c.next_attempt_at)
 sa.Index("ix_reminders_claim_expires_at", reminders.c.claim_expires_at)
 sa.Index(
     "uq_digest_dispatches_user_period",
@@ -345,6 +388,7 @@ sa.Index(
     digest_dispatches.c.digest_type,
     digest_dispatches.c.period_start_date,
     digest_dispatches.c.period_end_date,
+    digest_dispatches.c.channel,
     unique=True,
 )
 sa.Index(

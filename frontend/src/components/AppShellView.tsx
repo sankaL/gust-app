@@ -1,6 +1,6 @@
 import type { ReactNode, RefObject } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { CheckCircle2, Folder, Laptop, ListTodo, LogOut, Mic, Plus } from 'lucide-react'
+import { CheckCircle2, Folder, Laptop, ListTodo, LogOut, Mic, Plus, Settings } from 'lucide-react'
 
 import type { SessionStatus } from '../lib/api'
 import { Button } from './Button'
@@ -53,6 +53,7 @@ function AccountMenu({
           isLoggingOut={isLoggingOut}
           onCompletedTasks={onCompletedTasks}
           onDesktopMode={onDesktopMode}
+          onClose={onToggle}
           onLogout={onLogout}
         />
       )}
@@ -65,8 +66,9 @@ function AccountMenuPanel({
   isLoggingOut,
   onCompletedTasks,
   onDesktopMode,
+  onClose,
   onLogout,
-}: Omit<AccountMenuProps, 'accountInitials' | 'isOpen' | 'menuRef' | 'onToggle'>) {
+}: Omit<AccountMenuProps, 'accountInitials' | 'isOpen' | 'menuRef' | 'onToggle'> & { onClose: () => void }) {
   return (
     <div
       role="menu"
@@ -97,6 +99,15 @@ function AccountMenuPanel({
           <Laptop className="h-4 w-4 text-purple-400 transition-colors group-hover:text-purple-300" strokeWidth={1.9} />
           <span>Desktop Mode</span>
         </button>
+        <Link
+          to="/settings"
+          role="menuitem"
+          onClick={onClose}
+          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-body text-sm font-medium text-zinc-200 transition-all hover:bg-[#1a1136] hover:text-white"
+        >
+          <Settings className="h-4 w-4 text-purple-400" strokeWidth={1.9} />
+          <span>Settings</span>
+        </Link>
         <div className="my-0.5 h-px bg-purple-500/20" />
         <button
           type="button"

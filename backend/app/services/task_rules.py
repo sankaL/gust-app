@@ -28,6 +28,7 @@ class NormalizedTaskFields:
     title: str
     due_date: date | None
     reminder_at: datetime | None
+    reminder_date: date | None
     reminder_offset_minutes: int | None
     recurrence_frequency: str | None
     recurrence_interval: int | None
@@ -63,6 +64,7 @@ def normalize_task_fields(
     title: str,
     due_date: date | None,
     reminder_at: datetime | None,
+    reminder_date: date | None,
     recurrence: RecurrenceInput | None,
     user_timezone: str,
     current_series_id: str | None = None,
@@ -94,8 +96,8 @@ def normalize_task_fields(
         else:
             raise ValueError("Reminder timestamp must include a timezone.")
 
-    if due_date is None and reminder_at is not None:
-        raise ValueError("Reminder requires a due date.")
+    if reminder_at is not None and reminder_date is not None:
+        raise ValueError("Choose either a date-only reminder or a date-and-time reminder.")
 
     # For weekly/monthly recurrence: either default to today (opt-in) or raise error (strict)
     if due_date is None and recurrence is not None and recurrence.frequency != "daily":
@@ -128,6 +130,13 @@ def normalize_task_fields(
         recurrence_month = recurrence.month
         series_id = current_series_id or str(uuid.uuid4())
 
+    if (
+        recurrence is not None
+        and (reminder_at is not None or reminder_date is not None)
+        and due_date is None
+    ):
+        raise ValueError("Recurring task reminders require a due date.")
+
     reminder_offset_minutes = None
     if reminder_at is not None and due_date is not None:
         reminder_offset_minutes = compute_reminder_offset_minutes(
@@ -140,6 +149,7 @@ def normalize_task_fields(
         title=normalized_title,
         due_date=due_date,
         reminder_at=reminder_at,
+        reminder_date=reminder_date,
         reminder_offset_minutes=reminder_offset_minutes,
         recurrence_frequency=recurrence_frequency,
         recurrence_interval=recurrence_interval,

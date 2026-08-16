@@ -89,6 +89,7 @@ class ExtractedTaskResponse(BaseModel):
     group_name: str | None
     due_date: str | None
     reminder_at: str | None
+    reminder_date: str | None
     recurrence_frequency: str | None
     recurrence_weekday: int | None
     recurrence_day_of_month: int | None
@@ -120,6 +121,7 @@ class UpdateExtractedTaskRequest(BaseModel):
     group_id: str | None = None
     due_date: date | None = None
     reminder_at: datetime | None = None  # ISO datetime string (with timezone) or null
+    reminder_date: date | None = None
     recurrence_frequency: Literal["daily", "weekly", "monthly", "yearly"] | None = None
     recurrence_weekday: int | None = None  # 0-6 for weekly
     recurrence_day_of_month: int | None = None  # 1-31 for monthly
@@ -232,6 +234,7 @@ def _build_extracted_task_response(task) -> ExtractedTaskResponse:
         group_name=task.group_name,
         due_date=task.due_date.isoformat() if task.due_date else None,
         reminder_at=task.reminder_at.isoformat() if task.reminder_at else None,
+        reminder_date=task.reminder_date.isoformat() if task.reminder_date else None,
         recurrence_frequency=task.recurrence_frequency,
         recurrence_weekday=task.recurrence_weekday,
         recurrence_day_of_month=task.recurrence_day_of_month,

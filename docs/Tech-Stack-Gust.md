@@ -350,6 +350,7 @@ Committed cron split:
 
 - `digest-daily-cron` calls `POST /internal/reminders/run?mode=daily`
 - `digest-weekly-cron` calls `POST /internal/reminders/run?mode=weekly`
+- `task-reminder-cron` calls `POST /internal/reminders/run?mode=task` every five minutes. It is intentionally short-lived, uses the existing shared-secret boundary, and accepts a small delivery variance.
 - both jobs use the same shared-secret header as other internal jobs
 - no separate cron microservice codebase is required; this is deployment configuration only
 - each cron service is deployed from a dedicated Railway service directory with its own `cronSchedule`
@@ -371,7 +372,9 @@ Required behavior:
 - retry transient send failures without duplicate-send
 - keep the digest template branded but minimal, including the Gust logo and a link back to the web app
 
-Per-item reminder rows remain in the schema for compatibility but are no longer the active send path.
+Per-item reminder rows are claimed transactionally for Pushover task delivery. `next_attempt_at` provides bounded retry scheduling; task rows retain either an exact `reminder_at` or a date-only `reminder_date`, never both.
+
+Pushover user keys are validated with the provider before storage, encrypted by Fernet using a backend-only key, and never returned to the browser. Provider calls use bounded timeouts, sanitized error codes, normal priority, user-default sound, and no provider credentials or message bodies in logs.
 
 ### Recurrence
 

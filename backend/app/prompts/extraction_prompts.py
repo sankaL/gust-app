@@ -363,8 +363,9 @@ JSON SCHEMA:
     {
       "title": "string (required, non-empty)",
       "description": "string or null (optional short context that adds value beyond the title; use null if no extra context)",
-      "due_date": "string (ISO date YYYY-MM-DD, optional but REQUIRED if reminder_at is set or if recurrence is weekly/monthly)",
-      "reminder_at": "string (ISO datetime WITH timezone, e.g. 2026-03-25T09:00:00+00:00, optional)",
+      "due_date": "string (ISO date YYYY-MM-DD, optional but required for recurrence)",
+      "reminder_at": "string (ISO datetime WITH timezone, optional; mutually exclusive with reminder_date)",
+      "reminder_date": "string (ISO date for an explicit date-only reminder, optional; mutually exclusive with reminder_at)",
       "group_id": "string (UUID, optional)",
       "group_name": "string (optional)",
       "top_confidence": "float (0.0 to 1.0, default 0.9)",
@@ -384,7 +385,7 @@ JSON SCHEMA:
 4. "and" / "also" / "and also" / "I gotta" / "I should" typically mean SEPARATE parallel tasks
 5. Health, appointment, and personal errand tasks should be separate top-level tasks regardless of dominant transcript theme
 6. Parse dates relative to user's timezone and current date provided
-7. Set reminder_at ONLY when a specific time is mentioned — ALWAYS include timezone (e.g., +00:00 for UTC)
+7. Set a reminder only for explicit reminder/alert language, or for clearly scheduled events (appointments, meetings, reservations, interviews, classes, flights, scheduled calls, exact-time deadlines). Use reminder_at for an exact time and reminder_date for date-only. Ordinary errands with a time do not automatically get reminders. ALWAYS include timezone for reminder_at.
 8. For weekly, monthly, or yearly recurrence, you MUST set due_date to the first occurrence date
 9. Always include top_confidence (use 0.9 when not otherwise specified)
 10. Set description to null when the title already captures the full task or no extra context is available

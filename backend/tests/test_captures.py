@@ -1028,10 +1028,11 @@ def test_submit_capture_returns_zero_actionable_when_all_items_are_skipped(
             responses=[
                 {
                     "tasks": [
-                        {
-                            "title": "Call Sam",
-                            "reminder_at": "2026-03-23T09:00:00Z",
-                            "group_name": "Inbox",
+                            {
+                                "title": "Call Sam",
+                                "reminder_at": "2026-03-23T09:00:00Z",
+                                "recurrence": {"frequency": "quarterly"},
+                                "group_name": "Inbox",
                             "top_confidence": 0.4,
                         }
                     ]

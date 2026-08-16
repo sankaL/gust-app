@@ -33,6 +33,7 @@ const primaryNavigation = [
 
 const accountNavigation = [
   ...primaryNavigation.filter((item) => item.to !== '/desktop/groups'),
+  { to: '/desktop/settings', label: 'Settings', icon: Settings2, end: true },
   { to: '/capture', label: 'Mobile Mode', icon: Smartphone, end: true },
 ]
 

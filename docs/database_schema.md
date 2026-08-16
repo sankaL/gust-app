@@ -26,7 +26,7 @@ The schema is designed to support:
 - Active digest delivery state is normalized into a dedicated `digest_dispatches` table.
 - User-provided plain-text fields reject NUL and non-printable control characters other than carriage return, newline, and tab.
 - User-facing titles and descriptions are normalized as plain text at the backend boundary; transcripts preserve line structure after control-character cleanup.
-- Legacy per-task reminder rows are preserved for compatibility but are no longer the active email-send source.
+- Per-task reminder rows are the active Pushover reminder delivery queue; email remains digest-only.
 - Group names must be unique per user.
 
 ## Auth Allowlist
@@ -53,6 +53,7 @@ Hosted and local Postgres deployments must enable and force row-level security o
 - `reminders`
 - `extracted_tasks`
 - `digest_dispatches`
+- `notification_preferences`
 
 Policy contract:
 
@@ -192,6 +193,7 @@ Primary task record for open and completed tasks.
 | `needs_review` | `boolean` | No | Defaults to `false`. |
 | `due_date` | `date` | Yes | Optional due date in the user's calendar context. |
 | `reminder_at` | `timestamptz` | Yes | Optional reminder metadata timestamp captured from extraction or task editing. |
+| `reminder_date` | `date` | Yes | Date-only reminder metadata; mutually exclusive with `reminder_at`. |
 | `reminder_offset_minutes` | `integer` | Yes | Relative offset from the due date/time for inherited recurrence reminders. |
 | `recurrence_frequency` | `recurrence_frequency` | Yes | Null when not recurring. |
 | `recurrence_interval` | `integer` | Yes | Reserved for v1 default `1`; must be `1` in v1. |
@@ -209,9 +211,8 @@ Constraints and invariants:
 - `title` must not be blank after trimming.
 - `description` is optional plain text and may be null when the title already captures the task fully.
 - `completed_at` is required when `status = 'completed'` and must be null when `status = 'open'`.
-- If `reminder_at` is populated, `due_date` must also be populated at the application layer in v1.
-- Clearing `due_date` in task editing must also clear `reminder_at`, `reminder_offset_minutes`, and recurrence columns at the application layer.
-- `reminder_at` and `reminder_offset_minutes` are retained task metadata fields; digest sending is not driven by the `reminders` table.
+- `reminder_at` and `reminder_date` are mutually exclusive. Only recurring task reminders require a due date.
+- Clearing a due date preserves a non-recurring reminder but clears recurrence when recurrence requires a due date.
 - Recurrence columns are all null for non-recurring tasks.
 - Recurring task rules:
   - `recurrence_frequency = 'daily'` requires no weekday or day-of-month.
@@ -263,6 +264,7 @@ Staging table for extracted tasks before user approval. Tasks remain here until 
 | `group_name` | `text` | Yes | Denormalized group name for display. |
 | `due_date` | `date` | Yes | Optional due date. |
 | `reminder_at` | `timestamptz` | Yes | Optional reminder timestamp. |
+| `reminder_date` | `date` | Yes | Optional date-only reminder, resolved at the user's configured local reminder time. |
 | `recurrence_frequency` | `text` | Yes | Null when not recurring. |
 | `recurrence_weekday` | `smallint` | Yes | `0-6` for Sunday-Saturday. Required for weekly recurrence. |
 | `recurrence_day_of_month` | `smallint` | Yes | `1-31`. Required for monthly recurrence. |
@@ -284,6 +286,7 @@ Constraints and invariants:
 - When an extracted task is approved, its `subtask_titles` are written as rows to the `subtasks` table linked to the new `task_id`.
 - Tasks are linked to captures for traceability.
 - User-scoped for security.
+- At most one of `reminder_at` and `reminder_date` may be non-null.
 
 ### `captures`
 
@@ -326,7 +329,8 @@ Legacy per-task reminder lifecycle table retained for compatibility and historic
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
 | `task_id` | `uuid` | No | Foreign key to `tasks.id`. Historically one reminder row per task occurrence. |
 | `scheduled_for` | `timestamptz` | No | Historical per-item send target in UTC. |
-| `status` | `reminder_status` | No | Lifecycle state retained for legacy rows. |
+| `next_attempt_at` | `timestamptz` | Yes | Due time for a bounded retry; defaults to `scheduled_for`. |
+| `status` | `reminder_status` | No | Transactional Pushover reminder lifecycle state. |
 | `idempotency_key` | `text` | No | Historical deterministic key for per-item sends. |
 | `claim_token` | `uuid` | Yes | Legacy worker-claim token. |
 | `claimed_at` | `timestamptz` | Yes | Legacy claim timestamp. |
@@ -354,6 +358,7 @@ Per-user digest dispatch tracker for idempotency, retry safety, and auditability
 | `id` | `uuid` | No | Primary key. |
 | `user_id` | `uuid` | No | Foreign key to `users.id`. |
 | `digest_type` | `digest_type` | No | `daily` or `weekly`. |
+| `channel` | `text` | No | `email` or `pushover`. |
 | `period_start_date` | `date` | No | Inclusive period start date in Eastern date semantics. |
 | `period_end_date` | `date` | No | Inclusive period end date in Eastern date semantics. |
 | `status` | `digest_dispatch_status` | No | `sent`, `failed`, or `skipped_empty`. |
@@ -366,9 +371,34 @@ Per-user digest dispatch tracker for idempotency, retry safety, and auditability
 
 Constraints and invariants:
 
-- Unique period constraint on `(`user_id`, `digest_type`, `period_start_date`, `period_end_date`)`.
-- Unique constraint on `idempotency_key`.
-- One logical send outcome per user/digest/period, retry-safe across reruns.
+- Unique period constraint on `(`user_id`, `digest_type`, `period_start_date`, `period_end_date`, `channel`)`.
+
+### `notification_preferences`
+
+One user-scoped row stores independent daily/weekly email toggles, Pushover master and child toggles, date-only reminder time, encrypted Pushover user key, a masked key hint, verification timestamp, and sanitized connection state. The full user key is never exposed through application APIs.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `user_id` | `uuid` | No | Primary key and foreign key to `users.id`, with cascade delete. |
+| `email_daily_enabled` | `boolean` | No | Defaults to `true`. |
+| `email_weekly_enabled` | `boolean` | No | Defaults to `true`. |
+| `pushover_enabled` | `boolean` | No | Defaults to `false`. |
+| `pushover_task_reminders_enabled` | `boolean` | No | Defaults to `false`. |
+| `pushover_daily_digest_enabled` | `boolean` | No | Defaults to `false`. |
+| `pushover_weekly_digest_enabled` | `boolean` | No | Defaults to `false`. |
+| `date_only_reminder_time` | `time` | No | Defaults to `08:00:00` in the user's persisted timezone. |
+| `pushover_user_key_encrypted` | `text` | Yes | Fernet-encrypted provider user key; never returned by application APIs. |
+| `pushover_user_key_hint` | `varchar(12)` | Yes | Masked display hint only. |
+| `pushover_verified_at` | `timestamptz` | Yes | Most recent successful connection validation. |
+| `pushover_connection_error_code` | `varchar(64)` | Yes | Sanitized latest connection failure code. |
+| `created_at` | `timestamptz` | No | Default `now()`. |
+| `updated_at` | `timestamptz` | No | Default `now()`. |
+
+Constraints and invariants:
+
+- Row-level security uses the backend actor contract: `app.current_user_id` for user requests and `app.internal_job` for internal work.
+- Hosted `anon` and `authenticated` roles have no privileges; `gust_app_runtime` receives only application read/write access.
+- The full Pushover user key is encrypted at rest and never leaves the backend API.
 
 ### `rate_limit_counters`
 

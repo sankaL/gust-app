@@ -7,6 +7,7 @@ export type TaskFormDraft = {
   groupId: string
   dueDate: string
   reminderAt: string
+  reminderDate: string
   recurrence: TaskRecurrence | null
   subtaskTitles: string[]
 }
@@ -92,6 +93,7 @@ export function buildExtractedTaskDraft(
     groupId: task.group_id,
     dueDate: task.due_date ? task.due_date.split('T')[0] : '',
     reminderAt: toDateTimeLocalValue(task.reminder_at, timezone),
+    reminderDate: task.reminder_date ?? '',
     subtaskTitles: task.subtask_titles ?? [],
     recurrence: isTaskRecurrenceFrequency(task.recurrence_frequency)
       ? {
@@ -114,6 +116,7 @@ export function buildTaskDetailDraft(
     groupId: task.group.id,
     dueDate: task.due_date ?? '',
     reminderAt: toDateTimeLocalValue(task.reminder_at, timezone),
+    reminderDate: task.reminder_date ?? '',
     recurrence: task.recurrence,
   }
 }
@@ -176,6 +179,7 @@ export function buildExtractedTaskUpdates(
   if (draft.reminderAt !== initialReminder) {
     updates.reminder_at = dateTimeLocalToIso(draft.reminderAt, timezone)
   }
+  if (draft.reminderDate !== (task.reminder_date ?? '')) updates.reminder_date = draft.reminderDate || null
 
   applyRecurrenceUpdates(updates, task, draft.recurrence)
   return updates

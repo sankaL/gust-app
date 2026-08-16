@@ -89,6 +89,7 @@ def _seed_task(
     needs_review: bool = False,
     due_date_value: date | None = None,
     reminder_at_value: datetime | None = None,
+    reminder_date_value: date | None = None,
     reminder_offset_minutes: int | None = None,
     series_id: str | None = None,
     recurrence_frequency: str | None = None,
@@ -113,6 +114,7 @@ def _seed_task(
                 needs_review=needs_review,
                 due_date=due_date_value,
                 reminder_at=reminder_at_value,
+                reminder_date=reminder_date_value,
                 reminder_offset_minutes=reminder_offset_minutes,
                 recurrence_frequency=recurrence_frequency,
                 recurrence_interval=recurrence_interval,
@@ -546,6 +548,40 @@ def test_update_task_keeps_digest_only_reminder_state_and_series_id(
     assert cleared_task_row.reminder_at is None
     assert cleared_task_row.description is None
     assert cleared_reminder_rows == []
+
+
+def test_update_task_preserves_date_only_reminder_when_omitted_from_patch(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Inbox Mirror")
+    reminder_date = date.today() + timedelta(days=2)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Review notification preferences",
+        due_date_value=reminder_date,
+        reminder_date_value=reminder_date,
+    )
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={
+            "title": "Review notification preferences today",
+            "group_id": group_id,
+            "due_date": reminder_date.isoformat(),
+            "reminder_at": None,
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+    assert task_row.reminder_date == reminder_date
 
 
 def test_update_task_preserves_description_when_patch_omits_field(

@@ -23,6 +23,9 @@ const CompletedTasksRoute = lazyRoute(() =>
 const TaskDetailRoute = lazyRoute(() =>
   import('./routes/TaskDetailRoute').then((module) => module.TaskDetailRoute)
 )
+const SettingsRoute = lazyRoute(() =>
+  import('./routes/SettingsRoute').then((module) => module.SettingsRoute)
+)
 const DesktopDashboardRoute = lazyRoute(() =>
   import('./routes/desktop/DesktopDashboardRoute').then((module) => module.DesktopDashboardRoute)
 )
@@ -80,6 +83,10 @@ export const router = createBrowserRouter([
       {
         path: 'tasks/:taskId',
         element: <TaskDetailRoute />
+      },
+      {
+        path: 'settings',
+        element: <SettingsRoute />
       }
     ]
   },
@@ -118,6 +125,10 @@ export const router = createBrowserRouter([
       {
         path: 'groups/:groupId',
         element: <DesktopGroupDetailRoute />
+      },
+      {
+        path: 'settings',
+        element: <SettingsRoute />
       }
     ]
   }

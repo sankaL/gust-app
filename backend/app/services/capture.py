@@ -70,6 +70,7 @@ from app.services.task_rules import (
     normalize_task_description,
     normalize_task_fields,
 )
+from app.services.task_service import TaskService
 from app.services.transcription import (
     TranscriptionResult,
     TranscriptionServiceError,
@@ -129,6 +130,7 @@ class PreparedTask:
     needs_review: bool
     due_date: date | None
     reminder_at: datetime | None
+    reminder_date: date | None
     reminder_offset_minutes: int | None
     series_id: str | None
     recurrence_frequency: str | None
@@ -369,6 +371,7 @@ class CaptureService:
             extraction_attempt_count=extraction_attempt_count,
             prepared_tasks=prepared_tasks,
             skipped_count=len(skipped_items),
+            user_timezone=user.timezone,
         )
 
         assert final_capture is not None
@@ -501,6 +504,7 @@ class CaptureService:
         extraction_attempt_count: int,
         prepared_tasks: list[PreparedTask],
         skipped_count: int,
+        user_timezone: str,
     ):
         with (
             timed_stage("capture.db_write"),
@@ -520,7 +524,11 @@ class CaptureService:
                 error_code=None,
             )
             created_count, flagged_count = self._create_prepared_tasks(
-                connection, user_id=user_id, capture_id=capture_id, prepared_tasks=prepared_tasks
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                prepared_tasks=prepared_tasks,
+                user_timezone=user_timezone,
             )
             final_capture = update_capture(
                 connection,
@@ -537,7 +545,13 @@ class CaptureService:
         return final_capture, created_count, flagged_count
 
     def _create_prepared_tasks(
-        self, connection, *, user_id: str, capture_id: str, prepared_tasks: list[PreparedTask]
+        self,
+        connection,
+        *,
+        user_id: str,
+        capture_id: str,
+        prepared_tasks: list[PreparedTask],
+        user_timezone: str,
     ) -> tuple[int, int]:
         created_count = 0
         flagged_count = 0
@@ -552,6 +566,7 @@ class CaptureService:
                 description=prepared.description,
                 due_date=prepared.due_date,
                 reminder_at=prepared.reminder_at,
+                reminder_date=prepared.reminder_date,
                 reminder_offset_minutes=prepared.reminder_offset_minutes,
                 recurrence_frequency=prepared.recurrence_frequency,
                 recurrence_interval=prepared.recurrence_interval,
@@ -564,6 +579,14 @@ class CaptureService:
                 create_subtasks(
                     connection, user_id=user_id, task_id=task.id, titles=prepared.subtasks
                 )
+            TaskService._sync_task_reminder(
+                connection,
+                settings=self.settings,
+                user_id=user_id,
+                task=task,
+                user_timezone=user_timezone,
+                now=datetime.now(UTC),
+            )
             created_count += 1
             flagged_count += int(task.needs_review)
         return created_count, flagged_count
@@ -577,9 +600,7 @@ class CaptureService:
         source_text: str | None = None,
         transcript_text: str | None = None,
     ) -> CaptureRecord:
-        expires_at = datetime.now(UTC) + timedelta(
-            days=self.settings.capture_retention_days
-        )
+        expires_at = datetime.now(UTC) + timedelta(days=self.settings.capture_retention_days)
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             return create_capture(
                 connection,
@@ -643,6 +664,7 @@ class CaptureService:
             needs_review=needs_review,
             due_date=normalized.due_date,
             reminder_at=normalized.reminder_at,
+            reminder_date=normalized.reminder_date,
             reminder_offset_minutes=normalized.reminder_offset_minutes,
             series_id=normalized.series_id,
             recurrence_frequency=normalized.recurrence_frequency,
@@ -689,6 +711,7 @@ class CaptureService:
                 title=candidate.title,
                 due_date=candidate.due_date,
                 reminder_at=candidate.reminder_at,
+                reminder_date=candidate.reminder_date,
                 recurrence=self._candidate_recurrence(candidate),
                 user_timezone=user_timezone,
                 assume_utc_for_naive=True,

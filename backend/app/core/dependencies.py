@@ -36,6 +36,7 @@ from app.services.auth import (
 from app.services.capture import CaptureService
 from app.services.extraction import LangChainExtractionService
 from app.services.group_service import GroupService
+from app.services.pushover import PushoverService
 from app.services.reminders import (
     INTERNAL_JOB_SECRET_HEADER,
     ReminderWorkerService,
@@ -98,16 +99,22 @@ def get_resend_reminder_service(settings: SettingsDep) -> ResendReminderService:
     return ResendReminderService(settings)
 
 
+def get_pushover_service(settings: SettingsDep) -> PushoverService:
+    return PushoverService(settings)
+
+
 def get_reminder_worker_service(
     settings: SettingsDep,
     resend_reminder_service: Annotated[
         ResendReminderService,
         Depends(get_resend_reminder_service),
     ],
+    pushover_service: Annotated[PushoverService, Depends(get_pushover_service)],
 ) -> ReminderWorkerService:
     return ReminderWorkerService(
         settings=settings,
         reminder_delivery_service=resend_reminder_service,
+        pushover_service=pushover_service,
     )
 
 

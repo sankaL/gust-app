@@ -4,7 +4,7 @@ import base64
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Literal
 
 import sqlalchemy as sa
@@ -16,6 +16,7 @@ from app.db.schema import (
     digest_dispatches,
     extracted_tasks,
     groups,
+    notification_preferences,
     rate_limit_counters,
     reminders,
     subtasks,
@@ -90,6 +91,7 @@ class TaskRecord:
     needs_review: bool
     due_date: date | None
     reminder_at: datetime | None
+    reminder_date: date | None
     reminder_offset_minutes: int | None
     recurrence_frequency: str | None
     recurrence_interval: int | None
@@ -127,6 +129,7 @@ class ReminderRecord:
     user_id: str
     task_id: str
     scheduled_for: datetime
+    next_attempt_at: datetime | None
     status: str
     idempotency_key: str
     claim_token: str | None
@@ -144,6 +147,7 @@ class DigestDispatchRecord:
     id: str
     user_id: str
     digest_type: str
+    channel: str
     period_start_date: date
     period_end_date: date
     status: str
@@ -176,6 +180,7 @@ class ExtractedTaskRecord:
     group_name: str | None
     due_date: date | None
     reminder_at: datetime | None
+    reminder_date: date | None
     recurrence_frequency: str | None
     recurrence_weekday: int | None
     recurrence_day_of_month: int | None
@@ -192,6 +197,22 @@ class ExtractedTaskRecord:
 class SessionContext:
     user: UserRecord
     inbox_group_id: str
+
+
+@dataclass
+class NotificationPreferencesRecord:
+    user_id: str
+    email_daily_enabled: bool
+    email_weekly_enabled: bool
+    pushover_enabled: bool
+    pushover_task_reminders_enabled: bool
+    pushover_daily_digest_enabled: bool
+    pushover_weekly_digest_enabled: bool
+    date_only_reminder_time: time
+    pushover_user_key_encrypted: str | None
+    pushover_user_key_hint: str | None
+    pushover_verified_at: datetime | None
+    pushover_connection_error_code: str | None
 
 
 def _row_to_user(row: sa.Row) -> UserRecord:
@@ -259,6 +280,7 @@ def _row_to_task(row: sa.Row) -> TaskRecord:
         needs_review=bool(row.needs_review),
         due_date=row.due_date,
         reminder_at=row.reminder_at,
+        reminder_date=row.reminder_date,
         reminder_offset_minutes=row.reminder_offset_minutes,
         recurrence_frequency=row.recurrence_frequency,
         recurrence_interval=row.recurrence_interval,
@@ -305,6 +327,7 @@ def _row_to_reminder(row: sa.Row) -> ReminderRecord:
         user_id=str(row.user_id),
         task_id=str(row.task_id),
         scheduled_for=row.scheduled_for,
+        next_attempt_at=row.next_attempt_at,
         status=row.status,
         idempotency_key=row.idempotency_key,
         claim_token=str(row.claim_token) if row.claim_token is not None else None,
@@ -323,6 +346,7 @@ def _row_to_digest_dispatch(row: sa.Row) -> DigestDispatchRecord:
         id=str(row.id),
         user_id=str(row.user_id),
         digest_type=row.digest_type,
+        channel=row.channel,
         period_start_date=row.period_start_date,
         period_end_date=row.period_end_date,
         status=row.status,
@@ -359,6 +383,7 @@ def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
         group_name=row.group_name,
         due_date=row.due_date,
         reminder_at=row.reminder_at,
+        reminder_date=row.reminder_date,
         recurrence_frequency=row.recurrence_frequency,
         recurrence_weekday=row.recurrence_weekday,
         recurrence_day_of_month=row.recurrence_day_of_month,
@@ -369,6 +394,23 @@ def _row_to_extracted_task(row: sa.Row) -> ExtractedTaskRecord:
         subtask_titles=subtask_titles,
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+def _row_to_notification_preferences(row: sa.Row) -> NotificationPreferencesRecord:
+    return NotificationPreferencesRecord(
+        user_id=str(row.user_id),
+        email_daily_enabled=bool(row.email_daily_enabled),
+        email_weekly_enabled=bool(row.email_weekly_enabled),
+        pushover_enabled=bool(row.pushover_enabled),
+        pushover_task_reminders_enabled=bool(row.pushover_task_reminders_enabled),
+        pushover_daily_digest_enabled=bool(row.pushover_daily_digest_enabled),
+        pushover_weekly_digest_enabled=bool(row.pushover_weekly_digest_enabled),
+        date_only_reminder_time=row.date_only_reminder_time,
+        pushover_user_key_encrypted=row.pushover_user_key_encrypted,
+        pushover_user_key_hint=row.pushover_user_key_hint,
+        pushover_verified_at=row.pushover_verified_at,
+        pushover_connection_error_code=row.pushover_connection_error_code,
     )
 
 
@@ -412,6 +454,7 @@ def upsert_user(
         )
 
     connection.execute(statement)
+    ensure_notification_preferences(connection, user_id=user_id)
     row = connection.execute(sa.select(users).where(users.c.id == user_id)).one()
     return _row_to_user(row)
 
@@ -421,6 +464,68 @@ def get_user(connection: Connection, user_id: str) -> UserRecord | None:
     if row is None:
         return None
     return _row_to_user(row)
+
+
+def ensure_notification_preferences(
+    connection: Connection,
+    *,
+    user_id: str,
+) -> NotificationPreferencesRecord:
+    values = {"user_id": user_id}
+    if connection.dialect.name == "sqlite":
+        statement = sa.dialects.sqlite.insert(notification_preferences).values(**values)
+    else:
+        statement = sa.dialects.postgresql.insert(notification_preferences).values(**values)
+    connection.execute(
+        statement.on_conflict_do_nothing(index_elements=[notification_preferences.c.user_id])
+    )
+    row = connection.execute(
+        sa.select(notification_preferences).where(notification_preferences.c.user_id == user_id)
+    ).one()
+    return _row_to_notification_preferences(row)
+
+
+def get_notification_preferences(
+    connection: Connection,
+    *,
+    user_id: str,
+) -> NotificationPreferencesRecord:
+    return ensure_notification_preferences(connection, user_id=user_id)
+
+
+def update_notification_preferences(
+    connection: Connection,
+    *,
+    user_id: str,
+    values: dict[str, object],
+) -> NotificationPreferencesRecord:
+    ensure_notification_preferences(connection, user_id=user_id)
+    if values:
+        connection.execute(
+            notification_preferences.update()
+            .where(notification_preferences.c.user_id == user_id)
+            .values(**values, updated_at=CURRENT_TIMESTAMP)
+        )
+    return get_notification_preferences(connection, user_id=user_id)
+
+
+def cancel_pending_reminders_for_user(connection: Connection, *, user_id: str) -> int:
+    result = connection.execute(
+        reminders.update()
+        .where(
+            reminders.c.user_id == user_id,
+            reminders.c.status.in_(["pending", "claimed"]),
+        )
+        .values(
+            status="cancelled",
+            claim_token=None,
+            claimed_at=None,
+            claim_expires_at=None,
+            cancelled_at=CURRENT_TIMESTAMP,
+            updated_at=CURRENT_TIMESTAMP,
+        )
+    )
+    return int(result.rowcount or 0)
 
 
 def is_email_allowed(connection: Connection, *, email: str) -> bool:
@@ -1092,6 +1197,24 @@ def list_open_tasks_in_series(
     return [_row_to_task(row) for row in rows]
 
 
+def list_open_tasks_with_reminders(
+    connection: Connection,
+    *,
+    user_id: str,
+) -> list[TaskRecord]:
+    rows = connection.execute(
+        sa.select(tasks)
+        .where(
+            tasks.c.user_id == user_id,
+            tasks.c.status == "open",
+            tasks.c.deleted_at.is_(None),
+            sa.or_(tasks.c.reminder_at.is_not(None), tasks.c.reminder_date.is_not(None)),
+        )
+        .order_by(tasks.c.reminder_at.asc().nulls_last(), tasks.c.reminder_date.asc().nulls_last())
+    ).fetchall()
+    return [_row_to_task(row) for row in rows]
+
+
 def create_task(
     connection: Connection,
     *,
@@ -1103,6 +1226,7 @@ def create_task(
     description: str | None = None,
     due_date: date | None = None,
     reminder_at: datetime | None = None,
+    reminder_date: date | None = None,
     reminder_offset_minutes: int | None = None,
     recurrence_frequency: str | None = None,
     recurrence_interval: int | None = None,
@@ -1125,6 +1249,7 @@ def create_task(
             needs_review=needs_review,
             due_date=due_date,
             reminder_at=reminder_at,
+            reminder_date=reminder_date,
             reminder_offset_minutes=reminder_offset_minutes,
             recurrence_frequency=recurrence_frequency,
             recurrence_interval=recurrence_interval,
@@ -1326,6 +1451,7 @@ def get_digest_dispatch(
     *,
     user_id: str,
     digest_type: Literal["daily", "weekly"],
+    channel: Literal["email", "pushover"] = "email",
     period_start_date: date,
     period_end_date: date,
 ) -> DigestDispatchRecord | None:
@@ -1333,6 +1459,7 @@ def get_digest_dispatch(
         sa.select(digest_dispatches).where(
             digest_dispatches.c.user_id == user_id,
             digest_dispatches.c.digest_type == digest_type,
+            digest_dispatches.c.channel == channel,
             digest_dispatches.c.period_start_date == period_start_date,
             digest_dispatches.c.period_end_date == period_end_date,
         )
@@ -1347,6 +1474,7 @@ def upsert_digest_dispatch(
     *,
     user_id: str,
     digest_type: Literal["daily", "weekly"],
+    channel: Literal["email", "pushover"] = "email",
     period_start_date: date,
     period_end_date: date,
     status: Literal["sent", "failed", "skipped_empty"],
@@ -1360,6 +1488,7 @@ def upsert_digest_dispatch(
         "id": digest_dispatch_id,
         "user_id": user_id,
         "digest_type": digest_type,
+        "channel": channel,
         "period_start_date": period_start_date,
         "period_end_date": period_end_date,
         "status": status,
@@ -1378,6 +1507,7 @@ def upsert_digest_dispatch(
         index_elements=[
             digest_dispatches.c.user_id,
             digest_dispatches.c.digest_type,
+            digest_dispatches.c.channel,
             digest_dispatches.c.period_start_date,
             digest_dispatches.c.period_end_date,
         ],
@@ -1396,6 +1526,7 @@ def upsert_digest_dispatch(
         sa.select(digest_dispatches).where(
             digest_dispatches.c.user_id == user_id,
             digest_dispatches.c.digest_type == digest_type,
+            digest_dispatches.c.channel == channel,
             digest_dispatches.c.period_start_date == period_start_date,
             digest_dispatches.c.period_end_date == period_end_date,
         )
@@ -1418,6 +1549,7 @@ def create_reminder(
             user_id=user_id,
             task_id=task_id,
             scheduled_for=scheduled_for,
+            next_attempt_at=scheduled_for,
             status="pending",
             idempotency_key=idempotency_key,
         )
@@ -1471,6 +1603,7 @@ def claim_due_reminders(
                      AND t.user_id = r.user_id
                     WHERE r.status = 'pending'
                       AND r.scheduled_for <= :now
+                      AND COALESCE(r.next_attempt_at, r.scheduled_for) <= :now
                       AND t.status = 'open'
                       AND t.deleted_at IS NULL
                     ORDER BY r.scheduled_for ASC, r.id ASC
@@ -1500,7 +1633,7 @@ def claim_due_reminders(
             .select_from(reminders.join(tasks, tasks.c.id == reminders.c.task_id))
             .where(
                 reminders.c.status == "pending",
-                reminders.c.scheduled_for <= now,
+                sa.func.coalesce(reminders.c.next_attempt_at, reminders.c.scheduled_for) <= now,
                 tasks.c.status == "open",
                 tasks.c.deleted_at.is_(None),
             )
@@ -1592,6 +1725,7 @@ def requeue_claimed_reminder(
     reminder_id: str,
     claim_token: str,
     error_code: str,
+    next_attempt_at: datetime | None = None,
 ) -> ReminderRecord | None:
     connection.execute(
         reminders.update()
@@ -1607,6 +1741,7 @@ def requeue_claimed_reminder(
             claim_expires_at=None,
             send_attempt_count=reminders.c.send_attempt_count + 1,
             last_error_code=error_code,
+            next_attempt_at=next_attempt_at or reminders.c.scheduled_for,
             updated_at=CURRENT_TIMESTAMP,
         )
     )
@@ -1682,6 +1817,7 @@ def upsert_reminder(
         .where(reminders.c.id == existing.id, reminders.c.user_id == user_id)
         .values(
             scheduled_for=scheduled_for,
+            next_attempt_at=scheduled_for,
             status="pending",
             idempotency_key=idempotency_key,
             claim_token=None,
@@ -1717,6 +1853,7 @@ def create_extracted_task(
     top_confidence: float,
     needs_review: bool,
     subtask_titles: list[str] | None = None,
+    reminder_date: date | None = None,
 ) -> ExtractedTaskRecord:
     extracted_task_id = str(uuid.uuid4())
     connection.execute(
@@ -1730,6 +1867,7 @@ def create_extracted_task(
             group_name=group_name,
             due_date=due_date,
             reminder_at=reminder_at,
+            reminder_date=reminder_date,
             recurrence_frequency=recurrence_frequency,
             recurrence_weekday=recurrence_weekday,
             recurrence_day_of_month=recurrence_day_of_month,

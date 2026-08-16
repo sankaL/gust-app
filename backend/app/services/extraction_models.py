@@ -47,6 +47,7 @@ class ExtractedTaskCandidate(BaseModel):
     description: str | None = None
     due_date: date | None = None
     reminder_at: datetime | None = None
+    reminder_date: date | None = None
     group_id: str | None = None
     group_name: str | None = None
     top_confidence: float = Field(default=0.9, ge=0.0, le=1.0)
