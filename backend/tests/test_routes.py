@@ -56,6 +56,9 @@ def test_internal_reminder_route_returns_summary_when_authorized(client: TestCli
         "skipped_empty": 1,
         "failed": 0,
         "captures_deleted": 5,
+        "attempted": 0,
+        "retried": 0,
+        "skipped": 0,
     }
 
 

@@ -506,6 +506,7 @@ class ReminderWorkerService:
             )
 
         email_result: ReminderSendResult | None = None
+        delivery_failed = False
         try:
             if email_pending:
                 email_result = await self.reminder_delivery_service.send_digest(
@@ -535,7 +536,7 @@ class ReminderWorkerService:
                 provider_message_id=None,
                 last_error_code=exc.error_code,
             )
-            return "failed"
+            delivery_failed = True
 
         if email_result is not None:
             self._upsert_dispatch(
@@ -583,6 +584,9 @@ class ReminderWorkerService:
                     provider_message_id=None,
                     last_error_code=exc.error_code,
                 )
+                delivery_failed = True
+        if delivery_failed:
+            return "failed"
         logger.info(
             "digest_sent",
             extra={

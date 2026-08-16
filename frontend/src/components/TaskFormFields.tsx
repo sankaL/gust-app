@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+
 import type { TaskRecurrence } from '../lib/api'
 import { recurrenceForDueDate } from '../lib/taskFormModel'
 import { DatePicker } from './DatePicker'
@@ -57,8 +59,22 @@ function TaskIdentityFields({ title, description, disabled, onTitleChange, onDes
 }
 
 function TaskScheduleFields(props: Props & { disabled: boolean }) {
-  const reminderMode = props.reminderAt ? 'datetime' : props.reminderDate ? 'date' : 'none'
+  const inferredReminderMode = props.reminderAt ? 'datetime' : props.reminderDate ? 'date' : 'none'
+  const [reminderMode, setReminderModeState] = useState(inferredReminderMode)
+  const isSelectingReminderMode = useRef(false)
+
+  useEffect(() => {
+    if (inferredReminderMode !== 'none') {
+      isSelectingReminderMode.current = false
+      setReminderModeState(inferredReminderMode)
+    } else if (!isSelectingReminderMode.current) {
+      setReminderModeState('none')
+    }
+  }, [inferredReminderMode])
+
   const setReminderMode = (mode: string) => {
+    isSelectingReminderMode.current = mode !== 'none'
+    setReminderModeState(mode)
     if (mode === 'none') { props.onReminderAtChange(''); props.onReminderDateChange?.('') }
     if (mode === 'date') props.onReminderAtChange('')
     if (mode === 'datetime') props.onReminderDateChange?.('')
@@ -68,8 +84,8 @@ function TaskScheduleFields(props: Props & { disabled: boolean }) {
       <ScheduleField label="Due date"><DatePicker value={props.dueDate || null} onChange={props.onDueDateChange} mode="date" disabled={props.disabled} placeholder="Select a date" /></ScheduleField>
       <ScheduleField label="Reminder">
         <select aria-label="Reminder type" value={reminderMode} disabled={props.disabled} onChange={(event) => setReminderMode(event.target.value)} className="w-full rounded-soft bg-surface px-3 py-2 text-sm text-on-surface"><option value="none">No reminder</option><option value="date">Date only</option><option value="datetime">Date and time</option></select>
-        {reminderMode === 'date' ? <div className="mt-2"><DatePicker value={props.reminderDate || null} onChange={(value) => props.onReminderDateChange?.(value)} mode="date" disabled={props.disabled} placeholder="Select a date" /></div> : null}
-        {reminderMode === 'datetime' ? <div className="mt-2"><DatePicker value={props.reminderAt || null} onChange={props.onReminderAtChange} mode="datetime" disabled={props.disabled} placeholder="Select date & time" /></div> : null}
+        {reminderMode === 'date' ? <div className="mt-2"><DatePicker value={props.reminderDate || null} onChange={(value) => { props.onReminderDateChange?.(value); if (!value) setReminderMode('none') }} mode="date" disabled={props.disabled} placeholder="Select a date" /></div> : null}
+        {reminderMode === 'datetime' ? <div className="mt-2"><DatePicker value={props.reminderAt || null} onChange={(value) => { props.onReminderAtChange(value); if (!value) setReminderMode('none') }} mode="datetime" disabled={props.disabled} placeholder="Select date & time" /></div> : null}
         {reminderMode === 'date' ? <p className="mt-2 text-xs text-on-surface-variant/60">Notification time is set in Settings.</p> : null}
       </ScheduleField>
       <ScheduleField label="Group" isOpen={props.isGroupDropdownOpen}>
