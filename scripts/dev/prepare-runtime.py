@@ -25,7 +25,7 @@ COMPOSE_SERVICE_PORTS = {
 LOCAL_ENV_DEFAULTS = {
     "APP_ENV": "development",
     "GUST_DEV_MODE": "true",
-    "REQUIRED_ALEMBIC_REVISION": "0018_ensure_allowed_users",
+    "REQUIRED_ALEMBIC_REVISION": "0019_pushover_reminders",
     "RUN_STARTUP_CHECKS": "true",
     "LOG_LEVEL": "INFO",
     "SESSION_COOKIE_SECURE": "false",

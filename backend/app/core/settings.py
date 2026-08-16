@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
     )
     required_alembic_revision: str = Field(
-        default="0019_notification_preferences_pushover_reminders",
+        default="0019_pushover_reminders",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(

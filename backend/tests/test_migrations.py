@@ -427,6 +427,24 @@ def test_phase18_migration_creates_and_hardens_allowed_users(
     assert "grant select on table public.allowed_users to gust_app_runtime" in all_sql
 
 
+def test_phase19_migration_revision_fits_alembic_version_column() -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0019_notification_preferences_pushover_reminders.py"
+    )
+    spec = importlib.util.spec_from_file_location("pushover_reminders", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "0019_pushover_reminders"
+    assert len(module.revision) <= 32
+    assert module.down_revision == "0018_ensure_allowed_users"
+
+
 def test_supabase_allowlist_hardening_migration_revokes_public_roles() -> None:
     migration_path = (
         Path(__file__).resolve().parents[2]

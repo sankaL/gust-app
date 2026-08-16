@@ -131,7 +131,7 @@ Phase 8 introduces `0008_digest_dispatches` as the required application revision
 
 ## Revision 0019 (Notification Preferences and Pushover Reminders)
 
-Deploy `0019_notification_preferences_pushover_reminders` before enabling Pushover delivery. It creates default notification-preference rows for every user, adds `reminder_date`, retry scheduling, and digest channel idempotency without converting legacy exact-time values. Configure provider and Fernet secrets on the backend first, keep `PUSHOVER_NOTIFICATIONS_ENABLED=false` through callback/test validation, then deploy the five-minute task cron. Disable the feature flag and task cron to roll back delivery safely; email digests remain independent.
+Deploy `0019_pushover_reminders` before enabling Pushover delivery. It creates default notification-preference rows for every user, adds `reminder_date`, retry scheduling, and digest channel idempotency without converting legacy exact-time values. Configure provider and Fernet secrets on the backend first, keep `PUSHOVER_NOTIFICATIONS_ENABLED=false` through callback/test validation, then deploy the five-minute task cron. Disable the feature flag and task cron to roll back delivery safely; email digests remain independent.
 
 Before enabling the feature flag or task cron, verify the migration completed with these read-only checks; each must return zero rows (or count `0`):
 
