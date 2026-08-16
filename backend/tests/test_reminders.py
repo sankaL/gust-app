@@ -14,9 +14,11 @@ from app.db.repositories import (
     create_capture,
     create_task,
     ensure_inbox_group,
+    update_notification_preferences,
     upsert_user,
 )
 from app.db.schema import captures, digest_dispatches, tasks
+from app.services.pushover import PushoverSendResult
 from app.services.reminders import (
     DIGEST_TIMEZONE,
     DigestMode,
@@ -89,6 +91,36 @@ class FlakyReminderDeliveryService:
                 retryable=True,
             )
         return ReminderSendResult(provider_message_id="provider-msg-123")
+
+
+@dataclass
+class FakePushoverService:
+    is_enabled: bool = True
+    requests: list[dict[str, str]] = field(default_factory=list)
+
+    def decrypt_user_key(self, encrypted_key: str) -> str:
+        assert encrypted_key == "encrypted-user-key"
+        return "user-key"
+
+    async def send(
+        self,
+        *,
+        user_key: str,
+        title: str,
+        message: str,
+        url: str,
+        ttl_seconds: int,
+    ) -> PushoverSendResult:
+        self.requests.append(
+            {
+                "user_key": user_key,
+                "title": title,
+                "message": message,
+                "url": url,
+                "ttl_seconds": str(ttl_seconds),
+            }
+        )
+        return PushoverSendResult(request_id="push-request-123")
 
 
 def _seed_user_and_inbox(client) -> tuple[str, str]:
@@ -464,6 +496,41 @@ def test_digest_retries_failed_period_on_next_run(client) -> None:
     assert second_summary.sent == 1
     assert len(dispatch_rows) == 1
     assert dispatch_rows[0].status == "sent"
+
+
+def test_daily_digest_attempts_pushover_when_email_delivery_fails(client) -> None:
+    today_eastern = datetime.now(DIGEST_TIMEZONE).date()
+    _seed_open_task(client, title="Pay rent", due_date=today_eastern)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        update_notification_preferences(
+            connection,
+            user_id=USER_ID,
+            values={
+                "pushover_enabled": True,
+                "pushover_daily_digest_enabled": True,
+                "pushover_user_key_encrypted": "encrypted-user-key",
+            },
+        )
+
+    email_delivery = FakeReminderDeliveryService(mode="failure")
+    pushover = FakePushoverService()
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=email_delivery,
+        pushover_service=pushover,
+    )
+
+    summary = asyncio.run(worker.run_due_work(mode="daily"))
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        dispatch_rows = connection.execute(
+            sa.select(digest_dispatches.c.channel, digest_dispatches.c.status)
+        ).fetchall()
+
+    assert summary.failed == 1
+    assert len(email_delivery.requests) == 1
+    assert len(pushover.requests) == 1
+    assert {tuple(row) for row in dispatch_rows} == {("email", "failed"), ("pushover", "sent")}
 
 
 def test_reminder_worker_still_cleans_up_expired_captures_when_provider_unconfigured(

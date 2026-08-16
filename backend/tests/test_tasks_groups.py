@@ -11,7 +11,7 @@ from starlette.testclient import TestClient
 from app.core.dependencies import get_auth_service
 from app.core.security import ACCESS_TOKEN_COOKIE
 from app.db.engine import connection_scope
-from app.db.repositories import ensure_inbox_group, upsert_user
+from app.db.repositories import ensure_inbox_group, update_notification_preferences, upsert_user
 from app.db.schema import groups, reminders, subtasks, tasks
 from app.services.auth import AuthenticatedIdentity
 
@@ -582,6 +582,63 @@ def test_update_task_preserves_date_only_reminder_when_omitted_from_patch(
     with connection_scope(client.app.state.settings.database_url) as connection:
         task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
     assert task_row.reminder_date == reminder_date
+
+
+def test_update_task_does_not_reopen_a_sent_reminder_when_schedule_is_unchanged(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    app.state.settings.pushover_notifications_enabled = True
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Inbox Mirror")
+    reminder_at = (datetime.now(UTC) + timedelta(days=1)).replace(microsecond=0)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Review notification preferences",
+        due_date_value=reminder_at.date(),
+        reminder_at_value=reminder_at,
+    )
+    scheduled_for = reminder_at - timedelta(minutes=30)
+    _seed_reminder(
+        client,
+        user_id=USER_ID,
+        task_id=task_id,
+        scheduled_for=scheduled_for,
+        status="sent",
+    )
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        update_notification_preferences(
+            connection,
+            user_id=USER_ID,
+            values={
+                "pushover_enabled": True,
+                "pushover_task_reminders_enabled": True,
+                "pushover_user_key_encrypted": "encrypted-user-key",
+            },
+        )
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={
+            "title": "Review notification preferences again",
+            "group_id": group_id,
+            "due_date": reminder_at.date().isoformat(),
+            "reminder_at": reminder_at.isoformat().replace("+00:00", "Z"),
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        reminder_row = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == task_id)
+        ).one()
+
+    assert reminder_row.status == "sent"
+    assert reminder_row.scheduled_for == scheduled_for.replace(tzinfo=None)
 
 
 def test_update_task_preserves_description_when_patch_omits_field(

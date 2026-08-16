@@ -1801,6 +1801,7 @@ def upsert_reminder(
     user_id: str,
     task_id: str,
     scheduled_for: datetime,
+    preserve_sent: bool = False,
 ) -> ReminderRecord:
     existing = get_reminder_by_task_id(connection, user_id=user_id, task_id=task_id)
     if existing is None:
@@ -1810,6 +1811,9 @@ def upsert_reminder(
             task_id=task_id,
             scheduled_for=scheduled_for,
         )
+
+    if preserve_sent and existing.status == "sent":
+        return existing
 
     idempotency_key = f"task:{task_id}:scheduled:{scheduled_for.isoformat()}"
     connection.execute(

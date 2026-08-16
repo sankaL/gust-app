@@ -291,6 +291,10 @@ class TaskService:
                 task=updated,
                 user_timezone=user_timezone,
                 now=datetime.now(UTC),
+                preserve_sent=(
+                    existing.reminder_at == updated.reminder_at
+                    and existing.reminder_date == updated.reminder_date
+                ),
             )
             group = get_group(connection, user_id=user_id, group_id=updated.group_id)
             assert group is not None
@@ -659,6 +663,7 @@ class TaskService:
         task: TaskRecord,
         now: datetime,
         user_timezone: str,
+        preserve_sent: bool = False,
     ) -> None:
         self._sync_task_reminder(
             connection,
@@ -667,6 +672,7 @@ class TaskService:
             task=task,
             user_timezone=user_timezone,
             now=now,
+            preserve_sent=preserve_sent,
         )
 
 
@@ -679,6 +685,7 @@ class TaskService:
         task: TaskRecord,
         user_timezone: str,
         now: datetime,
+        preserve_sent: bool = False,
     ) -> None:
         preferences = get_notification_preferences(connection, user_id=user_id)
         if (
@@ -691,7 +698,13 @@ class TaskService:
             cancel_reminder(connection, user_id=user_id, task_id=task.id)
             return
         if task.reminder_at is not None:
-            scheduled_for = task.reminder_at - timedelta(minutes=30)
+            reminder_at = task.reminder_at
+            if reminder_at.tzinfo is None:
+                reminder_at = reminder_at.replace(tzinfo=UTC)
+            if reminder_at <= now:
+                cancel_reminder(connection, user_id=user_id, task_id=task.id)
+                return
+            scheduled_for = reminder_at - timedelta(minutes=30)
             if scheduled_for < now:
                 scheduled_for = now
         else:
@@ -704,7 +717,13 @@ class TaskService:
             scheduled_for = local_target.astimezone(UTC)
             if scheduled_for < now:
                 scheduled_for = now
-        upsert_reminder(connection, user_id=user_id, task_id=task.id, scheduled_for=scheduled_for)
+        upsert_reminder(
+            connection,
+            user_id=user_id,
+            task_id=task.id,
+            scheduled_for=scheduled_for,
+            preserve_sent=preserve_sent,
+        )
 
     def _create_next_occurrence_on_completion(
         self,

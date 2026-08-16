@@ -76,6 +76,7 @@ describe('task form overlays', () => {
     expect(reminderCard?.className).toContain('overflow-visible')
     expect(groupCard?.className).toContain('overflow-visible')
 
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Reminder type' }), 'datetime')
     await user.click(screen.getByRole('button', { name: 'Select date & time' }))
     expect(await screen.findByText('Time')).toBeInTheDocument()
 
@@ -92,6 +93,18 @@ describe('task form overlays', () => {
 
     expect(listbox.className).toContain('fixed')
     expect(await screen.findByText('Personal')).toBeInTheDocument()
+  })
+
+  it('shows the selected reminder picker before a reminder value exists', async () => {
+    const user = userEvent.setup()
+    renderFields()
+
+    const reminderType = screen.getByRole('combobox', { name: 'Reminder type' })
+    await user.selectOptions(reminderType, 'date')
+    expect(screen.getByRole('button', { name: 'Select a date' })).toBeInTheDocument()
+
+    await user.selectOptions(reminderType, 'datetime')
+    expect(screen.getByRole('button', { name: 'Select date & time' })).toBeInTheDocument()
   })
 
   it('keeps end-of-month navigation inside the selected month', async () => {

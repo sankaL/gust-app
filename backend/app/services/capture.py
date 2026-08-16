@@ -654,6 +654,11 @@ class CaptureService:
             candidate=candidate, resolved_group=resolved_group, inbox_group=inbox_group
         )
         normalized = self._normalize_candidate(candidate, user_timezone=user_timezone)
+        if self._has_past_reminder(normalized, user_timezone=user_timezone):
+            needs_review = True
+            normalized.reminder_at = None
+            normalized.reminder_date = None
+            normalized.reminder_offset_minutes = None
 
         subtasks = [subtask.title for subtask in candidate.subtasks]
         description = normalize_task_description(candidate.description, title=normalized.title)
@@ -673,6 +678,16 @@ class CaptureService:
             recurrence_day_of_month=normalized.recurrence_day_of_month,
             recurrence_month=normalized.recurrence_month,
             subtasks=[subtask.strip() for subtask in subtasks],
+        )
+
+    @staticmethod
+    def _has_past_reminder(normalized, *, user_timezone: str) -> bool:
+        now = datetime.now(UTC)
+        if normalized.reminder_at is not None:
+            return normalized.reminder_at <= now
+        return (
+            normalized.reminder_date is not None
+            and normalized.reminder_date < now.astimezone(ZoneInfo(user_timezone)).date()
         )
 
     def _validate_candidate_text(self, candidate: ExtractedTaskCandidate) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from app.core.errors import (
     ExtractedTaskNotFoundError,
@@ -157,6 +158,11 @@ class StagingService:
                         )
                         continue
 
+                    if self._has_past_reminder(normalized, user_timezone=user_timezone):
+                        needs_review = True
+                        normalized.reminder_at = None
+                        normalized.reminder_date = None
+
                     # Collect subtask titles from the candidate
                     subtask_titles = [s.title for s in candidate.subtasks if s.title.strip()]
 
@@ -208,6 +214,16 @@ class StagingService:
         )
 
         return StagingResult(extracted_tasks=extracted_tasks)
+
+    @staticmethod
+    def _has_past_reminder(normalized, *, user_timezone: str) -> bool:
+        now = datetime.now(UTC)
+        if normalized.reminder_at is not None:
+            return normalized.reminder_at <= now
+        return (
+            normalized.reminder_date is not None
+            and normalized.reminder_date < now.astimezone(ZoneInfo(user_timezone)).date()
+        )
 
     async def approve_task(
         self,

@@ -119,6 +119,7 @@ def _reconcile_task_reminders(
             task=task,
             user_timezone=timezone,
             now=now,
+            preserve_sent=True,
         )
 
 

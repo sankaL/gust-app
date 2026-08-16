@@ -5,7 +5,7 @@ import logging
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
@@ -320,7 +320,7 @@ def test_text_capture_rate_limit_returns_429(
 ) -> None:
     headers = _authenticated_headers(app, client)
     middleware = _request_context_middleware(app)
-    app.state.settings.rate_limit_capture_text_user = "1/60"
+    app.state.settings.rate_limit_capture_text_user = "1/3600"
     middleware.rate_limiter = RequestRateLimiter(app.state.settings)
     monkeypatch.setattr(
         RequestContextMiddleware,
@@ -740,6 +740,11 @@ def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
         headers=headers,
     )
     capture_id = create_response.json()["capture_id"]
+    reminder_at = datetime.combine(
+        datetime.now(UTC).date() + timedelta(days=3),
+        datetime.min.time(),
+        tzinfo=UTC,
+    ).replace(hour=13)
 
     fake_extraction = FakeExtractionService(
         responses=[
@@ -748,8 +753,8 @@ def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
                     {
                         "title": "Send invoice",
                         "description": "For the client follow-up after the draft is ready.",
-                        "due_date": "2026-03-23",
-                        "reminder_at": "2026-03-23T13:00:00Z",
+                        "due_date": reminder_at.date().isoformat(),
+                        "reminder_at": reminder_at.isoformat().replace("+00:00", "Z"),
                         "group_name": "Work",
                         "top_confidence": 0.91,
                         "alternative_groups": [{"group_name": "Inbox", "confidence": 0.2}],
@@ -758,7 +763,7 @@ def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
                     {
                         "title": "Buy groceries",
                         "description": "Pick up food for the house tomorrow.",
-                        "due_date": "2026-03-24",
+                        "due_date": (reminder_at.date() + timedelta(days=1)).isoformat(),
                         "group_name": "Unknown",
                         "top_confidence": 0.65,
                         "alternative_groups": [{"group_name": "Inbox", "confidence": 0.58}],
@@ -803,9 +808,102 @@ def test_submit_capture_persists_tasks_subtasks_and_digest_only_reminder_fields(
     assert task_rows[1].description == "For the client follow-up after the draft is ready."
     assert task_rows[1].group_id == work_group_id
     assert task_rows[1].needs_review is False
-    assert task_rows[1].reminder_at == datetime(2026, 3, 23, 13, 0)
+    assert task_rows[1].reminder_at == reminder_at.replace(tzinfo=None)
     assert task_rows[1].reminder_offset_minutes == 780
     assert reminder_rows == []
+
+
+def test_submit_capture_flags_past_extracted_reminders_and_does_not_schedule_them(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    capture_id = client.post(
+        "/captures/text",
+        json={"text": "Remind me about the overdue follow-up"},
+        headers=headers,
+    ).json()["capture_id"]
+    past_reminder = (datetime.now(UTC) - timedelta(hours=1)).replace(microsecond=0)
+    _override_extraction_service(
+        app,
+        FakeExtractionService(
+            responses=[
+                {
+                    "tasks": [
+                        {
+                            "title": "Overdue follow-up",
+                            "due_date": past_reminder.date().isoformat(),
+                            "reminder_at": past_reminder.isoformat().replace("+00:00", "Z"),
+                            "group_name": "Inbox",
+                            "top_confidence": 0.95,
+                        }
+                    ]
+                }
+            ]
+        ),
+    )
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": "Remind me about the overdue follow-up"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tasks_flagged_for_review_count"] == 1
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(
+            sa.select(tasks).where(tasks.c.capture_id == capture_id)
+        ).one()
+        reminder_rows = connection.execute(sa.select(reminders)).fetchall()
+
+    assert task_row.needs_review is True
+    assert task_row.reminder_at is None
+    assert task_row.reminder_date is None
+    assert reminder_rows == []
+
+
+def test_text_capture_stages_past_extracted_reminders_for_review_without_a_schedule(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    past_reminder = (datetime.now(UTC) - timedelta(hours=1)).replace(microsecond=0)
+    _override_extraction_service(
+        app,
+        FakeExtractionService(
+            responses=[
+                {
+                    "tasks": [
+                        {
+                            "title": "Review overdue follow-up",
+                            "due_date": past_reminder.date().isoformat(),
+                            "reminder_at": past_reminder.isoformat().replace("+00:00", "Z"),
+                            "group_name": "Inbox",
+                            "top_confidence": 0.95,
+                        }
+                    ]
+                }
+            ]
+        ),
+    )
+
+    response = client.post(
+        "/captures/text",
+        json={"text": "Review overdue follow-up"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    capture_id = response.json()["capture_id"]
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        extracted_task = connection.execute(
+            sa.select(extracted_tasks).where(extracted_tasks.c.capture_id == capture_id)
+        ).one()
+
+    assert extracted_task.needs_review is True
+    assert extracted_task.reminder_at is None
+    assert extracted_task.reminder_date is None
 
 
 def test_submit_capture_rate_limit_returns_429(
