@@ -8,6 +8,8 @@ from cryptography.fernet import Fernet, InvalidToken
 from app.core.errors import ConfigurationError
 from app.core.settings import Settings
 
+PUSHOVER_MESSAGE_MAX_CHARS = 1024
+
 
 @dataclass(frozen=True)
 class PushoverSendResult:
@@ -99,20 +101,29 @@ class PushoverService:
         message: str,
         url: str,
         ttl_seconds: int,
+        html_enabled: bool,
     ) -> PushoverSendResult:
         self.ensure_configured()
+        if len(message) > PUSHOVER_MESSAGE_MAX_CHARS:
+            raise PushoverDeliveryError(
+                error_code="pushover_message_too_long",
+                retryable=False,
+            )
+        payload = {
+            "token": self.settings.pushover_app_token,
+            "user": user_key,
+            "title": title[:250],
+            "message": message,
+            "url": url[:512],
+            "url_title": "Open in Gust",
+            "priority": "0",
+            "ttl": str(ttl_seconds),
+        }
+        if html_enabled:
+            payload["html"] = "1"
         response = await self._post(
             "/messages.json",
-            {
-                "token": self.settings.pushover_app_token,
-                "user": user_key,
-                "title": title[:250],
-                "message": message[:1024],
-                "url": url,
-                "url_title": "Open in Gust",
-                "priority": "0",
-                "ttl": str(ttl_seconds),
-            },
+            payload,
         )
         if response.status_code >= 500 or response.status_code in {408, 429}:
             raise PushoverDeliveryError(error_code="pushover_provider_retryable", retryable=True)

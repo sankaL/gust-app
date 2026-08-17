@@ -619,7 +619,7 @@ describe('tasks flow', () => {
           })
         )
       }
-      if (url.endsWith('/tasks/task-1') && method === 'GET') {
+      if (url.includes('/tasks/task-1') && !url.includes('/complete') && method === 'GET') {
         return Promise.resolve(
           jsonResponse({
             id: 'task-1',
@@ -679,6 +679,83 @@ describe('tasks flow', () => {
     expect(screen.getByRole('heading', { name: 'Review extraction contract', level: 2 })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/tasks')
     expect(router.state.location.search).toContain('task=task-1')
+  })
+
+  it('opens a notification task URL in the preview and completes it from the modal', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? 'GET'
+
+      if (url.includes('/auth/session')) {
+        return Promise.resolve(jsonResponse(buildSessionResponse()))
+      }
+      if (url.includes('/groups')) {
+        return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      }
+      if (url.includes('/tasks/task-1') && !url.includes('/complete') && method === 'GET') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 'task-1',
+            title: 'Open notification task',
+            description: 'Opened from Pushover.',
+            status: 'open',
+            needs_review: false,
+            due_date: '2026-08-17',
+            reminder_at: null,
+            reminder_date: null,
+            due_bucket: 'due_soon',
+            group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+            completed_at: null,
+            deleted_at: null,
+            recurrence: null,
+            subtasks: []
+          })
+        )
+      }
+      if (url.endsWith('/tasks/task-1/complete') && method === 'POST') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 'task-1',
+            title: 'Open notification task',
+            description: 'Opened from Pushover.',
+            status: 'completed',
+            needs_review: false,
+            due_date: '2026-08-17',
+            reminder_at: null,
+            reminder_date: null,
+            due_bucket: 'due_soon',
+            group: { id: 'inbox-1', name: 'Inbox', is_system: true },
+            completed_at: '2026-08-17T12:00:00Z',
+            deleted_at: null,
+            recurrence: null,
+            subtasks: []
+          })
+        )
+      }
+      if (url.includes('/tasks?') && url.includes('status=open')) {
+        return Promise.resolve(jsonResponse({ items: [], has_more: false, next_cursor: null }))
+      }
+      return Promise.resolve(jsonResponse([]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { router } = renderTaskRoute(['/tasks?group=all&task=task-1'])
+    const user = userEvent.setup()
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Open notification task', level: 2 })
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Complete' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/tasks/task-1/complete'),
+        expect.objectContaining({ method: 'POST' })
+      )
+    })
+    expect(router.state.location.pathname).toBe('/tasks')
+    expect(router.state.location.search).toBe('?group=all')
   })
 
   it('renders overdue, today, and tomorrow due badges accurately', async () => {

@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-08-17 10:05:52 EDT
+
+- Standardized single-task Pushover links on Gust's existing URL-backed task preview (`/tasks?group=all&task=<id>`) so notification opens provide the established context, recurrence, checklist, edit/delete, and whole-task completion experience rather than the standalone detail screen.
+- Chose dedicated, HTML-safe Pushover formatters instead of deriving pushes from email text. Pushes preserve plain-text line structure for notification banners, use only provider-supported emphasis in the opened client, and truncate at complete task/subtask boundaries within the 1,024-character limit.
+- Preserved task-preview query state across authentication and phone/desktop mode mapping rather than introducing a notification-only route or duplicating completion behavior.
+
 ## 2026-08-16 19:26:00 EDT
 
 - Routed AI-extracted tasks with past reminder timestamps or dates to review (`needs_review = true`) and cleared their reminder fields (`reminder_at`, `reminder_date`, `reminder_offset_minutes`).

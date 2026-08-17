@@ -6,7 +6,10 @@ import { AppProviders } from '../providers'
 import { AppShell } from '../components/AppShell'
 import { DesktopShell } from '../components/DesktopShell'
 import { RootRoute } from '../routes/RootRoute'
-import { DEVICE_REDIRECT_OVERRIDE_KEY } from '../hooks/useDeviceRedirect'
+import {
+  DEVICE_REDIRECT_OVERRIDE_KEY,
+  resolveDeviceRedirect
+} from '../hooks/useDeviceRedirect'
 import { signedInSession, signedOutSession } from './session-fixtures'
 
 const defaultUserAgent = window.navigator.userAgent
@@ -121,6 +124,43 @@ describe('Device detection utilities', () => {
       0
     )
     expect(isMobilePhoneDevice()).toBe(false)
+  })
+})
+
+describe('Device deep-link mapping', () => {
+  it('preserves a task preview when switching to desktop mode', () => {
+    expect(
+      resolveDeviceRedirect(
+        '/tasks',
+        '?group=all&task=e9e311a9-4a17-43fc-9382-835473f872eb',
+        false
+      )
+    ).toBe('/desktop/tasks?group=all&task=e9e311a9-4a17-43fc-9382-835473f872eb')
+  })
+
+  it('preserves a task preview when switching to phone mode', () => {
+    expect(
+      resolveDeviceRedirect(
+        '/desktop/tasks',
+        '?task=e9e311a9-4a17-43fc-9382-835473f872eb',
+        true
+      )
+    ).toBe('/tasks?task=e9e311a9-4a17-43fc-9382-835473f872eb')
+  })
+
+  it('preserves completed and group routes when switching to phone mode', () => {
+    expect(resolveDeviceRedirect('/desktop/completed', '?group=all&page=2', true)).toBe(
+      '/tasks/completed?group=all&page=2'
+    )
+    expect(resolveDeviceRedirect('/desktop/groups', '?sort=name', true)).toBe(
+      '/tasks/groups?sort=name'
+    )
+  })
+
+  it('keeps existing non-task device defaults', () => {
+    expect(resolveDeviceRedirect('/capture', '', false)).toBe('/desktop')
+    expect(resolveDeviceRedirect('/desktop', '', true)).toBe('/capture')
+    expect(resolveDeviceRedirect('/tasks', '?group=all', true)).toBeNull()
   })
 })
 

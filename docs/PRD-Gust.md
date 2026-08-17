@@ -126,6 +126,8 @@ Users can independently disable either email digest in Settings. No other remind
 - Pushover is optional. A user connects a Pushover destination through its subscription flow or a validated manual user key; Gust stores only encrypted key material and a masked hint.
 - A master Pushover switch and independent task-reminder, daily-brief, and weekly-summary switches preserve user control without affecting email preferences.
 - Exact-time reminders send about 30 minutes before their target; date-only reminders send at the user's selected local time (8:00 AM by default). Exact-time values remain fixed instants; date-only values follow the current user timezone.
+- A task reminder summarizes the task using the same hierarchy as task preview: status, group, title, context, due date, reminder, recurrence, and checklist progress. Provider-supported emphasis may enhance the opened message, but the content must remain readable when the operating system strips that emphasis.
+- The reminder's `Open in Gust` action opens the URL-backed task preview with the selected task preserved across authentication and mobile/desktop mode resolution. An open task can be completed through the preview's existing completion flow.
 - Explicit reminder language and clearly scheduled events can create reminder metadata. Ordinary timed errands must not create a reminder automatically. Ambiguous or past extracted reminders are flagged for review.
 
 ### 6. Installable PWA
@@ -427,7 +429,8 @@ Subtasks:
 - Empty digests are not sent and must be tracked as skipped; a digest with undated open tasks is not considered empty.
 - Retryable delivery failures may retry without duplicate-send; terminal provider failures must not duplicate-send.
 - No per-task reminder emails are sent in v1 from this workflow.
-- Pushover push digests mirror the Eastern email schedule and are compact (counts plus up to five task titles).
+- Pushover push digests mirror the Eastern email schedule and inclusion rules but use channel-specific, compact section and task blocks. They preserve readable whitespace, omit empty sections and raw web URLs, and truncate only at complete task boundaries with an explicit remaining-task count.
+- Formatted Pushover bodies must stay within the provider's 1,024-character limit, escape user-controlled content, and remain understandable when notification banners remove supported HTML emphasis.
 
 ## Recurrence Contract
 

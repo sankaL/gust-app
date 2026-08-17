@@ -5,6 +5,7 @@ import logging
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -20,6 +21,7 @@ from app.db.repositories import (
     delete_expired_captures,
     fail_claimed_reminder,
     get_digest_dispatch,
+    get_group,
     get_notification_preferences,
     get_task,
     get_user,
@@ -28,6 +30,7 @@ from app.db.repositories import (
     list_open_tasks_due_on_date,
     list_open_tasks_overdue_before_date,
     list_open_tasks_without_due_date,
+    list_subtasks,
     list_users,
     mark_reminder_sent,
     requeue_claimed_reminder,
@@ -36,6 +39,11 @@ from app.db.repositories import (
     upsert_digest_dispatch,
 )
 from app.services.pushover import PushoverDeliveryError, PushoverService
+from app.services.pushover_formatting import (
+    build_daily_digest_message,
+    build_task_reminder_message,
+    build_weekly_digest_message,
+)
 
 logger = logging.getLogger("gust.api")
 
@@ -269,18 +277,42 @@ class ReminderWorkerService:
                     summary.skipped += 1
                     continue
                 encrypted_key = preferences.pushover_user_key_encrypted
-                title = task.title
+                group = get_group(
+                    connection,
+                    user_id=reminder.user_id,
+                    group_id=task.group_id,
+                )
+                if group is None:
+                    cancel_claimed_reminder(
+                        connection,
+                        reminder_id=reminder.id,
+                        claim_token=reminder.claim_token or "",
+                    )
+                    summary.skipped += 1
+                    continue
+                task_subtasks = list_subtasks(
+                    connection,
+                    user_id=reminder.user_id,
+                    task_id=reminder.task_id,
+                )
             try:
                 user_key = self.pushover_service.decrypt_user_key(encrypted_key)
+                task_query = urlencode({"group": "all", "task": reminder.task_id})
                 task_url = (
-                    f"{(self.settings.frontend_app_url or '').rstrip('/')}/tasks/{reminder.task_id}"
+                    f"{(self.settings.frontend_app_url or '').rstrip('/')}/tasks?{task_query}"
                 )
                 result = await self.pushover_service.send(
                     user_key=user_key,
                     title="Gust task reminder",
-                    message=f"{title} — about 30 minutes before.",
+                    message=build_task_reminder_message(
+                        task=task,
+                        group_name=group.name,
+                        subtasks=task_subtasks,
+                        timezone=user.timezone,
+                    ),
                     url=task_url,
                     ttl_seconds=6 * 60 * 60 if task.reminder_at is not None else 24 * 60 * 60,
+                    html_enabled=True,
                 )
             except PushoverDeliveryError as exc:
                 with internal_job_connection_scope(self.settings.database_url) as connection:
@@ -437,6 +469,12 @@ class ReminderWorkerService:
                 overdue=overdue,
                 undated_open=undated_open,
             )
+            push_body = build_daily_digest_message(
+                digest_date=period.start_date,
+                due_today=due_today,
+                overdue=overdue,
+                undated_open=undated_open,
+            )
         else:
             assert period.completed_start_utc is not None
             assert period.completed_end_utc is not None
@@ -504,6 +542,13 @@ class ReminderWorkerService:
                 due_uncompleted=due_uncompleted,
                 undated_open=undated_open,
             )
+            push_body = build_weekly_digest_message(
+                start_date=period.start_date,
+                end_date=period.end_date,
+                completed=completed,
+                due_uncompleted=due_uncompleted,
+                undated_open=undated_open,
+            )
 
         email_result: ReminderSendResult | None = None
         delivery_failed = False
@@ -557,9 +602,10 @@ class ReminderWorkerService:
                         preferences.pushover_user_key_encrypted or ""
                     ),
                     title="Gust Daily Brief" if mode == "daily" else "Gust Weekly Summary",
-                    message=self._compact_push_digest(text_body),
+                    message=push_body,
                     url=self._frontend_tasks_url() or "https://gust.app/tasks",
                     ttl_seconds=24 * 60 * 60 if mode == "daily" else 7 * 24 * 60 * 60,
+                    html_enabled=True,
                 )
                 self._upsert_dispatch(
                     user=user,
@@ -624,11 +670,6 @@ class ReminderWorkerService:
                 provider_message_id=provider_message_id,
                 last_error_code=last_error_code,
             )
-
-    @staticmethod
-    def _compact_push_digest(text_body: str) -> str:
-        lines = [line for line in text_body.splitlines() if line and not line.startswith("User:")]
-        return "\n".join(lines)[:1024]
 
     def _resolve_period(self, *, mode: DigestMode, now_utc: datetime) -> DigestPeriod:
         now_local = now_utc.astimezone(DIGEST_TIMEZONE)

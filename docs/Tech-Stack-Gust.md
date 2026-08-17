@@ -377,6 +377,10 @@ Per-item reminder rows are claimed transactionally for Pushover task delivery. `
 
 Pushover user keys are validated with the provider before storage, encrypted by Fernet using a backend-only key, and never returned to the browser. Provider calls use bounded timeouts, sanitized error codes, normal priority, user-default sound, and no provider credentials or message bodies in logs.
 
+Pushover delivery uses dedicated channel formatters rather than compacting email text. Task reminders load the user-scoped task, group, and subtasks, render the task-preview field order with provider-supported HTML emphasis, and link to `/tasks?group=all&task=<id>`. Daily and weekly formatters build non-empty sections from the same digest query results used by email. Every builder HTML-escapes user content, budgets the 1,024-character provider limit before adding a complete task/subtask block, and emits an `…and N more` suffix instead of slicing markup.
+
+The frontend treats the `task` search parameter as URL-owned preview state. Device-mode resolution maps `/tasks?...&task=<id>` to `/desktop/tasks?...&task=<id>` and back for task routes, preserving the selected task instead of redirecting to a generic dashboard. The normal login `next` parameter retains the full path and query so signed-out notification opens resume the same preview after authentication.
+
 ### Recurrence
 
 Recurring task generation is handled server-side when a recurring task is completed.

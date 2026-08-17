@@ -12,6 +12,8 @@ from app.core.errors import ConfigurationError
 from app.db.engine import connection_scope
 from app.db.repositories import (
     create_capture,
+    create_reminder,
+    create_subtasks,
     create_task,
     ensure_inbox_group,
     update_notification_preferences,
@@ -102,6 +104,9 @@ class FakePushoverService:
         assert encrypted_key == "encrypted-user-key"
         return "user-key"
 
+    def ensure_configured(self) -> None:
+        return None
+
     async def send(
         self,
         *,
@@ -110,6 +115,7 @@ class FakePushoverService:
         message: str,
         url: str,
         ttl_seconds: int,
+        html_enabled: bool,
     ) -> PushoverSendResult:
         self.requests.append(
             {
@@ -118,6 +124,7 @@ class FakePushoverService:
                 "message": message,
                 "url": url,
                 "ttl_seconds": str(ttl_seconds),
+                "html_enabled": str(html_enabled),
             }
         )
         return PushoverSendResult(request_id="push-request-123")
@@ -530,7 +537,76 @@ def test_daily_digest_attempts_pushover_when_email_delivery_fails(client) -> Non
     assert summary.failed == 1
     assert len(email_delivery.requests) == 1
     assert len(pushover.requests) == 1
+    push_request = pushover.requests[0]
+    assert push_request["html_enabled"] == "True"
+    assert "<b>DAILY BRIEF</b>" in push_request["message"]
+    assert "\n\n" in push_request["message"]
+    assert "DUE TODAY · 1" in push_request["message"]
+    assert "User:" not in push_request["message"]
+    assert "https://" not in push_request["message"]
     assert {tuple(row) for row in dispatch_rows} == {("email", "failed"), ("pushover", "sent")}
+
+
+def test_task_reminder_opens_formatted_task_preview(client) -> None:
+    now = datetime.now(UTC).replace(microsecond=0)
+    _, inbox_id = _seed_user_and_inbox(client)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task = create_task(
+            connection,
+            user_id=USER_ID,
+            group_id=inbox_id,
+            capture_id=None,
+            title="Review <Navigator>",
+            description="Compare N1.5 & alternatives",
+            needs_review=False,
+            due_date=now.date(),
+            reminder_at=None,
+            reminder_date=now.date(),
+            recurrence_frequency="weekly",
+            recurrence_interval=1,
+            recurrence_weekday=1,
+        )
+        create_subtasks(
+            connection,
+            user_id=USER_ID,
+            task_id=task.id,
+            titles=["Read notes", "Write summary"],
+        )
+        create_reminder(
+            connection,
+            user_id=USER_ID,
+            task_id=task.id,
+            scheduled_for=now - timedelta(seconds=1),
+        )
+        update_notification_preferences(
+            connection,
+            user_id=USER_ID,
+            values={
+                "pushover_enabled": True,
+                "pushover_task_reminders_enabled": True,
+                "pushover_user_key_encrypted": "encrypted-user-key",
+            },
+        )
+
+    pushover = FakePushoverService()
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=FakeReminderDeliveryService(),
+        pushover_service=pushover,
+    )
+
+    summary = asyncio.run(worker.run_due_work(mode="task"))
+
+    assert summary.sent == 1
+    assert len(pushover.requests) == 1
+    request = pushover.requests[0]
+    assert request["url"] == f"http://frontend.test/tasks?group=all&task={task.id}"
+    assert request["html_enabled"] == "True"
+    assert "TASK PREVIEW" in request["message"]
+    assert "Review &lt;Navigator&gt;" in request["message"]
+    assert "Compare N1.5 &amp; alternatives" in request["message"]
+    assert "Weekly on Monday" in request["message"]
+    assert "Read notes" in request["message"]
 
 
 def test_reminder_worker_still_cleans_up_expired_captures_when_provider_unconfigured(

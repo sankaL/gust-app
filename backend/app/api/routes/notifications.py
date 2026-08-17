@@ -336,6 +336,7 @@ async def send_pushover_test(
         message="Pushover notifications are connected.",
         url=f"{(settings.frontend_app_url or '').rstrip('/')}/tasks",
         ttl_seconds=24 * 60 * 60,
+        html_enabled=False,
     )
 
 
