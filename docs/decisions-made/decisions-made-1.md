@@ -1,5 +1,10 @@
 # Decisions Made
 
+## 2026-08-19 20:45:00 EDT
+
+- Updated default task extraction model to OpenRouter `google/gemini-3.7-flash`, replacing `openai/gpt-5.6-luna`.
+- Updated backend settings default, local `.env` and `.env.example`, dev runtime generator script, tech stack documentation, and test assertions while preserving the existing structured-output extraction orchestration and guardrail checks.
+
 ## 2026-08-17 10:05:52 EDT
 
 - Standardized single-task Pushover links on Gust's existing URL-backed task preview (`/tasks?group=all&task=<id>`) so notification opens provide the established context, recurrence, checklist, edit/delete, and whole-task completion experience rather than the standalone detail screen.

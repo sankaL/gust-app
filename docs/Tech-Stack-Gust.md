@@ -317,7 +317,7 @@ Model selection is an operational setting, not a product contract. The required 
 - JSON-schema structured outputs
 - acceptable latency for synchronous task creation
 
-Current default model: `openai/gpt-5.6-luna`.
+Current default model: `google/gemini-3.7-flash`.
 
 Backend behavior:
 
