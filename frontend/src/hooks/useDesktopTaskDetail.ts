@@ -67,13 +67,17 @@ function useSaveTask(shared: Shared, setDraft: (draft: TaskDetailDraft) => void)
 function useCreateSubtask(shared: Shared, title: string, setTitle: (value: string) => void) {
   const client = useQueryClient(); const { notifyError, notifySuccess } = useNotifications()
   return useMutation({
-    onMutate: async () => { const { taskId, task } = shared; if (!taskId || !task || !title.trim()) return {}
+    onMutate: async () => {
+      const { taskId } = shared; if (!taskId || !title.trim()) return {}
       await client.cancelQueries({ queryKey: ['task-detail', taskId] }); const snapshots = snapshotTaskQueries(client, taskId)
+      const currentTask = client.getQueryData<TaskDetail>(['task-detail', taskId]) ?? shared.task
+      if (!currentTask) return { snapshots }
       const optimisticId = `optimistic-${Date.now()}`; shared.pending.mark(optimisticId, true)
-      updateTaskDetailCache(client, { ...task, subtasks: [...task.subtasks, { id: optimisticId, title: title.trim(), is_completed: false, completed_at: null }], subtask_count: task.subtask_count + 1 })
+      updateTaskDetailCache(client, { ...currentTask, subtasks: [...currentTask.subtasks, { id: optimisticId, title: title.trim(), is_completed: false, completed_at: null }], subtask_count: currentTask.subtask_count + 1 })
       applyTaskListMutation(client, (current) => current.id === taskId ? { ...current, subtask_count: current.subtask_count + 1 } : current)
-      return { snapshots, optimisticId } },
-    mutationFn: () => { if (!shared.taskId) throw new Error('Task detail is not ready.'); return createSubtask(shared.taskId, title, requireCsrfToken(shared.session)) },
+      return { snapshots, optimisticId }
+    },
+    mutationFn: () => { if (!shared.taskId) throw new Error('Task detail is not ready.'); return createSubtask(shared.taskId, title.trim(), requireCsrfToken(shared.session)) },
     onSuccess: (_value, _vars, context) => { if (context?.optimisticId) shared.pending.mark(context.optimisticId, false); setTitle(''); notifySuccess('Subtask added.'); if (shared.task) shared.refresh(shared.task) },
     onError: (error, _vars, context) => { restoreCreateSubtaskFailure(client, shared, context); notifyError(message(error, 'Subtask could not be added.')) },
   })
@@ -96,13 +100,23 @@ function useUpdateSubtask(shared: Shared) {
   const client = useQueryClient(); const { notifyError, notifySuccess } = useNotifications()
   type Payload = { subtaskId: string; title?: string; is_completed?: boolean }
   return useMutation({
-    onMutate: async (payload: Payload) => { if (!shared.taskId || !shared.task) return {}; shared.pending.mark(payload.subtaskId, true)
+    onMutate: async (payload: Payload) => {
+      if (!shared.taskId) return {}; shared.pending.mark(payload.subtaskId, true)
       await client.cancelQueries({ queryKey: ['task-detail', shared.taskId] }); const snapshots = snapshotTaskQueries(client, shared.taskId)
-      const subtasks = shared.task.subtasks.map((subtask) => subtask.id !== payload.subtaskId ? subtask : { ...subtask,
+      const currentTask = client.getQueryData<TaskDetail>(['task-detail', shared.taskId]) ?? shared.task
+      if (!currentTask) return { snapshots }
+      const subtasks = currentTask.subtasks.map((subtask) => subtask.id !== payload.subtaskId ? subtask : { ...subtask,
         title: payload.title ?? subtask.title, is_completed: payload.is_completed ?? subtask.is_completed,
         completed_at: payload.is_completed === undefined ? subtask.completed_at : payload.is_completed ? new Date().toISOString() : null })
-      updateTaskDetailCache(client, { ...shared.task, subtasks }); return { snapshots } },
-    mutationFn: (payload: Payload) => { if (!shared.taskId) throw new Error('Task detail is not ready.'); return updateSubtask(shared.taskId, payload.subtaskId, payload, requireCsrfToken(shared.session)) },
+      updateTaskDetailCache(client, { ...currentTask, subtasks }); return { snapshots }
+    },
+    mutationFn: (payload: Payload) => {
+      if (!shared.taskId) throw new Error('Task detail is not ready.')
+      const apiPayload: { title?: string; is_completed?: boolean } = {}
+      if (payload.title !== undefined) apiPayload.title = payload.title
+      if (payload.is_completed !== undefined) apiPayload.is_completed = payload.is_completed
+      return updateSubtask(shared.taskId, payload.subtaskId, apiPayload, requireCsrfToken(shared.session))
+    },
     onSuccess: (_value, payload) => { shared.pending.mark(payload.subtaskId, false); notifySuccess('Subtask updated.'); if (shared.task) shared.refresh(shared.task) },
     onError: (error, payload, context) => { if (context?.snapshots) restoreQuerySnapshots(client, context.snapshots); shared.pending.mark(payload.subtaskId, false); notifyError(message(error, 'Subtask could not be updated.')) },
   })
@@ -111,11 +125,15 @@ function useUpdateSubtask(shared: Shared) {
 function useDeleteSubtask(shared: Shared) {
   const client = useQueryClient(); const { notifyError, notifySuccess } = useNotifications()
   return useMutation({
-    onMutate: async (id: string) => { if (!shared.taskId || !shared.task) return {}; shared.pending.mark(id, true)
+    onMutate: async (id: string) => {
+      if (!shared.taskId) return {}; shared.pending.mark(id, true)
       await client.cancelQueries({ queryKey: ['task-detail', shared.taskId] }); const snapshots = snapshotTaskQueries(client, shared.taskId)
-      updateTaskDetailCache(client, { ...shared.task, subtasks: shared.task.subtasks.filter((item) => item.id !== id), subtask_count: Math.max(0, shared.task.subtask_count - 1) })
+      const currentTask = client.getQueryData<TaskDetail>(['task-detail', shared.taskId]) ?? shared.task
+      if (!currentTask) return { snapshots }
+      updateTaskDetailCache(client, { ...currentTask, subtasks: currentTask.subtasks.filter((item) => item.id !== id), subtask_count: Math.max(0, currentTask.subtask_count - 1) })
       applyTaskListMutation(client, (current) => current.id === shared.taskId ? { ...current, subtask_count: Math.max(0, current.subtask_count - 1) } : current)
-      return { snapshots } },
+      return { snapshots }
+    },
     mutationFn: (id: string) => { if (!shared.taskId) throw new Error('Task detail is not ready.'); return deleteSubtask(shared.taskId, id, requireCsrfToken(shared.session)) },
     onSuccess: (_value, id) => { shared.pending.mark(id, false); notifySuccess('Subtask deleted.'); if (shared.task) shared.refresh(shared.task) },
     onError: (error, id, context) => { if (context?.snapshots) restoreQuerySnapshots(client, context.snapshots); shared.pending.mark(id, false); notifyError(message(error, 'Subtask could not be deleted.')) },

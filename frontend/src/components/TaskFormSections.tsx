@@ -27,16 +27,22 @@ export function SubtaskDrafts({
       </p>
       <AddSubtaskInput value={newTitle} disabled={disabled} onChange={onNewTitleChange} onAdd={onAdd} />
       <div className="mt-3 space-y-1">
-        {titles.length === 0 ? <EmptySubtasks /> : titles.map((title, index) => ({ title, index })).reverse().map(({ title, index }) => (
-          <SubtaskDraftRow
-            key={`${title}-${index}`}
-            title={title}
-            index={index}
-            disabled={disabled}
-            onChange={(nextTitle) => onTitlesChange(titles.map((current, candidate) => candidate === index ? nextTitle : current))}
-            onDelete={() => onTitlesChange(titles.filter((_current, candidate) => candidate !== index))}
-          />
-        ))}
+        {titles.length === 0 ? (
+          <EmptySubtasks />
+        ) : (
+          titles.map((title, index) => (
+            <SubtaskDraftRow
+              key={index}
+              title={title}
+              index={index}
+              disabled={disabled}
+              onChange={(nextTitle) =>
+                onTitlesChange(titles.map((current, candidate) => (candidate === index ? nextTitle : current)))
+              }
+              onDelete={() => onTitlesChange(titles.filter((_current, candidate) => candidate !== index))}
+            />
+          ))
+        )}
       </div>
     </section>
   )

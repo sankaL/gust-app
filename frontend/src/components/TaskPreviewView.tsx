@@ -24,6 +24,7 @@ type Props = {
   onClose: () => void
   onSave: () => void
   onCreateSubtask: () => void
+  onToggleSubtask: (subtaskId: string, isCompleted: boolean) => void
   onDeleteSubtask: (id: string) => void
   onComplete?: () => void
   onRestore?: () => void
@@ -197,10 +198,10 @@ function ReadOnlyTask({
   onTouchStart: (e: React.TouchEvent) => void
   onTouchEnd: (e: React.TouchEvent) => void
 }) {
-  const recurrence = formatRecurrence(task.recurrence_frequency)
-  const displayDueDate = draft ? draft.dueDate : task.due_date
-  const displayReminder = draft ? draft.reminderAt : task.reminder_at
-  const displayDescription = draft ? draft.description : task.description
+  const recurrence = formatRecurrence(draft?.recurrence ?? task.recurrence)
+  const dueDate = formatDate(draft?.dueDate ?? task.due_date)
+  const reminder = formatDateTime(draft?.reminderAt ?? task.reminder_at)
+  const description = draft ? draft.description : task.description
 
   return (
     <>
@@ -215,15 +216,20 @@ function ReadOnlyTask({
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <TextQuote className="h-3.5 w-3.5 text-primary/80 transition-colors group-hover:text-primary" strokeWidth={1.8} />
-            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">Context</p>
+            <TextQuote
+              className="h-3.5 w-3.5 text-primary/80 transition-colors group-hover:text-primary"
+              strokeWidth={1.8}
+            />
+            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+              Context
+            </p>
           </div>
           <span className="text-[0.62rem] text-primary/60 opacity-0 transition-opacity group-hover:opacity-100">
             Tap or double-click to edit
           </span>
         </div>
         <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-          {displayDescription || 'No description yet.'}
+          {description || 'No description yet.'}
         </p>
       </button>
 
@@ -231,7 +237,7 @@ function ReadOnlyTask({
         <MetadataTile
           label="Due date"
           icon={CalendarDays}
-          value={formatDate(displayDueDate)}
+          value={dueDate}
           onClick={onStartEdit}
           onDoubleClick={onStartEdit}
           onTouchStart={onTouchStart}
@@ -240,7 +246,7 @@ function ReadOnlyTask({
         <MetadataTile
           label="Reminder"
           icon={Bell}
-          value={formatDateTime(displayReminder)}
+          value={reminder}
           onClick={onStartEdit}
           onDoubleClick={onStartEdit}
           onTouchStart={onTouchStart}
@@ -276,6 +282,7 @@ function Checklist({
   title,
   onTitleChange,
   onCreate,
+  onToggle,
   onDelete,
 }: {
   task: TaskDetail
@@ -284,6 +291,7 @@ function Checklist({
   title: string
   onTitleChange: (value: string) => void
   onCreate: () => void
+  onToggle: (subtaskId: string, is_completed: boolean) => void
   onDelete: (id: string) => void
 }) {
   return (
@@ -300,12 +308,20 @@ function Checklist({
       <div className="mt-3 space-y-2">
         {task.subtasks.length ? (
           task.subtasks.map((subtask) => (
-            <div key={subtask.id} className="flex items-start gap-3 rounded-card bg-surface-dim p-3">
-              <span
-                className={`mt-0.5 h-4 w-4 rounded-pill ${
-                  subtask.is_completed ? 'bg-primary' : 'bg-surface-container-high ring-1 ring-white/15'
+            <div key={subtask.id} className="flex items-center gap-3 rounded-card bg-surface-dim p-3">
+              <button
+                type="button"
+                onClick={() => onToggle(subtask.id, !subtask.is_completed)}
+                disabled={busy}
+                aria-label={`Toggle ${subtask.title}`}
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all ${
+                  subtask.is_completed
+                    ? 'bg-primary text-surface shadow-[0_0_10px_rgba(196,181,253,0.35)]'
+                    : 'border border-outline/40 bg-surface-container hover:border-primary/60'
                 }`}
-              />
+              >
+                {subtask.is_completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+              </button>
               <p
                 className={`min-w-0 flex-1 text-sm ${
                   subtask.is_completed ? 'text-on-surface-variant line-through' : 'text-on-surface'
@@ -319,7 +335,7 @@ function Checklist({
                   onClick={() => onDelete(subtask.id)}
                   disabled={busy}
                   aria-label={`Delete ${subtask.title}`}
-                  className="text-on-surface-variant hover:text-tertiary"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-tertiary/15 hover:text-tertiary"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -338,7 +354,7 @@ function Checklist({
             value={title}
             onChange={(event) => onTitleChange(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && title.trim()) onCreate()
+              if (event.key === 'Enter' && title.trim() && !busy) onCreate()
             }}
             className="min-w-0 flex-1 rounded-card bg-surface-dim px-3 py-3 text-sm text-on-surface"
             placeholder="Add a subtask..."
@@ -375,6 +391,7 @@ type PreviewBodyProps = {
   onDraftChange: Props['onDraftChange']
   onNewSubtaskTitleChange: (title: string) => void
   onCreateSubtask: () => void
+  onToggleSubtask: (subtaskId: string, is_completed: boolean) => void
   onDeleteSubtask: (id: string) => void
   friendlyError: Props['friendlyError']
 }
@@ -420,6 +437,7 @@ function PreviewBody(props: PreviewBodyProps) {
         title={props.newSubtaskTitle}
         onTitleChange={props.onNewSubtaskTitleChange}
         onCreate={props.onCreateSubtask}
+        onToggle={props.onToggleSubtask}
         onDelete={props.onDeleteSubtask}
       />
 
@@ -607,6 +625,7 @@ export function TaskPreviewView(props: Props) {
             onDraftChange={props.onDraftChange}
             onNewSubtaskTitleChange={props.onNewSubtaskTitleChange}
             onCreateSubtask={props.onCreateSubtask}
+            onToggleSubtask={props.onToggleSubtask}
             onDeleteSubtask={props.onDeleteSubtask}
             friendlyError={props.friendlyError}
           />

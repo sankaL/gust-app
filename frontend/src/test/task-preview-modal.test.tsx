@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 
 import { TaskPreviewModal } from '../components/TaskPreviewModal'
-import { deleteSubtask, getTaskDetail, type TaskDetail } from '../lib/api'
+import { deleteSubtask, getTaskDetail, updateSubtask, type TaskDetail } from '../lib/api'
 
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
@@ -14,11 +14,13 @@ vi.mock('../lib/api', async () => {
     ...actual,
     deleteSubtask: vi.fn(),
     getTaskDetail: vi.fn(),
+    updateSubtask: vi.fn(),
   }
 })
 
 const mockedGetTaskDetail = vi.mocked(getTaskDetail)
 const mockedDeleteSubtask = vi.mocked(deleteSubtask)
+const mockedUpdateSubtask = vi.mocked(updateSubtask)
 
 function createClient() {
   return new QueryClient({
@@ -310,5 +312,95 @@ describe('TaskPreviewModal', () => {
 
     // Save button is now enabled
     expect(saveButton).toBeEnabled()
+  })
+
+  it('toggles subtasks directly from the task preview modal', async () => {
+    const user = userEvent.setup()
+    mockedGetTaskDetail.mockResolvedValue(buildTask())
+    mockedUpdateSubtask.mockResolvedValue({
+      id: 'subtask-1',
+      title: 'Check retry contract',
+      is_completed: true,
+      completed_at: '2026-05-18T16:00:00Z',
+    })
+
+    renderModal({
+      session: {
+        signed_in: true,
+        user: { id: 'user-1', email: 'user@example.com', display_name: null },
+        timezone: 'America/Toronto',
+        inbox_group_id: 'inbox-1',
+        csrf_token: 'csrf-token',
+      },
+      groups: [
+        {
+          id: 'inbox-1',
+          name: 'Inbox',
+          description: null,
+          is_system: true,
+          system_key: 'inbox',
+          open_task_count: 1,
+          completed_task_count: 0,
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Toggle Check retry contract' }))
+
+    expect(mockedUpdateSubtask).toHaveBeenCalledWith(
+      'task-1',
+      'subtask-1',
+      { is_completed: true },
+      'csrf-token'
+    )
+  })
+
+  it('prevents further checklist mutations while a subtask update is pending', async () => {
+    const user = userEvent.setup()
+    const updatedSubtask = {
+      id: 'subtask-1',
+      title: 'Check retry contract',
+      is_completed: true,
+      completed_at: '2026-05-18T16:00:00Z',
+    }
+    let resolveUpdate: (value: typeof updatedSubtask) => void = () => undefined
+    mockedGetTaskDetail.mockResolvedValue(buildTask())
+    mockedUpdateSubtask.mockImplementation(
+      () => new Promise((resolve) => { resolveUpdate = resolve })
+    )
+
+    renderModal({
+      session: {
+        signed_in: true,
+        user: { id: 'user-1', email: 'user@example.com', display_name: null },
+        timezone: 'America/Toronto',
+        inbox_group_id: 'inbox-1',
+        csrf_token: 'csrf-token',
+      },
+      groups: [
+        {
+          id: 'inbox-1',
+          name: 'Inbox',
+          description: null,
+          is_system: true,
+          system_key: 'inbox',
+          open_task_count: 1,
+          completed_task_count: 0,
+        },
+      ],
+    })
+
+    const toggle = await screen.findByRole('button', { name: 'Toggle Check retry contract' })
+    const remove = screen.getByRole('button', { name: 'Delete Check retry contract' })
+    const add = screen.getByRole('button', { name: 'Add' })
+    await user.click(toggle)
+
+    await waitFor(() => expect(mockedUpdateSubtask).toHaveBeenCalledTimes(1))
+    expect(toggle).toBeDisabled()
+    expect(remove).toBeDisabled()
+    expect(add).toBeDisabled()
+
+    resolveUpdate(updatedSubtask)
+    await waitFor(() => expect(toggle).toBeEnabled())
   })
 })

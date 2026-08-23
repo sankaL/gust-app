@@ -50,13 +50,14 @@ function useEscapeClose(isOpen: boolean, requestClose: () => void) {
   }, [isOpen, requestClose])
 }
 
-function usePreviewRequests({ draft, task, isBusy, mutationPending, isDirty, title, acquire, onClose, onComplete, onRestore, onDelete, save, create, remove }: { draft: TaskDetailDraft | null; task?: TaskDetail; isBusy: boolean; mutationPending: boolean; isDirty: boolean; title: string; acquire: () => (() => void) | null; onClose: () => void; onComplete?: (task: TaskDetail) => void; onRestore?: (task: TaskDetail) => void; onDelete?: (task: TaskDetail) => void; save: (release: () => void) => void; create: (release: () => void) => void; remove: (variables: { subtaskId: string; release: () => void }) => void }) {
+function usePreviewRequests({ draft, task, isBusy, mutationPending, isDirty, title, acquire, onClose, onComplete, onRestore, onDelete, save, create, updateSubtask, remove }: { draft: TaskDetailDraft | null; task?: TaskDetail; isBusy: boolean; mutationPending: boolean; isDirty: boolean; title: string; acquire: () => (() => void) | null; onClose: () => void; onComplete?: (task: TaskDetail) => void; onRestore?: (task: TaskDetail) => void; onDelete?: (task: TaskDetail) => void; save: (release: () => void) => void; create: (release: () => void) => void; updateSubtask: (variables: { subtaskId: string; is_completed: boolean }) => void; remove: (variables: { subtaskId: string; release?: () => void }) => void }) {
   const close = useCallback(() => { if (!mutationPending && (!isDirty || window.confirm('Discard unsaved task changes?'))) onClose() }, [isDirty, mutationPending, onClose])
   function run(action: (() => void) | undefined) { if (!isBusy && action && (!isDirty || window.confirm('Discard unsaved task changes?'))) action() }
   function saveTask() { if (!isBusy && draft?.title.trim()) { const release = acquire(); if (release) save(release) } }
-  function createSubtask() { if (!isBusy && title.trim()) { const release = acquire(); if (release) create(release) } }
-  function deleteSubtask(subtaskId: string) { if (!isBusy) { const release = acquire(); if (release) remove({ subtaskId, release }) } }
-  return { close, saveTask, createSubtask, deleteSubtask, complete: task && onComplete ? () => run(() => onComplete(task)) : undefined, restore: task && onRestore ? () => run(() => onRestore(task)) : undefined, deleteTask: task && onDelete ? () => run(() => onDelete(task)) : undefined }
+  function createSubtask() { if (title.trim()) { const release = acquire(); if (release) create(release) } }
+  function toggleSubtask(subtaskId: string, is_completed: boolean) { if (!isBusy) updateSubtask({ subtaskId, is_completed }) }
+  function deleteSubtask(subtaskId: string) { if (!isBusy) remove({ subtaskId }) }
+  return { close, saveTask, createSubtask, toggleSubtask, deleteSubtask, complete: task && onComplete ? () => run(() => onComplete(task)) : undefined, restore: task && onRestore ? () => run(() => onRestore(task)) : undefined, deleteTask: task && onDelete ? () => run(() => onDelete(task)) : undefined }
 }
 
 function usePreviewState() {
@@ -81,17 +82,17 @@ function useTaskPreviewController({ taskId, isOpen, onClose, onComplete, onResto
   const taskQuery = useQuery({ queryKey: ['task-detail', taskId], queryFn: () => getTaskDetail(taskId as string), enabled: isOpen && Boolean(taskId), staleTime: TASK_SCREEN_STALE_TIME_MS, gcTime: TASK_SCREEN_GC_TIME_MS })
   const task = taskQuery.data
   const mutations = useTaskPreviewMutations({ queryClient, taskId, task, draft, groups, session, title: newSubtaskTitle, setDraft, setDraftTaskId, setDirty: setIsDraftDirty, setTitle: setNewSubtaskTitle, setError: setSaveError, setSaveNotice, friendlyError: buildFriendlyMessage })
-  const { save: saveMutation, create: createMutation, remove: deleteMutation } = mutations
-  const mutationPending = isLocked || saveMutation.isPending || createMutation.isPending || deleteMutation.isPending
+  const { save: saveMutation, create: createMutation, update: updateMutation, remove: deleteMutation } = mutations
+  const mutationPending = isLocked || saveMutation.isPending || createMutation.isPending || deleteMutation.isPending || updateMutation.isPending
   const isBusy = Boolean(task && busyTaskIds.includes(task.id)) || mutationPending
   const isEditable = Boolean(task && draft && session && groups.length)
 
   function updateDraft(updater: (current: TaskDetailDraft) => TaskDetailDraft) {
     setIsDraftDirty(true); setDraft((current) => current ? updater(current) : current)
   }
-  const requests = usePreviewRequests({ draft, task, isBusy, mutationPending, isDirty: isDraftDirty, title: newSubtaskTitle, acquire, onClose, onComplete, onRestore, onDelete: onRequestDelete, save: saveMutation.mutate, create: createMutation.mutate, remove: deleteMutation.mutate })
+  const requests = usePreviewRequests({ draft, task, isBusy, mutationPending, isDirty: isDraftDirty, title: newSubtaskTitle, acquire, onClose, onComplete, onRestore, onDelete: onRequestDelete, save: saveMutation.mutate, create: createMutation.mutate, updateSubtask: updateMutation.mutate, remove: deleteMutation.mutate })
 
   usePreviewDraftSync({ isOpen, task, timezone: session?.timezone ?? undefined, draftTaskId, isDirty: isDraftDirty, setDraft, setDraftTaskId, setDirty: setIsDraftDirty, setTitle: setNewSubtaskTitle, setError: setSaveError })
   useEscapeClose(isOpen, requests.close)
-  return { visible: Boolean(isOpen && taskId), view: { task, draft, groups, isLoading: taskQuery.isLoading, error: taskQuery.error, isEditable, isBusy, isDirty: isDraftDirty, saveError, saveNotice, newSubtaskTitle, onDraftChange: updateDraft, onNewSubtaskTitleChange: setNewSubtaskTitle, onDismissSaveNotice: () => setSaveNotice(null), onClose: requests.close, onSave: requests.saveTask, onCreateSubtask: requests.createSubtask, onDeleteSubtask: requests.deleteSubtask, onComplete: requests.complete, onRestore: requests.restore, onDelete: requests.deleteTask, friendlyError: buildFriendlyMessage } }
+  return { visible: Boolean(isOpen && taskId), view: { task, draft, groups, isLoading: taskQuery.isLoading, error: taskQuery.error, isEditable, isBusy, isDirty: isDraftDirty, saveError, saveNotice, newSubtaskTitle, onDraftChange: updateDraft, onNewSubtaskTitleChange: setNewSubtaskTitle, onDismissSaveNotice: () => setSaveNotice(null), onClose: requests.close, onSave: requests.saveTask, onCreateSubtask: requests.createSubtask, onToggleSubtask: requests.toggleSubtask, onDeleteSubtask: requests.deleteSubtask, onComplete: requests.complete, onRestore: requests.restore, onDelete: requests.deleteTask, friendlyError: buildFriendlyMessage } }
 }

@@ -1,5 +1,5 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
-import { createSubtask, deleteSubtask, updateTask, type GroupSummary, type SessionStatus, type TaskDetail } from '../lib/api'
+import { createSubtask, deleteSubtask, updateSubtask, updateTask, type GroupSummary, type SessionStatus, type TaskDetail } from '../lib/api'
 import { dateTimeLocalToIso } from '../lib/dateTime'
 import { buildTaskDetailDraft, type TaskDetailDraft } from '../lib/taskFormModel'
 import { adjustGroupOpenCount, applyTaskListMutation, prependTaskToMatchingLists, restoreQuerySnapshots, snapshotTaskQueries, updateTaskDetailCache } from '../lib/taskQueryCache'
@@ -100,13 +100,15 @@ function usePreviewSaveMutation(args: SaveMutationArgs) {
   })
 }
 
-function usePreviewCreateSubtaskMutation({ queryClient, taskId, task, title, session, setTitle, setError, friendlyError }: { queryClient: QueryClient; taskId: string | null; task?: TaskDetail; title: string; session?: SessionStatus; setTitle: (title: string) => void; setError: ErrorSetter; friendlyError: (error: unknown, fallback: string) => string }) {
+function usePreviewCreateSubtaskMutation({ queryClient, taskId, title, session, setTitle, setError, friendlyError }: { queryClient: QueryClient; taskId: string | null; task?: TaskDetail; title: string; session?: SessionStatus; setTitle: (title: string) => void; setError: ErrorSetter; friendlyError: (error: unknown, fallback: string) => string }) {
   return useMutation({
     onMutate: async () => {
-      if (!taskId || !task || !title.trim()) return {}
+      if (!taskId || !title.trim()) return {}
       setError(null); await cancelPreviewQueries(queryClient, taskId)
+      const currentTask = queryClient.getQueryData<TaskDetail>(['task-detail', taskId])
+      if (!currentTask) return {}
       const snapshots = snapshotTaskQueries(queryClient, taskId)
-      updateTaskDetailCache(queryClient, { ...task, subtasks: [...task.subtasks, { id: `optimistic-${Date.now()}`, title: title.trim(), is_completed: false, completed_at: null }], subtask_count: task.subtask_count + 1 })
+      updateTaskDetailCache(queryClient, { ...currentTask, subtasks: [...currentTask.subtasks, { id: `optimistic-${Date.now()}`, title: title.trim(), is_completed: false, completed_at: null }], subtask_count: currentTask.subtask_count + 1 })
       applyTaskListMutation(queryClient, (current) => current.id === taskId ? { ...current, subtask_count: current.subtask_count + 1 } : current)
       return { snapshots }
     },
@@ -117,17 +119,61 @@ function usePreviewCreateSubtaskMutation({ queryClient, taskId, task, title, ses
   })
 }
 
-function usePreviewDeleteSubtaskMutation({ queryClient, taskId, task, session, setError, friendlyError }: { queryClient: QueryClient; taskId: string | null; task?: TaskDetail; session?: SessionStatus; setError: ErrorSetter; friendlyError: (error: unknown, fallback: string) => string }) {
+function usePreviewUpdateSubtaskMutation({ queryClient, taskId, session, setError, friendlyError }: { queryClient: QueryClient; taskId: string | null; session?: SessionStatus; setError: ErrorSetter; friendlyError: (error: unknown, fallback: string) => string }) {
+  type UpdatePayload = { subtaskId: string; is_completed?: boolean; title?: string; release?: () => void }
   return useMutation({
-    onMutate: async ({ subtaskId }: { subtaskId: string; release: () => void }) => {
-      if (!taskId || !task) return {}
-      setError(null); await cancelPreviewQueries(queryClient, taskId)
+    onMutate: async ({ subtaskId, is_completed, title }: UpdatePayload) => {
+      if (!taskId) return {}
+      setError(null)
+      await cancelPreviewQueries(queryClient, taskId)
+      const currentTask = queryClient.getQueryData<TaskDetail>(['task-detail', taskId])
+      if (!currentTask) return {}
       const snapshots = snapshotTaskQueries(queryClient, taskId)
-      updateTaskDetailCache(queryClient, { ...task, subtasks: task.subtasks.filter((subtask) => subtask.id !== subtaskId), subtask_count: Math.max(0, task.subtask_count - 1) })
+      const subtasks = currentTask.subtasks.map((subtask) =>
+        subtask.id !== subtaskId
+          ? subtask
+          : {
+              ...subtask,
+              title: title ?? subtask.title,
+              is_completed: is_completed ?? subtask.is_completed,
+              completed_at: is_completed === undefined ? subtask.completed_at : is_completed ? new Date().toISOString() : null,
+            }
+      )
+      updateTaskDetailCache(queryClient, { ...currentTask, subtasks })
+      return { snapshots }
+    },
+    mutationFn: async ({ subtaskId, is_completed, title }: UpdatePayload) => {
+      if (!taskId) throw new Error('Task preview is not ready.')
+      const payload: { is_completed?: boolean; title?: string } = {}
+      if (is_completed !== undefined) payload.is_completed = is_completed
+      if (title !== undefined) payload.title = title
+      return updateSubtask(taskId, subtaskId, payload, requireCsrfToken(session))
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] })
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    },
+    onError: (error, _variables, context) => {
+      rollback(queryClient, context)
+      setError(friendlyError(error, 'Subtask could not be updated.'))
+    },
+    onSettled: (_data, _error, variables) => variables?.release?.(),
+  })
+}
+
+function usePreviewDeleteSubtaskMutation({ queryClient, taskId, session, setError, friendlyError }: { queryClient: QueryClient; taskId: string | null; session?: SessionStatus; setError: ErrorSetter; friendlyError: (error: unknown, fallback: string) => string }) {
+  return useMutation({
+    onMutate: async ({ subtaskId }: { subtaskId: string; release?: () => void }) => {
+      if (!taskId) return {}
+      setError(null); await cancelPreviewQueries(queryClient, taskId)
+      const currentTask = queryClient.getQueryData<TaskDetail>(['task-detail', taskId])
+      if (!currentTask) return {}
+      const snapshots = snapshotTaskQueries(queryClient, taskId)
+      updateTaskDetailCache(queryClient, { ...currentTask, subtasks: currentTask.subtasks.filter((subtask) => subtask.id !== subtaskId), subtask_count: Math.max(0, currentTask.subtask_count - 1) })
       applyTaskListMutation(queryClient, (current) => current.id === taskId ? { ...current, subtask_count: Math.max(0, current.subtask_count - 1) } : current)
       return { snapshots }
     },
-    mutationFn: async ({ subtaskId }: { subtaskId: string; release: () => void }) => { if (!taskId) throw new Error('Task preview is not ready.'); return deleteSubtask(taskId, subtaskId, requireCsrfToken(session)) },
+    mutationFn: async ({ subtaskId }: { subtaskId: string; release?: () => void }) => { if (!taskId) throw new Error('Task preview is not ready.'); return deleteSubtask(taskId, subtaskId, requireCsrfToken(session)) },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] }); void queryClient.invalidateQueries({ queryKey: ['tasks'] }) },
     onError: (error, _variables, context) => { rollback(queryClient, context); setError(friendlyError(error, 'Subtask could not be deleted.')) },
     onSettled: (_data, _error, variables) => variables?.release?.(),
@@ -137,6 +183,7 @@ function usePreviewDeleteSubtaskMutation({ queryClient, taskId, task, session, s
 export function useTaskPreviewMutations(args: { queryClient: QueryClient; taskId: string | null; task?: TaskDetail; draft: TaskDetailDraft | null; groups: GroupSummary[]; session?: SessionStatus; title: string; setDraft: (draft: TaskDetailDraft) => void; setDraftTaskId: (id: string) => void; setDirty: (dirty: boolean) => void; setTitle: (title: string) => void; setError: ErrorSetter; setSaveNotice: (message: string | null) => void; friendlyError: (error: unknown, fallback: string) => string }) {
   const save = usePreviewSaveMutation(args)
   const create = usePreviewCreateSubtaskMutation(args)
+  const update = usePreviewUpdateSubtaskMutation(args)
   const remove = usePreviewDeleteSubtaskMutation(args)
-  return { save, create, remove }
+  return { save, create, update, remove }
 }

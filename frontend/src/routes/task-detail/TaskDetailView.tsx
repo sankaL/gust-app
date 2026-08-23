@@ -1,3 +1,4 @@
+import { CheckCircle2 } from 'lucide-react'
 import { TaskDeleteDialog } from '../../components/TaskDeleteDialog'
 import { TaskFormFields } from '../../components/TaskFormFields'
 import type { GroupSummary, TaskDeleteScope, TaskDetail, TaskRecurrence } from '../../lib/api'
@@ -130,8 +131,21 @@ function SubtaskRow(props: SubtaskRowProps) {
 }
 
 function SubtaskToggle(props: { subtask: TaskDetail['subtasks'][number]; pending: boolean; onUpdate: (change: SubtaskChange) => void }) {
-  const stateClass = props.subtask.is_completed ? 'border-primary bg-primary' : 'border-outline/25 bg-surface-container-high'
-  return <button type="button" onClick={() => props.onUpdate({ subtaskId: props.subtask.id, is_completed: !props.subtask.is_completed })} disabled={props.pending} className={`mt-0.5 h-5 w-5 rounded-pill border ${stateClass}`} aria-label={`Toggle ${props.subtask.title}`} />
+  return (
+    <button
+      type="button"
+      onClick={() => props.onUpdate({ subtaskId: props.subtask.id, is_completed: !props.subtask.is_completed })}
+      disabled={props.pending}
+      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all ${
+        props.subtask.is_completed
+          ? 'bg-primary text-surface shadow-[0_0_10px_rgba(196,181,253,0.35)]'
+          : 'border border-outline/40 bg-surface-container hover:border-primary/60'
+      }`}
+      aria-label={`Toggle ${props.subtask.title}`}
+    >
+      {props.subtask.is_completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+    </button>
+  )
 }
 
 type SubtaskContentProps = {

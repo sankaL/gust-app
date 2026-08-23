@@ -57,7 +57,54 @@ type SubtaskActions = { pending: (id: string) => boolean; mark: (id: string, val
 
 function SubtaskRow({ task, value, setValue, actions }: { task: TaskDetail['subtasks'][number]; value: string; setValue: (value: string) => void; actions: SubtaskActions }) {
   const pending = actions.pending(task.id)
-  return <div className="flex items-center gap-3 px-4 py-3"><button type="button" disabled={pending} aria-label={`Toggle ${task.title}`} onClick={() => { actions.mark(task.id, true); actions.update({ subtaskId: task.id, is_completed: !task.is_completed }) }} className={task.is_completed ? 'h-5 w-5 rounded-full bg-primary' : 'h-5 w-5 rounded-full border'}><CheckCircle2 className="h-3.5 w-3.5" /></button><input value={value} onChange={(event) => setValue(event.target.value)} onBlur={() => { const title = value.trim(); if (title && title !== task.title && !pending) { actions.mark(task.id, true); actions.update({ subtaskId: task.id, title }) } }} disabled={pending} className="min-w-0 flex-1 bg-transparent text-sm" aria-label={`Subtask ${task.title}`} /><button type="button" disabled={pending} aria-label={`Delete ${task.title}`} onClick={() => { actions.mark(task.id, true); actions.remove(task.id) }}><Trash2 className="h-4 w-4" /></button></div>
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <button
+        type="button"
+        disabled={pending}
+        aria-label={`Toggle ${task.title}`}
+        onClick={() => {
+          actions.mark(task.id, true)
+          actions.update({ subtaskId: task.id, is_completed: !task.is_completed })
+        }}
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all ${
+          task.is_completed
+            ? 'bg-primary text-surface shadow-[0_0_10px_rgba(196,181,253,0.35)]'
+            : 'border border-outline/40 bg-surface-container hover:border-primary/60'
+        }`}
+      >
+        {task.is_completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+      </button>
+      <input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={() => {
+          const title = value.trim()
+          if (title && title !== task.title && !pending) {
+            actions.mark(task.id, true)
+            actions.update({ subtaskId: task.id, title })
+          }
+        }}
+        disabled={pending}
+        className={`min-w-0 flex-1 bg-transparent text-sm outline-none ${
+          task.is_completed ? 'text-on-surface-variant line-through' : 'text-on-surface'
+        }`}
+        aria-label={`Subtask ${task.title}`}
+      />
+      <button
+        type="button"
+        disabled={pending}
+        aria-label={`Delete ${task.title}`}
+        onClick={() => {
+          actions.mark(task.id, true)
+          actions.remove(task.id)
+        }}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-tertiary/15 hover:text-tertiary disabled:opacity-50"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  )
 }
 
 export function TaskDetailSubtasks({ task, drafts, setDraft, newTitle, setNewTitle, create, disabled, actions }: { task: TaskDetail; drafts: Record<string, string>; setDraft: (id: string, value: string) => void; newTitle: string; setNewTitle: (value: string) => void; create: () => void; disabled: boolean; actions: SubtaskActions }) {

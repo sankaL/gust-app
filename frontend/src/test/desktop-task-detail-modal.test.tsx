@@ -179,7 +179,7 @@ describe('DesktopTaskDetailModal', () => {
     expect(mockedUpdateSubtask).toHaveBeenCalledWith(
       'task-1',
       'subtask-1',
-      { subtaskId: 'subtask-1', is_completed: true },
+      { is_completed: true },
       'csrf-token'
     )
 

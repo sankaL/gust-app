@@ -175,7 +175,7 @@ describe('EditExtractedTaskModal', () => {
     expect(screen.queryByPlaceholderText('Add a subtask...')).not.toBeInTheDocument()
   })
 
-  it('keeps the subtask composer first and places the newest edit immediately below it', async () => {
+  it('renders added subtasks in order with the composer input', async () => {
     const user = userEvent.setup()
 
     render(
@@ -197,8 +197,8 @@ describe('EditExtractedTaskModal', () => {
       .getAllByRole('textbox')
       .filter((input) => input.getAttribute('aria-label')?.startsWith('Subtask '))
 
-    expect(subtaskInputs[0]).toHaveValue('Newest subtask')
-    expect(subtaskInputs[0]).toHaveClass('bg-transparent')
+    expect(subtaskInputs[1]).toHaveValue('Newest subtask')
+    expect(subtaskInputs[1]).toHaveClass('bg-transparent')
   })
 
   it('validates recurrence before submitting an extracted-task update', async () => {
@@ -258,7 +258,7 @@ describe('EditExtractedTaskModal', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }))
 
     const draftRows = screen.getAllByRole('textbox').filter((input) => input.getAttribute('aria-label')?.startsWith('Subtask '))
-    await user.clear(draftRows[0])
+    await user.clear(draftRows[2])
     await user.click(screen.getByRole('button', { name: 'Add Task' }))
 
     expect(await screen.findByText('Subtask request failed')).toBeInTheDocument()

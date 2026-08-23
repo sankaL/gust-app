@@ -184,13 +184,15 @@ function useSaveTask(base: Base, notices: ReturnType<typeof useNotifications>) {
 function useCreateSubtask(base: Base, notices: ReturnType<typeof useNotifications>) {
   return useMutation({
     onMutate: async () => {
-      if (!base.taskId || !base.task.data || !base.newSubtaskTitle.trim()) return {}
+      if (!base.taskId || !base.newSubtaskTitle.trim()) return {}
       await base.queryClient.cancelQueries({ queryKey: ['task-detail', base.taskId] }); const snapshots = snapshotTaskQueries(base.queryClient, base.taskId); const optimisticId = `optimistic-${Date.now()}`
-      markPending(base, optimisticId, true); updateTaskDetailCache(base.queryClient, { ...base.task.data, subtasks: [...base.task.data.subtasks, { id: optimisticId, title: base.newSubtaskTitle.trim(), is_completed: false, completed_at: null }] })
+      const currentTask = base.queryClient.getQueryData<TaskDetail>(['task-detail', base.taskId]) ?? base.task.data
+      if (!currentTask) return { snapshots, optimisticId }
+      markPending(base, optimisticId, true); updateTaskDetailCache(base.queryClient, { ...currentTask, subtasks: [...currentTask.subtasks, { id: optimisticId, title: base.newSubtaskTitle.trim(), is_completed: false, completed_at: null }], subtask_count: currentTask.subtask_count + 1 })
       applyTaskListMutation(base.queryClient, (task) => task.id === base.taskId ? { ...task, subtask_count: task.subtask_count + 1 } : task)
       return { snapshots, optimisticId }
     },
-    mutationFn: () => { if (!base.taskId) throw new Error('Task detail is not ready.'); return createSubtask(base.taskId, base.newSubtaskTitle, requireCsrfToken(base.session.data)) },
+    mutationFn: () => { if (!base.taskId) throw new Error('Task detail is not ready.'); return createSubtask(base.taskId, base.newSubtaskTitle.trim(), requireCsrfToken(base.session.data)) },
     onSuccess: (_item, _value, context) => { if (context?.optimisticId) markPending(base, context.optimisticId, false); base.setNewSubtaskTitle(''); notices.notifySuccess('Subtask added.'); void base.refresh() },
     onError: (error, _value, context) => { rollbackCreateSubtask(base, context); notices.notifyError(friendly(error, 'Subtask could not be added.')) },
   })
@@ -199,12 +201,20 @@ function useCreateSubtask(base: Base, notices: ReturnType<typeof useNotification
 function useUpdateSubtask(base: Base, notices: ReturnType<typeof useNotifications>) {
   return useMutation({
     onMutate: async (change: SubtaskChange) => {
-      if (!base.taskId || !base.task.data) return {}
+      if (!base.taskId) return {}
       markPending(base, change.subtaskId, true); await base.queryClient.cancelQueries({ queryKey: ['task-detail', base.taskId] }); const snapshots = snapshotTaskQueries(base.queryClient, base.taskId)
-      const subtasks = base.task.data.subtasks.map((item) => applySubtaskChange(item, change))
-      updateTaskDetailCache(base.queryClient, { ...base.task.data, subtasks }); return { snapshots }
+      const currentTask = base.queryClient.getQueryData<TaskDetail>(['task-detail', base.taskId]) ?? base.task.data
+      if (!currentTask) return { snapshots }
+      const subtasks = currentTask.subtasks.map((item) => applySubtaskChange(item, change))
+      updateTaskDetailCache(base.queryClient, { ...currentTask, subtasks }); return { snapshots }
     },
-    mutationFn: (change: SubtaskChange) => { if (!base.taskId) throw new Error('Task detail is not ready.'); return updateSubtask(base.taskId, change.subtaskId, change, requireCsrfToken(base.session.data)) },
+    mutationFn: (change: SubtaskChange) => {
+      if (!base.taskId) throw new Error('Task detail is not ready.')
+      const apiPayload: { title?: string; is_completed?: boolean } = {}
+      if (change.title !== undefined) apiPayload.title = change.title
+      if (change.is_completed !== undefined) apiPayload.is_completed = change.is_completed
+      return updateSubtask(base.taskId, change.subtaskId, apiPayload, requireCsrfToken(base.session.data))
+    },
     onSuccess: (_item, change) => { markPending(base, change.subtaskId, false); notices.notifySuccess('Subtask updated.'); void base.refresh() },
     onError: (error, change, context) => { if (context?.snapshots) restoreQuerySnapshots(base.queryClient, context.snapshots); markPending(base, change.subtaskId, false); notices.notifyError(friendly(error, 'Subtask could not be updated.')) },
   })
@@ -213,9 +223,11 @@ function useUpdateSubtask(base: Base, notices: ReturnType<typeof useNotification
 function useDeleteSubtask(base: Base, notices: ReturnType<typeof useNotifications>) {
   return useMutation({
     onMutate: async (id: string) => {
-      if (!base.taskId || !base.task.data) return {}
+      if (!base.taskId) return {}
       markPending(base, id, true); await base.queryClient.cancelQueries({ queryKey: ['task-detail', base.taskId] }); const snapshots = snapshotTaskQueries(base.queryClient, base.taskId)
-      updateTaskDetailCache(base.queryClient, { ...base.task.data, subtasks: base.task.data.subtasks.filter((item) => item.id !== id) })
+      const currentTask = base.queryClient.getQueryData<TaskDetail>(['task-detail', base.taskId]) ?? base.task.data
+      if (!currentTask) return { snapshots }
+      updateTaskDetailCache(base.queryClient, { ...currentTask, subtasks: currentTask.subtasks.filter((item) => item.id !== id), subtask_count: Math.max(0, currentTask.subtask_count - 1) })
       applyTaskListMutation(base.queryClient, (task) => task.id === base.taskId ? { ...task, subtask_count: Math.max(0, task.subtask_count - 1) } : task); return { snapshots }
     },
     mutationFn: (id: string) => { if (!base.taskId) throw new Error('Task detail is not ready.'); return deleteSubtask(base.taskId, id, requireCsrfToken(base.session.data)) },
