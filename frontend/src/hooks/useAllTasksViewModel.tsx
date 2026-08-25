@@ -87,18 +87,19 @@ function useLoadMoreObserver({
   }, [enabled, loadMore, loadMoreRef])
 }
 
-export function useAllTasksViewModel(userTimezone: string | null) {
+export function useAllTasksViewModel(userTimezone: string | null, searchQuery = '') {
   const queryClient = useQueryClient()
   const shellActions = useAppShellActions()
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const query = useInfiniteQuery({
-    queryKey: QUERY_KEY,
-    queryFn: ({ pageParam }) => listAllTasks('open', pageParam ?? null, PAGE_SIZE),
+    queryKey: [...QUERY_KEY, searchQuery],
+    queryFn: ({ pageParam }) => listAllTasks('open', pageParam ?? null, PAGE_SIZE, null, null, searchQuery),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor,
     staleTime: TASK_SCREEN_STALE_TIME_MS,
     gcTime: TASK_SCREEN_GC_TIME_MS,
+    placeholderData: (previous) => previous,
   })
   const refresh = useCallback(() => refreshTaskScreenQueries(queryClient, { statuses: ['open'], includeAllOpen: true }), [queryClient])
   const tasks = useMemo(() => query.data?.pages.flatMap((page) => page.items) ?? [], [query.data])

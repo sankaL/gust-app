@@ -97,33 +97,35 @@ def _seed_task(
     recurrence_weekday: int | None = None,
     recurrence_day_of_month: int | None = None,
     deleted_at_value: datetime | None = None,
+    created_at_value: datetime | None = None,
 ) -> str:
     task_id = str(uuid.uuid4())
     completed_at = datetime.now(UTC) if status == "completed" else None
     with connection_scope(client.app.state.settings.database_url) as connection:
-        connection.execute(
-            tasks.insert().values(
-                id=task_id,
-                user_id=user_id,
-                group_id=group_id,
-                capture_id=None,
-                series_id=series_id,
-                title=title,
-                description=description,
-                status=status,
-                needs_review=needs_review,
-                due_date=due_date_value,
-                reminder_at=reminder_at_value,
-                reminder_date=reminder_date_value,
-                reminder_offset_minutes=reminder_offset_minutes,
-                recurrence_frequency=recurrence_frequency,
-                recurrence_interval=recurrence_interval,
-                recurrence_weekday=recurrence_weekday,
-                recurrence_day_of_month=recurrence_day_of_month,
-                completed_at=completed_at,
-                deleted_at=deleted_at_value,
-            )
-        )
+        values = {
+            "id": task_id,
+            "user_id": user_id,
+            "group_id": group_id,
+            "capture_id": None,
+            "series_id": series_id,
+            "title": title,
+            "description": description,
+            "status": status,
+            "needs_review": needs_review,
+            "due_date": due_date_value,
+            "reminder_at": reminder_at_value,
+            "reminder_date": reminder_date_value,
+            "reminder_offset_minutes": reminder_offset_minutes,
+            "recurrence_frequency": recurrence_frequency,
+            "recurrence_interval": recurrence_interval,
+            "recurrence_weekday": recurrence_weekday,
+            "recurrence_day_of_month": recurrence_day_of_month,
+            "completed_at": completed_at,
+            "deleted_at": deleted_at_value,
+        }
+        if created_at_value is not None:
+            values["created_at"] = created_at_value
+        connection.execute(tasks.insert().values(**values))
     return task_id
 
 
@@ -414,6 +416,128 @@ def test_list_tasks_applies_sorting_and_user_scope(app: FastAPI, client: TestCli
         "due_soon",
         "no_date",
     ]
+
+
+def test_list_tasks_searches_literal_title_and_description_with_scope(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    projects_group_id = _seed_group(client, user_id=USER_ID, name="Projects")
+    errands_group_id = _seed_group(client, user_id=USER_ID, name="Errands")
+    _seed_user(client, user_id=OTHER_USER_ID)
+    other_group_id = _seed_group(client, user_id=OTHER_USER_ID, name="Private")
+    search_time = datetime.now(UTC)
+
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=projects_group_id,
+        title="Quarterly ROADMAP",
+        created_at_value=search_time - timedelta(seconds=1),
+    )
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=projects_group_id,
+        title="Call Alice",
+        description="Discuss the launch checklist",
+    )
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=projects_group_id,
+        title="Budget is 100% ready",
+    )
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=errands_group_id,
+        title="Roadmap pickup",
+        created_at_value=search_time,
+    )
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=projects_group_id,
+        title="Roadmap completed",
+        status="completed",
+    )
+    _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=projects_group_id,
+        title="Roadmap deleted",
+        deleted_at_value=datetime.now(UTC),
+    )
+    _seed_task(
+        client,
+        user_id=OTHER_USER_ID,
+        group_id=other_group_id,
+        title="Roadmap private",
+    )
+
+    title_response = client.get(
+        "/tasks",
+        params={"group_id": projects_group_id, "status": "open", "q": "roadMAP"},
+        headers=headers,
+    )
+    description_response = client.get(
+        "/tasks",
+        params={"group_id": projects_group_id, "status": "open", "q": "LAUNCH"},
+        headers=headers,
+    )
+    literal_response = client.get(
+        "/tasks",
+        params={"group_id": projects_group_id, "status": "open", "q": "%"},
+        headers=headers,
+    )
+    all_groups_response = client.get(
+        "/tasks",
+        params={"status": "open", "q": "roadmap", "limit": 1},
+        headers=headers,
+    )
+
+    assert title_response.status_code == 200
+    assert [item["title"] for item in title_response.json()["items"]] == [
+        "Quarterly ROADMAP"
+    ]
+    assert [item["title"] for item in description_response.json()["items"]] == ["Call Alice"]
+    assert [item["title"] for item in literal_response.json()["items"]] == [
+        "Budget is 100% ready"
+    ]
+
+    first_page = all_groups_response.json()
+    assert all_groups_response.status_code == 200
+    assert first_page["has_more"] is True
+    assert first_page["next_cursor"] is not None
+    second_page_response = client.get(
+        "/tasks",
+        params={
+            "status": "open",
+            "q": "roadmap",
+            "limit": 1,
+            "cursor": first_page["next_cursor"],
+        },
+        headers=headers,
+    )
+    searched_titles = {
+        first_page["items"][0]["title"],
+        second_page_response.json()["items"][0]["title"],
+    }
+    assert searched_titles == {"Quarterly ROADMAP", "Roadmap pickup"}, (
+        first_page,
+        second_page_response.json(),
+    )
+    assert second_page_response.json()["has_more"] is False
+
+
+def test_list_tasks_rejects_an_overlong_search_query(app: FastAPI, client: TestClient) -> None:
+    headers = _authenticated_headers(app, client)
+
+    response = client.get("/tasks", params={"q": "x" * 201}, headers=headers)
+
+    assert response.status_code == 422
 
 
 def test_list_tasks_returns_subtask_counts_from_returned_page(

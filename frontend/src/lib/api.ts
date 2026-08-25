@@ -317,7 +317,8 @@ export function listTasks(
   cursor: string | null = null,
   limit: number = 50,
   completedStart: string | null = null,
-  completedEnd: string | null = null
+  completedEnd: string | null = null,
+  searchQuery: string | null = null
 ): Promise<PaginatedTasksResponse> {
   const params = new URLSearchParams({
     group_id: groupId,
@@ -333,6 +334,9 @@ export function listTasks(
   if (completedEnd) {
     params.set('completed_end', completedEnd)
   }
+  if (searchQuery?.trim()) {
+    params.set('q', searchQuery.trim())
+  }
   return apiRequest<PaginatedTasksResponse>(`/tasks?${params.toString()}`)
 }
 
@@ -341,7 +345,8 @@ export function listAllTasks(
   cursor: string | null = null,
   limit: number = 50,
   completedStart: string | null = null,
-  completedEnd: string | null = null
+  completedEnd: string | null = null,
+  searchQuery: string | null = null
 ): Promise<PaginatedTasksResponse> {
   const params = new URLSearchParams({
     status: statusValue,
@@ -355,6 +360,9 @@ export function listAllTasks(
   }
   if (completedEnd) {
     params.set('completed_end', completedEnd)
+  }
+  if (searchQuery?.trim()) {
+    params.set('q', searchQuery.trim())
   }
   return apiRequest<PaginatedTasksResponse>(`/tasks?${params.toString()}`)
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 
@@ -8,6 +8,14 @@ import { TASK_SCREEN_GC_TIME_MS, TASK_SCREEN_STALE_TIME_MS } from '../lib/taskSc
 export function useTaskListRouteState(queryClient: QueryClient) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([])
+  const searchQuery = searchParams.get('q') ?? ''
+  const isSearchActive = searchParams.has('q')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery.trim())
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedSearchQuery(searchQuery.trim()), 200)
+    return () => window.clearTimeout(timeoutId)
+  }, [searchQuery])
 
   function markTaskPending(taskId: string, isPending: boolean) {
     setPendingTaskIds((current) => {
@@ -38,14 +46,39 @@ export function useTaskListRouteState(queryClient: QueryClient) {
     setSearchParams(next, { replace: true })
   }
 
+  function openTaskSearch() {
+    const next = new URLSearchParams(searchParams)
+    next.set('q', '')
+    setSearchParams(next, { replace: true })
+  }
+
+  function setTaskSearchQuery(value: string) {
+    const next = new URLSearchParams(searchParams)
+    next.set('q', value)
+    setSearchParams(next, { replace: true })
+  }
+
+  function clearTaskSearch() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('q')
+    setDebouncedSearchQuery('')
+    setSearchParams(next, { replace: true })
+  }
+
   return {
     searchParams,
     setSearchParams,
     selectedTaskId: searchParams.get('task'),
+    searchQuery,
+    debouncedSearchQuery,
+    isSearchActive,
     pendingTaskIds,
     markTaskPending,
     prefetchTaskDetail,
     openTaskPreview,
     closeTaskPreview,
+    openTaskSearch,
+    setTaskSearchQuery,
+    clearTaskSearch,
   }
 }

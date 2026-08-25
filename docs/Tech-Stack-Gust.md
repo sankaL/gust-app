@@ -110,6 +110,8 @@ Use three categories of client state:
 - local component state for transient UI such as recording, swipe affordances, and transcript edits
 - TanStack Query for all server-backed data
 
+The mobile task list stores search text in the `q` URL parameter and debounces list requests by 200 milliseconds. Query keys include the normalized search text so searched and unsearched task pages cannot share incompatible cache data. The selected `group` remains in force while the search controls are open.
+
 ### Audio Capture
 
 Browser APIs:
@@ -230,6 +232,8 @@ The backend is a REST API with narrowly scoped resources:
 - tasks
 - groups
 - internal digest jobs
+
+`GET /tasks` accepts an optional `q` parameter of at most 200 characters. The task repository trims the value and performs a parameterized, case-insensitive literal substring match against title and description before pagination. Existing user, group, status, completion-window, and soft-delete filters still apply. Empty search text does not add a search condition.
 
 ### Service Modules
 

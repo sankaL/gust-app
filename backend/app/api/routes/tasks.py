@@ -171,6 +171,7 @@ def list_tasks_route(
     status_value: str = Query("open", alias="status"),
     limit: int = Query(50, ge=1, le=100),
     cursor: str | None = Query(None),
+    search_query: str | None = Query(None, alias="q", max_length=200),
     completed_start: Annotated[date | None, Query()] = None,
     completed_end: Annotated[date | None, Query()] = None,
 ) -> PaginatedTaskListResponse:
@@ -182,6 +183,7 @@ def list_tasks_route(
         status=validated_status,
         limit=limit,
         cursor=cursor,
+        search_query=search_query,
         completed_start=completed_start,
         completed_end=completed_end,
     )

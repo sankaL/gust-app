@@ -45,7 +45,7 @@ export function TasksRoute() {
   const [pendingDeleteTask, setPendingDeleteTask] = useState<TaskSummary | null>(null)
   const notifications = useNotifications()
   const selectedGroupId = routeState.searchParams.get('group')
-  const data = useOpenTaskRouteQueries(selectedGroupId)
+  const data = useOpenTaskRouteQueries(selectedGroupId, routeState.debouncedSearchQuery)
   const { session: sessionQuery, groups: groupsQuery, tasks: tasksQuery, effectiveGroupId, isAllView, resolvedGroupId, isRefreshing } = data
 
   useDefaultTaskGroup({ signedIn: sessionQuery.data?.signed_in === true, selectedGroupId, searchParams: routeState.searchParams, setSearchParams: routeState.setSearchParams })
@@ -83,5 +83,10 @@ export function TasksRoute() {
     if (pendingDeleteTask) actions.delete(pendingDeleteTask, 'series')
   }
 
-  return <TasksRouteView session={sessionQuery.data} isSessionLoading={sessionQuery.isLoading} isSessionError={sessionQuery.isError} groups={groupsQuery.data ?? []} effectiveGroupId={effectiveGroupId} isAllView={isAllView} tasks={tasks} isTasksLoading={tasksQuery.isLoading} hasTaskResult={tasksQuery.data !== undefined} isRefreshing={isRefreshing} pendingTaskIds={routeState.pendingTaskIds} selectedTaskId={routeState.selectedTaskId} pendingDeleteTask={pendingDeleteTask} isDeleting={actions.isDeleting} refresh={refreshCurrentTasks} onSelectGroup={(groupId) => routeState.setSearchParams({ group: groupId })} onOpen={routeState.openTaskPreview} onPrepareOpen={routeState.prefetchTaskDetail} onComplete={actions.complete} onDeleteRequest={setPendingDeleteTask} onDeleteOccurrence={deleteOccurrence} onDeleteSeries={deleteSeries} onCloseDelete={() => setPendingDeleteTask(null)} onClosePreview={routeState.closeTaskPreview} onPreviewComplete={closePreviewAndComplete} onPreviewDelete={closePreviewAndDelete} />
+  const isSearchPending = routeState.isSearchActive && (
+    routeState.searchQuery.trim() !== routeState.debouncedSearchQuery ||
+    (!isAllView && tasksQuery.isFetching && Boolean(routeState.debouncedSearchQuery))
+  )
+
+  return <TasksRouteView session={sessionQuery.data} isSessionLoading={sessionQuery.isLoading} isSessionError={sessionQuery.isError} groups={groupsQuery.data ?? []} effectiveGroupId={effectiveGroupId} isAllView={isAllView} tasks={tasks} isTasksLoading={tasksQuery.isLoading} isTasksError={tasksQuery.isError} hasTaskResult={tasksQuery.data !== undefined} isRefreshing={isRefreshing} searchQuery={routeState.searchQuery} requestSearchQuery={routeState.debouncedSearchQuery} isSearchActive={routeState.isSearchActive} isSearchPending={isSearchPending} pendingTaskIds={routeState.pendingTaskIds} selectedTaskId={routeState.selectedTaskId} pendingDeleteTask={pendingDeleteTask} isDeleting={actions.isDeleting} refresh={refreshCurrentTasks} retryTasks={() => { void tasksQuery.refetch() }} onSelectGroup={(groupId) => routeState.setSearchParams({ group: groupId })} onSearchOpen={routeState.openTaskSearch} onSearchChange={routeState.setTaskSearchQuery} onSearchClear={routeState.clearTaskSearch} onOpen={routeState.openTaskPreview} onPrepareOpen={routeState.prefetchTaskDetail} onComplete={actions.complete} onDeleteRequest={setPendingDeleteTask} onDeleteOccurrence={deleteOccurrence} onDeleteSeries={deleteSeries} onCloseDelete={() => setPendingDeleteTask(null)} onClosePreview={routeState.closeTaskPreview} onPreviewComplete={closePreviewAndComplete} onPreviewDelete={closePreviewAndDelete} />
 }

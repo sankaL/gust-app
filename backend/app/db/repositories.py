@@ -1037,6 +1037,7 @@ def _task_list_conditions(
     group_id: str | None,
     status: str,
     include_deleted: bool,
+    search_query: str | None,
     completed_start: datetime | None,
     completed_end: datetime | None,
 ) -> list[object]:
@@ -1045,6 +1046,17 @@ def _task_list_conditions(
         conditions.append(tasks.c.group_id == group_id)
     if not include_deleted:
         conditions.append(tasks.c.deleted_at.is_(None))
+    if search_query:
+        escaped_query = (
+            search_query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        pattern = f"%{escaped_query}%"
+        conditions.append(
+            sa.or_(
+                tasks.c.title.ilike(pattern, escape="\\"),
+                tasks.c.description.ilike(pattern, escape="\\"),
+            )
+        )
     if status == "completed" and completed_start is not None:
         conditions.append(tasks.c.completed_at >= completed_start)
     if status == "completed" and completed_end is not None:
@@ -1098,6 +1110,7 @@ def list_tasks(
     include_deleted: bool = False,
     limit: int = 50,
     cursor: str | None = None,
+    search_query: str | None = None,
     completed_start: datetime | None = None,
     completed_end: datetime | None = None,
 ) -> tuple[list[TaskWithGroupRecord], bool, str | None]:
@@ -1107,6 +1120,7 @@ def list_tasks(
         group_id=group_id,
         status=status,
         include_deleted=include_deleted,
+        search_query=search_query,
         completed_start=completed_start,
         completed_end=completed_end,
     )

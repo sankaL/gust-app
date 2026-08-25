@@ -221,6 +221,10 @@ describe('AllTasksView', () => {
       <QueryClientProvider client={client}>
         <AllTasksView
           userTimezone="UTC"
+          searchQuery=""
+          requestSearchQuery=""
+          isSearchActive={false}
+          isSearchDebouncing={false}
           onTaskOpen={onTaskOpen}
           onTaskComplete={vi.fn()}
           onTaskDelete={vi.fn()}
@@ -268,6 +272,10 @@ describe('AllTasksView', () => {
       <QueryClientProvider client={client}>
         <AllTasksView
           userTimezone="UTC"
+          searchQuery=""
+          requestSearchQuery=""
+          isSearchActive={false}
+          isSearchDebouncing={false}
           onTaskOpen={vi.fn()}
           onTaskComplete={vi.fn()}
           onTaskDelete={vi.fn()}
@@ -300,8 +308,54 @@ describe('AllTasksView', () => {
     )
 
     await waitFor(() =>
-      expect(mockedListAllTasks).toHaveBeenNthCalledWith(2, 'open', 'cursor-2', 50)
+      expect(mockedListAllTasks).toHaveBeenNthCalledWith(2, 'open', 'cursor-2', 50, null, null, '')
     )
+  })
+
+  it('keeps the search query on every all-tasks page', async () => {
+    mockedListAllTasks
+      .mockResolvedValueOnce({
+        items: [{
+          ...taskSummaryDefaults,
+          id: 'task-search-1',
+          title: 'Needle one',
+          description: null,
+          status: 'open',
+          needs_review: false,
+          due_date: null,
+          reminder_at: null,
+          due_bucket: 'no_date',
+          group: { id: 'group-1', name: 'Inbox', is_system: true },
+          completed_at: null,
+          deleted_at: null,
+          subtask_count: 0,
+        }],
+        has_more: true,
+        next_cursor: 'search-cursor',
+      })
+      .mockResolvedValueOnce({ items: [], has_more: false, next_cursor: null })
+
+    render(
+      <QueryClientProvider client={createClient()}>
+        <AllTasksView
+          userTimezone="UTC"
+          searchQuery="needle"
+          requestSearchQuery="needle"
+          isSearchActive
+          isSearchDebouncing={false}
+          onTaskOpen={vi.fn()}
+          onTaskComplete={vi.fn()}
+          onTaskDelete={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+
+    await waitFor(() => expect(observerInstances).toHaveLength(1))
+    const observer = observerInstances[0]
+    const sentinel = observer.observed[0]
+    observer.callback([{ isIntersecting: true, target: sentinel } as IntersectionObserverEntry], {} as IntersectionObserver)
+
+    await waitFor(() => expect(mockedListAllTasks).toHaveBeenNthCalledWith(2, 'open', 'search-cursor', 50, null, null, 'needle'))
   })
 
   it('re-measures remaining rows after a deleted task removes an entire section', async () => {
@@ -354,6 +408,10 @@ describe('AllTasksView', () => {
       <QueryClientProvider client={client}>
         <AllTasksView
           userTimezone="UTC"
+          searchQuery=""
+          requestSearchQuery=""
+          isSearchActive={false}
+          isSearchDebouncing={false}
           onTaskOpen={vi.fn()}
           onTaskComplete={vi.fn()}
           onTaskDelete={vi.fn()}

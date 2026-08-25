@@ -40,6 +40,9 @@ export function GroupedOpenTaskList({
   todayIso,
   isLoading,
   hasResult,
+  searchQuery,
+  isSearchActive,
+  isSearchPending,
   busyTaskIds,
   onOpen,
   onPrepareOpen,
@@ -50,16 +53,21 @@ export function GroupedOpenTaskList({
   todayIso: string
   isLoading: boolean
   hasResult: boolean
+  searchQuery: string
+  isSearchActive: boolean
+  isSearchPending: boolean
   busyTaskIds: string[]
   onOpen: (taskId: string) => void
   onPrepareOpen: (taskId: string) => void
   onComplete: (task: TaskSummary) => void
   onDelete: (task: TaskSummary) => void
 }) {
+  const hasSearchQuery = isSearchActive && Boolean(searchQuery.trim())
   return (
-    <div className="space-y-3">
-      {isLoading && <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">Loading open tasks.</div>}
-      {hasResult && tasks.length === 0 && <div className="rounded-soft bg-surface-container p-6 shadow-ambient"><p className="font-display text-2xl text-on-surface">No open tasks here</p><p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">Capture a voice note or move tasks into this group from detail editing.</p></div>}
+    <div aria-busy={isSearchPending} className={`space-y-3 transition-opacity duration-200 motion-reduce:transition-none ${isSearchPending ? 'opacity-55' : 'opacity-100'}`}>
+      {isLoading && <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">{hasSearchQuery ? 'Searching tasks.' : 'Loading open tasks.'}</div>}
+      {hasResult && tasks.length === 0 && hasSearchQuery && <div className="rounded-soft bg-surface-container p-6 shadow-ambient"><p className="font-display text-2xl text-on-surface">No tasks match "{searchQuery.trim()}"</p><p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">Try a different task title or detail.</p></div>}
+      {hasResult && tasks.length === 0 && !hasSearchQuery && <div className="rounded-soft bg-surface-container p-6 shadow-ambient"><p className="font-display text-2xl text-on-surface">No open tasks here</p><p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">Capture a voice note or move tasks into this group from detail editing.</p></div>}
       <div className="space-y-4">{sections.map((section) => <TaskSection key={section.key} label={section.label} tasks={tasks.filter((task) => task.due_bucket === section.key)} todayIso={todayIso} busyTaskIds={busyTaskIds} onOpen={onOpen} onPrepareOpen={onPrepareOpen} onComplete={onComplete} onDelete={onDelete} />)}</div>
     </div>
   )

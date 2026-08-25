@@ -112,6 +112,7 @@ class TaskService:
         status: str = "open",
         limit: int = 50,
         cursor: str | None = None,
+        search_query: str | None = None,
         completed_start: date | None = None,
         completed_end: date | None = None,
     ) -> PaginatedTaskList:
@@ -145,6 +146,7 @@ class TaskService:
                 status=status,
                 limit=limit,
                 cursor=cursor,
+                search_query=search_query.strip() if search_query else None,
                 completed_start=completed_start_at,
                 completed_end=completed_end_at,
             )

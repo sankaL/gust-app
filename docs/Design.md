@@ -61,6 +61,12 @@ In the "Digital Void," shadows represent ambient light from the accent colors, n
 * **Layout:** Forbid divider lines. Use `spacing.4` (1.4rem) between cards to create distinction.
 * **Leading Element:** Use high-contrast badges for due dates using `tertiary_container` (#fd81a8) with `on_tertiary_container` (#59002a) text.
 
+### Mobile Task Search
+* Place the icon-only search control before `All` in the mobile group row and give it a 40px touch target plus an accessible label and tooltip.
+* Opening search replaces the row with one full-width field. Cross-fade and shift the two states over 200ms, but remove the motion when the user requests reduced motion.
+* Keep the search icon as the field's leading anchor and place a clear control at the trailing edge. Clearing or pressing Escape restores the group row and focus to the search icon.
+* While a request is pending, keep the current task layout in place, mark it busy, and lower its opacity. Search errors must use fixed user-safe copy and leave the query available for retry.
+
 ### Input Fields
 * **Styling:** Background-less. Only a bottom "Ghost Border" using `outline_variant` at 20% opacity.
 * **Focus State:** The border transitions to a `primary` (#ba9eff) glow.

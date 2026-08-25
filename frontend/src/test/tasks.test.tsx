@@ -158,6 +158,27 @@ function localDate(offsetDays: number) {
   return `${year}-${month}-${day}`
 }
 
+function buildOpenTask(id: string, title: string, groupId = 'personal-1') {
+  return {
+    id,
+    title,
+    description: null,
+    series_id: null,
+    recurrence_frequency: null,
+    status: 'open',
+    needs_review: false,
+    due_date: null,
+    reminder_at: null,
+    due_bucket: 'no_date',
+    group: { id: groupId, name: groupId === 'personal-1' ? 'Personal' : 'Inbox', is_system: groupId === 'inbox-1' },
+    completed_at: null,
+    deleted_at: null,
+    created_at: '2026-08-24T12:00:00Z',
+    updated_at: '2026-08-24T12:00:00Z',
+    subtask_count: 0
+  }
+}
+
 beforeEach(() => {
   vi.restoreAllMocks()
 })
@@ -167,6 +188,86 @@ afterEach(() => {
 })
 
 describe('tasks flow', () => {
+  it('searches within the selected group and restores the group controls when cleared', async () => {
+    const taskRequests: string[] = []
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/auth/session')) return Promise.resolve(jsonResponse(buildSessionResponse()))
+      if (url.includes('/groups')) return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      if (url.includes('/tasks?group_id=personal-1')) {
+        taskRequests.push(url)
+        const items = url.includes('q=garage')
+          ? [buildOpenTask('task-garage', 'Organize garage shelving')]
+          : [buildOpenTask('task-garage', 'Organize garage shelving'), buildOpenTask('task-bills', 'Pay utility bills')]
+        return Promise.resolve(jsonResponse({ items, has_more: false, next_cursor: null }))
+      }
+      return Promise.resolve(jsonResponse({ items: [], has_more: false, next_cursor: null }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { router } = renderTaskRoute(['/tasks?group=personal-1'])
+    const user = userEvent.setup()
+
+    expect(await screen.findByText('Pay utility bills')).toBeInTheDocument()
+    const searchButton = screen.getByRole('button', { name: 'Search tasks' })
+    const allButton = screen.getByRole('button', { name: 'All' })
+    expect(searchButton.compareDocumentPosition(allButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    await user.click(searchButton)
+    const searchInput = screen.getByRole('textbox', { name: 'Search tasks' })
+    expect(searchInput).toHaveFocus()
+    expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument()
+
+    await user.type(searchInput, 'garage')
+    expect(router.state.location.search).toBe('?group=personal-1&q=garage')
+    await waitFor(() => expect(taskRequests.some((url) => url.includes('group_id=personal-1') && url.includes('q=garage'))).toBe(true))
+    expect(await screen.findByText('Organize garage shelving')).toBeInTheDocument()
+    expect(screen.queryByText('Pay utility bills')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(router.state.location.search).toBe('?group=personal-1')
+    expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Search tasks' })).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: 'Search tasks' }))
+    await user.keyboard('{Escape}')
+    expect(router.state.location.search).toBe('?group=personal-1')
+  })
+
+  it('searches all groups and keeps the query visible for empty and failed results', async () => {
+    const taskRequests: string[] = []
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/auth/session')) return Promise.resolve(jsonResponse(buildSessionResponse()))
+      if (url.includes('/groups')) return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      if (url.includes('/tasks?') && url.includes('status=open')) {
+        taskRequests.push(url)
+        if (url.includes('q=broken')) return Promise.resolve(jsonResponse({ error: { message: 'Private detail' } }, { status: 500 }))
+        const items = url.includes('q=missing') ? [] : [buildOpenTask('task-inbox', 'Inbox task', 'inbox-1')]
+        return Promise.resolve(jsonResponse({ items, has_more: false, next_cursor: null }))
+      }
+      return Promise.resolve(jsonResponse({}))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskRoute(['/tasks?group=all'])
+    const user = userEvent.setup()
+
+    expect(await screen.findByText('Inbox task')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Search tasks' }))
+    const searchInput = screen.getByRole('textbox', { name: 'Search tasks' })
+    await user.type(searchInput, 'missing')
+
+    expect(await screen.findByText('No tasks match "missing"')).toBeInTheDocument()
+    expect(taskRequests.some((url) => url.includes('q=missing') && !url.includes('group_id='))).toBe(true)
+
+    await user.clear(searchInput)
+    await user.type(searchInput, 'broken')
+    expect(await screen.findByText('Could not search tasks.', {}, { timeout: 3000 })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Search tasks' })).toHaveValue('broken')
+    expect(screen.queryByText('Private detail')).not.toBeInTheDocument()
+  })
+
   it('defaults the task route to all tasks without first fetching Inbox tasks', async () => {
     const taskRequests: string[] = []
     const fetchMock = vi.fn((input: RequestInfo | URL) => {

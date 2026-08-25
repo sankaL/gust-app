@@ -223,6 +223,14 @@ Within each group, sorting is:
 
 Within each due bucket, flagged tasks appear before unflagged tasks.
 
+Mobile open-task search:
+
+- An icon before the group controls opens a full-width search field and temporarily hides those controls.
+- Search stays within the selected group. Selecting `All` searches open tasks across every group.
+- Matching is case-insensitive across task titles and descriptions.
+- The `q` URL parameter owns the search text. Clearing search removes it and restores the group controls.
+- Empty results, loading, and search failures must be explicit without discarding the entered query.
+
 Each task card shows:
 
 - Title
