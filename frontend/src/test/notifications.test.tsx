@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -107,6 +107,21 @@ describe('notification center', () => {
 
     const viewport = screen.getByText('Second message').closest('section')?.parentElement
     expect(viewport?.className).toContain('z-[80]')
+    expect(viewport).toHaveClass('top-0', 'sm:bottom-0', 'sm:top-auto')
+  })
+
+  it('dismisses a notification with a quick horizontal touch swipe', async () => {
+    const user = userEvent.setup()
+    renderNotificationsDemo()
+
+    await user.click(screen.getByRole('button', { name: 'First' }))
+    const notification = await screen.findByRole('status')
+
+    fireEvent.touchStart(notification, { touches: [{ clientX: 120, clientY: 30 }] })
+    fireEvent.touchMove(notification, { touches: [{ clientX: 188, clientY: 32 }] })
+    fireEvent.touchEnd(notification)
+
+    expect(screen.queryByText('First message')).not.toBeInTheDocument()
   })
 
   it('auto-dismisses standard notifications and keeps actionable ones visible longer', async () => {

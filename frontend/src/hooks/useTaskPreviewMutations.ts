@@ -149,17 +149,8 @@ function usePreviewUpdateSubtaskMutation({ queryClient, taskId, session, setErro
       if (title !== undefined) payload.title = title
       return updateSubtask(taskId, subtaskId, payload, requireCsrfToken(session))
     },
-    onSuccess: (updated) => {
-      queryClient.setQueryData<TaskDetail>(['task-detail', taskId], (current) =>
-        current
-          ? {
-              ...current,
-              subtasks: current.subtasks.map((subtask) =>
-                subtask.id === updated.id ? updated : subtask
-              ),
-            }
-          : current
-      )
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] })
       void queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
     onError: (error, _variables, context) => {

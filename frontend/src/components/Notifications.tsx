@@ -9,6 +9,8 @@ import {
   type PropsWithChildren,
 } from 'react'
 
+import { useSwipeDismiss } from '../hooks/useSwipeDismiss'
+
 type NotificationType = 'success' | 'error' | 'warning' | 'info' | 'loading'
 
 type NotificationInput = {
@@ -79,94 +81,6 @@ function CloseIcon({ className }: IconProps) {
   )
 }
 
-function dragPresentation(deltaX: number, deltaY: number, threshold: number) {
-  const absX = Math.abs(deltaX)
-  const absY = Math.abs(deltaY)
-  if (Math.max(absX, absY) <= threshold) return null
-  const vertical = absY > absX
-  return {
-    translate: dragTranslation(vertical, deltaX, deltaY),
-    opacity: Math.max(0.3, 1 - dragDistance(vertical, absX, absY) / 300),
-  }
-}
-
-function dragTranslation(vertical: boolean, deltaX: number, deltaY: number) {
-  return vertical ? { x: deltaX * 0.2, y: deltaY } : { x: deltaX, y: deltaY * 0.2 }
-}
-
-function dragDistance(vertical: boolean, absX: number, absY: number) {
-  return vertical ? absY : absX
-}
-
-// Swipe hook for touch gestures
-function useSwipeToDismiss(
-  onDismiss: () => void,
-  enabled: boolean = true
-) {
-  const [translate, setTranslate] = useState({ x: 0, y: 0 })
-  const [opacity, setOpacity] = useState(1)
-  const startPos = useRef<{ x: number; y: number } | null>(null)
-  const isDragging = useRef(false)
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!enabled) return
-    const touch = e.touches[0]
-    startPos.current = { x: touch.clientX, y: touch.clientY }
-    isDragging.current = true
-  }, [enabled])
-
-  const updateDrag = useCallback((clientX: number, clientY: number, movementThreshold: number) => {
-    if (!enabled || !isDragging.current || !startPos.current) return
-    const presentation = dragPresentation(clientX - startPos.current.x, clientY - startPos.current.y, movementThreshold)
-    if (!presentation) return
-    setTranslate(presentation.translate)
-    setOpacity(presentation.opacity)
-  }, [enabled])
-
-  const finishDrag = useCallback(() => {
-    if (!enabled) return
-    const { x, y } = translate
-    if (Math.abs(x) > 100 || Math.abs(y) > 100) {
-      onDismiss()
-    } else {
-      setTranslate({ x: 0, y: 0 })
-      setOpacity(1)
-    }
-    startPos.current = null
-    isDragging.current = false
-  }, [enabled, translate, onDismiss])
-
-  const handleTouchMove = useCallback((event: React.TouchEvent) => {
-    const touch = event.touches[0]
-    updateDrag(touch.clientX, touch.clientY, 10)
-  }, [updateDrag])
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!enabled) return
-    startPos.current = { x: e.clientX, y: e.clientY }
-    isDragging.current = true
-  }, [enabled])
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    updateDrag(e.clientX, e.clientY, 5)
-  }, [updateDrag])
-
-  return {
-    translate,
-    opacity,
-    handlers: enabled ? {
-      onTouchStart: handleTouchStart,
-      onTouchMove: handleTouchMove,
-      onTouchEnd: finishDrag,
-      onMouseDown: handleMouseDown,
-      onMouseMove: handleMouseMove,
-      onMouseUp: finishDrag,
-      onMouseLeave: finishDrag,
-    } : {},
-  }
-}
-
-// Notification colors
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   success: '#4F7942',
   error: '#F54927',
@@ -204,11 +118,6 @@ const notificationStyles: Record<
   },
 }
 
-// Helper to check if currently dragging
-function isDragging(handlers: Record<string, unknown>): boolean {
-  return 'onMouseDown' in handlers
-}
-
 function SwipeableNotification({
   notification,
   onDismiss,
@@ -219,7 +128,7 @@ function SwipeableNotification({
   const style = notificationStyles[notification.type]
   const isLoading = notification.type === 'loading'
 
-  const { translate, opacity, handlers } = useSwipeToDismiss(
+  const { offsetX, opacity, isDragging, handlers } = useSwipeDismiss(
     onDismiss,
     !isLoading && notification.dismissible !== false
   )
@@ -228,26 +137,23 @@ function SwipeableNotification({
     <section
       role={notification.type === 'error' ? 'alert' : 'status'}
       style={{
-        transform: `translate(${translate.x}px, ${translate.y}px)`,
+        transform: `translateX(${offsetX}px)`,
         opacity,
-        transition: isDragging(handlers) ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out',
+        transition: isDragging ? 'none' : 'transform 160ms ease-out, opacity 160ms ease-out',
       }}
       className={[
-        'pointer-events-auto relative cursor-grab select-none overflow-hidden rounded-lg shadow-lg active:cursor-grabbing',
+        'pointer-events-auto relative select-none overflow-hidden rounded-lg shadow-lg touch-pan-y',
       ].join(' ')}
       {...handlers}
     >
-      {/* Solid background */}
       <div
         className="flex items-center gap-2 px-3 py-2"
         style={{ backgroundColor: style.background }}
       >
-        {/* Message */}
         <p className="min-w-0 flex-1 font-body text-xs font-medium leading-4 text-white">
           {notification.message}
         </p>
 
-        {/* Action button (Undo) - prominent */}
         {notification.actionLabel && notification.onAction ? (
           <button
             type="button"
@@ -264,7 +170,6 @@ function SwipeableNotification({
           </button>
         ) : null}
 
-        {/* Dismiss button - subtle (only if no action) */}
         {notification.dismissible !== false && !notification.actionLabel ? (
           <button
             type="button"
@@ -297,8 +202,7 @@ function NotificationViewport({
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] mx-auto flex w-full max-w-md flex-col-reverse gap-1.5 px-2 pt-3"
-      style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
+      className="toast-viewport pointer-events-none fixed inset-x-0 top-0 z-[80] mx-auto flex w-full max-w-md flex-col-reverse gap-1.5 px-2 sm:bottom-0 sm:top-auto"
     >
       {notifications.map((notification) => (
         <SwipeableNotification

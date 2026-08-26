@@ -46,9 +46,11 @@ function useCaptureQueries(reviewCaptureId: string | null, showStaging: boolean)
 }
 
 function useCaptureMutations(state: ReturnType<typeof useCaptureState>, session: ReturnType<typeof useCaptureQueries>['session']) {
+  const queryClient = useQueryClient()
   const beginReview = (captureId: string) => {
     state.setSummary(null); state.setTextCaptureError(null); state.setTranscriptionError(null)
     state.setReviewCaptureId(captureId); state.setShowStaging(true)
+    void queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
   }
   const text = useMutation({
     mutationFn: (value: string) => createTextCapture(value, requireCsrfToken(session.data)),

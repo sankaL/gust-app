@@ -177,12 +177,146 @@ function createFetchMock() {
   return { fetchMock, state }
 }
 
+function createSequentialCaptureFetchMock() {
+  const state = {
+    pendingTasks: [] as ReturnType<typeof buildExtractedTask>[],
+    nextCaptureNumber: 1
+  }
+
+  return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = requestUrl(input)
+    const method = init?.method ?? 'GET'
+
+    if (url.includes('/auth/session')) {
+      return Promise.resolve(jsonResponse(buildSessionResponse()))
+    }
+
+    if (url.endsWith('/groups')) {
+      return Promise.resolve(jsonResponse([]))
+    }
+
+    if (url.endsWith('/captures/pending-tasks')) {
+      return Promise.resolve(jsonResponse(state.pendingTasks))
+    }
+
+    if (url.endsWith('/captures/text') && method === 'POST') {
+      const captureNumber = state.nextCaptureNumber++
+      const captureId = `capture-${captureNumber}`
+      state.pendingTasks.push(buildExtractedTask({
+        id: `task-${captureNumber}`,
+        capture_id: captureId,
+        title: `Captured task ${captureNumber}`
+      }))
+      return Promise.resolve(jsonResponse({
+        capture_id: captureId,
+        status: 'ready_for_review',
+        transcript_text: `Capture ${captureNumber}`
+      }, { status: 201 }))
+    }
+
+    const extractedTasksMatch = url.match(/\/captures\/([^/]+)\/extracted-tasks$/)
+    if (extractedTasksMatch && method === 'GET') {
+      return Promise.resolve(jsonResponse(
+        state.pendingTasks.filter((task) => task.capture_id === extractedTasksMatch[1])
+      ))
+    }
+
+    return Promise.resolve(jsonResponse({ error: { code: 'not_found', message: 'Not found' } }, { status: 404 }))
+  })
+}
+
+function createStalledPendingRefreshFetchMock() {
+  const state = { pendingRequestCount: 0 }
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = requestUrl(input)
+    const method = init?.method ?? 'GET'
+
+    if (url.includes('/auth/session')) {
+      return Promise.resolve(jsonResponse(buildSessionResponse()))
+    }
+
+    if (url.endsWith('/groups')) {
+      return Promise.resolve(jsonResponse([]))
+    }
+
+    if (url.endsWith('/captures/pending-tasks')) {
+      state.pendingRequestCount += 1
+      return new Promise<Response>(() => {})
+    }
+
+    if (url.endsWith('/captures/text') && method === 'POST') {
+      return Promise.resolve(jsonResponse({
+        capture_id: 'capture-stalled-pending-refresh',
+        status: 'ready_for_review',
+        transcript_text: 'Capture ready despite pending refresh'
+      }, { status: 201 }))
+    }
+
+    const extractedTasksMatch = url.match(/\/captures\/([^/]+)\/extracted-tasks$/)
+    if (extractedTasksMatch && method === 'GET') {
+      return Promise.resolve(jsonResponse([buildExtractedTask({
+        id: 'task-stalled-pending-refresh',
+        capture_id: extractedTasksMatch[1],
+        title: 'Capture ready despite pending refresh'
+      })]))
+    }
+
+    return Promise.resolve(jsonResponse({ error: { code: 'not_found', message: 'Not found' } }, { status: 404 }))
+  })
+
+  return { fetchMock, state }
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
 describe('capture pending list dedupe', () => {
+  it('opens review when the pending-task refresh is stalled', async () => {
+    const { fetchMock, state } = createStalledPendingRefreshFetchMock()
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByText('Write it instead'))
+    await waitFor(() => expect(state.pendingRequestCount).toBeGreaterThan(0))
+    await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Capture despite refresh issue')
+    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+
+    expect(await screen.findByText('Capture ready despite pending refresh')).toBeInTheDocument()
+    expect(screen.queryByText('Preparing...')).not.toBeInTheDocument()
+  })
+
+  it('keeps unresolved tasks visible across consecutive captures', async () => {
+    vi.stubGlobal('fetch', createSequentialCaptureFetchMock())
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByText('Write it instead'))
+    await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Capture several tasks')
+
+    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+    expect(await screen.findByText('Captured task 1')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Old pending tasks/i })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Captured task 1')).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+    expect(await screen.findByText('Captured task 2')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Old pending tasks 1' })).toBeInTheDocument()
+    expect(screen.getAllByText('Captured task 1')).toHaveLength(1)
+    expect(screen.getAllByText('Captured task 2')).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+    expect(await screen.findByText('Captured task 3')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Old pending tasks 2' })).toBeInTheDocument()
+    expect(screen.getAllByText('Captured task 1')).toHaveLength(1)
+    expect(screen.getAllByText('Captured task 2')).toHaveLength(1)
+    expect(screen.getAllByText('Captured task 3')).toHaveLength(1)
+  })
+
   it('hides active-capture pending tasks during review and restores them after Done', async () => {
     const { fetchMock } = createFetchMock()
     vi.stubGlobal('fetch', fetchMock)

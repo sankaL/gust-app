@@ -214,7 +214,7 @@ function SummaryMetric({ label, value }: { label: string; value: number }) {
   return <div className="rounded-card bg-surface-dim px-4 py-4 text-center"><p className="font-display text-2xl text-on-surface">{value}</p><p className="text-xs uppercase text-on-surface-variant">{label}</p></div>
 }
 
-type StagingProps = { tasks: ExtractedTask[]; isLoading: boolean; title: string; subtext: string; onApprove: (id: string) => Promise<void>; onDiscard: (id: string) => Promise<void>; onApproveAll: () => Promise<void>; onDiscardAll: () => Promise<void>; onTaskClick: (task: ExtractedTask) => void; processing?: boolean; onDone?: () => void }
+type StagingProps = { tasks: ExtractedTask[]; isLoading: boolean; title: string; subtext?: string; onApprove: (id: string) => Promise<void>; onDiscard: (id: string) => Promise<void>; onApproveAll: () => Promise<void>; onDiscardAll: () => Promise<void>; onTaskClick: (task: ExtractedTask) => void; processing?: boolean; onDone?: () => void }
 
 export function CaptureStaging(props: StagingProps) {
   if (props.processing) return <div className="mt-4"><ExtractingLoader variant="tasks" /></div>

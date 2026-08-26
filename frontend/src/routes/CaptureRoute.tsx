@@ -102,5 +102,5 @@ function LatestCaptureReview({ controller }: { controller: ReturnType<typeof use
 function OlderPendingReview({ controller }: { controller: ReturnType<typeof useCaptureController> }) {
   const { queries, review, state } = controller
   if (!queries.visiblePending.length) return null
-  return <CaptureStaging tasks={queries.visiblePending} isLoading={queries.pending.isLoading || queries.pending.isFetching} title="Old pending tasks" subtext="Pending tasks from previous captures awaiting review" onApprove={review.approve} onDiscard={review.discard} onApproveAll={review.approvePending} onDiscardAll={review.discardPending} onTaskClick={state.setEditTask} />
+  return <CaptureStaging tasks={queries.visiblePending} isLoading={queries.pending.isLoading || queries.pending.isFetching} title="Old pending tasks" onApprove={review.approve} onDiscard={review.discard} onApproveAll={review.approvePending} onDiscardAll={review.discardPending} onTaskClick={state.setEditTask} />
 }

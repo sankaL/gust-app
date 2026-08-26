@@ -3,7 +3,7 @@ import { ChevronDown, Inbox, Layers, Search, X } from 'lucide-react'
 
 import type { GroupSummary } from '../lib/api'
 
-const basePillClass = 'rounded-pill px-3 py-1.5 font-body text-xs font-medium transition-all duration-200 active:scale-95 outline-none flex items-center gap-1.5 sm:px-4 sm:py-2 sm:text-sm sm:gap-2'
+const basePillClass = 'flex h-10 items-center gap-1.5 rounded-pill px-3 py-1.5 font-body text-xs font-medium outline-none transition-all duration-200 active:scale-95 sm:gap-2 sm:px-4 sm:py-2 sm:text-sm'
 const activePillClass = 'bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_2px_0_#171033,_0_4px_8px_rgba(0,0,0,0.3),_inset_0_1px_2px_rgba(255,255,255,0.15)] -translate-y-[1px]'
 const inactivePillClass = 'bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/5'
 
@@ -139,7 +139,7 @@ export function TaskGroupTabs(props: TaskGroupTabsProps) {
   }
 
   return (
-    <div className="relative h-10 w-full min-w-0">
+    <div className={`relative h-10 w-full min-w-0 ${isOpen ? 'z-30' : ''}`}>
       <GroupPills props={props} menuRef={menuRef} searchButtonRef={searchButtonRef} isOpen={isOpen} setIsOpen={setIsOpen} inbox={inbox} otherGroups={otherGroups} selectedOther={selectedOther} onSelectOther={selectOther} />
       <TaskSearchField active={props.isSearchActive} value={props.searchQuery} inputRef={searchInputRef} onChange={props.onSearchChange} onClear={props.onSearchClear} />
     </div>

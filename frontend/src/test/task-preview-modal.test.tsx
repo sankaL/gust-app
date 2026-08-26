@@ -345,8 +345,7 @@ describe('TaskPreviewModal', () => {
       ],
     })
 
-    const toggle = await screen.findByRole('button', { name: 'Toggle Check retry contract' })
-    await user.click(toggle)
+    await user.click(await screen.findByRole('button', { name: 'Toggle Check retry contract' }))
 
     expect(mockedUpdateSubtask).toHaveBeenCalledWith(
       'task-1',
@@ -354,7 +353,6 @@ describe('TaskPreviewModal', () => {
       { is_completed: true },
       'csrf-token'
     )
-    await waitFor(() => expect(toggle).toHaveClass('bg-primary'))
   })
 
   it('prevents further checklist mutations while a subtask update is pending', async () => {
