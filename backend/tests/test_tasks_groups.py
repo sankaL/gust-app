@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 import sqlalchemy as sa
 from fastapi import FastAPI
@@ -763,6 +763,281 @@ def test_update_task_does_not_reopen_a_sent_reminder_when_schedule_is_unchanged(
 
     assert reminder_row.status == "sent"
     assert reminder_row.scheduled_for == scheduled_for.replace(tzinfo=None)
+
+
+def test_update_task_moves_overdue_task_with_reminder_at_to_future(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    app.state.settings.pushover_notifications_enabled = True
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Overdue Group")
+    past_date = date.today() - timedelta(days=3)
+    past_reminder_at = datetime.combine(past_date, time(9, 30), tzinfo=UTC)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Overdue task with reminder",
+        due_date_value=past_date,
+        reminder_at_value=past_reminder_at,
+        reminder_offset_minutes=570,
+    )
+    scheduled_for = past_reminder_at - timedelta(minutes=30)
+    _seed_reminder(
+        client,
+        user_id=USER_ID,
+        task_id=task_id,
+        scheduled_for=scheduled_for,
+        status="sent",
+    )
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        update_notification_preferences(
+            connection,
+            user_id=USER_ID,
+            values={
+                "pushover_enabled": True,
+                "pushover_task_reminders_enabled": True,
+                "pushover_user_key_encrypted": "encrypted-user-key",
+            },
+        )
+
+    future_date = date.today() + timedelta(days=5)
+    # Simulate the frontend moving the due date while passing the old reminder timestamp.
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={
+            "title": "Overdue task with reminder",
+            "group_id": group_id,
+            "due_date": future_date.isoformat(),
+            "reminder_at": past_reminder_at.isoformat().replace("+00:00", "Z"),
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    expected_reminder_at = datetime.combine(future_date, time(9, 30), tzinfo=UTC)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+        reminder_row = connection.execute(
+            sa.select(reminders).where(reminders.c.task_id == task_id)
+        ).one()
+
+    assert task_row.due_date == future_date
+    assert task_row.reminder_at == expected_reminder_at.replace(tzinfo=None)
+    assert task_row.reminder_offset_minutes == 570
+    assert reminder_row.status == "pending"
+    assert reminder_row.scheduled_for == (expected_reminder_at - timedelta(minutes=30)).replace(
+        tzinfo=None
+    )
+
+
+def test_update_task_moves_due_today_task_with_past_reminder_at_to_future(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    app.state.settings.pushover_notifications_enabled = True
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Today Group")
+    today = date.today()
+    # Reminder earlier today (in the past relative to now, or morning of today)
+    past_reminder_at = (datetime.now(UTC) - timedelta(hours=2)).replace(microsecond=0)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Due today task with morning reminder",
+        due_date_value=today,
+        reminder_at_value=past_reminder_at,
+    )
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        update_notification_preferences(
+            connection,
+            user_id=USER_ID,
+            values={
+                "pushover_enabled": True,
+                "pushover_task_reminders_enabled": True,
+                "pushover_user_key_encrypted": "encrypted-user-key",
+            },
+        )
+
+    future_date = today + timedelta(days=2)
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={
+            "title": "Due today task with morning reminder",
+            "group_id": group_id,
+            "due_date": future_date.isoformat(),
+            "reminder_at": past_reminder_at.isoformat().replace("+00:00", "Z"),
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    expected_reminder_at = datetime.combine(future_date, past_reminder_at.time(), tzinfo=UTC)
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+
+    assert task_row.due_date == future_date
+    assert task_row.reminder_at == expected_reminder_at.replace(tzinfo=None)
+
+
+def test_update_task_moves_overdue_task_with_date_only_reminder_to_future(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Overdue Date-Only")
+    past_date = date.today() - timedelta(days=4)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Overdue task date-only reminder",
+        due_date_value=past_date,
+        reminder_date_value=past_date,
+    )
+
+    future_date = date.today() + timedelta(days=3)
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={
+            "title": "Overdue task date-only reminder",
+            "group_id": group_id,
+            "due_date": future_date.isoformat(),
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+
+    assert task_row.due_date == future_date
+    assert task_row.reminder_date == future_date
+    assert task_row.reminder_at is None
+
+
+def test_update_task_overdue_with_explicitly_cleared_reminder(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Overdue Clear")
+    past_date = date.today() - timedelta(days=2)
+    past_reminder_at = datetime.combine(past_date, time(10, 0), tzinfo=UTC)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Overdue task clear reminder",
+        due_date_value=past_date,
+        reminder_at_value=past_reminder_at,
+    )
+
+    future_date = date.today() + timedelta(days=3)
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={
+            "title": "Overdue task clear reminder",
+            "group_id": group_id,
+            "due_date": future_date.isoformat(),
+            "reminder_at": None,
+            "reminder_date": None,
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+
+    assert task_row.due_date == future_date
+    assert task_row.reminder_at is None
+    assert task_row.reminder_date is None
+
+
+def test_update_task_overdue_with_explicit_future_reminder(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Overdue Custom")
+    past_date = date.today() - timedelta(days=2)
+    past_reminder_at = datetime.combine(past_date, time(10, 0), tzinfo=UTC)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Overdue task custom reminder",
+        due_date_value=past_date,
+        reminder_at_value=past_reminder_at,
+    )
+
+    future_date = date.today() + timedelta(days=3)
+    custom_reminder_at = datetime.combine(future_date, time(16, 0), tzinfo=UTC)
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={
+            "title": "Overdue task custom reminder",
+            "group_id": group_id,
+            "due_date": future_date.isoformat(),
+            "reminder_at": custom_reminder_at.isoformat().replace("+00:00", "Z"),
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+
+    assert task_row.due_date == future_date
+    assert task_row.reminder_at == custom_reminder_at.replace(tzinfo=None)
+
+
+def test_update_task_overdue_preserves_explicit_date_only_reminder(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    group_id = _seed_group(client, user_id=USER_ID, name="Overdue Date Switch")
+    past_date = date.today() - timedelta(days=2)
+    task_id = _seed_task(
+        client,
+        user_id=USER_ID,
+        group_id=group_id,
+        title="Switch reminder precision",
+        due_date_value=past_date,
+        reminder_at_value=datetime.combine(past_date, time(10, 0), tzinfo=UTC),
+    )
+
+    future_date = date.today() + timedelta(days=3)
+    custom_reminder_date = future_date - timedelta(days=1)
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={
+            "title": "Switch reminder precision",
+            "group_id": group_id,
+            "due_date": future_date.isoformat(),
+            "reminder_at": None,
+            "reminder_date": custom_reminder_date.isoformat(),
+            "recurrence": None,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == task_id)).one()
+
+    assert task_row.reminder_at is None
+    assert task_row.reminder_date == custom_reminder_date
+
 
 
 def test_update_task_preserves_description_when_patch_omits_field(

@@ -192,4 +192,51 @@ describe('DesktopTaskDetailModal', () => {
       'csrf-token'
     )
   })
+
+  it('automatically shifts reminder to new due date when due date is changed for a task with a reminder', async () => {
+    const user = userEvent.setup()
+    const today = new Date()
+    const overdueDate = new Date(today)
+    overdueDate.setDate(today.getDate() - 2)
+    const futureDate = new Date(today)
+    futureDate.setDate(today.getDate() + 5)
+    const dateToken = (value: Date) => value.toISOString().slice(0, 10)
+    const overdueToken = dateToken(overdueDate)
+    const futureToken = dateToken(futureDate)
+    const taskWithReminder = buildTask({
+      due_date: overdueToken,
+      reminder_at: `${overdueToken}T14:30:00.000Z`,
+    })
+    const updatedTask = buildTask({
+      due_date: futureToken,
+      reminder_at: `${futureToken}T14:30:00.000Z`,
+    })
+    mockedUpdateTask.mockResolvedValue(updatedTask)
+    renderDesktopEditor(taskWithReminder)
+
+    expect(await screen.findByRole('dialog', { name: 'Review extraction contract' })).toBeInTheDocument()
+
+    const dueDateLabel = new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(overdueDate)
+    const dueDateBtn = screen.getByRole('button', { name: dueDateLabel })
+    await user.click(dueDateBtn)
+    if (futureDate.getMonth() !== overdueDate.getMonth()) {
+      await user.click(await screen.findByRole('button', { name: 'next month' }))
+    }
+    await user.click(await screen.findByRole('button', { name: String(futureDate.getDate()) }))
+
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(mockedUpdateTask).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({
+        due_date: futureToken,
+        reminder_at: `${futureToken}T14:30:00.000Z`,
+      }),
+      'csrf-token'
+    )
+  })
 })

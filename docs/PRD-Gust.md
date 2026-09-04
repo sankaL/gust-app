@@ -274,6 +274,7 @@ Editable fields:
 
 Detail editing uses a local draft with an explicit save action.
 If the user clears the due date, the app must also clear the reminder and recurrence before save so the payload remains valid.
+When an overdue task or a task due today with an existing reminder is moved to a future due date, the system automatically reschedules the reminder to the new due date at the same local time (or shifts date-only reminders to the new date), preventing past-reminder validation errors from blocking user rescheduling.
 V1 recurrence editing is limited to `daily`, `weekly`, and `monthly`.
 
 V1 does not include rich notes, attachments, or nested subtasks.

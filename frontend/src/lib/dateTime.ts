@@ -82,3 +82,42 @@ export function dateTimeLocalToIso(
   const date = new Date(utcMs)
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
+
+export function shiftReminderDateTimeLocal(
+  reminderAt: string | null | undefined,
+  newDueDate: string | null | undefined
+): string {
+  if (!reminderAt || !newDueDate) return ''
+  const tIndex = reminderAt.indexOf('T')
+  if (tIndex === -1) return ''
+  const timePart = reminderAt.slice(tIndex + 1)
+  return `${newDueDate}T${timePart}`
+}
+
+export function shiftReminderIso(
+  reminderAtIso: string | null | undefined,
+  newDueDate: string | null | undefined,
+  timezone?: string | null
+): string | null {
+  if (!reminderAtIso || !newDueDate) return null
+  const localValue = toDateTimeLocalValue(reminderAtIso, timezone)
+  if (!localValue) return null
+  const shiftedLocal = shiftReminderDateTimeLocal(localValue, newDueDate)
+  return dateTimeLocalToIso(shiftedLocal, timezone)
+}
+
+export function shouldShiftReminderForDueDate(
+  originalDueDate: string | null | undefined,
+  newDueDate: string | null | undefined,
+  timezone?: string | null,
+  now = new Date()
+): boolean {
+  const original = originalDueDate ?? ''
+  const next = newDueDate ?? ''
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(original)) return false
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return false
+  const parts = getZonedParts(now, timezone)
+  if (Object.values(parts).some((part) => Number.isNaN(part))) return false
+  const today = `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`
+  return original <= today && next > today
+}

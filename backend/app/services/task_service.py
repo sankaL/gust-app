@@ -86,6 +86,7 @@ class TaskUpdateInput:
     reminder_date: date | None
     reminder_date_provided: bool
     recurrence: RecurrenceInput | None
+    reminder_at_provided: bool = True
 
 
 @dataclass
@@ -253,10 +254,64 @@ class TaskService:
             reminder_date = payload.reminder_date
             if not payload.reminder_date_provided and payload.reminder_at is None:
                 reminder_date = existing.reminder_date
+
+            reminder_at = payload.reminder_at
+
+            now = datetime.now(UTC)
+            user_tz = ZoneInfo(user_timezone)
+            today = now.astimezone(user_tz).date()
+
+            is_overdue_or_today = existing.due_date is not None and existing.due_date <= today
+            is_moving_to_future = payload.due_date is not None and payload.due_date > today
+
+            explicitly_cleared_reminders = (
+                payload.reminder_at is None
+                and payload.reminder_date is None
+                and payload.reminder_date_provided
+                and payload.reminder_at_provided
+            )
+
+            if (
+                is_moving_to_future
+                and is_overdue_or_today
+                and not explicitly_cleared_reminders
+            ):
+                has_explicit_date_reminder = (
+                    payload.reminder_date_provided and reminder_date is not None
+                )
+                if existing.reminder_at is not None and not has_explicit_date_reminder:
+                    needs_shift = (
+                        reminder_at is None
+                        or reminder_at <= now
+                        or reminder_at == existing.reminder_at
+                        or reminder_at.astimezone(user_tz).date() <= today
+                    )
+                    if needs_shift:
+                        existing_tz = existing.reminder_at.tzinfo or UTC
+                        existing_local = existing.reminder_at.replace(
+                            tzinfo=existing_tz
+                        ).astimezone(user_tz)
+                        new_local = datetime.combine(
+                            payload.due_date,
+                            existing_local.time(),
+                            tzinfo=user_tz,
+                        )
+                        reminder_at = new_local.astimezone(UTC)
+                        reminder_date = None
+                elif existing.reminder_date is not None:
+                    needs_shift = (
+                        reminder_date is None
+                        or reminder_date <= today
+                        or reminder_date == existing.reminder_date
+                    )
+                    if needs_shift and reminder_at is None:
+                        reminder_date = payload.due_date
+                        reminder_at = None
+
             normalized = self._normalize_fields(
                 title=payload.title,
                 due_date=payload.due_date,
-                reminder_at=payload.reminder_at,
+                reminder_at=reminder_at,
                 reminder_date=reminder_date,
                 recurrence=payload.recurrence,
                 user_timezone=user_timezone,

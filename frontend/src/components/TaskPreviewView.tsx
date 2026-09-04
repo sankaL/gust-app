@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import type { GroupSummary, TaskDetail } from '../lib/api'
 import type { TaskDetailDraft } from '../lib/taskFormModel'
 import { formatDate, formatDateTime, formatRecurrence } from '../lib/taskFormatters'
+import { shiftReminderDateTimeLocal, shouldShiftReminderForDueDate } from '../lib/dateTime'
 import { TaskFormFields } from './TaskFormFields'
 import { SaveConfirmationToast } from './SaveConfirmationToast'
 
@@ -156,11 +157,13 @@ function PreviewHeader({
 }
 
 function EditableTask({
+  task,
   draft,
   groups,
   disabled,
   onChange,
 }: {
+  task: TaskDetail
   draft: TaskDetailDraft
   groups: GroupSummary[]
   disabled: boolean
@@ -176,7 +179,7 @@ function EditableTask({
       onTitleChange={(title) => onChange((current) => ({ ...current, title }))}
       onDescriptionChange={(description) => onChange((current) => ({ ...current, description }))}
       onGroupIdChange={(groupId) => onChange((current) => ({ ...current, groupId }))}
-      onDueDateChange={(dueDate) => onChange((current) => ({ ...current, dueDate }))}
+      onDueDateChange={(dueDate) => onChange((current) => (dueDate ? shouldShiftReminderForDueDate(task.due_date, dueDate) ? { ...current, dueDate, reminderAt: current.reminderAt ? shiftReminderDateTimeLocal(current.reminderAt, dueDate) : '', reminderDate: current.reminderDate ? dueDate : '' } : { ...current, dueDate } : { ...current, dueDate: '', reminderAt: '', reminderDate: '', recurrence: null }))}
       onReminderAtChange={(reminderAt) => onChange((current) => ({ ...current, reminderAt }))}
       onReminderDateChange={(reminderDate) => onChange((current) => ({ ...current, reminderDate }))}
       onRecurrenceChange={(recurrence) => onChange((current) => ({ ...current, recurrence }))}
@@ -411,6 +414,7 @@ function PreviewBody(props: PreviewBodyProps) {
     <div className="space-y-4">
       {props.isEditing && props.isEditable && props.draft ? (
         <EditableTask
+          task={props.task}
           draft={props.draft}
           groups={props.groups}
           disabled={props.isBusy}

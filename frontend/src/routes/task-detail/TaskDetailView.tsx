@@ -1,6 +1,7 @@
 import { CheckCircle2 } from 'lucide-react'
 import { TaskDeleteDialog } from '../../components/TaskDeleteDialog'
 import { TaskFormFields } from '../../components/TaskFormFields'
+import { shiftReminderDateTimeLocal, shouldShiftReminderForDueDate } from '../../lib/dateTime'
 import type { GroupSummary, TaskDeleteScope, TaskDetail, TaskRecurrence } from '../../lib/api'
 
 export type TaskDetailDraft = {
@@ -67,10 +68,11 @@ type TaskOverviewProps = {
 }
 
 function TaskOverview(props: TaskOverviewProps) {
-  return <div className="relative z-20 rounded-[1.7rem] bg-[radial-gradient(circle_at_top_left,_rgba(186,158,255,0.16),_rgba(32,32,31,0.98)_40%,_rgba(14,14,14,1)_100%)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.48)]"><div className="flex flex-wrap gap-2"><span className="rounded-pill bg-white/6 px-3 py-1 text-xs uppercase text-on-surface-variant">{props.isEditMode ? 'Editing task' : 'Task summary'}</span><span className="rounded-pill bg-surface-container-high px-3 py-1 text-xs uppercase text-on-surface-variant">{props.groupName}</span>{props.task.needs_review ? <span className="rounded-pill bg-warning/20 px-3 py-1 text-xs uppercase text-warning">Needs review</span> : null}</div><div className="mt-4">{props.isEditMode ? <TaskEditor draft={props.draft} groups={props.groups} isBusy={props.isBusy} isGroupDropdownOpen={props.isGroupDropdownOpen} onDraft={props.onDraft} onGroupDropdown={props.onGroupDropdown} /> : <ReadOnlySummary draft={props.draft} groupName={props.groupName} />}</div></div>
+  return <div className="relative z-20 rounded-[1.7rem] bg-[radial-gradient(circle_at_top_left,_rgba(186,158,255,0.16),_rgba(32,32,31,0.98)_40%,_rgba(14,14,14,1)_100%)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.48)]"><div className="flex flex-wrap gap-2"><span className="rounded-pill bg-white/6 px-3 py-1 text-xs uppercase text-on-surface-variant">{props.isEditMode ? 'Editing task' : 'Task summary'}</span><span className="rounded-pill bg-surface-container-high px-3 py-1 text-xs uppercase text-on-surface-variant">{props.groupName}</span>{props.task.needs_review ? <span className="rounded-pill bg-warning/20 px-3 py-1 text-xs uppercase text-warning">Needs review</span> : null}</div><div className="mt-4">{props.isEditMode ? <TaskEditor originalDueDate={props.task.due_date} draft={props.draft} groups={props.groups} isBusy={props.isBusy} isGroupDropdownOpen={props.isGroupDropdownOpen} onDraft={props.onDraft} onGroupDropdown={props.onGroupDropdown} /> : <ReadOnlySummary draft={props.draft} groupName={props.groupName} />}</div></div>
 }
 
 type TaskEditorProps = {
+  originalDueDate: string | null
   draft: TaskDetailDraft
   groups: GroupSummary[]
   isBusy: boolean
@@ -80,7 +82,16 @@ type TaskEditorProps = {
 }
 
 function TaskEditor(props: TaskEditorProps) {
-  const dueDateChange = (dueDate: string) => props.onDraft(dueDate ? { dueDate } : { dueDate: '', reminderAt: '', reminderDate: '', recurrence: null })
+  const dueDateChange = (dueDate: string) =>
+    props.onDraft(
+      dueDate
+        ? {
+            dueDate,
+            ...(shouldShiftReminderForDueDate(props.originalDueDate, dueDate) && props.draft.reminderAt ? { reminderAt: shiftReminderDateTimeLocal(props.draft.reminderAt, dueDate) } : {}),
+            ...(shouldShiftReminderForDueDate(props.originalDueDate, dueDate) && props.draft.reminderDate ? { reminderDate: dueDate } : {}),
+          }
+        : { dueDate: '', reminderAt: '', reminderDate: '', recurrence: null }
+    )
   return <TaskFormFields title={props.draft.title} description={props.draft.description} groupId={props.draft.groupId} dueDate={props.draft.dueDate} reminderAt={props.draft.reminderAt} reminderDate={props.draft.reminderDate} recurrence={props.draft.recurrence} groups={props.groups} isGroupDropdownOpen={props.isGroupDropdownOpen} disabled={props.isBusy} onTitleChange={(title) => props.onDraft({ title })} onDescriptionChange={(description) => props.onDraft({ description })} onGroupIdChange={(groupId) => props.onDraft({ groupId })} onDueDateChange={dueDateChange} onReminderAtChange={(reminderAt) => props.onDraft({ reminderAt })} onReminderDateChange={(reminderDate) => props.onDraft({ reminderDate })} onRecurrenceChange={(recurrence) => props.onDraft({ recurrence })} onGroupDropdownOpenChange={props.onGroupDropdown} />
 }
 

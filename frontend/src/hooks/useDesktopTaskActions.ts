@@ -22,6 +22,7 @@ import {
 import { refreshTaskScreenQueries } from '../lib/taskScreenCache'
 import { acquireTaskMutationLock } from '../lib/taskMutationLocks'
 import { requireCsrfToken } from '../lib/sessionSecurity'
+import { shiftReminderIso, shouldShiftReminderForDueDate } from '../lib/dateTime'
 
 type CompleteVariables = { task: TaskSummary; releaseLock: () => void }
 type MoveDueDateVariables = { task: TaskSummary; dueDate: string | null; releaseLock: () => void }
@@ -33,23 +34,28 @@ function buildFriendlyMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-async function prepareDueDateMutation(queryClient: QueryClient, task: TaskSummary, dueDate: string | null) {
+async function prepareDueDateMutation(queryClient: QueryClient, task: TaskSummary, dueDate: string | null, timezone?: string | null) {
   const queryKeys = [['tasks'], ['desktop', 'tasks'], ['task-detail', task.id]]
   await Promise.all(queryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey })))
   const snapshots = snapshotTaskQueries(queryClient, task.id)
-  const optimisticTask = dueDateTask(task, dueDate)
+  const optimisticTask = dueDateTask(task, dueDate, timezone)
   applyTaskListMutation(queryClient, (currentTask, statusSegment) => currentTask.id === task.id && statusSegment === task.status ? { ...currentTask, ...optimisticTask } : currentTask.id === task.id ? null : currentTask)
   const detail = queryClient.getQueryData<TaskDetail>(['task-detail', task.id])
-  if (detail) updateTaskDetailCache(queryClient, dueDateDetail(detail, dueDate))
+  if (detail) updateTaskDetailCache(queryClient, dueDateDetail(detail, dueDate, timezone))
   return { snapshots }
 }
 
-function dueDateTask(task: TaskSummary, dueDate: string | null): TaskSummary {
-  return { ...task, due_date: dueDate, reminder_at: dueDate ? task.reminder_at : null, recurrence_frequency: dueDate ? task.recurrence_frequency : null }
+function dueDateTask(task: TaskSummary, dueDate: string | null, timezone?: string | null): TaskSummary {
+  const shiftReminder = shouldShiftReminderForDueDate(task.due_date, dueDate, timezone)
+  const nextReminderAt = dueDate ? shiftReminder ? shiftReminderIso(task.reminder_at, dueDate, timezone) : task.reminder_at : null
+  return { ...task, due_date: dueDate, reminder_at: nextReminderAt, recurrence_frequency: dueDate ? task.recurrence_frequency : null }
 }
 
-function dueDateDetail(task: TaskDetail, dueDate: string | null): TaskDetail {
-  return { ...task, due_date: dueDate, reminder_at: dueDate ? task.reminder_at : null, recurrence: dueDate ? task.recurrence : null, recurrence_frequency: dueDate ? task.recurrence_frequency : null }
+function dueDateDetail(task: TaskDetail, dueDate: string | null, timezone?: string | null): TaskDetail {
+  const shiftReminder = shouldShiftReminderForDueDate(task.due_date, dueDate, timezone)
+  const nextReminderAt = dueDate ? shiftReminder ? shiftReminderIso(task.reminder_at, dueDate, timezone) : task.reminder_at : null
+  const nextReminderDate = dueDate && task.reminder_date ? shiftReminder ? dueDate : task.reminder_date : null
+  return { ...task, due_date: dueDate, reminder_at: nextReminderAt, reminder_date: nextReminderDate, recurrence: dueDate ? task.recurrence : null, recurrence_frequency: dueDate ? task.recurrence_frequency : null }
 }
 
 export function useDesktopTaskActions(session: SessionStatus | undefined) {
@@ -146,13 +152,17 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
   })
 
   const moveDueDateMutation = useMutation({
-    onMutate: ({ task, dueDate }: MoveDueDateVariables) => prepareDueDateMutation(queryClient, task, dueDate),
+    onMutate: ({ task, dueDate }: MoveDueDateVariables) => prepareDueDateMutation(queryClient, task, dueDate, session?.timezone),
     mutationFn: async ({ task, dueDate }: MoveDueDateVariables) => {
       const detail = await queryClient.fetchQuery({
         queryKey: ['task-detail', task.id],
         queryFn: () => getTaskDetail(task.id),
         staleTime: 0,
       })
+
+      const shiftReminder = shouldShiftReminderForDueDate(detail.due_date, dueDate, session?.timezone)
+      const nextReminderAt = dueDate ? shiftReminder ? shiftReminderIso(detail.reminder_at, dueDate, session?.timezone) : detail.reminder_at : null
+      const nextReminderDate = dueDate && detail.reminder_date ? shiftReminder ? dueDate : detail.reminder_date : null
 
       return updateTask(
         task.id,
@@ -161,7 +171,8 @@ export function useDesktopTaskActions(session: SessionStatus | undefined) {
           description: detail.description,
           group_id: detail.group.id,
           due_date: dueDate,
-          reminder_at: dueDate ? detail.reminder_at : null,
+          reminder_at: nextReminderAt,
+          reminder_date: nextReminderDate,
           recurrence: dueDate ? detail.recurrence : null,
         },
         requireCsrfToken(session)

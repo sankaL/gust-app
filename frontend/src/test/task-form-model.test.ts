@@ -7,6 +7,11 @@ import {
   recurrenceForDueDate,
   validateTaskFormDraft,
 } from '../lib/taskFormModel'
+import {
+  shiftReminderDateTimeLocal,
+  shiftReminderIso,
+  shouldShiftReminderForDueDate,
+} from '../lib/dateTime'
 
 function task(overrides: Partial<ExtractedTask> = {}): ExtractedTask {
   return {
@@ -99,5 +104,33 @@ describe('task form model', () => {
       recurrence_month: 7,
       subtask_titles: ['First', 'Second'],
     })
+  })
+
+  it('shifts reminder date-time local value to new due date', () => {
+    expect(shiftReminderDateTimeLocal('2026-09-01T09:30', '2026-09-10')).toBe('2026-09-10T09:30')
+    expect(shiftReminderDateTimeLocal(null, '2026-09-10')).toBe('')
+    expect(shiftReminderDateTimeLocal('2026-09-01T09:30', null)).toBe('')
+  })
+
+  it('shifts reminder ISO timestamp preserving local wall-clock time in timezone', () => {
+    // 2026-09-01 09:30 EDT (UTC-4) -> 13:30:00.000Z
+    const oldReminderIso = '2026-09-01T13:30:00.000Z'
+    const shifted = shiftReminderIso(oldReminderIso, '2026-09-10', 'America/New_York')
+    expect(shifted).toBe('2026-09-10T13:30:00.000Z')
+
+    // In UTC:
+    const utcReminder = '2026-08-15T10:00:00.000Z'
+    expect(shiftReminderIso(utcReminder, '2026-08-25', 'UTC')).toBe('2026-08-25T10:00:00.000Z')
+    expect(shiftReminderIso(null, '2026-08-25', 'UTC')).toBeNull()
+    expect(shiftReminderIso(utcReminder, null, 'UTC')).toBeNull()
+  })
+
+  it('only auto-shifts reminders when an overdue or due-today task moves to the future', () => {
+    const now = new Date('2026-09-04T16:00:00.000Z')
+
+    expect(shouldShiftReminderForDueDate('2026-09-03', '2026-09-10', 'UTC', now)).toBe(true)
+    expect(shouldShiftReminderForDueDate('2026-09-04', '2026-09-10', 'UTC', now)).toBe(true)
+    expect(shouldShiftReminderForDueDate('2026-09-05', '2026-09-10', 'UTC', now)).toBe(false)
+    expect(shouldShiftReminderForDueDate('2026-09-03', '2026-09-04', 'UTC', now)).toBe(false)
   })
 })

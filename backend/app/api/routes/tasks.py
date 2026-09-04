@@ -244,6 +244,7 @@ def update_task_route(
             group_id=payload.group_id,
             due_date=payload.due_date,
             reminder_at=payload.reminder_at,
+            reminder_at_provided="reminder_at" in payload.model_fields_set,
             reminder_date=payload.reminder_date,
             reminder_date_provided="reminder_date" in payload.model_fields_set,
             recurrence=_build_recurrence_input(payload.recurrence),
