@@ -239,6 +239,21 @@ class ExtractionFailedError(ApiError):
         )
 
 
+AI_SERVICE_ADMIN_CONTACT_MESSAGE = (
+    "Gust's AI service is unavailable because its usage limit has been reached. "
+    "Please contact the administrator."
+)
+
+
+class AIServiceQuotaExceededError(ApiError):
+    def __init__(self, message: str = AI_SERVICE_ADMIN_CONTACT_MESSAGE) -> None:
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code="ai_service_quota_exceeded",
+            message=message,
+        )
+
+
 class TaskNotFoundError(ApiError):
     def __init__(self, message: str = "Task could not be found.") -> None:
         super().__init__(

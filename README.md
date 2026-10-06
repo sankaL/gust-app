@@ -97,9 +97,9 @@
 
 ### AI, Orchestration & Services
 
-![Mistral AI](https://img.shields.io/badge/Mistral%20AI-Voice%20Capture%20%26%20Transcription-fd81a8?style=flat-square)
+![AssemblyAI](https://img.shields.io/badge/AssemblyAI-Voice%20Capture%20%26%20Transcription-fd81a8?style=flat-square)
 ![LangChain](https://img.shields.io/badge/LangChain-Orchestration-ba9eff?style=flat-square)
-![OpenAI](https://img.shields.io/badge/OpenAI-GPT--5.4%20mini-0d0d12?style=flat-square&logo=openai&logoColor=white)
+![Gemini](https://img.shields.io/badge/Gemini-3.8%20Flash-0d0d12?style=flat-square&logo=googlegemini&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Railway](https://img.shields.io/badge/Railway-Deployment-fd81a8?style=flat-square&logo=railway&logoColor=white)
 

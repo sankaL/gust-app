@@ -7,7 +7,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -23,7 +23,12 @@ from app.services.extraction_models import (
     ExtractionModelRegistry,
     ExtractorPayload,
 )
-from app.services.extraction_retry import ExtractionRetryError, ExtractionRetryManager, RetryConfig
+from app.services.extraction_retry import (
+    ExtractionRetryError,
+    ExtractionRetryManager,
+    NonRetryableExtractionError,
+    RetryConfig,
+)
 
 logger = logging.getLogger("gust.api")
 
@@ -94,6 +99,46 @@ class ExtractorMalformedResponseError(ExtractionServiceError):
     pass
 
 
+ExtractionAccountFailureReason = Literal["quota_exceeded", "credentials_invalid"]
+
+
+class ExtractionProviderAccountError(ExtractionServiceError, NonRetryableExtractionError):
+    """Raised when the provider account itself is unusable (no credits or rejected key)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        failure_reason: ExtractionAccountFailureReason,
+        provider_status_code: int | None,
+    ) -> None:
+        super().__init__(message)
+        self.failure_reason = failure_reason
+        self.provider_status_code = provider_status_code
+
+
+def _provider_account_error(exc: Exception) -> ExtractionProviderAccountError | None:
+    """Classify provider HTTP failures that no retry can recover from."""
+    status_code = getattr(exc, "status_code", None)
+    if status_code is None:
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+    if status_code == 402:
+        return ExtractionProviderAccountError(
+            "Extraction provider account has insufficient credits.",
+            failure_reason="quota_exceeded",
+            provider_status_code=status_code,
+        )
+    # Only 401 is a key problem: OpenRouter also uses 403 for moderation and guardrail
+    # blocks on specific input, which are not administrator issues.
+    if status_code == 401:
+        return ExtractionProviderAccountError(
+            "Extraction provider rejected the configured credentials.",
+            failure_reason="credentials_invalid",
+            provider_status_code=status_code,
+        )
+    return None
+
+
 class LangChainExtractionService:
     """Extraction service using LangChain with OpenRouter."""
 
@@ -135,7 +180,9 @@ class LangChainExtractionService:
     def ensure_configured(self) -> None:
         """Ensure extraction service is properly configured."""
         if not self.settings.openrouter_api_key:
-            raise ConfigurationError("OpenRouter extraction configuration is missing.")
+            raise ConfigurationError(
+                "Task extraction is not configured. Please contact the administrator."
+            )
 
     async def extract(
         self,
@@ -214,6 +261,20 @@ class LangChainExtractionService:
             )
             raise ExtractionServiceError("Extraction failed after retries.") from exc
 
+        except ExtractionProviderAccountError as exc:
+            self.last_attempt_count = self.retry_manager.last_attempt_count
+            logger.error(
+                "extraction_provider_account_error",
+                extra={
+                    "event": "extraction_provider_account_error",
+                    "model": model_config.model_id,
+                    "model_name": model_config.name,
+                    "failure_reason": exc.failure_reason,
+                    "provider_status_code": exc.provider_status_code,
+                },
+            )
+            raise
+
     async def _execute_extraction(
         self,
         request: ExtractionRequest,
@@ -276,6 +337,9 @@ class LangChainExtractionService:
                 error_details["status_code"] = exc.status_code
 
             logger.warning("extraction_chain_error", extra=error_details)
+            account_error = _provider_account_error(exc)
+            if account_error is not None:
+                raise account_error from exc
             raise ExtractorMalformedResponseError(
                 f"Extraction provider request failed: {type(exc).__name__}: {str(exc)}"
             ) from exc

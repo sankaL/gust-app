@@ -44,7 +44,7 @@ from app.services.reminders import (
 )
 from app.services.staging import StagingService
 from app.services.task_service import TaskService
-from app.services.transcription import MistralTranscriptionService
+from app.services.transcription import AssemblyAITranscriptionService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -55,9 +55,9 @@ def get_auth_service(settings: SettingsDep) -> AuthService:
 
 def get_transcription_service(
     settings: SettingsDep,
-) -> MistralTranscriptionService:
-    """Return the Mistral transcription service in every environment."""
-    return MistralTranscriptionService(settings)
+) -> AssemblyAITranscriptionService:
+    """Return the AssemblyAI transcription service in every environment."""
+    return AssemblyAITranscriptionService(settings)
 
 
 def get_extraction_service(settings: SettingsDep) -> LangChainExtractionService:
@@ -67,7 +67,7 @@ def get_extraction_service(settings: SettingsDep) -> LangChainExtractionService:
 def get_capture_service(
     settings: SettingsDep,
     transcription_service: Annotated[
-        MistralTranscriptionService,
+        AssemblyAITranscriptionService,
         Depends(get_transcription_service),
     ],
     extraction_service: Annotated[

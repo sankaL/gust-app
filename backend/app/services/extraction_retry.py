@@ -77,6 +77,10 @@ class ExtractionRetryManager:
                 self.last_attempt_count = attempt
                 return validated_result
 
+            except NonRetryableExtractionError:
+                self.last_attempt_count = attempt
+                raise
+
             except ValidationError as exc:
                 last_exception = exc
                 self.last_attempt_count = attempt
@@ -96,20 +100,7 @@ class ExtractionRetryManager:
             except Exception as exc:
                 last_exception = exc
                 self.last_attempt_count = attempt
-                error_details = {
-                    "event": "extraction_attempt_failed",
-                    "attempt": attempt,
-                    "max_retries": self.config.max_retries,
-                    "error_type": type(exc).__name__,
-                    "error_message": sanitize_for_log(str(exc), max_length=160),
-                }
-
-                if hasattr(exc, "response"):
-                    error_details["response_status"] = getattr(exc.response, "status_code", None)
-                if hasattr(exc, "status_code"):
-                    error_details["status_code"] = exc.status_code
-
-                logger.warning("extraction_attempt_failed", extra=error_details)
+                self._log_attempt_failure(exc, attempt)
 
             # Calculate delay with exponential backoff
             if attempt < self.config.max_retries:
@@ -149,6 +140,22 @@ class ExtractionRetryManager:
             last_exception=last_exception,
         )
 
+    def _log_attempt_failure(self, exc: Exception, attempt: int) -> None:
+        error_details = {
+            "event": "extraction_attempt_failed",
+            "attempt": attempt,
+            "max_retries": self.config.max_retries,
+            "error_type": type(exc).__name__,
+            "error_message": sanitize_for_log(str(exc), max_length=160),
+        }
+
+        if hasattr(exc, "response"):
+            error_details["response_status"] = getattr(exc.response, "status_code", None)
+        if hasattr(exc, "status_code"):
+            error_details["status_code"] = exc.status_code
+
+        logger.warning("extraction_attempt_failed", extra=error_details)
+
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay with exponential backoff.
 
@@ -160,6 +167,10 @@ class ExtractionRetryManager:
         """
         delay = self.config.base_delay * (self.config.exponential_base ** (attempt - 1))
         return min(delay, self.config.max_delay)
+
+
+class NonRetryableExtractionError(Exception):
+    """Marker for failures that retrying cannot fix (e.g. exhausted provider credits)."""
 
 
 class ExtractionRetryError(Exception):

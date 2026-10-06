@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from app.core.input_safety import (
     DEFAULT_ALLOWED_AUDIO_CONTENT_TYPES,
@@ -177,20 +178,26 @@ class Settings(BaseSettings):
         default=7,
         validation_alias=AliasChoices("CAPTURE_RETENTION_DAYS"),
     )
-    mistral_api_url: str = Field(
-        default="https://api.mistral.ai/v1/audio/transcriptions",
-        validation_alias=AliasChoices("MISTRAL_API_URL"),
+    assemblyai_api_url: str = Field(
+        default="https://api.assemblyai.com",
+        validation_alias=AliasChoices("ASSEMBLYAI_API_URL"),
     )
-    mistral_api_key: str | None = Field(
+    assemblyai_api_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("MISTRAL_API_KEY"),
+        validation_alias=AliasChoices("ASSEMBLYAI_API_KEY"),
     )
-    mistral_transcription_model: str = Field(
-        default="voxtral-mini-latest",
-        validation_alias=AliasChoices("MISTRAL_TRANSCRIPTION_MODEL"),
+    assemblyai_speech_models: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=("universal-3-5-pro", "universal-2"),
+        validation_alias=AliasChoices("ASSEMBLYAI_SPEECH_MODELS"),
+    )
+    assemblyai_poll_interval_seconds: float = Field(
+        default=1.0,
+        gt=0,
+        validation_alias=AliasChoices("ASSEMBLYAI_POLL_INTERVAL_SECONDS"),
     )
     transcription_timeout_seconds: float = Field(
-        default=20.0,
+        default=30.0,
+        gt=0,
         validation_alias=AliasChoices("TRANSCRIPTION_TIMEOUT_SECONDS"),
     )
     openrouter_api_url: str = Field(
@@ -202,7 +209,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("OPENROUTER_API_KEY"),
     )
     openrouter_extraction_model: str = Field(
-        default="google/gemini-3.7-flash",
+        default="google/gemini-3.8-flash",
         validation_alias=AliasChoices("OPENROUTER_EXTRACTION_MODEL"),
     )
     extraction_timeout_seconds: float = Field(
@@ -292,7 +299,9 @@ class Settings(BaseSettings):
     def alembic_database_url(self) -> str:
         return self.migration_database_url or self.database_url
 
-    @field_validator("trusted_hosts", "extra_allowed_origins", mode="before")
+    @field_validator(
+        "trusted_hosts", "extra_allowed_origins", "assemblyai_speech_models", mode="before"
+    )
     @classmethod
     def _split_csv_tuple(
         cls,

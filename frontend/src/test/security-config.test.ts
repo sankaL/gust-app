@@ -10,7 +10,7 @@ const ALLOWED_ENV_KEYS = new Set([
   'VITE_API_BASE_URL',
   'VITE_GUST_DEV_MODE'
 ])
-const FORBIDDEN_ENV_PREFIXES = ['VITE_SUPABASE', 'VITE_OPENROUTER', 'VITE_MISTRAL', 'VITE_RESEND']
+const FORBIDDEN_ENV_PREFIXES = ['VITE_SUPABASE', 'VITE_OPENROUTER', 'VITE_MISTRAL', 'VITE_ASSEMBLYAI', 'VITE_RESEND']
 
 function collectSourceFiles(directory: string): string[] {
   const entries = readdirSync(directory)

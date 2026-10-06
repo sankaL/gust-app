@@ -10,9 +10,16 @@ export function captureErrorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback
 }
 
+// Failures only an administrator can fix (exhausted AI credits, bad provider config): retrying won't help.
+const ADMIN_ACTION_ERROR_CODES = new Set(['ai_service_quota_exceeded', 'config_missing', 'config_invalid'])
+const ADMIN_ACTION_FALLBACK_MESSAGE = "Gust's AI service is unavailable right now. Please contact the administrator."
+
 export function buildVoiceCaptureError(error: unknown): CaptureErrorState {
   if (!(error instanceof ApiError)) {
     return { message: 'Transcription failed. Please retry the same recording.', requestId: null, canRetry: true }
+  }
+  if (ADMIN_ACTION_ERROR_CODES.has(error.code)) {
+    return { message: error.message.trim() || ADMIN_ACTION_FALLBACK_MESSAGE, requestId: error.requestId, canRetry: false }
   }
   const messages: Record<string, string> = {
     transcription_no_speech: 'No speech was detected. Check that your microphone is picking up audio, then retry.',

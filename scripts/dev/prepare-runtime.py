@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import socket
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,13 +32,13 @@ LOCAL_ENV_DEFAULTS = {
     "SESSION_COOKIE_SECURE": "false",
     "SESSION_COOKIE_DOMAIN": "",
     "CAPTURE_RETENTION_DAYS": "7",
-    "MISTRAL_API_URL": "https://api.mistral.ai/v1/audio/transcriptions",
-    "MISTRAL_API_KEY": "",
-    "MISTRAL_TRANSCRIPTION_MODEL": "voxtral-mini-latest",
-    "TRANSCRIPTION_TIMEOUT_SECONDS": "20",
+    "ASSEMBLYAI_API_URL": "https://api.assemblyai.com",
+    "ASSEMBLYAI_API_KEY": "",
+    "ASSEMBLYAI_SPEECH_MODELS": "universal-3-5-pro,universal-2",
+    "TRANSCRIPTION_TIMEOUT_SECONDS": "30",
     "OPENROUTER_API_URL": "https://openrouter.ai/api/v1/chat/completions",
     "OPENROUTER_API_KEY": "",
-    "OPENROUTER_EXTRACTION_MODEL": "google/gemini-3.7-flash",
+    "OPENROUTER_EXTRACTION_MODEL": "google/gemini-3.8-flash",
     "EXTRACTION_TIMEOUT_SECONDS": "20",
     "RESEND_API_URL": "https://api.resend.com/emails",
     "RESEND_API_KEY": "",
@@ -65,9 +66,9 @@ RUNTIME_KEYS = (
     "SESSION_COOKIE_SECURE",
     "SESSION_COOKIE_DOMAIN",
     "CAPTURE_RETENTION_DAYS",
-    "MISTRAL_API_URL",
-    "MISTRAL_API_KEY",
-    "MISTRAL_TRANSCRIPTION_MODEL",
+    "ASSEMBLYAI_API_URL",
+    "ASSEMBLYAI_API_KEY",
+    "ASSEMBLYAI_SPEECH_MODELS",
     "TRANSCRIPTION_TIMEOUT_SECONDS",
     "OPENROUTER_API_URL",
     "OPENROUTER_API_KEY",
@@ -221,6 +222,26 @@ def write_runtime_env(runtime_values: dict[str, str | int]) -> None:
     RUNTIME_ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# Local voice capture and extraction call the real providers; without these keys they fail closed.
+AI_PROVIDER_KEYS = {
+    "ASSEMBLYAI_API_KEY": "voice transcription",
+    "OPENROUTER_API_KEY": "task extraction",
+}
+
+
+def missing_ai_provider_keys(runtime_values: dict[str, str | int]) -> list[str]:
+    return [key for key in AI_PROVIDER_KEYS if not str(runtime_values.get(key, "")).strip()]
+
+
+def warn_missing_ai_provider_keys(runtime_values: dict[str, str | int]) -> None:
+    for key in missing_ai_provider_keys(runtime_values):
+        print(
+            f"WARNING: {key} is empty in {ROOT_ENV_PATH.name}; local {AI_PROVIDER_KEYS[key]} "
+            "will fail with config_missing until it is set and `make dev` is re-run.",
+            file=sys.stderr,
+        )
+
+
 def main() -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -232,6 +253,7 @@ def main() -> None:
     )
     runtime_values = build_runtime_values(root_env_values, ports)
     write_runtime_env(runtime_values)
+    warn_missing_ai_provider_keys(runtime_values)
 
 
 if __name__ == "__main__":

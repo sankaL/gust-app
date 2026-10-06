@@ -301,7 +301,7 @@ Bounded-retention record of capture attempts and transcript review state.
 | `source_text` | `text` | Yes | Original manual text capture when input type is text. Plain text, max 20,000 chars. |
 | `transcript_text` | `text` | Yes | Current transcript shown for review. Plain text, max 20,000 chars. |
 | `transcript_edited_text` | `text` | Yes | User-edited transcript snapshot if submitted. Plain text, max 20,000 chars. |
-| `transcription_provider` | `text` | Yes | Initial provider name, for example `mistral`. |
+| `transcription_provider` | `text` | Yes | Transcription provider name, for example `assemblyai` (historical rows may contain `mistral`). |
 | `transcription_latency_ms` | `integer` | Yes | Optional provider latency metric. |
 | `extraction_attempt_count` | `smallint` | No | Defaults to `0`. |
 | `tasks_created_count` | `integer` | No | Defaults to `0`. |

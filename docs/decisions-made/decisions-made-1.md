@@ -1,5 +1,14 @@
 # Decisions Made
 
+## 2026-10-06 18:40:00 EDT
+
+- Moved voice transcription from Mistral Voxtral to AssemblyAI. The requested Universal-3.6 Pro model is streaming-only on AssemblyAI; because Gust records a clip and uploads it, we chose the pre-recorded API with `speech_models = ["universal-3-5-pro", "universal-2"]` (AssemblyAI's recommended pre-recorded default, with Universal-2 covering languages 3.5 Pro does not support) instead of re-architecting capture around real-time streaming. Revisit if live captions become a product goal.
+- Delete each AssemblyAI transcript after processing (which also deletes the uploaded audio) to keep the PRD guarantee that raw audio is not retained; cleanup failures are logged but do not fail the user's capture.
+- Updated the OpenRouter extraction default to `google/gemini-3.8-flash` (the only Gemini 3.8 variant available; there is no 3.8 Pro), keeping the existing LangChain/OpenRouter structured-output pipeline.
+- Accepted a bounded AssemblyAI retention window for one edge case: if an upload succeeds but transcript submission fails (or a still-processing transcript cannot be deleted after a timeout), the audio stays with AssemblyAI until its automatic 2-day `/v2/upload` expiry, because AssemblyAI exposes no delete for bare uploads. Cleanup failures are logged as `transcription_provider_cleanup_failed`.
+- Limited OpenRouter "credentials invalid" handling to HTTP 401. OpenRouter also returns 403 for moderation and guardrail blocks on a specific transcript, which must stay an ordinary extraction failure rather than tell the user to contact the administrator.
+- Treated exhausted provider credits and rejected credentials as administrator-only failures: they map to `ai_service_quota_exceeded` / `config_invalid` (HTTP 503) with a "contact the administrator" message, skip the extraction retry backoff, and are no longer swallowed by best-effort auto-extraction (which previously made an out-of-credit key look like "no tasks found").
+
 ## 2026-08-19 20:45:00 EDT
 
 - Updated default task extraction model to OpenRouter `google/gemini-3.7-flash`, replacing `openai/gpt-5.6-luna`.

@@ -9,7 +9,7 @@ Keep this file focused on **durable backend engineering rules** for Gust. Do not
 - Backend/database migration runbook: `docs/backend-database-migration-runbook.md`
 
 ## Backend Commitments
-- Follow the committed stack: FastAPI, Pydantic v2, SQLAlchemy Core with `psycopg`, Alembic, Supabase Auth with Google OAuth, Mistral transcription, OpenRouter structured extraction, and Resend reminders.
+- Follow the committed stack: FastAPI, Pydantic v2, SQLAlchemy Core with `psycopg`, Alembic, Supabase Auth with Google OAuth, AssemblyAI transcription, OpenRouter structured extraction, and Resend reminders.
 - Keep the API surface aligned with the committed resources:
   - auth/session
   - captures

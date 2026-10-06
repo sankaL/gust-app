@@ -1,16 +1,19 @@
 import asyncio
+import json
 import logging
 from dataclasses import dataclass
 from datetime import date
 from unittest.mock import patch
 
 import httpx
+import openai
 import pytest
 
 from app.core.errors import ConfigurationError, InvalidConfigurationError
 from app.core.settings import Settings
 from app.prompts.extraction_prompts import ExtractionPromptManager
 from app.services.extraction import (
+    ExtractionProviderAccountError,
     ExtractionRequest,
     ExtractionServiceError,
     ExtractorMalformedResponseError,
@@ -27,7 +30,11 @@ from app.services.extraction_retry import (
     RetryConfig,
 )
 from app.services.reminders import ReminderDeliveryError, ResendReminderService
-from app.services.transcription import MistralTranscriptionService, TranscriptionServiceError
+from app.services.transcription import (
+    AssemblyAITranscriptionService,
+    TranscriptionResult,
+    TranscriptionServiceError,
+)
 
 
 class FakeAsyncClient:
@@ -70,7 +77,8 @@ def build_settings() -> Settings:
             "BACKEND_PUBLIC_URL": "http://testserver",
             "SUPABASE_URL": "http://supabase.test",
             "SUPABASE_ANON_KEY": "test-anon-key",
-            "MISTRAL_API_KEY": "mistral-key",
+            "ASSEMBLYAI_API_KEY": "assemblyai-key",
+            "ASSEMBLYAI_POLL_INTERVAL_SECONDS": 0.001,
             "OPENROUTER_API_KEY": "openrouter-key",
             "RESEND_API_KEY": "resend-key",
             "RESEND_FROM_EMAIL": "gust@example.com",
@@ -80,83 +88,18 @@ def build_settings() -> Settings:
     )
 
 
-def test_transcription_service_wraps_http_transport_failures(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = MistralTranscriptionService(build_settings())
-    monkeypatch.setattr(
-        httpx,
-        "AsyncClient",
-        lambda timeout: FakeAsyncClient(error=httpx.ReadTimeout("timeout")),
-    )
-
-    with pytest.raises(TranscriptionServiceError) as exc_info:
-        asyncio.run(
-            service.transcribe(
-                audio_bytes=b"voice-bytes",
-                filename="capture.webm",
-                content_type="audio/webm",
-            )
-        )
-    assert exc_info.value.failure_reason == "timeout"
+def _assemblyai_service(
+    handler,
+    **setting_overrides: object,
+) -> AssemblyAITranscriptionService:
+    settings = build_settings()
+    for key, value in setting_overrides.items():
+        setattr(settings, key, value)
+    return AssemblyAITranscriptionService(settings, transport=httpx.MockTransport(handler))
 
 
-def test_transcription_service_wraps_invalid_json_responses(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = MistralTranscriptionService(build_settings())
-    monkeypatch.setattr(
-        httpx,
-        "AsyncClient",
-        lambda timeout: FakeAsyncClient(
-            response=FakeJsonResponse(status_code=200, json_error=ValueError("bad json"))
-        ),
-    )
-
-    with pytest.raises(TranscriptionServiceError) as exc_info:
-        asyncio.run(
-            service.transcribe(
-                audio_bytes=b"voice-bytes",
-                filename="capture.webm",
-                content_type="audio/webm",
-            )
-        )
-    assert exc_info.value.failure_reason == "provider_invalid_response"
-
-
-def test_transcription_service_classifies_empty_transcript_as_no_speech(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = MistralTranscriptionService(build_settings())
-    monkeypatch.setattr(
-        httpx,
-        "AsyncClient",
-        lambda timeout: FakeAsyncClient(
-            response=FakeJsonResponse(status_code=200, json_value={"text": "   "})
-        ),
-    )
-
-    with pytest.raises(TranscriptionServiceError) as exc_info:
-        asyncio.run(
-            service.transcribe(
-                audio_bytes=b"voice-bytes",
-                filename="capture.webm",
-                content_type="audio/webm",
-            )
-        )
-    assert exc_info.value.failure_reason == "no_speech"
-
-
-def test_transcription_service_uses_expected_default_model(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = MistralTranscriptionService(build_settings())
-    client = FakeAsyncClient(
-        response=FakeJsonResponse(status_code=200, json_value={"text": "Buy coffee"})
-    )
-    monkeypatch.setattr(httpx, "AsyncClient", lambda timeout: client)
-
-    result = asyncio.run(
+def _transcribe(service: AssemblyAITranscriptionService) -> TranscriptionResult:
+    return asyncio.run(
         service.transcribe(
             audio_bytes=b"voice-bytes",
             filename="capture.webm",
@@ -164,41 +107,354 @@ def test_transcription_service_uses_expected_default_model(
         )
     )
 
-    assert result.transcript_text == "Buy coffee"
-    assert result.provider == "mistral"
-    assert len(client.post_calls) == 1
-    request_kwargs = client.post_calls[0]["kwargs"]
-    assert request_kwargs["data"] == {"model": "voxtral-mini-latest"}
-    assert request_kwargs["files"] == {"file": ("capture.webm", b"voice-bytes", "audio/webm")}
+
+def _assemblyai_handler(
+    *,
+    upload: httpx.Response | None = None,
+    submit: httpx.Response | None = None,
+    polls: list[httpx.Response | Exception] | None = None,
+    delete: httpx.Response | None = None,
+    requests: list[httpx.Request] | None = None,
+):
+    poll_responses = list(polls or [])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if requests is not None:
+            requests.append(request)
+        if request.method == "DELETE":
+            assert request.url.path == "/v2/transcript/tx-1"
+            return delete or httpx.Response(200, json={"id": "tx-1", "status": "deleted"})
+        if request.url.path == "/v2/upload":
+            return upload or httpx.Response(200, json={"upload_url": "https://cdn.test/a"})
+        if request.url.path == "/v2/transcript":
+            return submit or httpx.Response(200, json={"id": "tx-1", "status": "queued"})
+        if request.url.path == "/v2/transcript/tx-1":
+            poll = poll_responses.pop(0) if len(poll_responses) > 1 else poll_responses[0]
+            if isinstance(poll, Exception):
+                raise poll
+            return poll
+        raise AssertionError(f"unexpected request {request.url}")
+
+    return handler
 
 
-def test_transcription_service_maps_invalid_model_to_invalid_configuration(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = MistralTranscriptionService(build_settings())
-    monkeypatch.setattr(
-        httpx,
-        "AsyncClient",
-        lambda timeout: FakeAsyncClient(
-            response=FakeJsonResponse(
-                status_code=400,
-                json_value={
-                    "message": "Invalid model: voxtral-mini-transcribe-26-02",
-                    "type": "invalid_model",
-                    "code": "1500",
-                },
-            )
-        ),
+def test_assemblyai_transcribes_via_upload_submit_and_poll() -> None:
+    requests: list[httpx.Request] = []
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[
+                httpx.Response(200, json={"id": "tx-1", "status": "processing"}),
+                httpx.Response(
+                    200, json={"id": "tx-1", "status": "completed", "text": " Buy coffee "}
+                ),
+            ],
+            requests=requests,
+        )
     )
 
-    with pytest.raises(InvalidConfigurationError):
-        asyncio.run(
-            service.transcribe(
-                audio_bytes=b"voice-bytes",
-                filename="capture.webm",
-                content_type="audio/webm",
+    result = _transcribe(service)
+
+    assert result.transcript_text == "Buy coffee"
+    assert result.provider == "assemblyai"
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("POST", "/v2/upload"),
+        ("POST", "/v2/transcript"),
+        ("GET", "/v2/transcript/tx-1"),
+        ("GET", "/v2/transcript/tx-1"),
+        ("DELETE", "/v2/transcript/tx-1"),
+    ]
+    assert all(request.headers["authorization"] == "assemblyai-key" for request in requests)
+    assert requests[0].content == b"voice-bytes"
+    assert json.loads(requests[1].content) == {
+        "audio_url": "https://cdn.test/a",
+        "speech_models": ["universal-3-5-pro", "universal-2"],
+    }
+
+
+def test_assemblyai_deletes_transcript_after_a_transcript_error() -> None:
+    requests: list[httpx.Request] = []
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[
+                httpx.Response(
+                    200,
+                    json={"id": "tx-1", "status": "error", "error": "Transcoding failed."},
+                )
+            ],
+            requests=requests,
+        )
+    )
+
+    with pytest.raises(TranscriptionServiceError):
+        _transcribe(service)
+
+    assert requests[-1].method == "DELETE"
+
+
+def test_assemblyai_cleanup_failure_is_logged_without_failing_transcription(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[httpx.Response(200, json={"id": "tx-1", "status": "completed", "text": "Hi"})],
+            delete=httpx.Response(500, json={"error": "internal"}),
+        )
+    )
+
+    with caplog.at_level(logging.WARNING, logger="gust.api"):
+        result = _transcribe(service)
+
+    assert result.transcript_text == "Hi"
+    cleanup_logs = [
+        record for record in caplog.records if record.msg == "transcription_provider_cleanup_failed"
+    ]
+    assert len(cleanup_logs) == 1
+    assert cleanup_logs[0].provider_status_code == 500
+
+
+def test_assemblyai_negative_balance_maps_to_quota_exceeded(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            upload=httpx.Response(
+                400,
+                json={
+                    "error": (
+                        "Your current account balance is negative. "
+                        "Please top up to continue using the API."
+                    )
+                },
             )
         )
+    )
+
+    with (
+        caplog.at_level(logging.WARNING, logger="gust.api"),
+        pytest.raises(TranscriptionServiceError) as exc_info,
+    ):
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "quota_exceeded"
+    assert exc_info.value.provider_status_code == 400
+    assert "assemblyai-key" not in caplog.text
+    assert "capture.webm" not in caplog.text
+
+
+def test_assemblyai_payment_required_maps_to_quota_exceeded() -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(submit=httpx.Response(402, json={"error": "Payment required"}))
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "quota_exceeded"
+
+
+def test_assemblyai_rejected_credentials_map_to_invalid_configuration() -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            upload=httpx.Response(
+                401, json={"error": "Authentication error, API token missing/invalid."}
+            )
+        )
+    )
+
+    with pytest.raises(InvalidConfigurationError) as exc_info:
+        _transcribe(service)
+
+    assert "contact the administrator" in exc_info.value.message
+
+
+def test_assemblyai_rate_limit_and_server_errors_map_to_provider_unavailable() -> None:
+    for status_code in (429, 503):
+        service = _assemblyai_service(
+            _assemblyai_handler(submit=httpx.Response(status_code, json={"error": "busy"}))
+        )
+        with pytest.raises(TranscriptionServiceError) as exc_info:
+            _transcribe(service)
+        assert exc_info.value.failure_reason == "provider_unavailable"
+
+
+def test_assemblyai_no_spoken_audio_error_maps_to_no_speech() -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[
+                httpx.Response(
+                    200,
+                    json={
+                        "id": "tx-1",
+                        "status": "error",
+                        "error": (
+                            "language_detection cannot be performed on files with no spoken audio."
+                        ),
+                    },
+                )
+            ]
+        )
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "no_speech"
+
+
+def test_assemblyai_other_transcript_error_maps_to_provider_rejected() -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[
+                httpx.Response(
+                    200,
+                    json={"id": "tx-1", "status": "error", "error": "Transcoding failed."},
+                )
+            ]
+        )
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "provider_rejected"
+
+
+def test_assemblyai_empty_transcript_maps_to_no_speech() -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[httpx.Response(200, json={"id": "tx-1", "status": "completed", "text": "  "})]
+        )
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "no_speech"
+
+
+def test_assemblyai_polling_is_bounded_by_transcription_timeout() -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[httpx.Response(200, json={"id": "tx-1", "status": "processing"})]
+        ),
+        transcription_timeout_seconds=0.05,
+        assemblyai_poll_interval_seconds=0.01,
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "timeout"
+
+
+def test_assemblyai_transport_failure_maps_to_provider_unavailable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("down", request=request)
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(_assemblyai_service(handler))
+
+    assert exc_info.value.failure_reason == "provider_unavailable"
+
+
+def test_assemblyai_invalid_json_maps_to_provider_invalid_response() -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(upload=httpx.Response(200, content=b"not json"))
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "provider_invalid_response"
+
+
+def test_assemblyai_missing_api_key_fails_closed() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("no provider call expected without credentials")
+
+    with pytest.raises(ConfigurationError):
+        _transcribe(_assemblyai_service(handler, assemblyai_api_key=None))
+
+
+def test_extraction_payment_required_is_not_retried() -> None:
+    """Exhausted provider credits should fail fast instead of burning retries."""
+    service = LangChainExtractionService(settings=build_settings())
+    call_count = 0
+
+    async def no_credits(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        raise ExtractionProviderAccountError(
+            "no credits", failure_reason="quota_exceeded", provider_status_code=402
+        )
+
+    with (
+        patch.object(service, "_execute_extraction", side_effect=no_credits),
+        pytest.raises(ExtractionProviderAccountError) as exc_info,
+    ):
+        asyncio.run(
+            service.extract(
+                request=ExtractionRequest(
+                    transcript_text="Plan trip",
+                    user_timezone="UTC",
+                    current_local_date=date(2026, 3, 22),
+                    groups=[],
+                ),
+            )
+        )
+
+    assert exc_info.value.failure_reason == "quota_exceeded"
+    assert call_count == 1
+    assert service.last_attempt_count == 1
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected_reason"),
+    [(402, "quota_exceeded"), (401, "credentials_invalid")],
+)
+def test_extraction_classifies_provider_account_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+    expected_reason: str,
+) -> None:
+    service = LangChainExtractionService(settings=build_settings())
+    provider_error = openai.APIStatusError(
+        "provider account error",
+        response=httpx.Response(
+            status_code,
+            request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"),
+        ),
+        body=None,
+    )
+
+    class FailingChain:
+        def __or__(self, other):
+            return self
+
+        async def ainvoke(self, payload):
+            raise provider_error
+
+    monkeypatch.setattr(
+        "app.services.extraction.ChatPromptTemplate.from_messages",
+        lambda messages: FailingChain(),
+    )
+
+    with pytest.raises(ExtractionProviderAccountError) as exc_info:
+        asyncio.run(
+            service._execute_extraction(
+                request=ExtractionRequest(
+                    transcript_text="Plan trip",
+                    user_timezone="UTC",
+                    current_local_date=date(2026, 3, 22),
+                    groups=[],
+                ),
+                model_config=service.model_registry.select_model(),
+                llm=object(),
+            )
+        )
+
+    assert exc_info.value.failure_reason == expected_reason
+    assert exc_info.value.provider_status_code == status_code
 
 
 def test_extraction_service_chain_error_raises_service_error() -> None:
@@ -800,3 +1056,116 @@ def test_resend_service_forwards_html_digest_body_without_mutation(
 
     request_kwargs = client.post_calls[0]["kwargs"]
     assert request_kwargs["json"]["html"] == malicious_html
+
+
+def _poll_connect_error() -> httpx.ConnectError:
+    return httpx.ConnectError(
+        "blip", request=httpx.Request("GET", "https://api.assemblyai.com/v2/transcript/tx-1")
+    )
+
+
+def test_assemblyai_poll_rides_out_brief_transient_failures() -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[
+                httpx.Response(503, json={"error": "busy"}),
+                _poll_connect_error(),
+                httpx.Response(429, json={"error": "slow down"}),
+                httpx.Response(200, json={"id": "tx-1", "status": "completed", "text": "Hi"}),
+            ]
+        )
+    )
+
+    assert _transcribe(service).transcript_text == "Hi"
+
+
+def test_assemblyai_poll_gives_up_after_repeated_transient_failures() -> None:
+    requests: list[httpx.Request] = []
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[httpx.Response(503, json={"error": "busy"})],
+            requests=requests,
+        )
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "provider_unavailable"
+    poll_requests = [r for r in requests if r.method == "GET"]
+    assert len(poll_requests) == 4
+    assert requests[-1].method == "DELETE"
+
+
+def test_assemblyai_poll_does_not_retry_non_transient_failures() -> None:
+    requests: list[httpx.Request] = []
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            polls=[httpx.Response(400, json={"error": "Bad transcript id"})],
+            requests=requests,
+        )
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "provider_rejected"
+    assert len([r for r in requests if r.method == "GET"]) == 1
+
+
+def test_assemblyai_unrelated_error_text_is_not_treated_as_quota() -> None:
+    service = _assemblyai_service(
+        _assemblyai_handler(
+            upload=httpx.Response(400, json={"error": "Desktop upload of this file type failed"})
+        )
+    )
+
+    with pytest.raises(TranscriptionServiceError) as exc_info:
+        _transcribe(service)
+
+    assert exc_info.value.failure_reason == "provider_rejected"
+
+
+@pytest.mark.parametrize("status_code", [403, 429, 500])
+def test_extraction_does_not_treat_moderation_or_transient_errors_as_account_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+) -> None:
+    """OpenRouter uses 403 for moderation/guardrail blocks; those are not admin problems."""
+    service = LangChainExtractionService(settings=build_settings())
+    provider_error = openai.APIStatusError(
+        "provider error",
+        response=httpx.Response(
+            status_code,
+            request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"),
+        ),
+        body=None,
+    )
+
+    class FailingChain:
+        def __or__(self, other):
+            return self
+
+        async def ainvoke(self, payload):
+            raise provider_error
+
+    monkeypatch.setattr(
+        "app.services.extraction.ChatPromptTemplate.from_messages",
+        lambda messages: FailingChain(),
+    )
+
+    with pytest.raises(ExtractorMalformedResponseError) as exc_info:
+        asyncio.run(
+            service._execute_extraction(
+                request=ExtractionRequest(
+                    transcript_text="Plan trip",
+                    user_timezone="UTC",
+                    current_local_date=date(2026, 3, 22),
+                    groups=[],
+                ),
+                model_config=service.model_registry.select_model(),
+                llm=object(),
+            )
+        )
+
+    assert not isinstance(exc_info.value, ExtractionProviderAccountError)

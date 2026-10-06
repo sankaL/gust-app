@@ -29,10 +29,10 @@ from app.db.engine import connection_scope
 from app.db.repositories import ensure_inbox_group, upsert_user
 from app.db.schema import captures, extracted_tasks, groups, reminders, tasks
 from app.services.auth import AuthenticatedIdentity
-from app.services.extraction import ExtractorMalformedResponseError
+from app.services.extraction import ExtractionProviderAccountError, ExtractorMalformedResponseError
 from app.services.staging import ApproveResult, StagingService
 from app.services.transcription import (
-    MistralTranscriptionService,
+    AssemblyAITranscriptionService,
     TranscriptionResult,
     TranscriptionServiceError,
 )
@@ -103,6 +103,21 @@ class FakeExtractionService:
         return response
 
 
+class EmptyExtractionService:
+    last_attempt_count = 1
+
+    async def extract(self, *, request) -> dict[str, object]:
+        del request
+        return {"tasks": []}
+
+
+@pytest.fixture(autouse=True)
+def _default_extraction_service(app: FastAPI) -> None:
+    # Auto-extraction now fails closed on missing provider config, so capture creation
+    # needs a stub; tests that care about extraction output override this.
+    app.dependency_overrides[get_extraction_service] = lambda: EmptyExtractionService()
+
+
 def _override_auth_service(app: FastAPI) -> None:
     app.dependency_overrides[get_auth_service] = lambda: FakeAuthService()
 
@@ -115,12 +130,12 @@ def _override_extraction_service(app: FastAPI, service: FakeExtractionService) -
     app.dependency_overrides[get_extraction_service] = lambda: service
 
 
-def test_transcription_dependency_uses_mistral_in_dev_mode() -> None:
+def test_transcription_dependency_uses_assemblyai_in_dev_mode() -> None:
     settings = SimpleNamespace(gust_dev_mode=True)
 
     service = get_transcription_service(settings)
 
-    assert isinstance(service, MistralTranscriptionService)
+    assert isinstance(service, AssemblyAITranscriptionService)
     assert service.settings is settings
 
 
@@ -356,7 +371,7 @@ def test_voice_capture_rate_limit_returns_429(
         FakeTranscriptionService(
             result=TranscriptionResult(
                 transcript_text="Buy coffee beans at 5pm",
-                provider="mistral",
+                provider="assemblyai",
                 latency_ms=412,
             )
         ),
@@ -461,7 +476,7 @@ def test_voice_capture_transcribes_audio_and_returns_review_state(
     fake_transcription = FakeTranscriptionService(
         result=TranscriptionResult(
             transcript_text="Buy coffee beans at 5pm",
-            provider="mistral",
+            provider="assemblyai",
             latency_ms=412,
         )
     )
@@ -486,7 +501,7 @@ def test_voice_capture_transcribes_audio_and_returns_review_state(
         ).one()
 
     assert capture_row.status == "ready_for_review"
-    assert capture_row.transcription_provider == "mistral"
+    assert capture_row.transcription_provider == "assemblyai"
     assert capture_row.transcription_latency_ms == 412
 
 
@@ -677,7 +692,7 @@ def test_voice_capture_returns_config_invalid_for_invalid_transcription_model(
     _override_transcription_service(
         app,
         FakeTranscriptionService(
-            error=InvalidConfigurationError("Configured Mistral transcription model is invalid."),
+            error=InvalidConfigurationError("Voice transcription is not configured correctly."),
         ),
     )
 
@@ -1543,3 +1558,184 @@ def test_approve_extracted_task_copies_description_to_saved_task(
         ).one()
 
     assert task_row.description == "Follow up with a short summary after reviewing the draft."
+
+
+def _quota_exceeded_error() -> ExtractionProviderAccountError:
+    return ExtractionProviderAccountError(
+        "no credits",
+        failure_reason="quota_exceeded",
+        provider_status_code=402,
+    )
+
+
+def test_voice_capture_returns_admin_contact_error_when_transcription_quota_exhausted(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            error=TranscriptionServiceError(
+                "balance negative",
+                failure_reason="quota_exceeded",
+                provider_status_code=400,
+            )
+        ),
+    )
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 503
+    error = response.json()["error"]
+    assert error["code"] == "ai_service_quota_exceeded"
+    assert "contact the administrator" in error["message"]
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "transcription_failed"
+    assert capture_row.error_code == "quota_exceeded"
+
+
+def test_voice_capture_surfaces_extraction_quota_instead_of_silently_staging_nothing(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            result=TranscriptionResult(
+                transcript_text="Buy coffee beans",
+                provider="assemblyai",
+                latency_ms=300,
+            )
+        ),
+    )
+    _override_extraction_service(app, FakeExtractionService(responses=[_quota_exceeded_error()]))
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.webm", b"voice-bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "ai_service_quota_exceeded"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    # Transcript is preserved so the capture can be re-extracted once credits are restored.
+    assert capture_row.transcript_text == "Buy coffee beans"
+    assert capture_row.status == "extraction_failed"
+    assert capture_row.error_code == "extraction_quota_exceeded"
+
+
+def test_text_capture_returns_admin_contact_error_when_extraction_quota_exhausted(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    fake_extraction = FakeExtractionService(responses=[_quota_exceeded_error()])
+    _override_extraction_service(app, fake_extraction)
+
+    response = client.post("/captures/text", json={"text": "Plan roadmap"}, headers=headers)
+
+    assert response.status_code == 503
+    error = response.json()["error"]
+    assert error["code"] == "ai_service_quota_exceeded"
+    assert "contact the administrator" in error["message"]
+    assert fake_extraction.call_count == 1
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(sa.select(captures)).one()
+
+    assert capture_row.status == "extraction_failed"
+    assert capture_row.error_code == "extraction_quota_exceeded"
+
+
+def test_text_capture_returns_config_invalid_when_extraction_credentials_rejected(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_extraction_service(
+        app,
+        FakeExtractionService(
+            responses=[
+                ExtractionProviderAccountError(
+                    "bad key",
+                    failure_reason="credentials_invalid",
+                    provider_status_code=401,
+                )
+            ]
+        ),
+    )
+
+    response = client.post("/captures/text", json={"text": "Plan roadmap"}, headers=headers)
+
+    assert response.status_code == 503
+    error = response.json()["error"]
+    assert error["code"] == "config_invalid"
+    assert "contact the administrator" in error["message"]
+
+
+def test_submit_capture_returns_admin_contact_error_without_retrying_on_quota(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    create_response = client.post("/captures/text", json={"text": "Plan trip"}, headers=headers)
+    capture_id = create_response.json()["capture_id"]
+    fake_extraction = FakeExtractionService(responses=[_quota_exceeded_error()])
+    _override_extraction_service(app, fake_extraction)
+
+    response = client.post(
+        f"/captures/{capture_id}/submit",
+        json={"transcript_text": "Plan trip next week"},
+        headers=headers,
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "ai_service_quota_exceeded"
+    assert fake_extraction.call_count == 1
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(
+            sa.select(captures).where(captures.c.id == capture_id)
+        ).one()
+
+    assert capture_row.status == "extraction_failed"
+    assert capture_row.error_code == "extraction_quota_exceeded"
+
+
+def test_re_extract_returns_admin_contact_error_when_extraction_quota_exhausted(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    capture_id = _seed_capture(client, user_id="11111111-1111-1111-1111-111111111111")
+    _override_extraction_service(app, FakeExtractionService(responses=[_quota_exceeded_error()]))
+
+    response = client.post(
+        f"/captures/{capture_id}/re-extract",
+        json={"transcript_text": "New transcript text"},
+        headers=headers,
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "ai_service_quota_exceeded"
+
+    with connection_scope(client.app.state.settings.database_url) as connection:
+        capture_row = connection.execute(
+            sa.select(captures).where(captures.c.id == capture_id)
+        ).one()
+
+    assert capture_row.status == "extraction_failed"
+    assert capture_row.error_code == "extraction_quota_exceeded"

@@ -49,4 +49,18 @@ describe('capture model', () => {
       canRetry: true,
     })
   })
+
+  it('shows the admin-contact message without a retry when AI credits are exhausted', () => {
+    const message = "Gust's AI service is unavailable because its usage limit has been reached. Please contact the administrator."
+    const result = buildVoiceCaptureError(new ApiError(message, 'ai_service_quota_exceeded', 503, 'request-2'))
+
+    expect(result).toEqual({ message, requestId: 'request-2', canRetry: false })
+  })
+
+  it('falls back to an admin-contact message when a configuration error has no message', () => {
+    const result = buildVoiceCaptureError(new ApiError('  ', 'config_invalid', 503, null))
+
+    expect(result.message).toContain('contact the administrator')
+    expect(result.canRetry).toBe(false)
+  })
 })

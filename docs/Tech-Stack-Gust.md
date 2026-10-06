@@ -33,7 +33,7 @@ The frontend talks only to the backend API. It does not call the database, trans
 | Migrations | Alembic | Standard schema migration workflow |
 | Auth provider | Supabase Auth with Google OAuth | Managed identity for a single-user-per-account app |
 | Database | Supabase Postgres | Managed Postgres with backups and hosted auth adjacency |
-| Transcription | Mistral transcription API | Current hosted transcription API with direct audio support |
+| Transcription | AssemblyAI pre-recorded API (Universal-3.5 Pro, Universal-2 fallback) | Highest-accuracy AssemblyAI model available for uploaded recordings |
 | Extraction | OpenRouter-backed LLM with JSON-schema structured outputs | Provider flexibility without sacrificing typed output |
 | Email | Resend | Simple transactional email API with idempotency support |
 | Hosting | Railway | Simple deployment for the API, frontend, and scheduled jobs |
@@ -295,20 +295,34 @@ Reason:
 
 ### Transcription
 
-Use Mistral's audio transcription endpoint as the initial speech-to-text provider.
+Use AssemblyAI's pre-recorded (async) API as the speech-to-text provider.
 
-Current default model alias: `voxtral-mini-latest`.
+Current default `speech_models`: `["universal-3-5-pro", "universal-2"]` (Universal-3.5 Pro, with
+AssemblyAI falling back to Universal-2 for languages 3.5 Pro does not support). Universal-3.6 Pro
+is AssemblyAI's streaming-only model and is not available for uploaded recordings; adopting it would
+require moving capture to real-time streaming.
 
-Local development and production both use the real Mistral provider. Dev mode changes
+Local development and production both use the real AssemblyAI provider. Dev mode changes
 authentication and local infrastructure behavior, but it does not mock transcription;
-local voice capture therefore requires valid Mistral credentials.
+local voice capture therefore requires valid AssemblyAI credentials.
 
 Operational contract:
 
-- audio is uploaded from backend to provider
-- provider response returns transcript text
+- backend uploads audio to `/v2/upload`, submits `/v2/transcript`, and polls until `completed` or `error`
+- the whole upload/submit/poll sequence is bounded by `TRANSCRIPTION_TIMEOUT_SECONDS`; up to 3 consecutive transient poll failures (429, 5xx, connection errors) are tolerated inside that deadline because the job is already submitted
+- after every transcript (success or failure) the backend deletes it via `DELETE /v2/transcript/{id}`, which also deletes the uploaded audio; cleanup failures are logged and do not fail the capture
+- if upload succeeds but submission fails, there is no transcript to delete and AssemblyAI has no upload-delete API; AssemblyAI auto-deletes `/v2/upload` files after 2 days
 - raw audio is discarded after processing
-- transcription latency and failures are logged without logging the transcript body
+- transcription latency and failures are logged without logging the transcript body or provider error text
+
+### AI Provider Account Failures
+
+Exhausted credits and rejected credentials are administrator problems, not user problems:
+
+- AssemblyAI negative balance (HTTP 400 "balance is negative … top up") or HTTP 402, and OpenRouter HTTP 402, map to API error `ai_service_quota_exceeded` (HTTP 503) with a "contact the administrator" message
+- AssemblyAI HTTP 401/403 and OpenRouter HTTP 401 map to `config_invalid` (HTTP 503) with an administrator-contact message; OpenRouter 403 is not treated as an account failure because OpenRouter also uses it for moderation and guardrail blocks on specific input
+- these failures are never retried by the extraction backoff loop, and they are surfaced from voice capture, text capture, submit, and re-extract instead of being swallowed by best-effort auto-extraction
+- the capture is marked `extraction_failed` (or `transcription_failed`) with a sanitized `error_code` so it can be re-extracted once the account is restored
 
 ### Extraction
 
@@ -321,7 +335,7 @@ Model selection is an operational setting, not a product contract. The required 
 - JSON-schema structured outputs
 - acceptable latency for synchronous task creation
 
-Current default model: `google/gemini-3.7-flash`.
+Current default model: `google/gemini-3.8-flash`.
 
 Backend behavior:
 

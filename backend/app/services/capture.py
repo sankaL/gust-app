@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app.core.action_locks import ActionLockBusyError, user_action_lock
 from app.core.errors import (
+    AIServiceQuotaExceededError,
     CaptureNotFoundError,
     CaptureStateConflictError,
     ConfigurationError,
@@ -50,6 +51,7 @@ from app.db.repositories import (
     update_capture,
 )
 from app.services.extraction import (
+    ExtractionProviderAccountError,
     ExtractionRequest,
     ExtractionServiceError,
     ExtractorMalformedResponseError,
@@ -77,6 +79,13 @@ from app.services.transcription import (
 )
 
 logger = logging.getLogger("gust.api")
+
+# Extraction failures only an administrator can fix; never swallowed during auto-extraction.
+_ADMIN_ACTION_EXTRACTION_ERRORS = (
+    ExtractionProviderAccountError,
+    ConfigurationError,
+    InvalidConfigurationError,
+)
 
 
 class TranscriptionClient(Protocol):
@@ -266,6 +275,10 @@ class CaptureService:
                             capture_id=updated.id,
                             transcript_text=updated.transcript_text or "",
                         )
+                except _ADMIN_ACTION_EXTRACTION_ERRORS as exc:
+                    raise self._fail_auto_extraction(
+                        user_id=user_id, capture_id=updated.id, error=exc
+                    ) from exc
                 except Exception as exc:
                     logger.warning(
                         "auto_extraction_failed",
@@ -308,6 +321,10 @@ class CaptureService:
                             capture_id=capture.id,
                             transcript_text=normalized,
                         )
+                except _ADMIN_ACTION_EXTRACTION_ERRORS as exc:
+                    raise self._fail_auto_extraction(
+                        user_id=user_id, capture_id=capture.id, error=exc
+                    ) from exc
                 except Exception as exc:
                     logger.warning(
                         "auto_extraction_failed",
@@ -438,6 +455,10 @@ class CaptureService:
                     extraction_request=request,
                     inbox_group=inbox_group,
                 )
+        except ExtractionProviderAccountError as exc:
+            error_code, public_error = self._resolve_admin_action_extraction_failure(exc)
+            self._record_submission_failure(user_id, capture_id, transcript, error_code)
+            raise public_error from exc
         except (ExtractorMalformedResponseError, ValidationError) as exc:
             self._record_submission_failure(
                 user_id, capture_id, transcript, "extractor_payload_invalid"
@@ -826,6 +847,8 @@ class CaptureService:
                 return "no_speech", TranscriptionNoSpeechError()
             if exc.failure_reason == "timeout":
                 return "timeout", TranscriptionTimeoutError()
+            if exc.failure_reason == "quota_exceeded":
+                return "quota_exceeded", AIServiceQuotaExceededError()
             if exc.failure_reason == "provider_unavailable":
                 return "provider_unavailable", TranscriptionProviderUnavailableError()
             if exc.failure_reason == "provider_rejected":
@@ -871,6 +894,44 @@ class CaptureService:
                 "audio_size_bytes": audio_size_bytes,
             },
         )
+
+    def _resolve_admin_action_extraction_failure(
+        self,
+        exc: Exception,
+    ) -> tuple[str, Exception]:
+        if isinstance(exc, ExtractionProviderAccountError):
+            if exc.failure_reason == "quota_exceeded":
+                return "extraction_quota_exceeded", AIServiceQuotaExceededError()
+            return "config_invalid", InvalidConfigurationError(
+                "Task extraction is not configured correctly. Please contact the administrator."
+            )
+        return self._error_code_for_exception(exc), exc
+
+    def _fail_auto_extraction(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        error: Exception,
+    ) -> Exception:
+        error_code, public_error = self._resolve_admin_action_extraction_failure(error)
+        logger.error(
+            "auto_extraction_blocked",
+            extra={
+                "event": "auto_extraction_blocked",
+                "capture_id": capture_id,
+                "user_id": user_id,
+                "error_code": error_code,
+                "error_type": type(error).__name__,
+            },
+        )
+        self._mark_capture_failure(
+            capture_id=capture_id,
+            user_id=user_id,
+            status="extraction_failed",
+            error_code=error_code,
+        )
+        return public_error
 
     def _map_extraction_error(self, exc: Exception) -> Exception:
         if isinstance(exc, ExtractionServiceError):
@@ -1065,6 +1126,8 @@ class CaptureService:
                 },
             )
             return
+        except ExtractionProviderAccountError:
+            raise
         except ExtractionServiceError as exc:
             logger.warning(
                 "extraction_failed_for_staging",
@@ -1153,11 +1216,16 @@ class CaptureService:
                     )
 
                 assert updated is not None
-                await self._extract_and_store_in_staging(
-                    user_id=user_id,
-                    capture_id=capture_id,
-                    transcript_text=normalized_transcript,
-                )
+                try:
+                    await self._extract_and_store_in_staging(
+                        user_id=user_id,
+                        capture_id=capture_id,
+                        transcript_text=normalized_transcript,
+                    )
+                except _ADMIN_ACTION_EXTRACTION_ERRORS as exc:
+                    raise self._fail_auto_extraction(
+                        user_id=user_id, capture_id=capture_id, error=exc
+                    ) from exc
         except ActionLockBusyError as exc:
             raise RateLimitExceededError(
                 message="Another capture is already processing. Please wait a moment and retry."

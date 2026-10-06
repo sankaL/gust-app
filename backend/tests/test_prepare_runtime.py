@@ -80,3 +80,31 @@ def test_get_compose_owned_ports_reads_published_host_ports(
     )
 
     assert prepare_runtime_module.get_compose_owned_ports() == {3100}
+
+
+def test_missing_ai_provider_keys_flags_blank_transcription_and_extraction_keys(
+    prepare_runtime_module,
+) -> None:
+    module = prepare_runtime_module
+
+    assert module.missing_ai_provider_keys(
+        {"ASSEMBLYAI_API_KEY": "  ", "OPENROUTER_API_KEY": "set"}
+    ) == ["ASSEMBLYAI_API_KEY"]
+    assert module.missing_ai_provider_keys({}) == ["ASSEMBLYAI_API_KEY", "OPENROUTER_API_KEY"]
+    assert module.missing_ai_provider_keys(
+        {"ASSEMBLYAI_API_KEY": "a", "OPENROUTER_API_KEY": "b"}
+    ) == []
+
+
+def test_build_runtime_values_forwards_assemblyai_settings_from_root_env(
+    prepare_runtime_module,
+) -> None:
+    module = prepare_runtime_module
+    ports = {"GUST_FRONTEND_PORT": 3000, "GUST_BACKEND_PORT": 8000, "GUST_POSTGRES_PORT": 5432}
+
+    runtime_values = module.build_runtime_values({"ASSEMBLYAI_API_KEY": "local-key"}, ports)
+
+    assert runtime_values["ASSEMBLYAI_API_KEY"] == "local-key"
+    assert runtime_values["ASSEMBLYAI_SPEECH_MODELS"] == "universal-3-5-pro,universal-2"
+    assert "MISTRAL_API_KEY" not in runtime_values
+

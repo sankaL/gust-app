@@ -296,6 +296,11 @@ For environments with existing deployments, use this order:
 8. Deploy frontend changes that depend on the backend behavior.
 9. Verify the user-visible flow and background job behavior.
 
+Provider configuration changes (no schema impact) follow the same backend-before-frontend order, with
+the provider secrets set first:
+
+- AssemblyAI transcription cutover: set `ASSEMBLYAI_API_KEY` (and optionally `ASSEMBLYAI_SPEECH_MODELS`, default `universal-3-5-pro,universal-2`) on the Railway backend service, and set `OPENROUTER_EXTRACTION_MODEL=google/gemini-3.8-flash` if production overrides the default, **before** deploying the backend. A backend deployed without the key fails closed: voice capture returns `config_missing` with an administrator-contact message. The legacy `MISTRAL_*` variables are ignored and may be removed after verification.
+
 Why this order:
 
 - the backend must not start against an unknown or older schema
@@ -342,6 +347,12 @@ Allowlist administration:
 - the allowlist trigger normalizes `email` to lowercase trimmed text before storage
 
 ## Post-Deploy Verification
+
+After an AI provider configuration change (for example the AssemblyAI cutover):
+
+- Record a short voice capture and confirm a transcript returns and new `captures` rows report `transcription_provider = 'assemblyai'`.
+- Confirm backend logs show no `transcription_provider_cleanup_failed` events for that capture.
+- Submit a text capture and confirm tasks are extracted with the configured OpenRouter model.
 
 Minimum verification after applying schema-affecting changes:
 

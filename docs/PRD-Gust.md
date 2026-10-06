@@ -207,6 +207,7 @@ Required failure handling:
 - If mic permission is denied, the app must show a clear error and keep text capture available.
 - If transcription fails, no tasks are created and the user can retry.
 - If extraction fails, the transcript stays visible so the user can retry or edit.
+- If an AI provider is unusable because its credits are exhausted or its credentials are rejected, the app must tell the user to contact the administrator and must not offer a retry that cannot succeed. This must surface even during automatic extraction rather than silently producing zero tasks.
 - If zero actionable tasks are found, the app must say so explicitly and create nothing.
 
 ### Tasks
