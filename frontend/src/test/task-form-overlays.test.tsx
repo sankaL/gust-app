@@ -76,7 +76,8 @@ describe('task form overlays', () => {
     expect(reminderCard?.className).toContain('overflow-visible')
     expect(groupCard?.className).toContain('overflow-visible')
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Reminder type' }), 'datetime')
+    await user.click(screen.getByRole('button', { name: /No reminder/ }))
+    await user.click(screen.getByRole('option', { name: /Date and time/ }))
     await user.click(screen.getByRole('button', { name: 'Select date & time' }))
     expect(await screen.findByText('Time')).toBeInTheDocument()
 
@@ -99,11 +100,12 @@ describe('task form overlays', () => {
     const user = userEvent.setup()
     renderFields()
 
-    const reminderType = screen.getByRole('combobox', { name: 'Reminder type' })
-    await user.selectOptions(reminderType, 'date')
+    await user.click(screen.getByRole('button', { name: /No reminder/ }))
+    await user.click(screen.getByRole('option', { name: /Date only/ }))
     expect(screen.getByRole('button', { name: 'Select a date' })).toBeInTheDocument()
 
-    await user.selectOptions(reminderType, 'datetime')
+    await user.click(screen.getByRole('button', { name: /Date only/ }))
+    await user.click(screen.getByRole('option', { name: /Date and time/ }))
     expect(screen.getByRole('button', { name: 'Select date & time' })).toBeInTheDocument()
   })
 

@@ -8,6 +8,8 @@ import { TaskRecurrenceFields } from './TaskRecurrenceFields'
 
 type Group = { id: string; name: string }
 
+const REMINDER_MODE_OPTIONS = [{ value: 'none', label: 'No reminder' }, { value: 'date', label: 'Date only' }, { value: 'datetime', label: 'Date and time' }]
+
 type Props = {
   title: string
   description: string
@@ -83,7 +85,7 @@ function TaskScheduleFields(props: Props & { disabled: boolean }) {
     <div className="grid min-w-0 gap-3 sm:grid-cols-2">
       <ScheduleField label="Due date"><DatePicker value={props.dueDate || null} onChange={props.onDueDateChange} mode="date" disabled={props.disabled} placeholder="Select a date" /></ScheduleField>
       <ScheduleField label="Reminder">
-        <select aria-label="Reminder type" value={reminderMode} disabled={props.disabled} onChange={(event) => setReminderMode(event.target.value)} className="w-full rounded-soft bg-surface px-3 py-2 text-sm text-on-surface"><option value="none">No reminder</option><option value="date">Date only</option><option value="datetime">Date and time</option></select>
+        <SelectDropdown label="" options={REMINDER_MODE_OPTIONS} value={reminderMode} disabled={props.disabled} onChange={(value) => setReminderMode(String(value))} />
         {reminderMode === 'date' ? <div className="mt-2"><DatePicker value={props.reminderDate || null} onChange={(value) => { props.onReminderDateChange?.(value); if (!value) setReminderMode('none') }} mode="date" disabled={props.disabled} placeholder="Select a date" /></div> : null}
         {reminderMode === 'datetime' ? <div className="mt-2"><DatePicker value={props.reminderAt || null} onChange={(value) => { props.onReminderAtChange(value); if (!value) setReminderMode('none') }} mode="datetime" disabled={props.disabled} placeholder="Select date & time" /></div> : null}
         {reminderMode === 'date' ? <p className="mt-2 text-xs text-on-surface-variant/60">Notification time is set in Settings.</p> : null}
