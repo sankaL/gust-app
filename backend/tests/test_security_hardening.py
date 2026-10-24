@@ -6,13 +6,13 @@ from fastapi import FastAPI
 from starlette.requests import Request
 
 from app.core.dependencies import get_auth_service
+from app.core.errors import InvalidCredentialsError
 from app.core.middleware import RequestContextMiddleware
 from app.core.rate_limits import RequestRateLimiter
 from app.core.request_security import client_ip_for_request
 from app.core.security import (
     ACCESS_TOKEN_COOKIE,
     CSRF_COOKIE,
-    OAUTH_CODE_VERIFIER_COOKIE,
     REFRESH_TOKEN_COOKIE,
     TokenBundle,
 )
@@ -26,8 +26,8 @@ class FakeAuthService:
     def ensure_configured(self) -> None:
         return None
 
-    def build_google_authorize_url(self, *, code_challenge: str) -> str:
-        return f"https://supabase.example/auth?challenge={code_challenge}"
+    async def sign_in_with_password(self, *, email: str, password: str) -> AuthenticatedSession:
+        raise InvalidCredentialsError()
 
     async def refresh_session(self, *, refresh_token: str) -> AuthenticatedSession:
         assert refresh_token == "refresh-token"
@@ -158,11 +158,13 @@ def test_auth_entry_rate_limit_returns_429(app: FastAPI, client) -> None:
     app.state.settings.rate_limit_auth_entry_ip = "1/60"
     middleware.rate_limiter = RequestRateLimiter(app.state.settings)
 
-    first = client.get("/auth/session/google/start")
-    second = client.get("/auth/session/google/start")
+    credentials = {"email": "user@example.com", "password": "wrong-password"}
+    headers = {"Origin": "http://frontend.test"}
+    first = client.post("/auth/session/login", json=credentials, headers=headers)
+    second = client.post("/auth/session/login", json=credentials, headers=headers)
 
-    assert first.status_code == 302
-    assert OAUTH_CODE_VERIFIER_COOKIE in first.headers["set-cookie"]
+    assert first.status_code == 401
+    assert first.json()["error"]["code"] == "auth_invalid_credentials"
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "rate_limit_exceeded"
 

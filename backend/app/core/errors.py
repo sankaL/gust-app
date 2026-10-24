@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 
 from app.core.security import (
     clear_csrf_cookie,
-    clear_oauth_code_verifier_cookie,
     clear_session_cookies,
 )
 from app.db.migrations import MigrationVersionError
@@ -40,6 +39,15 @@ class AuthEmailNotAllowedError(ApiError):
         super().__init__(
             status_code=status.HTTP_403_FORBIDDEN,
             code="auth_email_not_allowed",
+            message=message,
+        )
+
+
+class InvalidCredentialsError(ApiError):
+    def __init__(self, message: str = "Email or password is incorrect.") -> None:
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="auth_invalid_credentials",
             message=message,
         )
 
@@ -389,7 +397,6 @@ async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
         if settings is not None:
             clear_session_cookies(response, settings)
             clear_csrf_cookie(response, settings)
-            clear_oauth_code_verifier_cookie(response, settings)
     return response
 
 

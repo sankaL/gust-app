@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import contextlib
 from typing import Annotated
-from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.dependencies import (
     get_auth_service,
@@ -16,19 +14,16 @@ from app.core.dependencies import (
 from app.core.errors import (
     AuthEmailNotAllowedError,
     AuthRequiredError,
-    CsrfValidationError,
     InvalidTimezoneError,
+    OriginValidationError,
 )
+from app.core.request_security import validate_browser_origin
 from app.core.security import (
     CSRF_COOKIE,
-    OAUTH_CODE_VERIFIER_COOKIE,
     REFRESH_TOKEN_COOKIE,
     clear_csrf_cookie,
-    clear_oauth_code_verifier_cookie,
     clear_session_cookies,
     ensure_csrf_cookie,
-    generate_pkce_challenge,
-    set_oauth_code_verifier_cookie,
     set_session_cookies,
 )
 from app.core.settings import Settings, get_settings
@@ -75,6 +70,19 @@ class TimezoneUpdateRequest(BaseModel):
     timezone: str
 
 
+class PasswordSignInRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=256)
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized or any(char.isspace() for char in normalized):
+            raise ValueError("Enter a valid email address.")
+        return normalized
+
+
 @router.get("", response_model=SessionStatusResponse)
 async def get_session_status(
     request: Request,
@@ -91,51 +99,26 @@ async def get_session_status(
     return _build_session_status_response(session_context, csrf_token)
 
 
-@router.get("/google/start")
-async def start_google_sign_in(
-    settings: SettingsDep,
-    auth_service: AuthServiceDep,
-) -> RedirectResponse:
-    if settings.gust_dev_mode or isinstance(auth_service, LocalDevAuthService):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
-    auth_service.ensure_configured()
-    pkce_challenge = generate_pkce_challenge()
-    response = RedirectResponse(
-        url=auth_service.build_google_authorize_url(
-            code_challenge=pkce_challenge.challenge,
-        ),
-        status_code=302,
-    )
-    set_oauth_code_verifier_cookie(response, settings, pkce_challenge)
-    return response
-
-
-@router.get("/callback")
-async def auth_callback(
+@router.post("/login", response_model=SessionStatusResponse)
+async def password_sign_in(
+    payload: PasswordSignInRequest,
     request: Request,
+    response: Response,
     settings: SettingsDep,
     auth_service: AuthServiceDep,
-    code: str = Query(..., min_length=1, max_length=4096),
-) -> RedirectResponse:
+) -> SessionStatusResponse:
     if settings.gust_dev_mode or isinstance(auth_service, LocalDevAuthService):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
+    # No session exists yet, so there is no CSRF token to check. Requiring a trusted
+    # Origin/Referer blocks cross-site login CSRF instead.
+    if not validate_browser_origin(request, settings):
+        raise OriginValidationError()
     auth_service.ensure_configured()
 
-    code_verifier = request.cookies.get(OAUTH_CODE_VERIFIER_COOKIE)
-    if not code_verifier:
-        raise CsrfValidationError("OAuth PKCE verifier was missing or expired.")
-    try:
-        session = await auth_service.exchange_code_for_session(
-            code=code,
-            code_verifier=code_verifier,
-        )
-    except AuthEmailNotAllowedError:
-        # The provider rejected this sign-in before returning a refresh token, so there is
-        # no provider session to revoke here. Cookies are still cleared below.
-        return _build_blocked_auth_redirect_response(
-            settings=settings,
-            response_url=_build_landing_redirect_url(settings, auth_error="email_not_allowed"),
-        )
+    session = await auth_service.sign_in_with_password(
+        email=payload.email,
+        password=payload.password,
+    )
 
     with user_connection_scope(
         settings.database_url,
@@ -143,25 +126,16 @@ async def auth_callback(
     ) as connection:
         if not is_email_allowed(connection, email=session.identity.email):
             await _best_effort_revoke_refresh_token(auth_service, session.tokens.refresh_token)
-            return _build_blocked_auth_redirect_response(
-                settings=settings,
-                response_url=_build_landing_redirect_url(settings, auth_error="email_not_allowed"),
-            )
+            raise AuthEmailNotAllowedError()
         _bootstrap_user_session(connection, session)
         session_context = get_session_context(connection, session.identity.user_id)
 
     if session_context is None:
         raise AuthRequiredError("Authenticated user could not be resolved locally.")
 
-    _frontend = (settings.frontend_app_url or "").rstrip("/")
-    response = RedirectResponse(
-        url=f"{_frontend}/capture" if _frontend else "/capture",
-        status_code=302,
-    )
-    clear_oauth_code_verifier_cookie(response, settings)
     set_session_cookies(response, settings, session.tokens)
-    ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
-    return response
+    csrf_token = ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
+    return _build_session_status_response(session_context, csrf_token)
 
 
 @router.post("/dev-login", response_model=SessionStatusResponse)
@@ -275,28 +249,6 @@ def _bootstrap_user_session(connection, session: AuthenticatedSession) -> None:
         timezone=existing_user.timezone if existing_user is not None else "UTC",
     )
     ensure_inbox_group(connection, user_id=session.identity.user_id)
-
-
-def _build_landing_redirect_url(settings: Settings, *, auth_error: str | None = None) -> str:
-    frontend_app_url = (settings.frontend_app_url or "").rstrip("/")
-    base_url = frontend_app_url or "/"
-
-    if auth_error is None:
-        return base_url
-
-    return f"{base_url}?{urlencode({'auth_error': auth_error})}"
-
-
-def _build_blocked_auth_redirect_response(
-    *,
-    settings: Settings,
-    response_url: str,
-) -> RedirectResponse:
-    response = RedirectResponse(url=response_url, status_code=302)
-    clear_oauth_code_verifier_cookie(response, settings)
-    clear_session_cookies(response, settings)
-    clear_csrf_cookie(response, settings)
-    return response
 
 
 async def _best_effort_revoke_refresh_token(

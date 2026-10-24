@@ -173,8 +173,7 @@ class RequestRateLimiter:
             return None
 
         if path in {
-            "/auth/session/google/start",
-            "/auth/session/callback",
+            "/auth/session/login",
             "/auth/session/dev-login",
         }:
             return RateLimitPolicy(

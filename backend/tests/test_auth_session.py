@@ -7,11 +7,10 @@ from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 from app.core.dependencies import get_auth_service
-from app.core.errors import UpstreamAuthError
+from app.core.errors import InvalidCredentialsError
 from app.core.security import (
     ACCESS_TOKEN_COOKIE,
     CSRF_COOKIE,
-    OAUTH_CODE_VERIFIER_COOKIE,
     REFRESH_TOKEN_COOKIE,
     TokenBundle,
 )
@@ -25,28 +24,22 @@ from app.services.auth import (
     LocalDevAuthService,
 )
 
+VALID_EMAIL = "user@example.com"
+VALID_PASSWORD = "correct-horse-battery-staple"
+FRONTEND_ORIGIN = {"Origin": "http://frontend.test"}
+
 
 @dataclass
 class FakeAuthService:
-    fail_signup: bool = False
+    sign_in_calls: int = 0
 
     def ensure_configured(self) -> None:
         return None
 
-    def build_google_authorize_url(self, *, code_challenge: str) -> str:
-        return (
-            "https://supabase.example/auth/v1/authorize"
-            f"?provider=google&code_challenge={code_challenge}"
-        )
-
-    async def exchange_code_for_session(
-        self,
-        *,
-        code: str,
-        code_verifier: str,
-    ) -> AuthenticatedSession:
-        assert code == "valid-code"
-        assert code_verifier == "expected-verifier"
+    async def sign_in_with_password(self, *, email: str, password: str) -> AuthenticatedSession:
+        self.sign_in_calls += 1
+        if email != VALID_EMAIL or password != VALID_PASSWORD:
+            raise InvalidCredentialsError()
         return AuthenticatedSession(
             tokens=TokenBundle(
                 access_token="access-token",
@@ -55,7 +48,7 @@ class FakeAuthService:
             ),
             identity=AuthenticatedIdentity(
                 user_id="11111111-1111-1111-1111-111111111111",
-                email="user@example.com",
+                email=email,
                 display_name="Gust User",
             ),
         )
@@ -72,47 +65,6 @@ class FakeAuthService:
                 user_id="11111111-1111-1111-1111-111111111111",
                 email="user@example.com",
                 display_name="Gust User",
-            ),
-        )
-
-    async def sign_up_with_password(
-        self,
-        *,
-        email: str,
-        password: str,
-        display_name: str | None = None,
-    ) -> AuthenticatedSession:
-        assert email == "local-dev@gust.local"
-        assert password == "gust-local-dev-password"
-        assert display_name == "Local Dev User"
-        if self.fail_signup:
-            raise UpstreamAuthError("signup failed")
-        return AuthenticatedSession(
-            tokens=TokenBundle(
-                access_token="access-token",
-                refresh_token="refresh-token",
-                expires_in=3600,
-            ),
-            identity=AuthenticatedIdentity(
-                user_id="11111111-1111-1111-1111-111111111111",
-                email=email,
-                display_name=display_name,
-            ),
-        )
-
-    async def sign_in_with_password(self, *, email: str, password: str) -> AuthenticatedSession:
-        assert email == "local-dev@gust.local"
-        assert password == "gust-local-dev-password"
-        return AuthenticatedSession(
-            tokens=TokenBundle(
-                access_token="access-token",
-                refresh_token="refresh-token",
-                expires_in=3600,
-            ),
-            identity=AuthenticatedIdentity(
-                user_id="11111111-1111-1111-1111-111111111111",
-                email=email,
-                display_name="Local Dev User",
             ),
         )
 
@@ -199,25 +151,24 @@ def test_session_preflight_allows_frontend_origin(client: TestClient) -> None:
     assert "POST" in response.headers["access-control-allow-methods"]
 
 
-def test_google_start_sets_pkce_cookies(app: FastAPI, client: TestClient) -> None:
-    _override_auth_service(app, FakeAuthService())
-
-    response = client.get("/auth/session/google/start")
-
-    assert response.status_code == 302
-    assert response.headers["location"].startswith("https://supabase.example/auth/v1/authorize")
-    assert OAUTH_CODE_VERIFIER_COOKIE in response.headers["set-cookie"]
-
-
-def test_callback_bootstraps_user_session_and_inbox(app: FastAPI, client: TestClient) -> None:
+def test_password_login_bootstraps_user_session_and_inbox(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
     _override_auth_service(app, FakeAuthService())
     _allow_email(client, "user@example.com")
-    client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
 
-    response = client.get("/auth/session/callback?code=valid-code")
+    response = client.post(
+        "/auth/session/login",
+        json={"email": VALID_EMAIL, "password": VALID_PASSWORD},
+        headers=FRONTEND_ORIGIN,
+    )
 
-    assert response.status_code == 302
-    assert response.headers["location"] == "http://frontend.test/capture"
+    assert response.status_code == 200
+    login_payload = response.json()
+    assert login_payload["signed_in"] is True
+    assert login_payload["user"]["email"] == "user@example.com"
+    assert login_payload["csrf_token"] is not None
     assert ACCESS_TOKEN_COOKIE in response.headers["set-cookie"]
     assert REFRESH_TOKEN_COOKIE in response.headers["set-cookie"]
     assert CSRF_COOKIE in response.headers["set-cookie"]
@@ -229,7 +180,7 @@ def test_callback_bootstraps_user_session_and_inbox(app: FastAPI, client: TestCl
     assert payload["user"]["email"] == "user@example.com"
     assert payload["timezone"] == "UTC"
     assert payload["inbox_group_id"] is not None
-    assert payload["csrf_token"] is not None
+    assert payload["csrf_token"] == login_payload["csrf_token"]
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         context = get_session_context(connection, "11111111-1111-1111-1111-111111111111")
@@ -238,12 +189,102 @@ def test_callback_bootstraps_user_session_and_inbox(app: FastAPI, client: TestCl
     assert context.inbox_group_id == payload["inbox_group_id"]
 
 
-def test_callback_rejects_missing_oauth_verifier(app: FastAPI, client: TestClient) -> None:
+def test_password_login_normalizes_email_before_sign_in(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
     _override_auth_service(app, FakeAuthService())
-    response = client.get("/auth/session/callback?code=valid-code")
+    _allow_email(client, "user@example.com")
+
+    response = client.post(
+        "/auth/session/login",
+        json={"email": "  User@Example.com ", "password": VALID_PASSWORD},
+        headers=FRONTEND_ORIGIN,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "user@example.com"
+
+
+def test_password_login_rejects_wrong_password_without_session(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    _override_auth_service(app, FakeAuthService())
+    _allow_email(client, "user@example.com")
+
+    response = client.post(
+        "/auth/session/login",
+        json={"email": VALID_EMAIL, "password": "wrong-password"},
+        headers=FRONTEND_ORIGIN,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "auth_invalid_credentials"
+    set_cookie_headers = response.headers.get_list("set-cookie")
+    assert not any(header.startswith(f"{ACCESS_TOKEN_COOKIE}=") for header in set_cookie_headers)
+    assert not any(header.startswith(f"{REFRESH_TOKEN_COOKIE}=") for header in set_cookie_headers)
+
+
+def test_password_login_rejects_foreign_origin_before_contacting_provider(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    fake_service = FakeAuthService()
+    _override_auth_service(app, fake_service)
+    _allow_email(client, "user@example.com")
+
+    response = client.post(
+        "/auth/session/login",
+        json={"email": VALID_EMAIL, "password": VALID_PASSWORD},
+        headers={"Origin": "https://evil.test"},
+    )
 
     assert response.status_code == 403
-    assert response.json()["error"]["code"] == "csrf_invalid"
+    assert response.json()["error"]["code"] == "origin_invalid"
+    assert fake_service.sign_in_calls == 0
+
+
+def test_password_login_rejects_missing_origin(app: FastAPI, client: TestClient) -> None:
+    fake_service = FakeAuthService()
+    _override_auth_service(app, fake_service)
+
+    response = client.post(
+        "/auth/session/login",
+        json={"email": VALID_EMAIL, "password": VALID_PASSWORD},
+        headers={},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "origin_invalid"
+    assert fake_service.sign_in_calls == 0
+
+
+def test_password_login_rejects_malformed_email(app: FastAPI, client: TestClient) -> None:
+    fake_service = FakeAuthService()
+    _override_auth_service(app, fake_service)
+
+    response = client.post(
+        "/auth/session/login",
+        json={"email": "not-an-email", "password": VALID_PASSWORD},
+        headers=FRONTEND_ORIGIN,
+    )
+
+    assert response.status_code == 422
+    assert fake_service.sign_in_calls == 0
+
+
+def test_password_login_is_hidden_in_dev_mode(app: FastAPI, client: TestClient) -> None:
+    app.state.settings.gust_dev_mode = True
+    _override_auth_service(app, FakeAuthService())
+
+    response = client.post(
+        "/auth/session/login",
+        json={"email": VALID_EMAIL, "password": VALID_PASSWORD},
+        headers=FRONTEND_ORIGIN,
+    )
+
+    assert response.status_code == 404
 
 
 def test_local_dev_login_bootstraps_cookie_session(app: FastAPI, client: TestClient) -> None:
@@ -281,7 +322,7 @@ def test_local_dev_login_is_hidden_outside_dev_mode(app: FastAPI, client: TestCl
     assert response.status_code == 404
 
 
-def test_callback_preserves_existing_timezone(app: FastAPI, client: TestClient) -> None:
+def test_password_login_preserves_existing_timezone(app: FastAPI, client: TestClient) -> None:
     _override_auth_service(app, FakeAuthService())
     _allow_email(client, "user@example.com")
 
@@ -296,11 +337,13 @@ def test_callback_preserves_existing_timezone(app: FastAPI, client: TestClient) 
             timezone="America/Toronto",
         )
 
-    client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
+    response = client.post(
+        "/auth/session/login",
+        json={"email": VALID_EMAIL, "password": VALID_PASSWORD},
+        headers=FRONTEND_ORIGIN,
+    )
 
-    response = client.get("/auth/session/callback?code=valid-code")
-
-    assert response.status_code == 302
+    assert response.status_code == 200
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         context = get_session_context(connection, "11111111-1111-1111-1111-111111111111")
@@ -475,19 +518,23 @@ def test_refresh_token_restores_session_when_access_cookie_has_expired(
     assert ACCESS_TOKEN_COOKIE in response.headers["set-cookie"]
 
 
-def test_callback_redirects_blocked_email_to_landing(app: FastAPI, client: TestClient) -> None:
-    _override_auth_service(app, FakeAuthService())
+def test_password_login_blocks_email_outside_allowlist(app: FastAPI, client: TestClient) -> None:
+    fake_service = FakeAuthService()
+    _override_auth_service(app, fake_service)
     _disallow_email(client, "user@example.com")
-    client.cookies.set(OAUTH_CODE_VERIFIER_COOKIE, "expected-verifier")
 
-    response = client.get("/auth/session/callback?code=valid-code")
+    response = client.post(
+        "/auth/session/login",
+        json={"email": VALID_EMAIL, "password": VALID_PASSWORD},
+        headers=FRONTEND_ORIGIN,
+    )
 
-    assert response.status_code == 302
-    assert response.headers["location"] == "http://frontend.test?auth_error=email_not_allowed"
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "auth_email_not_allowed"
     _assert_cookie_cleared(response, ACCESS_TOKEN_COOKIE)
     _assert_cookie_cleared(response, REFRESH_TOKEN_COOKIE)
     _assert_cookie_cleared(response, CSRF_COOKIE)
-    _assert_cookie_cleared(response, OAUTH_CODE_VERIFIER_COOKIE)
+    assert fake_service.revoked_token == "refresh-token"
 
     with connection_scope(client.app.state.settings.database_url) as connection:
         context = get_session_context(connection, "11111111-1111-1111-1111-111111111111")

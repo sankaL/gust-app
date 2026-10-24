@@ -14,7 +14,7 @@ Gust is a mobile-first web application with:
 
 - a React frontend
 - a FastAPI backend
-- Supabase-hosted Postgres and Google OAuth
+- Supabase-hosted Postgres and Supabase Auth (email + password)
 - server-side integrations for transcription, extraction, and digest email delivery
 
 The frontend talks only to the backend API. It does not call the database, transcription provider, extraction provider, or email provider directly.
@@ -31,7 +31,7 @@ The frontend talks only to the backend API. It does not call the database, trans
 | Backend API | FastAPI + Pydantic v2 | Good typed contracts and async request handling |
 | Database access | SQLAlchemy 2.x Core + `psycopg` | Explicit SQL, transactions, migrations, and parameter safety |
 | Migrations | Alembic | Standard schema migration workflow |
-| Auth provider | Supabase Auth with Google OAuth | Managed identity for a single-user-per-account app |
+| Auth provider | Supabase Auth with email + password (admin-created accounts) | Managed identity for a single-user-per-account app |
 | Database | Supabase Postgres | Managed Postgres with backups and hosted auth adjacency |
 | Transcription | AssemblyAI pre-recorded API (Universal-3.5 Pro, Universal-2 fallback) | Highest-accuracy AssemblyAI model available for uploaded recordings |
 | Extraction | OpenRouter-backed LLM with JSON-schema structured outputs | Provider flexibility without sacrificing typed output |
@@ -167,7 +167,8 @@ Frontend security contract:
 
 ### Provider
 
-Supabase Auth handles Google OAuth.
+Supabase Auth handles email + password identities. Google OAuth was removed (see the decisions log).
+Accounts are created and passwords reset by an administrator in the Supabase dashboard; public sign-up is disabled in Supabase (`enable_signup = false`) and Gust exposes no sign-up or password-reset endpoints.
 
 Routine local development deliberately does not run Supabase Auth. With
 `GUST_DEV_MODE=true`, the backend issues signed access and refresh cookies for the fixed
@@ -177,9 +178,9 @@ scoping. Production and deployed integration environments continue to use Supaba
 
 Private-access contract:
 
-- Google sign-in is restricted to emails present in `public.allowed_users`.
-- Supabase enforces new-user gating through a `before_user_created` Postgres hook.
-- The backend re-checks the same allowlist during callback bootstrap and session refresh so removed emails lose access on the next auth event.
+- Sign-in is restricted to emails present in `public.allowed_users`.
+- Supabase enforces new-user gating through a `before_user_created` Postgres hook, so an administrator adds the email to the allowlist before creating the Supabase user.
+- The backend re-checks the same allowlist after a successful password sign-in and on every session resolve/refresh, so removed emails lose access on the next request. A correct password for a non-allowlisted email has its new refresh token revoked and receives `auth_email_not_allowed`.
 
 ### Session Storage
 
@@ -187,15 +188,16 @@ Auth tokens must be stored in secure cookies, not in browser localStorage.
 
 Committed model:
 
-- Google OAuth flow completes through Supabase
-- backend exchanges and manages the session
-- backend generates a short-lived, high-entropy PKCE verifier cookie and rejects callbacks that cannot prove possession of it
+- the frontend posts email + password to `POST /auth/session/login`; the backend calls Supabase's `password` grant and never stores or logs the password
+- the login request has no session yet, so instead of a CSRF token it must carry a trusted `Origin`/`Referer` (blocks login CSRF); it is throttled by the `auth_entry` IP rate limit
+- Supabase `400` responses (wrong password, unknown email, unconfirmed email) collapse into one `401 auth_invalid_credentials` so sign-in does not reveal which accounts exist
+- backend manages the session
 - browser receives `Secure`, `HttpOnly` session cookies on the app domain
 - unsafe HTTP methods require CSRF protection plus same-origin `Origin` or `Referer` validation
 
 The frontend learns whether the user is signed in by calling the backend session endpoint, not by reading tokens from browser storage.
 Logout must clear client-side query caches before the next account signs in so stale user data is not reused.
-Unsuccessful or blocked OAuth callbacks redirect to the landing entry with a sanitized auth error; only successful callbacks restore a signed-in session and redirect to `/capture`.
+Unsuccessful or blocked sign-ins return a sanitized JSON error and set no session cookies; only successful sign-ins set the session cookies, after which the login route redirects to the requested path (default `/capture`).
 
 ### Backend Auth Handling
 
@@ -510,9 +512,9 @@ Required automated coverage:
 
 Required end-to-end coverage:
 
-- Google sign-in happy path in a test environment
+- email + password sign-in happy path in a test environment
 - local dev signed-session login without external auth services
-- Supabase Google OAuth in a dedicated deployed integration environment
+- Supabase password sign-in in a dedicated deployed integration environment
 - voice capture with mocked transcription response
 - text capture fallback
 - digest job flow with mocked Resend provider

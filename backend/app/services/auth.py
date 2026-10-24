@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import urlencode, urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 import jwt
@@ -14,6 +14,7 @@ from app.core.errors import (
     AUTH_EMAIL_NOT_ALLOWED_MESSAGE,
     AuthEmailNotAllowedError,
     ConfigurationError,
+    InvalidCredentialsError,
     UpstreamAuthError,
 )
 from app.core.security import TokenBundle
@@ -41,23 +42,11 @@ class SupabaseAuthService:
     def ensure_configured(self) -> None:
         if not self.settings.supabase_url or not self.settings.supabase_anon_key:
             raise ConfigurationError("Supabase auth configuration is missing.")
-        if not self.settings.backend_public_url or not self.settings.frontend_app_url:
-            raise ConfigurationError("Backend and frontend auth URLs must be configured.")
-
-    @property
-    def authorize_url(self) -> str:
-        assert self.settings.supabase_url is not None
-        return f"{self.settings.supabase_url.rstrip('/')}/auth/v1/authorize"
 
     @property
     def token_url(self) -> str:
         assert self.settings.supabase_url is not None
         return f"{self.settings.supabase_url.rstrip('/')}/auth/v1/token"
-
-    @property
-    def signup_url(self) -> str:
-        assert self.settings.supabase_url is not None
-        return f"{self.settings.supabase_url.rstrip('/')}/auth/v1/signup"
 
     @property
     def logout_url(self) -> str:
@@ -91,59 +80,9 @@ class SupabaseAuthService:
 
         return issuers
 
-    @property
-    def callback_url(self) -> str:
-        assert self.settings.backend_public_url is not None
-        return f"{self.settings.backend_public_url.rstrip('/')}/auth/session/callback"
-
-    def build_google_authorize_url(
-        self,
-        *,
-        code_challenge: str,
-    ) -> str:
-        self.ensure_configured()
-        query = urlencode(
-            {
-                "provider": "google",
-                "redirect_to": self.callback_url,
-                "code_challenge": code_challenge,
-                "code_challenge_method": "S256",
-            }
-        )
-        return f"{self.authorize_url}?{query}"
-
-    async def exchange_code_for_session(
-        self,
-        *,
-        code: str,
-        code_verifier: str,
-    ) -> AuthenticatedSession:
-        payload = {"auth_code": code, "code_verifier": code_verifier}
-        data = await self._post_token_request({"grant_type": "pkce"}, payload)
-        return self._parse_session(data)
-
     async def refresh_session(self, *, refresh_token: str) -> AuthenticatedSession:
         payload = {"refresh_token": refresh_token}
         data = await self._post_token_request({"grant_type": "refresh_token"}, payload)
-        return self._parse_session(data)
-
-    async def sign_up_with_password(
-        self,
-        *,
-        email: str,
-        password: str,
-        display_name: str | None = None,
-    ) -> AuthenticatedSession:
-        payload: dict[str, Any] = {
-            "email": email,
-            "password": password,
-        }
-        if display_name:
-            payload["data"] = {
-                "full_name": display_name,
-                "name": display_name,
-            }
-        data = await self._post_auth_request(self.signup_url, payload)
         return self._parse_session(data)
 
     async def sign_in_with_password(
@@ -160,6 +99,7 @@ class SupabaseAuthService:
             self.token_url,
             payload,
             query_params={"grant_type": "password"},
+            rejects_credentials=True,
         )
         return self._parse_session(data)
 
@@ -242,6 +182,7 @@ class SupabaseAuthService:
         payload: dict[str, Any],
         *,
         query_params: dict[str, str] | None = None,
+        rejects_credentials: bool = False,
     ) -> dict[str, Any]:
         self.ensure_configured()
         headers = {"apikey": self.settings.supabase_anon_key or ""}
@@ -256,6 +197,11 @@ class SupabaseAuthService:
             error_message = self._extract_error_message(response)
             if self._is_email_not_allowed_error(response.status_code, error_message):
                 raise AuthEmailNotAllowedError()
+            # Supabase answers a bad password, an unknown email, and an unconfirmed
+            # email with 400. Collapse them into one message so sign-in does not
+            # reveal which accounts exist.
+            if rejects_credentials and response.status_code == 400:
+                raise InvalidCredentialsError()
             raise UpstreamAuthError("Authentication provider token exchange failed.")
         return response.json()
 

@@ -189,8 +189,11 @@ function buildApiUrl(apiBaseUrl: string, path: string): string {
   return requestUrl.toString()
 }
 
-export function getAuthStartUrl(): string {
-  return `${getAppConfig().apiBaseUrl}/auth/session/google/start`
+export function signInWithPassword(email: string, password: string): Promise<SessionStatus> {
+  return apiRequest<SessionStatus>('/auth/session/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password })
+  })
 }
 
 export function getSessionStatus(): Promise<SessionStatus> {

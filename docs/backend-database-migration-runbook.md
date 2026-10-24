@@ -35,7 +35,7 @@ Guardrails:
 - Dev mode uses a backend-issued local test-account session; it does not disable authentication, allowlisting, CSRF, origin validation, or explicit user scoping.
 - `LOCAL_DEV_AUTH_SECRET` must contain at least 32 characters. Missing or short values fail closed.
 - The dev-only issuer and `/auth/session/dev-login` endpoint must remain unavailable unless `GUST_DEV_MODE=true`.
-- Google OAuth and its callback are intentionally unavailable in local dev mode. Test the production Supabase OAuth lifecycle in a dedicated non-local integration environment.
+- Password sign-in (`POST /auth/session/login`) is intentionally unavailable in local dev mode. Test the production Supabase password sign-in lifecycle in a dedicated non-local integration environment.
 - The local backend must target the current required Alembic revision before it serves traffic.
 - Backend startup seeds the local test identity and Inbox. `make dev` then seeds the deterministic dashboard fixture only when the local test account has no tasks; existing local data is preserved on later starts. The explicit dashboard seed target remains available when a reset of the fixture is desired.
 - The startup entrypoint must print the chosen local URLs when it falls back to non-default ports.
@@ -326,7 +326,7 @@ Production database ownership rules:
 - Supabase Auth hook assets such as `public.allowed_users` and `public.before_user_created_allowlist(jsonb)` are versioned under `supabase/` and applied through the Supabase project workflow, not Alembic
 - hosted `anon` and `authenticated` roles must not retain table privileges on `public.allowed_users` or `public.rate_limit_counters`
 - hosted `anon`, `authenticated`, and `service_role` roles must not retain table privileges on `public.alembic_version`
-- the backend runtime role must retain only `SELECT` on `public.allowed_users`, because callback and session-refresh auth checks read that table directly
+- the backend runtime role must retain only `SELECT` on `public.allowed_users`, because sign-in and session-refresh auth checks read that table directly
 - the backend runtime role may retain only `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `public.rate_limit_counters`
 - the backend runtime role must retain only `SELECT` on `public.alembic_version` for startup revision verification
 - do not use `supabase db push` for the application schema
@@ -379,14 +379,15 @@ Minimum verification after applying schema-affecting changes:
 - `public.allowed_users` exists and contains the intended private-access email set.
 - the backend runtime role can `SELECT` from `public.allowed_users` and hosted `anon` / `authenticated` roles cannot.
 - the Supabase `before_user_created` hook is enabled and points to `public.before_user_created_allowlist`.
-- an allowlisted Google email can complete signup/sign-in.
-- a non-allowlisted Google email is rejected before `auth.users` insertion.
+- an allowlisted email with an admin-created Supabase password user can sign in through `POST /auth/session/login`.
+- creating a Supabase user for a non-allowlisted email is rejected before `auth.users` insertion.
+- a wrong password returns `401 auth_invalid_credentials` and sets no session cookies.
 - a previously-created but now-removed email cannot restore a backend session and is redirected or returned as `auth_email_not_allowed`.
 - `rate_limit_counters` exists with the composite primary key and `expires_at` cleanup index.
 - `rate_limit_counters` rejects empty/oversized keys, negative counts, and nonpositive windows except for the explicit `action_lock:*` zero-duration sentinel.
 - hosted `anon` / `authenticated` roles cannot read or mutate `public.rate_limit_counters`.
-- `POST /auth/session/google/start` returns a short-lived, high-entropy PKCE verifier cookie and does not attach a backend-owned OAuth `state` parameter that Supabase social sign-in would consume rather than echo to Gust.
-- `GET /auth/session/callback` rejects a missing PKCE verifier cookie.
+- `POST /auth/session/login` rejects a missing or foreign `Origin` / `Referer` with `403 origin_invalid`.
+- `/auth/session/google/start` and `/auth/session/callback` return `404`.
 - Unsafe cookie-authenticated methods reject requests with missing or foreign `Origin` / `Referer`.
 - Trusted host enforcement accepts the deployed frontend/backend hosts and rejects unexpected `Host` headers.
 - Auth/session and authenticated JSON responses emit `Cache-Control: no-store` plus the committed security headers.
@@ -446,6 +447,18 @@ Runbook procedure at DST boundary:
 3. Re-run the dry run and confirm `would_rotate=0`, then delete `PUSHOVER_PREVIOUS_CREDENTIAL_ENCRYPTION_KEYS` and redeploy. Send a Pushover test notification from Settings to verify.
 
 Rollback: before step 3, restoring the old key as `PUSHOVER_CREDENTIAL_ENCRYPTION_KEY` with the new key in `PUSHOVER_PREVIOUS_CREDENTIAL_ENCRYPTION_KEYS` keeps all rows readable.
+
+## Auth Cutover (Google OAuth to Email + Password)
+
+There is no schema change. Gust user rows are keyed by the Supabase `auth.users.id`, so every existing user must keep the same Supabase user. Never delete and recreate a user to switch them to a password: the new UUID would orphan their tasks, groups, and captures.
+
+1. Before deploying, give every existing allowlisted user a password on their **existing** Supabase user. A Google-created user has no password, so set one with the Supabase Admin API using the service-role key from an admin machine (`PUT {SUPABASE_URL}/auth/v1/admin/users/{user_id}` with `{"password": "..."}`), and share it with the user out of band. For a brand-new user, insert the email into `public.allowed_users` first (the `before_user_created` hook rejects anyone else), then create the user in the dashboard with **Auto Confirm User** checked.
+2. Deploy the backend and frontend together. The new frontend posts to `POST /auth/session/login`; the old frontend's Google button points to `/auth/session/google/start`, which now returns `404`. Existing session cookies keep working because access/refresh tokens are still Supabase tokens.
+3. After verifying password sign-in in production, disable the Google provider and public sign-ups in the hosted Supabase project (dashboard, or `supabase config push` from the updated `supabase/config.toml`). Remove `https://api.gustapp.ca/auth/session/callback` from the redirect allowlist.
+
+Verify: sign in with a known-good password, see a wrong password return the generic error, and see that a non-allowlisted user with a valid password is refused.
+
+Rollback: redeploy the previous backend and frontend, and re-enable the Google provider if step 3 already ran. Passwords set in step 1 are harmless to leave in place.
 
 ## Rollback Guidance
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import secrets
 from dataclasses import dataclass
 
@@ -12,7 +10,6 @@ from app.core.settings import Settings
 ACCESS_TOKEN_COOKIE = "gust_access_token"
 REFRESH_TOKEN_COOKIE = "gust_refresh_token"
 CSRF_COOKIE = "gust_csrf_token"
-OAUTH_CODE_VERIFIER_COOKIE = "gust_oauth_code_verifier"
 CSRF_HEADER = "X-CSRF-Token"
 
 
@@ -23,24 +20,8 @@ class TokenBundle:
     expires_in: int
 
 
-@dataclass
-class PkceChallenge:
-    verifier: str
-    challenge: str
-
-
 def generate_csrf_token() -> str:
     return secrets.token_urlsafe(32)
-
-
-def generate_pkce_challenge() -> PkceChallenge:
-    verifier = secrets.token_urlsafe(64)
-    challenge_bytes = hashlib.sha256(verifier.encode("utf-8")).digest()
-    challenge = base64.urlsafe_b64encode(challenge_bytes).decode("utf-8").rstrip("=")
-    return PkceChallenge(
-        verifier=verifier,
-        challenge=challenge,
-    )
 
 
 def set_session_cookies(
@@ -101,33 +82,6 @@ def clear_csrf_cookie(response: Response, settings: Settings) -> None:
         domain=settings.session_cookie_domain,
         secure=settings.session_cookie_secure,
         httponly=False,
-        samesite="lax",
-    )
-
-
-def set_oauth_code_verifier_cookie(
-    response: Response,
-    settings: Settings,
-    pkce_challenge: PkceChallenge,
-) -> None:
-    cookie_kwargs = {
-        "httponly": True,
-        "secure": settings.session_cookie_secure,
-        "samesite": "lax",
-        "path": "/auth/session",
-        "domain": settings.session_cookie_domain,
-        "max_age": 600,
-    }
-    response.set_cookie(OAUTH_CODE_VERIFIER_COOKIE, pkce_challenge.verifier, **cookie_kwargs)
-
-
-def clear_oauth_code_verifier_cookie(response: Response, settings: Settings) -> None:
-    response.delete_cookie(
-        OAUTH_CODE_VERIFIER_COOKIE,
-        path="/auth/session",
-        domain=settings.session_cookie_domain,
-        secure=settings.session_cookie_secure,
-        httponly=True,
         samesite="lax",
     )
 

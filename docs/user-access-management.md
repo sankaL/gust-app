@@ -1,25 +1,26 @@
 # User Access Management
 
-This document explains how to grant or revoke app access for users when Gust uses Google OAuth with Supabase Auth allowlist enforcement.
+This document explains how to grant, reset, or revoke app access when Gust uses Supabase Auth email + password sign-in with a database allowlist.
 
-## When You Need This
+Gust has no public sign-up and no in-app password reset. An administrator creates every account and resets passwords.
 
-Use this process when:
-- you have already added a person to the Google OAuth app configuration (for example, OAuth test users), and
-- they still cannot sign in to Gust.
+## How Access Works
 
-Gust enforces access with a Supabase database allowlist (`public.allowed_users`) in addition to Google OAuth.
+A person can use Gust only when both of these are true:
+- their email is in `public.allowed_users`, and
+- they have a Supabase Auth user with a password.
+
+The `before_user_created` hook rejects creating a Supabase user whose email is not on the allowlist, so always add the email to the allowlist first.
 
 ## Prerequisites
 
 - You have admin access to the correct Supabase project (local or production).
-- You know the exact Google account email address the user will use.
+- You know the exact email address the user will sign in with.
 
 ## Add a New User (Step by Step)
 
 1. Open Supabase for the target environment.
-2. Go to **SQL Editor**.
-3. Run:
+2. Go to **SQL Editor** and run:
 
 ```sql
 insert into public.allowed_users (email)
@@ -27,7 +28,7 @@ values ('newuser@example.com')
 on conflict (email) do nothing;
 ```
 
-4. Verify the email is present:
+3. Verify the email is present:
 
 ```sql
 select email, created_at
@@ -35,8 +36,26 @@ from public.allowed_users
 where email = 'newuser@example.com';
 ```
 
-5. Ask the user to sign in again from Gust login (`/login`) using the same Google email.
-6. On first successful login, Gust bootstraps that user account data automatically.
+4. Go to **Authentication → Users → Add user → Create new user**. Enter the same email and a strong password, and check **Auto Confirm User**.
+5. Share the password with the user through a private channel (not email in plain text where avoidable).
+6. Ask the user to sign in at `/login` with that email and password. On first successful sign-in, Gust creates their account data (user row and Inbox) automatically.
+
+## Reset a Password
+
+1. Open **Authentication → Users** and find the user.
+2. Set a new password for the **existing** user. Use the dashboard if it offers a password field, or the Admin API with the service-role key from an admin machine:
+
+```bash
+curl -X PUT "$SUPABASE_URL/auth/v1/admin/users/<user_id>" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"password": "<new password>"}'
+```
+
+3. Share the new password privately.
+
+Never delete and recreate a user to reset their password. A recreated user gets a new ID, and their existing tasks, groups, and captures stay attached to the old one.
 
 ## Remove a User (Revoke Access)
 
@@ -56,19 +75,20 @@ from public.allowed_users
 where email = 'olduser@example.com';
 ```
 
-If no row is returned, allowlist access is revoked.
+If no row is returned, allowlist access is revoked. Gust re-checks the allowlist on every request, so any open session stops working on the user's next request.
 
 ## Important Notes
 
-- Emails are normalized to lowercase + trimmed by database trigger logic.
+- Emails are normalized to lowercase + trimmed by database trigger logic, and the sign-in form normalizes the same way.
 - Always add/remove users in the same Supabase project the app is using (local vs production).
-- Adding someone only in Google OAuth does not grant Gust app access by itself.
+- A Supabase user without an allowlist row cannot use Gust, even with the correct password.
 
 ## Troubleshooting
 
-If login still fails after allowlisting:
-- Confirm the user signed in with the exact email you added.
-- Confirm the row exists in `public.allowed_users`.
-- Confirm you edited the correct Supabase environment.
-- Have the user fully sign out and retry login.
+If sign-in fails with "Email or password is incorrect.":
+- Confirm the Supabase user exists with exactly that email and is confirmed.
+- Reset the password (see above) and retry.
 
+If sign-in shows the "not part of the user list" message:
+- The password was correct, but the email is not in `public.allowed_users`. Add it and retry.
+- Confirm you edited the correct Supabase environment.

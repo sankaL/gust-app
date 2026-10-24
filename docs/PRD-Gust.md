@@ -107,9 +107,8 @@ Group management is reached from the Tasks area and is not a primary navigation 
 
 ### 4. Authentication
 
-Users sign in with Google. During private access, only explicitly allowlisted email addresses may create or restore a Gust session. All application data is scoped per user.
-Authentication uses a dedicated `/login` screen and redirects signed-out access away from protected task/capture routes. Unsuccessful sign-in attempts return to the landing page with a sanitized access notice.
-The backend binds the Google callback to the browser that started it with a short-lived PKCE verifier and rejects missing or invalid callback proof.
+Users sign in with an email address and password. Accounts are created by an administrator in Supabase Auth; there is no public sign-up and no in-app password reset (an administrator resets passwords). During private access, only explicitly allowlisted email addresses may create or restore a Gust session. All application data is scoped per user.
+Authentication uses a dedicated `/login` screen with an email + password form and redirects signed-out access away from protected task/capture routes. A wrong email or password shows one generic "Email or password is incorrect." message that does not reveal whether the account exists; a correct password for a non-allowlisted email shows the sanitized access notice.
 The authenticated shell includes a top-right account avatar menu with entries for `Completed Tasks`, `Desktop Mode`, `Settings`, and `Logout`.
 
 ### 5. Email Digests

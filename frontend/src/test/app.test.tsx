@@ -515,7 +515,7 @@ describe('app shell', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/login')
     })
-    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('renders the capture route on /capture', async () => {
@@ -551,7 +551,7 @@ describe('app shell', () => {
 
     renderWithRoute(['/tasks'])
 
-    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('redirects signed-out /capture to /login', async () => {
@@ -570,7 +570,7 @@ describe('app shell', () => {
 
     renderWithRoute(['/capture'])
 
-    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('redirects signed-out desktop routes to /login', async () => {
@@ -589,7 +589,7 @@ describe('app shell', () => {
 
     renderWithRoute(['/desktop'])
 
-    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('shows only local sign-in on /login in dev mode', async () => {
@@ -609,7 +609,7 @@ describe('app shell', () => {
 
     renderWithRoute(['/login'])
 
-    expect(screen.queryByRole('link', { name: 'Sign in with Google' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument()
     expect(
       await screen.findByRole('button', { name: 'Continue with Local Test Account' })
     ).toBeInTheDocument()
@@ -623,7 +623,7 @@ describe('app shell', () => {
     })
   })
 
-  it('shows Google-only sign-in on /login outside dev mode', async () => {
+  it('shows email and password sign-in on /login outside dev mode', async () => {
     vi.stubEnv('VITE_GUST_DEV_MODE', 'false')
     vi.stubGlobal(
       'fetch',
@@ -640,10 +640,102 @@ describe('app shell', () => {
 
     renderWithRoute(['/login'])
 
-    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Continue with Local Test Account' })
     ).not.toBeInTheDocument()
+  })
+
+  it('signs in with email and password and continues to the requested route', async () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'false')
+    const loginBodies: unknown[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input)
+        if (url.endsWith('/auth/session/login')) {
+          loginBodies.push(JSON.parse(init?.body as string))
+          return jsonResponse(signedInSession())
+        }
+        if (url.endsWith('/auth/session')) {
+          return jsonResponse(loginBodies.length > 0 ? signedInSession() : signedOutSession())
+        }
+        return jsonResponse({})
+      })
+    )
+    const user = userEvent.setup()
+    const { router } = renderWithRoute(['/login?next=%2Ftasks'])
+
+    await user.type(await screen.findByLabelText('Email'), '  user@example.com ')
+    await user.type(screen.getByLabelText('Password'), 'correct-password')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/tasks')
+    })
+    expect(loginBodies).toEqual([{ email: 'user@example.com', password: 'correct-password' }])
+  })
+
+  it('shows a generic error and clears the password when sign-in is rejected', async () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'false')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        if (requestUrl(input).endsWith('/auth/session/login')) {
+          return jsonResponse(
+            {
+              error: {
+                code: 'auth_invalid_credentials',
+                message: 'Email or password is incorrect.'
+              }
+            },
+            { status: 401 }
+          )
+        }
+        return jsonResponse(signedOutSession())
+      })
+    )
+    const user = userEvent.setup()
+    renderWithRoute(['/login'])
+
+    await user.type(await screen.findByLabelText('Email'), 'user@example.com')
+    await user.type(screen.getByLabelText('Password'), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Email or password is incorrect.')
+    expect(screen.getByLabelText('Password')).toHaveValue('')
+    expect(screen.getByLabelText('Email')).toHaveValue('user@example.com')
+  })
+
+  it('shows the allowlist message when a valid password belongs to a blocked email', async () => {
+    vi.stubEnv('VITE_GUST_DEV_MODE', 'false')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        if (requestUrl(input).endsWith('/auth/session/login')) {
+          return jsonResponse(
+            {
+              error: {
+                code: 'auth_email_not_allowed',
+                message: 'This email is not allowed to access Gust.'
+              }
+            },
+            { status: 403 }
+          )
+        }
+        return jsonResponse(signedOutSession())
+      })
+    )
+    const user = userEvent.setup()
+    renderWithRoute(['/login'])
+
+    await user.type(await screen.findByLabelText('Email'), 'blocked@example.com')
+    await user.type(screen.getByLabelText('Password'), 'correct-password')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
+    )
   })
 
   it('shows the allowlist error on the login route', async () => {
@@ -709,7 +801,7 @@ describe('app shell', () => {
         'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
       )
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('opens the account menu and navigates to desktop mission control', async () => {
@@ -993,7 +1085,7 @@ describe('app shell', () => {
     await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
     await user.click(screen.getByRole('menuitem', { name: 'Logout' }))
 
-    expect(await screen.findByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('/auth/session/logout'),

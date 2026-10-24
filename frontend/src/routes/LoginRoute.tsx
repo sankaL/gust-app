@@ -4,9 +4,7 @@ import { Navigate, useSearchParams } from 'react-router-dom'
 import { PortraitOrientationGuard } from '../components/PortraitOrientationGuard'
 import { SessionRequiredCard } from '../components/SessionRequiredCard'
 import { ApiError, getSessionStatus } from '../lib/api'
-
-const EMAIL_NOT_ALLOWED_MESSAGE =
-  'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
+import { EMAIL_NOT_ALLOWED_MESSAGE } from '../lib/sessionPresentation'
 
 function resolveNextPath(nextPath: string | null): string {
   if (!nextPath) {

@@ -1,5 +1,14 @@
 # Decisions Made
 
+## 2026-10-24 15:25:00 EDT
+
+- Replaced Google OAuth with Supabase email + password sign-in. Gust is a private, allowlisted app with a handful of users, so the Google provider, its client secrets, the redirect/callback flow, and the PKCE verifier cookie were more moving parts than the access model needs. Supabase stays the identity provider, so access/refresh tokens, cookie sessions, JWKS validation, the allowlist, and RLS scoping are unchanged.
+- Chose admin-created accounts with no public sign-up (`enable_signup = false`) and admin-only password resets. This avoids exposing a sign-up surface, needing SMTP for confirmation and recovery emails, and building reset pages. An in-app "forgot password" flow can be added later if the user base grows.
+- The password grant runs on the backend (`POST /auth/session/login`), not in the browser via supabase-js, so tokens stay in HttpOnly cookies and never reach JavaScript or localStorage.
+- Login has no session yet, so it cannot use the CSRF double-submit check. It requires a trusted `Origin`/`Referer` instead, which blocks login CSRF, and it shares the `auth_entry` IP rate limit.
+- Collapsed every Supabase `400` from the password grant (wrong password, unknown email, unconfirmed email) into one `401 auth_invalid_credentials` with a generic message, so sign-in does not reveal which accounts exist. The allowlist check runs only after a correct password, so the "not on the user list" message is never shown to someone who does not know the password.
+- Existing Google users keep their Supabase user ID. The cutover sets a password on each existing user instead of recreating it, so no Gust data has to move.
+
 ## 2026-10-06 18:40:00 EDT
 
 - Moved voice transcription from Mistral Voxtral to AssemblyAI. The requested Universal-3.6 Pro model is streaming-only on AssemblyAI; because Gust records a clip and uploads it, we chose the pre-recorded API with `speech_models = ["universal-3-5-pro", "universal-2"]` (AssemblyAI's recommended pre-recorded default, with Universal-2 covering languages 3.5 Pro does not support) instead of re-architecting capture around real-time streaming. Revisit if live captions become a product goal.

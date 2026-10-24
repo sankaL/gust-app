@@ -1,3 +1,8 @@
+import { ApiError } from './api'
+
+export const EMAIL_NOT_ALLOWED_MESSAGE =
+  'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
+
 function buildLoginPath(pathname: string, search: string, authError?: string): string {
   const params = new URLSearchParams({ next: `${pathname}${search}` })
   if (authError) params.set('auth_error', authError)
@@ -21,4 +26,3 @@ export function resolveLoginPath(query: { isError: boolean; error: unknown; data
   if (!query.data?.signed_in) return buildLoginPath(pathname, search)
   return null
 }
-import { ApiError } from './api'

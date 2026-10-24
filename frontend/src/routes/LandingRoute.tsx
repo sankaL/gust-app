@@ -5,9 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { Check, X } from 'lucide-react'
 import './LandingRoute.css'
 
-
-const EMAIL_NOT_ALLOWED_MESSAGE =
-  'You are not part of the user list that has access to this app. If you should have access, please contact the administrator.'
+import { EMAIL_NOT_ALLOWED_MESSAGE } from '../lib/sessionPresentation'
 
 const METRIC_VALUE = 3
 
