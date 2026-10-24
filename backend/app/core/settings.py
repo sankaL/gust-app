@@ -280,6 +280,11 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("PUSHOVER_CREDENTIAL_ENCRYPTION_KEY"),
     )
+    # Retired keys, still accepted for decryption while a key rotation is in progress.
+    pushover_previous_credential_encryption_keys: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=(),
+        validation_alias=AliasChoices("PUSHOVER_PREVIOUS_CREDENTIAL_ENCRYPTION_KEYS"),
+    )
     pushover_api_url: str = Field(
         default="https://api.pushover.net/1",
         validation_alias=AliasChoices("PUSHOVER_API_URL"),
@@ -300,7 +305,11 @@ class Settings(BaseSettings):
         return self.migration_database_url or self.database_url
 
     @field_validator(
-        "trusted_hosts", "extra_allowed_origins", "assemblyai_speech_models", mode="before"
+        "trusted_hosts",
+        "extra_allowed_origins",
+        "assemblyai_speech_models",
+        "pushover_previous_credential_encryption_keys",
+        mode="before",
     )
     @classmethod
     def _split_csv_tuple(

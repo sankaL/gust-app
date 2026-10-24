@@ -437,6 +437,16 @@ Runbook procedure at DST boundary:
 4. Confirm job logs show expected mode and non-error completion.
 5. Confirm one test user generates either `sent` or `skipped_empty` in `digest_dispatches` for the expected Eastern period.
 
+## Pushover Credential Key Rotation
+
+`notification_preferences.pushover_user_key_encrypted` is Fernet-encrypted with `PUSHOVER_CREDENTIAL_ENCRYPTION_KEY`. Swapping that key directly makes every stored user key undecryptable, so rotate in three steps. There is no schema change.
+
+1. Generate a new key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`). On the backend service, set `PUSHOVER_PREVIOUS_CREDENTIAL_ENCRYPTION_KEYS` to the old key (comma-separated if several), then set `PUSHOVER_CREDENTIAL_ENCRYPTION_KEY` to the new key, and deploy. The backend now encrypts with the new key and decrypts with either.
+2. From the deployed backend container (`railway ssh --service backend`), run `python -m app.ops.rotate_pushover_credentials` for a dry run, then `python -m app.ops.rotate_pushover_credentials --apply`. The command runs in one transaction under the internal-job database actor, prints counts only, and writes nothing if any row cannot be decrypted by a configured key (it lists those user IDs and exits non-zero).
+3. Re-run the dry run and confirm `would_rotate=0`, then delete `PUSHOVER_PREVIOUS_CREDENTIAL_ENCRYPTION_KEYS` and redeploy. Send a Pushover test notification from Settings to verify.
+
+Rollback: before step 3, restoring the old key as `PUSHOVER_CREDENTIAL_ENCRYPTION_KEY` with the new key in `PUSHOVER_PREVIOUS_CREDENTIAL_ENCRYPTION_KEYS` keeps all rows readable.
+
 ## Rollback Guidance
 
 Default rollback stance:

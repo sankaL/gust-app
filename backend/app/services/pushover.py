@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import httpx
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 
 from app.core.errors import ConfigurationError
 from app.core.settings import Settings
@@ -44,8 +44,16 @@ class PushoverService:
             raise ConfigurationError("Pushover notification configuration is missing.")
         if require_subscription and not self.settings.pushover_subscription_url:
             raise ConfigurationError("Pushover subscription configuration is missing.")
+        self.credential_cipher()
+
+    def credential_cipher(self) -> MultiFernet:
+        """Encrypts with the current key; decrypts with the current or any previous key."""
+        keys = (
+            self.settings.pushover_credential_encryption_key,
+            *self.settings.pushover_previous_credential_encryption_keys,
+        )
         try:
-            Fernet(self.settings.pushover_credential_encryption_key.encode())
+            return MultiFernet([Fernet(str(key).encode()) for key in keys])
         except (TypeError, ValueError) as exc:
             raise ConfigurationError(
                 "Pushover credential encryption configuration is invalid."
@@ -53,20 +61,12 @@ class PushoverService:
 
     def encrypt_user_key(self, user_key: str) -> str:
         self.ensure_configured()
-        return (
-            Fernet(self.settings.pushover_credential_encryption_key.encode())
-            .encrypt(user_key.encode())
-            .decode()
-        )
+        return self.credential_cipher().encrypt(user_key.encode()).decode()
 
     def decrypt_user_key(self, encrypted_key: str) -> str:
         self.ensure_configured()
         try:
-            return (
-                Fernet(self.settings.pushover_credential_encryption_key.encode())
-                .decrypt(encrypted_key.encode())
-                .decode()
-            )
+            return self.credential_cipher().decrypt(encrypted_key.encode()).decode()
         except (InvalidToken, UnicodeDecodeError) as exc:
             raise PushoverDeliveryError(
                 error_code="pushover_credential_invalid", retryable=False
