@@ -1,4 +1,4 @@
-"""Task extraction with Claude structured outputs."""
+"""Task extraction with Claude structured outputs, served through OpenRouter."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from app.services.extraction_models import ExtractorPayload
 
 logger = logging.getLogger("gust.api")
 
-# Phrases the API uses when the organization has no usable credit.
-_QUOTA_ERROR_MARKERS = ("credit balance", "billing", "insufficient funds")
+# Phrases OpenRouter or the upstream provider use when the account has no usable credit.
+_QUOTA_ERROR_MARKERS = ("insufficient credits", "credit balance", "billing", "insufficient funds")
 
 
 @dataclass
@@ -107,11 +107,12 @@ _OUTPUT_SCHEMA = anthropic.transform_schema(_WirePayload.model_json_schema())
 
 def build_extraction_client(settings: Settings) -> anthropic.AsyncAnthropic | None:
     """Long-lived client so each capture reuses an open connection; None when unconfigured."""
-    if not settings.anthropic_api_key:
+    if not settings.openrouter_api_key:
         return None
     return anthropic.AsyncAnthropic(
-        api_key=settings.anthropic_api_key,
-        base_url=settings.anthropic_base_url,
+        # OpenRouter takes its key as a bearer token on the Anthropic-compatible endpoint.
+        auth_token=settings.openrouter_api_key,
+        base_url=settings.extraction_base_url,
         timeout=settings.extraction_timeout_seconds,
         # One fast transport-level retry for 429/5xx/connection errors; payload retries live in
         # CaptureService so the total stays bounded.
@@ -135,7 +136,7 @@ class ClaudeExtractionService:
         self.last_attempt_count = 0
 
     def ensure_configured(self) -> None:
-        if not self.settings.anthropic_api_key:
+        if not self.settings.openrouter_api_key:
             raise ConfigurationError(
                 "Task extraction is not configured. Please contact the administrator."
             )
@@ -183,6 +184,7 @@ class ClaudeExtractionService:
                     "effort": "low",
                     "format": {"type": "json_schema", "schema": _OUTPUT_SCHEMA},
                 },
+                extra_body=self._provider_preferences(),
             )
         except anthropic.APIStatusError as exc:
             self._log_provider_error(exc)
@@ -236,6 +238,17 @@ class ClaudeExtractionService:
             ) from exc
         return _to_extractor_payload(wire, request.groups).model_dump()
 
+    def _provider_preferences(self) -> dict[str, object]:
+        """Prefer the fastest measured provider; OpenRouter falls back to others if it is down."""
+        if not self.settings.extraction_provider_order:
+            return {}
+        return {
+            "provider": {
+                "order": list(self.settings.extraction_provider_order),
+                "allow_fallbacks": True,
+            }
+        }
+
     def _log_provider_error(self, exc: anthropic.APIStatusError) -> None:
         logger.warning(
             "extraction_provider_error",
@@ -261,7 +274,8 @@ def _provider_account_error(exc: anthropic.APIStatusError) -> ExtractionProvider
             failure_reason="quota_exceeded",
             provider_status_code=status_code,
         )
-    if status_code in {401, 403}:
+    # Only 401 is a key problem: OpenRouter also uses 403 for moderation blocks on specific input.
+    if status_code == 401:
         return ExtractionProviderAccountError(
             "Extraction provider rejected the configured credentials.",
             failure_reason="credentials_invalid",

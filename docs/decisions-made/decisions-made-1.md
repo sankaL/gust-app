@@ -1,5 +1,12 @@
 # Decisions Made
 
+## 2026-10-26 11:00:00 EDT
+
+- Routed Claude Haiku 5.5 extraction through OpenRouter's Anthropic-compatible Messages API instead of a direct Anthropic account, so one existing OpenRouter key and bill cover both transcription and extraction. The `anthropic` SDK is kept (base URL `https://openrouter.ai/api`, key as bearer token), so thinking control, structured outputs, and prompt caching pass through unchanged; verified live.
+- Prefer OpenRouter's Anthropic provider with fallbacks allowed. Measured on the same two-task capture: about 1.1 s warm on Anthropic versus 1.45-1.7 s on Azure (OpenRouter's default pick). Fallbacks keep capture working during a provider outage at a latency cost.
+- Restored the rule that only HTTP 401 means a bad key: OpenRouter uses 403 for moderation blocks on specific input.
+- Known cost: the first request for a new output schema on a provider takes 9-11 s while the grammar compiles; it is then cached for 24 hours. A periodic warm-up call could hide this; not added yet.
+
 ## 2026-10-26 10:30:00 EDT
 
 - Switched transcription from a direct Mistral account (Voxtral Mini Transcribe V2) to Voxtral Mini Transcribe 3 through OpenRouter (`mistralai/voxtral-mini-transcribe-3-0`). OpenRouter's `/audio/transcriptions` endpoint takes the same single multipart request, and the existing OpenRouter key and billing cover it, so no new provider account is needed. Transcribe 3 is Mistral's current recorded-file model (released 2026-10-20).

@@ -34,7 +34,7 @@ The frontend talks only to the backend API. It does not call the database, trans
 | Auth provider | Supabase Auth with email + password (admin-created accounts) | Managed identity for a single-user-per-account app |
 | Database | Supabase Postgres | Managed Postgres with backups and hosted auth adjacency |
 | Transcription | Mistral Voxtral Mini Transcribe 3 via OpenRouter (`mistralai/voxtral-mini-transcribe-3-0`) | One synchronous request per recording; reuses the OpenRouter account |
-| Extraction | Anthropic Claude Haiku 5.5 via the official SDK, JSON-schema structured outputs | Lowest-latency typed extraction; thinking off, schema-constrained output |
+| Extraction | Claude Haiku 5.5 via OpenRouter's Anthropic-compatible API (official `anthropic` SDK), JSON-schema structured outputs | One OpenRouter key for all AI calls; thinking off, schema-constrained output |
 | Email | Resend | Simple transactional email API with idempotency support |
 | Hosting | Railway | Simple deployment for the API, frontend, and scheduled jobs |
 
@@ -318,14 +318,14 @@ Operational contract:
 
 Exhausted credits and rejected credentials are administrator problems, not user problems:
 
-- OpenRouter transcription HTTP 402 or an insufficient-credit/billing error message, and Anthropic HTTP 402 or HTTP 400 "credit balance is too low", map to API error `ai_service_quota_exceeded` (HTTP 503) with a "contact the administrator" message
-- OpenRouter transcription HTTP 401/403/404 (unknown model) or `invalid_model`, and Anthropic HTTP 401/403, map to `config_invalid` (HTTP 503) with an administrator-contact message
+- OpenRouter transcription HTTP 402 or an insufficient-credit/billing error message, and OpenRouter extraction HTTP 402 or an insufficient-credit message, map to API error `ai_service_quota_exceeded` (HTTP 503) with a "contact the administrator" message
+- OpenRouter transcription HTTP 401/403/404 (unknown model) or `invalid_model`, and OpenRouter extraction HTTP 401, map to `config_invalid` (HTTP 503) with an administrator-contact message
 - these failures are never retried, and they are surfaced from voice capture, text capture, submit, and re-extract instead of being swallowed by best-effort auto-extraction
 - the capture is marked `extraction_failed` (or `transcription_failed`) with a sanitized `error_code` so it can be re-extracted once the account is restored
 
 ### Extraction
 
-Call Claude through the official `anthropic` Python SDK with JSON-schema structured outputs (`output_config.format`).
+Call Claude through OpenRouter's Anthropic-compatible Messages API (`EXTRACTION_BASE_URL`, default `https://openrouter.ai/api`) using the official `anthropic` Python SDK with the OpenRouter key as a bearer token, and JSON-schema structured outputs (`output_config.format`). OpenRouter extraction 403s are moderation blocks on specific input, not account failures, so they stay ordinary extraction failures.
 
 Model selection is an operational setting, not a product contract. The required capabilities are:
 
@@ -334,7 +334,7 @@ Model selection is an operational setting, not a product contract. The required 
 - JSON-schema structured outputs
 - acceptable latency for synchronous task creation
 
-Current default model: `claude-haiku-5-5` (`EXTRACTION_MODEL`), called with `thinking: disabled` and `effort: low`. Sampling parameters (`temperature`, `top_p`, `top_k`) are not sent; current Claude models reject them.
+Current default model: `anthropic/claude-haiku-5.5` (`EXTRACTION_MODEL`), called with `thinking: disabled` and `effort: low`, with OpenRouter provider preference `order: [anthropic]` and fallbacks allowed (`EXTRACTION_PROVIDER_ORDER`). Measured 2026-10-26: about 1.1 s warm on Anthropic versus 1.45-1.7 s on Azure for a two-task capture; a prompt-cache miss adds about 0.4-0.8 s; the first request for a new output schema on a provider takes 9-11 s while the grammar compiles, then it is cached for 24 hours. Sampling parameters (`temperature`, `top_p`, `top_k`) are not sent; current Claude models reject them.
 
 Latency design:
 

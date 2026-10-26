@@ -21,7 +21,7 @@ With inputs that short, the cost was fixed overhead: provider round trips, hidde
 
 **Transcription.** `OpenRouterTranscriptionService` sends one multipart request to OpenRouter's `/audio/transcriptions` with Voxtral Mini Transcribe 3 (`mistralai/voxtral-mini-transcribe-3-0`). iOS `mp4` uploads are renamed `.m4a`. Error mapping: 401/403/404 or `invalid_model` → `config_invalid`; 402 or a billing/credit message → `ai_service_quota_exceeded`; 429/5xx → provider unavailable; other 4xx → provider rejected; empty text → no speech.
 
-**Extraction.** `ClaudeExtractionService` calls `claude-haiku-5-5` through the `anthropic` SDK with:
+**Extraction.** `ClaudeExtractionService` calls `anthropic/claude-haiku-5.5` through OpenRouter's Anthropic-compatible Messages API (`https://openrouter.ai/api`, OpenRouter key as bearer token) using the `anthropic` SDK, preferring the Anthropic provider with fallbacks allowed, with:
 - `thinking: disabled`, `output_config.effort: low`
 - a JSON schema built from a compact wire model (`_WirePayload`): optional fields may be omitted, groups are referenced by name, and subtasks are plain strings
 - a static, cached system prompt (`cache_control: ephemeral`) with rules plus three short examples; no two-pass enumeration
@@ -43,7 +43,7 @@ Responses from `POST /captures/voice`, `POST /captures/text`, and `POST /capture
 
 ## Configuration
 
-- New: `OPENROUTER_TRANSCRIPTION_URL`, `TRANSCRIPTION_MODEL` (default `mistralai/voxtral-mini-transcribe-3-0`), `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` (optional), `EXTRACTION_MODEL` (default `claude-haiku-5-5`), `EXTRACTION_MAX_OUTPUT_TOKENS` (default 2048).
+- New: `OPENROUTER_TRANSCRIPTION_URL`, `TRANSCRIPTION_MODEL` (default `mistralai/voxtral-mini-transcribe-3-0`), `EXTRACTION_BASE_URL` (default `https://openrouter.ai/api`), `EXTRACTION_MODEL` (default `anthropic/claude-haiku-5.5`), `EXTRACTION_PROVIDER_ORDER` (default `anthropic`), `EXTRACTION_MAX_OUTPUT_TOKENS` (default 2048).
 - Changed defaults: `TRANSCRIPTION_TIMEOUT_SECONDS` 30 → 20, `EXTRACTION_TIMEOUT_SECONDS` 20 → 10.
 - Removed (now ignored): `ASSEMBLYAI_*`, `OPENROUTER_EXTRACTION_MODEL`, `OPENROUTER_API_URL`, `EXTRACTION_MAX_RETRIES`, `EXTRACTION_RETRY_*`, `EXTRACTION_MODEL_CONFIG_PATH`, `EXTRACTION_AB_TEST_ENABLED`.
 
@@ -59,7 +59,7 @@ Responses from `POST /captures/voice`, `POST /captures/text`, and `POST /capture
   - capture responses carrying staged tasks
 - **Frontend:** typecheck, lint, and the full vitest suite pass. A new test confirms voice review renders from the response without fetching extracted tasks.
 - **Live transcription check:** via `railway run` with the production OpenRouter key, a 4-second synthetic m4a clip transcribed correctly in 483 ms and 439 ms. Chrome `webm` was not exercised (no ffmpeg locally).
-- **Not verified live:** extraction, because no Anthropic key exists locally or in Railway yet.
+- **Live extraction check:** through the production OpenRouter key, a 2-task capture took 1.3 s and a 3-task capture 2.7 s, with correct groups, dates, and weekly recurrence. Pinning the Anthropic provider measured ~1.1 s warm versus ~1.5 s on Azure. The first request for a new schema took 9-11 s (one-time grammar compile, cached 24 h).
 
 ## Expected latency (unmeasured)
 

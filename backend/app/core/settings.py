@@ -195,17 +195,19 @@ class Settings(BaseSettings):
         gt=0,
         validation_alias=AliasChoices("TRANSCRIPTION_TIMEOUT_SECONDS"),
     )
-    anthropic_api_key: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("ANTHROPIC_API_KEY"),
-    )
-    anthropic_base_url: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("ANTHROPIC_BASE_URL"),
+    # OpenRouter's Anthropic-compatible Messages API; the Anthropic SDK appends /v1/messages.
+    extraction_base_url: str = Field(
+        default="https://openrouter.ai/api",
+        validation_alias=AliasChoices("EXTRACTION_BASE_URL"),
     )
     extraction_model: str = Field(
-        default="claude-haiku-5-5",
+        default="anthropic/claude-haiku-5.5",
         validation_alias=AliasChoices("EXTRACTION_MODEL"),
+    )
+    # OpenRouter providers tried first, in order; others remain as fallbacks.
+    extraction_provider_order: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=("anthropic",),
+        validation_alias=AliasChoices("EXTRACTION_PROVIDER_ORDER"),
     )
     extraction_timeout_seconds: float = Field(
         default=10.0,
@@ -288,6 +290,7 @@ class Settings(BaseSettings):
     @field_validator(
         "trusted_hosts",
         "extra_allowed_origins",
+        "extraction_provider_order",
         "pushover_previous_credential_encryption_keys",
         mode="before",
     )

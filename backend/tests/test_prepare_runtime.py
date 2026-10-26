@@ -87,13 +87,9 @@ def test_missing_ai_provider_keys_flags_blank_transcription_and_extraction_keys(
 ) -> None:
     module = prepare_runtime_module
 
-    assert module.missing_ai_provider_keys(
-        {"OPENROUTER_API_KEY": "  ", "ANTHROPIC_API_KEY": "set"}
-    ) == ["OPENROUTER_API_KEY"]
-    assert module.missing_ai_provider_keys({}) == ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"]
-    assert (
-        module.missing_ai_provider_keys({"OPENROUTER_API_KEY": "a", "ANTHROPIC_API_KEY": "b"}) == []
-    )
+    assert module.missing_ai_provider_keys({"OPENROUTER_API_KEY": "  "}) == ["OPENROUTER_API_KEY"]
+    assert module.missing_ai_provider_keys({}) == ["OPENROUTER_API_KEY"]
+    assert module.missing_ai_provider_keys({"OPENROUTER_API_KEY": "set"}) == []
 
 
 def test_build_runtime_values_forwards_ai_provider_settings_from_root_env(
@@ -102,13 +98,11 @@ def test_build_runtime_values_forwards_ai_provider_settings_from_root_env(
     module = prepare_runtime_module
     ports = {"GUST_FRONTEND_PORT": 3000, "GUST_BACKEND_PORT": 8000, "GUST_POSTGRES_PORT": 5432}
 
-    runtime_values = module.build_runtime_values(
-        {"OPENROUTER_API_KEY": "local-key", "ANTHROPIC_API_KEY": "local-anthropic"}, ports
-    )
+    runtime_values = module.build_runtime_values({"OPENROUTER_API_KEY": "local-key"}, ports)
 
     assert runtime_values["OPENROUTER_API_KEY"] == "local-key"
     assert runtime_values["TRANSCRIPTION_MODEL"] == "mistralai/voxtral-mini-transcribe-3-0"
-    assert runtime_values["ANTHROPIC_API_KEY"] == "local-anthropic"
-    assert runtime_values["EXTRACTION_MODEL"] == "claude-haiku-5-5"
+    assert runtime_values["EXTRACTION_MODEL"] == "anthropic/claude-haiku-5.5"
+    assert "ANTHROPIC_API_KEY" not in runtime_values
     assert "ASSEMBLYAI_API_KEY" not in runtime_values
     assert "MISTRAL_API_KEY" not in runtime_values

@@ -51,7 +51,9 @@ def test_ai_provider_defaults_use_voxtral_3_and_haiku_5_5(
 
     settings = Settings(_env_file=None)
 
-    assert settings.extraction_model == "claude-haiku-5-5"
+    assert settings.extraction_model == "anthropic/claude-haiku-5.5"
+    assert settings.extraction_base_url == "https://openrouter.ai/api"
+    assert settings.extraction_provider_order == ("anthropic",)
     assert settings.transcription_model == "mistralai/voxtral-mini-transcribe-3-0"
     assert settings.extraction_timeout_seconds == 10.0
 

@@ -36,8 +36,7 @@ LOCAL_ENV_DEFAULTS = {
     "OPENROUTER_API_KEY": "",
     "TRANSCRIPTION_MODEL": "mistralai/voxtral-mini-transcribe-3-0",
     "TRANSCRIPTION_TIMEOUT_SECONDS": "20",
-    "ANTHROPIC_API_KEY": "",
-    "EXTRACTION_MODEL": "claude-haiku-5-5",
+    "EXTRACTION_MODEL": "anthropic/claude-haiku-5.5",
     "EXTRACTION_TIMEOUT_SECONDS": "10",
     "RESEND_API_URL": "https://api.resend.com/emails",
     "RESEND_API_KEY": "",
@@ -69,7 +68,6 @@ RUNTIME_KEYS = (
     "OPENROUTER_API_KEY",
     "TRANSCRIPTION_MODEL",
     "TRANSCRIPTION_TIMEOUT_SECONDS",
-    "ANTHROPIC_API_KEY",
     "EXTRACTION_MODEL",
     "EXTRACTION_TIMEOUT_SECONDS",
     "RESEND_API_URL",
@@ -222,8 +220,7 @@ def write_runtime_env(runtime_values: dict[str, str | int]) -> None:
 
 # Local voice capture and extraction call the real providers; without these keys they fail closed.
 AI_PROVIDER_KEYS = {
-    "OPENROUTER_API_KEY": "voice transcription",
-    "ANTHROPIC_API_KEY": "task extraction",
+    "OPENROUTER_API_KEY": "voice transcription and task extraction",
 }
 
 

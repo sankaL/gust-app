@@ -21,6 +21,7 @@ from app.services.extraction import (
     ExtractionServiceError,
     ExtractorMalformedResponseError,
     _WirePayload,
+    build_extraction_client,
 )
 from app.services.extraction_models import ExtractorPayload
 from app.services.reminders import ReminderDeliveryError, ResendReminderService
@@ -75,7 +76,6 @@ def build_settings() -> Settings:
             "SUPABASE_URL": "http://supabase.test",
             "SUPABASE_ANON_KEY": "test-anon-key",
             "OPENROUTER_API_KEY": "openrouter-key",
-            "ANTHROPIC_API_KEY": "anthropic-key",
             "RESEND_API_KEY": "resend-key",
             "RESEND_FROM_EMAIL": "gust@example.com",
             "RUN_STARTUP_CHECKS": False,
@@ -282,7 +282,7 @@ def _message_response(
         "id": "msg_test",
         "type": "message",
         "role": "assistant",
-        "model": "claude-haiku-5-5",
+        "model": "anthropic/claude-haiku-5.5",
         "content": [{"type": "text", "text": text}],
         "stop_reason": stop_reason,
         "stop_sequence": None,
@@ -297,7 +297,7 @@ def _message_response(
 
 def _extraction_service(handler) -> ClaudeExtractionService:
     client = anthropic.AsyncAnthropic(
-        api_key="anthropic-key",
+        auth_token="openrouter-key",
         http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
         max_retries=0,
     )
@@ -370,7 +370,8 @@ def test_extraction_sends_one_fast_structured_request_and_maps_groups() -> None:
     assert service.last_attempt_count == 1
     assert len(requests) == 1
     body = requests[0]
-    assert body["model"] == "claude-haiku-5-5"
+    assert body["model"] == "anthropic/claude-haiku-5.5"
+    assert body["provider"] == {"order": ["anthropic"], "allow_fallbacks": True}
     assert body["thinking"] == {"type": "disabled"}
     assert body["output_config"]["effort"] == "low"
     assert body["output_config"]["format"]["type"] == "json_schema"
@@ -387,6 +388,23 @@ def test_extraction_sends_one_fast_structured_request_and_maps_groups() -> None:
     assert second.due_date == date(2026, 10, 27)
     assert second.reminder_at is not None and second.reminder_at.utcoffset() is not None
     assert [subtask.title for subtask in second.subtasks] == ["Find insurance card"]
+
+
+def test_extraction_client_targets_openrouter_with_a_bearer_key() -> None:
+    client = build_extraction_client(build_settings())
+
+    assert client is not None
+    assert str(client.base_url).rstrip("/") == "https://openrouter.ai/api"
+    assert client.auth_token == "openrouter-key"
+    assert client.max_retries == 1
+    asyncio.run(client.close())
+
+
+def test_extraction_client_is_absent_without_an_openrouter_key() -> None:
+    settings = build_settings()
+    settings.openrouter_api_key = None
+
+    assert build_extraction_client(settings) is None
 
 
 def test_extraction_leaves_unknown_groups_unresolved_for_inbox_routing() -> None:
@@ -419,7 +437,6 @@ def test_extraction_clamps_confidence_into_range() -> None:
             "quota_exceeded",
         ),
         (401, "authentication_error", "invalid x-api-key", "credentials_invalid"),
-        (403, "permission_error", "key lacks access", "credentials_invalid"),
     ],
 )
 def test_extraction_classifies_provider_account_failures(
@@ -439,7 +456,7 @@ def test_extraction_classifies_provider_account_failures(
     assert exc_info.value.provider_status_code == status_code
 
 
-@pytest.mark.parametrize("status_code", [400, 429, 500, 529])
+@pytest.mark.parametrize("status_code", [400, 403, 429, 500, 529])
 def test_extraction_transient_and_request_errors_are_not_account_failures(
     status_code: int,
 ) -> None:
@@ -491,7 +508,7 @@ def test_extraction_schema_mismatch_is_malformed() -> None:
 
 def test_extraction_missing_api_key_fails_closed() -> None:
     service = ClaudeExtractionService(build_settings())
-    service.settings.anthropic_api_key = None
+    service.settings.openrouter_api_key = None
 
     with pytest.raises(ConfigurationError):
         _extract(service)
@@ -510,7 +527,7 @@ def test_extraction_logs_usage_without_transcript_or_output(
     assert record.output_tokens == 40
     assert "my private transcript" not in caplog.text
     assert "Private task title" not in caplog.text
-    assert "anthropic-key" not in caplog.text
+    assert "openrouter-key" not in caplog.text
 
 
 # --- Extraction prompt ---
