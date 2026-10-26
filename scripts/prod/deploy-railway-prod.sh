@@ -114,7 +114,7 @@ poll_deployment() {
 
 deploy_service() {
   local service="$1"
-  local path repository_root sha branch message output deployment_id
+  local path repository_root sha branch message output up_status deployment_id
 
   path="$(service_path "$service")"
   repository_root="$(service_uses_repository_root "$service")"
@@ -133,19 +133,22 @@ deploy_service() {
     return 0
   fi
 
+  # Capture the exit status explicitly: a bare `output="$(...)"` under `set -e`
+  # exits before the CLI error (e.g. a revoked token) is ever printed.
   if [[ "$repository_root" == "true" ]]; then
     output="$(
       cd "$REPO_ROOT" &&
       railway_cli up -s "$service" -e "$ENVIRONMENT_NAME" -p "$PROJECT_ID" -d -m "$message" 2>&1
-    )"
+    )" && up_status=0 || up_status=$?
   else
     output="$(
       cd "$REPO_ROOT" &&
       railway_cli up "$path" --path-as-root -s "$service" -e "$ENVIRONMENT_NAME" -p "$PROJECT_ID" -d -m "$message" 2>&1
-    )"
+    )" && up_status=0 || up_status=$?
   fi
 
   printf '%s\n' "$output"
+  [[ "$up_status" -eq 0 ]] || fail "railway up failed for ${service} (exit ${up_status}). If the output mentions auth, replace the RAILWAY_TOKEN project token."
 
   deployment_id="$(printf '%s\n' "$output" | parse_deployment_id)"
   [[ -n "$deployment_id" ]] || fail "Could not parse deployment id for ${service}"

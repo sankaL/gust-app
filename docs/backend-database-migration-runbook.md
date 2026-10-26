@@ -518,7 +518,8 @@ If Railway-native repo auto-deploy is not linked for the production services, us
 Fallback contract:
 
 - the workflow runs only after the `CI` workflow completes successfully on `main`
-- the GitHub Actions deploy workflow should use repository secret `RAILWAY_TOKEN` with a Railway project token scoped to the production environment; `RAILWAY_API_TOKEN` remains a legacy fallback for account/workspace-token setups
+- the GitHub Actions deploy workflow should use the `prod` environment secret `RAILWAY_TOKEN` with a Railway project token scoped to the production environment; `RAILWAY_API_TOKEN` remains a legacy fallback, and the workflow passes whichever is set to the CLI as `RAILWAY_TOKEN`, so it must also hold a project token
+- Railway revoked every project and API token in its October 2026 security incident. Revoked tokens can still appear under project Settings → Tokens. If the deploy step fails at the first `railway up` with an auth error, create a new production project token, replace the GitHub secret, and re-run the workflow
 - the deploy script uploads the four production services from their checked-in source directories:
   - `backend/`
   - `frontend/`
