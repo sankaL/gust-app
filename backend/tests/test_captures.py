@@ -32,7 +32,7 @@ from app.services.auth import AuthenticatedIdentity
 from app.services.extraction import ExtractionProviderAccountError, ExtractorMalformedResponseError
 from app.services.staging import ApproveResult, StagingService
 from app.services.transcription import (
-    MistralTranscriptionService,
+    OpenRouterTranscriptionService,
     TranscriptionResult,
     TranscriptionServiceError,
 )
@@ -138,7 +138,7 @@ def test_provider_dependencies_use_the_shared_lifespan_clients() -> None:
     transcription = get_transcription_service(request, settings)
     extraction = get_extraction_service(request, settings)
 
-    assert isinstance(transcription, MistralTranscriptionService)
+    assert isinstance(transcription, OpenRouterTranscriptionService)
     assert transcription.settings is settings
     assert transcription._client is shared.transcription
     assert extraction._client is shared.extraction
@@ -376,7 +376,7 @@ def test_voice_capture_rate_limit_returns_429(
         FakeTranscriptionService(
             result=TranscriptionResult(
                 transcript_text="Buy coffee beans at 5pm",
-                provider="mistral",
+                provider="openrouter",
                 latency_ms=412,
             )
         ),
@@ -481,7 +481,7 @@ def test_voice_capture_transcribes_audio_and_returns_review_state(
     fake_transcription = FakeTranscriptionService(
         result=TranscriptionResult(
             transcript_text="Buy coffee beans at 5pm",
-            provider="mistral",
+            provider="openrouter",
             latency_ms=412,
         )
     )
@@ -507,7 +507,7 @@ def test_voice_capture_transcribes_audio_and_returns_review_state(
         ).one()
 
     assert capture_row.status == "ready_for_review"
-    assert capture_row.transcription_provider == "mistral"
+    assert capture_row.transcription_provider == "openrouter"
     assert capture_row.transcription_latency_ms == 412
 
 
@@ -942,7 +942,7 @@ def test_voice_capture_returns_staged_tasks_and_extracts_from_the_transcript(
         FakeTranscriptionService(
             result=TranscriptionResult(
                 transcript_text="Call the dentist tomorrow",
-                provider="mistral",
+                provider="openrouter",
                 latency_ms=300,
             )
         ),
@@ -1661,7 +1661,7 @@ def test_voice_capture_surfaces_extraction_quota_instead_of_silently_staging_not
         FakeTranscriptionService(
             result=TranscriptionResult(
                 transcript_text="Buy coffee beans",
-                provider="mistral",
+                provider="openrouter",
                 latency_ms=300,
             )
         ),

@@ -23,7 +23,7 @@ TranscriptionFailureReason = Literal[
     "unknown",
 ]
 
-# Mistral reports an unpaid or exhausted account in the error message rather than a fixed code.
+# OpenRouter uses 402 for exhausted credits; upstream providers may only say so in the message.
 _QUOTA_ERROR_MARKERS = (
     "insufficient funds",
     "insufficient credit",
@@ -31,6 +31,9 @@ _QUOTA_ERROR_MARKERS = (
     "billing",
     "payment required",
 )
+# OpenRouter infers the audio format from the upload's extension. Browser recorders on iOS emit
+# audio-only MP4, which is the m4a container, so name it that way.
+_UPLOAD_EXTENSION_ALIASES = {"mp4": "m4a"}
 
 
 @dataclass
@@ -58,17 +61,17 @@ class TranscriptionServiceError(Exception):
 
 
 def build_transcription_http_client(settings: Settings) -> httpx.AsyncClient:
-    """Long-lived client so each capture reuses an open TLS connection to Mistral."""
+    """Long-lived client so each capture reuses an open TLS connection to OpenRouter."""
     return httpx.AsyncClient(
         timeout=httpx.Timeout(settings.transcription_timeout_seconds),
         limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=300.0),
     )
 
 
-class MistralTranscriptionService:
-    """Synchronous single-request transcription via Mistral Voxtral."""
+class OpenRouterTranscriptionService:
+    """Synchronous single-request transcription via OpenRouter (Voxtral Mini Transcribe 3)."""
 
-    provider_name = "mistral"
+    provider_name = "openrouter"
 
     def __init__(
         self,
@@ -82,7 +85,7 @@ class MistralTranscriptionService:
         self._transport = transport
 
     def ensure_configured(self) -> None:
-        if not self.settings.mistral_api_key or not self.settings.mistral_transcription_model:
+        if not self.settings.openrouter_api_key or not self.settings.transcription_model:
             raise ConfigurationError(
                 "Voice transcription is not configured. Please contact the administrator."
             )
@@ -144,10 +147,10 @@ class MistralTranscriptionService:
         content_type: str,
     ) -> httpx.Response:
         return await client.post(
-            self.settings.mistral_api_url,
-            headers={"Authorization": f"Bearer {self.settings.mistral_api_key}"},
-            data={"model": self.settings.mistral_transcription_model},
-            files={"file": (filename, audio_bytes, content_type)},
+            self.settings.openrouter_transcription_url,
+            headers={"Authorization": f"Bearer {self.settings.openrouter_api_key}"},
+            data={"model": self.settings.transcription_model},
+            files={"file": (_upload_filename(filename), audio_bytes, content_type)},
             timeout=self.settings.transcription_timeout_seconds,
         )
 
@@ -179,7 +182,7 @@ class MistralTranscriptionService:
         message, error_type, error_code = _provider_error_details(response)
         lowered = message.lower()
 
-        if status_code in {401, 403} or error_type == "invalid_model":
+        if status_code in {401, 403, 404} or error_type == "invalid_model":
             logger.warning(
                 "transcription_provider_auth_failed",
                 extra={
@@ -238,6 +241,9 @@ def _provider_error_details(response: httpx.Response) -> tuple[str, str | None, 
         return "", None, None
     if not isinstance(payload, dict):
         return "", None, None
+    # OpenRouter nests errors as {"error": {"code", "message", "metadata"}}.
+    if isinstance(payload.get("error"), dict):
+        payload = payload["error"]
     message = payload.get("message")
     error_type = payload.get("type")
     error_code = payload.get("code")
@@ -246,6 +252,13 @@ def _provider_error_details(response: httpx.Response) -> tuple[str, str | None, 
         error_type.strip() if isinstance(error_type, str) and error_type.strip() else None,
         str(error_code).strip() if isinstance(error_code, (str, int)) else None,
     )
+
+
+def _upload_filename(filename: str) -> str:
+    extension = _filename_extension(filename)
+    if extension in _UPLOAD_EXTENSION_ALIASES:
+        return f"{filename.rsplit('.', maxsplit=1)[0]}.{_UPLOAD_EXTENSION_ALIASES[extension]}"
+    return filename
 
 
 def _filename_extension(filename: str) -> str | None:

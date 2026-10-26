@@ -44,7 +44,7 @@ from app.services.reminders import (
 )
 from app.services.staging import StagingService
 from app.services.task_service import TaskService
-from app.services.transcription import MistralTranscriptionService
+from app.services.transcription import OpenRouterTranscriptionService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -56,9 +56,9 @@ def get_auth_service(settings: SettingsDep) -> AuthService:
 def get_transcription_service(
     request: Request,
     settings: SettingsDep,
-) -> MistralTranscriptionService:
+) -> OpenRouterTranscriptionService:
     clients = getattr(request.app.state, "ai_clients", None)
-    return MistralTranscriptionService(
+    return OpenRouterTranscriptionService(
         settings,
         client=clients.transcription if clients is not None else None,
     )
@@ -75,7 +75,7 @@ def get_extraction_service(request: Request, settings: SettingsDep) -> ClaudeExt
 def get_capture_service(
     settings: SettingsDep,
     transcription_service: Annotated[
-        MistralTranscriptionService,
+        OpenRouterTranscriptionService,
         Depends(get_transcription_service),
     ],
     extraction_service: Annotated[

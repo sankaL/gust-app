@@ -178,17 +178,17 @@ class Settings(BaseSettings):
         default=7,
         validation_alias=AliasChoices("CAPTURE_RETENTION_DAYS"),
     )
-    mistral_api_url: str = Field(
-        default="https://api.mistral.ai/v1/audio/transcriptions",
-        validation_alias=AliasChoices("MISTRAL_API_URL"),
+    openrouter_transcription_url: str = Field(
+        default="https://openrouter.ai/api/v1/audio/transcriptions",
+        validation_alias=AliasChoices("OPENROUTER_TRANSCRIPTION_URL"),
     )
-    mistral_api_key: str | None = Field(
+    openrouter_api_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("MISTRAL_API_KEY"),
+        validation_alias=AliasChoices("OPENROUTER_API_KEY"),
     )
-    mistral_transcription_model: str = Field(
-        default="voxtral-mini-2602",
-        validation_alias=AliasChoices("MISTRAL_TRANSCRIPTION_MODEL"),
+    transcription_model: str = Field(
+        default="mistralai/voxtral-mini-transcribe-3-0",
+        validation_alias=AliasChoices("TRANSCRIPTION_MODEL"),
     )
     transcription_timeout_seconds: float = Field(
         default=20.0,

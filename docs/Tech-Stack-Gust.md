@@ -33,7 +33,7 @@ The frontend talks only to the backend API. It does not call the database, trans
 | Migrations | Alembic | Standard schema migration workflow |
 | Auth provider | Supabase Auth with email + password (admin-created accounts) | Managed identity for a single-user-per-account app |
 | Database | Supabase Postgres | Managed Postgres with backups and hosted auth adjacency |
-| Transcription | Mistral Voxtral Mini Transcribe V2 (`voxtral-mini-2602`) | One synchronous request per recording; no upload/submit/poll round trips |
+| Transcription | Mistral Voxtral Mini Transcribe 3 via OpenRouter (`mistralai/voxtral-mini-transcribe-3-0`) | One synchronous request per recording; reuses the OpenRouter account |
 | Extraction | Anthropic Claude Haiku 5.5 via the official SDK, JSON-schema structured outputs | Lowest-latency typed extraction; thinking off, schema-constrained output |
 | Email | Resend | Simple transactional email API with idempotency support |
 | Hosting | Railway | Simple deployment for the API, frontend, and scheduled jobs |
@@ -297,27 +297,29 @@ Reason:
 
 ### Transcription
 
-Use Mistral's audio transcription API (`POST /v1/audio/transcriptions`) with Voxtral Mini Transcribe V2, pinned as `voxtral-mini-2602` (`MISTRAL_TRANSCRIPTION_MODEL`). The model is pinned rather than `voxtral-mini-latest` so a provider-side alias move cannot silently change accuracy or latency.
+Use OpenRouter's speech-to-text endpoint (`POST https://openrouter.ai/api/v1/audio/transcriptions`) with Mistral's Voxtral Mini Transcribe 3, model `mistralai/voxtral-mini-transcribe-3-0` (`TRANSCRIPTION_MODEL`). OpenRouter was chosen over a direct Mistral account so transcription bills to the existing OpenRouter key.
 
-Local development and production both use the real Mistral provider. Dev mode changes
+Local development and production both use the real provider. Dev mode changes
 authentication and local infrastructure behavior, but it does not mock transcription;
-local voice capture therefore requires valid Mistral credentials.
+local voice capture therefore requires a valid `OPENROUTER_API_KEY`.
 
 Operational contract:
 
-- backend sends the recording as one multipart request and receives the transcript in the response; there is no upload, job, or polling step
+- backend sends the recording as one multipart request (`model`, `file`) and receives `{text, usage}` in the response; there is no upload, job, or polling step
+- OpenRouter infers the format from the file extension, so iOS `audio/mp4` recordings are uploaded as `.m4a` (same container); Chrome sends `.webm`
 - the request is bounded by `TRANSCRIPTION_TIMEOUT_SECONDS` (default 20)
 - one process-wide `httpx.AsyncClient` is opened in the app lifespan and reused, so captures skip a fresh TLS handshake; it is closed on shutdown
-- audio is sent inline and not stored as a Mistral file, so there is nothing to delete afterwards
+- audio is sent inline, not by URL or stored file, so there is nothing to delete afterwards
 - raw audio is discarded after processing
 - transcription latency and failures are logged without logging the transcript body or provider error text
+- measured 2026-10-26 on a 4-second synthetic m4a clip: 440-480 ms end to end (AssemblyAI baseline 3.4 s)
 
 ### AI Provider Account Failures
 
 Exhausted credits and rejected credentials are administrator problems, not user problems:
 
-- Mistral HTTP 402 or an insufficient-credit/billing error message, and Anthropic HTTP 402 or HTTP 400 "credit balance is too low", map to API error `ai_service_quota_exceeded` (HTTP 503) with a "contact the administrator" message
-- Mistral HTTP 401/403 or `invalid_model`, and Anthropic HTTP 401/403, map to `config_invalid` (HTTP 503) with an administrator-contact message
+- OpenRouter transcription HTTP 402 or an insufficient-credit/billing error message, and Anthropic HTTP 402 or HTTP 400 "credit balance is too low", map to API error `ai_service_quota_exceeded` (HTTP 503) with a "contact the administrator" message
+- OpenRouter transcription HTTP 401/403/404 (unknown model) or `invalid_model`, and Anthropic HTTP 401/403, map to `config_invalid` (HTTP 503) with an administrator-contact message
 - these failures are never retried, and they are surfaced from voice capture, text capture, submit, and re-extract instead of being swallowed by best-effort auto-extraction
 - the capture is marked `extraction_failed` (or `transcription_failed`) with a sanitized `error_code` so it can be re-extracted once the account is restored
 

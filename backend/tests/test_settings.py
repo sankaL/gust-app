@@ -41,18 +41,18 @@ def test_alembic_database_url_prefers_migration_database_url(
     assert settings.alembic_database_url == "postgresql+psycopg://admin@db/admin"
 
 
-def test_ai_provider_defaults_use_voxtral_v2_and_haiku_5_5(
+def test_ai_provider_defaults_use_voxtral_3_and_haiku_5_5(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    for name in ("EXTRACTION_MODEL", "MISTRAL_TRANSCRIPTION_MODEL", "EXTRACTION_TIMEOUT_SECONDS"):
+    for name in ("EXTRACTION_MODEL", "TRANSCRIPTION_MODEL", "EXTRACTION_TIMEOUT_SECONDS"):
         monkeypatch.delenv(name, raising=False)
 
     settings = Settings(_env_file=None)
 
     assert settings.extraction_model == "claude-haiku-5-5"
-    assert settings.mistral_transcription_model == "voxtral-mini-2602"
+    assert settings.transcription_model == "mistralai/voxtral-mini-transcribe-3-0"
     assert settings.extraction_timeout_seconds == 10.0
 
 

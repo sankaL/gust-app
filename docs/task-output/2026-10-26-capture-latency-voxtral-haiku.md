@@ -1,4 +1,4 @@
-# Capture Latency: Voxtral Transcription and Claude Haiku 5.5 Extraction
+# Capture Latency: Voxtral 3 (via OpenRouter) Transcription and Claude Haiku 5.5 Extraction
 
 Date: 2026-10-26
 
@@ -19,7 +19,7 @@ With inputs that short, the cost was fixed overhead: provider round trips, hidde
 
 ## What changed
 
-**Transcription.** `MistralTranscriptionService` sends one multipart request to Mistral (`voxtral-mini-2602`, Voxtral Mini Transcribe V2). Error mapping: 401/403 or `invalid_model` → `config_invalid`; 402 or a billing/credit message → `ai_service_quota_exceeded`; 429/5xx → provider unavailable; other 4xx → provider rejected; empty text → no speech.
+**Transcription.** `OpenRouterTranscriptionService` sends one multipart request to OpenRouter's `/audio/transcriptions` with Voxtral Mini Transcribe 3 (`mistralai/voxtral-mini-transcribe-3-0`). iOS `mp4` uploads are renamed `.m4a`. Error mapping: 401/403/404 or `invalid_model` → `config_invalid`; 402 or a billing/credit message → `ai_service_quota_exceeded`; 429/5xx → provider unavailable; other 4xx → provider rejected; empty text → no speech.
 
 **Extraction.** `ClaudeExtractionService` calls `claude-haiku-5-5` through the `anthropic` SDK with:
 - `thinking: disabled`, `output_config.effort: low`
@@ -31,8 +31,8 @@ Wire output is mapped back to `ExtractorPayload` (group names → ids, confidenc
 
 **Retries.** Removed `ExtractionRetryManager` (3 attempts with backoff) and the OpenRouter A/B model registry. Bounds are now: one SDK transport retry, one payload retry, and the existing corrective guardrail pass.
 
-**Pipeline.** `app/services/ai_clients.py` opens one `httpx.AsyncClient` (Mistral) and one `AsyncAnthropic` client in the FastAPI lifespan and closes them on shutdown. In `CaptureService`:
-- **Voice:** the capture-row insert and the group/timezone load run while Mistral transcribes, and the transcript write runs while Claude extracts.
+**Pipeline.** `app/services/ai_clients.py` opens one `httpx.AsyncClient` (OpenRouter transcription) and one `AsyncAnthropic` client in the FastAPI lifespan and closes them on shutdown. In `CaptureService`:
+- **Voice:** the capture-row insert and the group/timezone load run while Voxtral transcribes, and the transcript write runs while Claude extracts.
 - **Text and re-extract:** the capture write and the context load run side by side.
 
 Responses from `POST /captures/voice`, `POST /captures/text`, and `POST /captures/{id}/re-extract` include the staged tasks. The frontend seeds `['extracted-tasks', captureId]` from them, so review renders without another request.
@@ -43,14 +43,14 @@ Responses from `POST /captures/voice`, `POST /captures/text`, and `POST /capture
 
 ## Configuration
 
-- New: `MISTRAL_API_URL`, `MISTRAL_API_KEY`, `MISTRAL_TRANSCRIPTION_MODEL` (default `voxtral-mini-2602`), `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` (optional), `EXTRACTION_MODEL` (default `claude-haiku-5-5`), `EXTRACTION_MAX_OUTPUT_TOKENS` (default 2048).
+- New: `OPENROUTER_TRANSCRIPTION_URL`, `TRANSCRIPTION_MODEL` (default `mistralai/voxtral-mini-transcribe-3-0`), `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` (optional), `EXTRACTION_MODEL` (default `claude-haiku-5-5`), `EXTRACTION_MAX_OUTPUT_TOKENS` (default 2048).
 - Changed defaults: `TRANSCRIPTION_TIMEOUT_SECONDS` 30 → 20, `EXTRACTION_TIMEOUT_SECONDS` 20 → 10.
-- Removed (now ignored): `ASSEMBLYAI_*`, `OPENROUTER_*`, `EXTRACTION_MAX_RETRIES`, `EXTRACTION_RETRY_*`, `EXTRACTION_MODEL_CONFIG_PATH`, `EXTRACTION_AB_TEST_ENABLED`.
+- Removed (now ignored): `ASSEMBLYAI_*`, `OPENROUTER_EXTRACTION_MODEL`, `OPENROUTER_API_URL`, `EXTRACTION_MAX_RETRIES`, `EXTRACTION_RETRY_*`, `EXTRACTION_MODEL_CONFIG_PATH`, `EXTRACTION_AB_TEST_ENABLED`.
 
 ## Verification
 
 - **Backend:** 268 tests ran; 267 pass. The one failure, `test_rotate_pushover_credentials.py::test_previous_keys_setting_parses_csv`, fails identically at HEAD because it does not set `APP_ENV`. New tests:
-  - Mistral request shape, error mapping, and client reuse
+  - OpenRouter transcription request shape, m4a renaming, error mapping, and client reuse
   - Claude request body (thinking off, low effort, schema, cached system prompt, no sampling params)
   - group-name mapping and account-error classification
   - refusal, truncation, and schema-mismatch handling
@@ -58,11 +58,12 @@ Responses from `POST /captures/voice`, `POST /captures/text`, and `POST /capture
   - prompt examples validated against the wire schema
   - capture responses carrying staged tasks
 - **Frontend:** typecheck, lint, and the full vitest suite pass. A new test confirms voice review renders from the response without fetching extracted tasks.
-- **Not verified against live providers:** no Mistral or Anthropic key is available locally or in Railway yet, so the latency gain and extraction quality are unmeasured.
+- **Live transcription check:** via `railway run` with the production OpenRouter key, a 4-second synthetic m4a clip transcribed correctly in 483 ms and 439 ms. Chrome `webm` was not exercised (no ffmpeg locally).
+- **Not verified live:** extraction, because no Anthropic key exists locally or in Railway yet.
 
 ## Expected latency (unmeasured)
 
-- Transcription: roughly 0.5–1.5 s for a short clip, versus 3.4 s.
+- Transcription: measured ~0.45 s on a 4-second clip, versus 3.4 s.
 - Extraction: roughly 0.5–1 s for one task, longer as the task count grows, versus 5.4 s.
 - Overall: the overlapped DB work and the dropped follow-up GET remove about 1 s more.
 
@@ -73,4 +74,3 @@ Responses from `POST /captures/voice`, `POST /captures/text`, and `POST /capture
   - `get_auth_service` builds a new `PyJWKClient` per request, likely re-fetching JWKS each time.
   - Synchronous SQLAlchemy calls still block the event loop.
   - The staging path routes by confidence differently from the PRD (0.7 review threshold, no tie or below-0.5 Inbox rule).
-- Voxtral Mini Transcribe 3 is now available and worth an A/B comparison.

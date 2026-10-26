@@ -32,9 +32,9 @@ LOCAL_ENV_DEFAULTS = {
     "SESSION_COOKIE_SECURE": "false",
     "SESSION_COOKIE_DOMAIN": "",
     "CAPTURE_RETENTION_DAYS": "7",
-    "MISTRAL_API_URL": "https://api.mistral.ai/v1/audio/transcriptions",
-    "MISTRAL_API_KEY": "",
-    "MISTRAL_TRANSCRIPTION_MODEL": "voxtral-mini-2602",
+    "OPENROUTER_TRANSCRIPTION_URL": "https://openrouter.ai/api/v1/audio/transcriptions",
+    "OPENROUTER_API_KEY": "",
+    "TRANSCRIPTION_MODEL": "mistralai/voxtral-mini-transcribe-3-0",
     "TRANSCRIPTION_TIMEOUT_SECONDS": "20",
     "ANTHROPIC_API_KEY": "",
     "EXTRACTION_MODEL": "claude-haiku-5-5",
@@ -65,9 +65,9 @@ RUNTIME_KEYS = (
     "SESSION_COOKIE_SECURE",
     "SESSION_COOKIE_DOMAIN",
     "CAPTURE_RETENTION_DAYS",
-    "MISTRAL_API_URL",
-    "MISTRAL_API_KEY",
-    "MISTRAL_TRANSCRIPTION_MODEL",
+    "OPENROUTER_TRANSCRIPTION_URL",
+    "OPENROUTER_API_KEY",
+    "TRANSCRIPTION_MODEL",
     "TRANSCRIPTION_TIMEOUT_SECONDS",
     "ANTHROPIC_API_KEY",
     "EXTRACTION_MODEL",
@@ -222,7 +222,7 @@ def write_runtime_env(runtime_values: dict[str, str | int]) -> None:
 
 # Local voice capture and extraction call the real providers; without these keys they fail closed.
 AI_PROVIDER_KEYS = {
-    "MISTRAL_API_KEY": "voice transcription",
+    "OPENROUTER_API_KEY": "voice transcription",
     "ANTHROPIC_API_KEY": "task extraction",
 }
 

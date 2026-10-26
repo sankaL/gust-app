@@ -97,7 +97,7 @@
 
 ### AI, Orchestration & Services
 
-![Mistral](https://img.shields.io/badge/Mistral-Voxtral%20Transcription-fd81a8?style=flat-square)
+![Voxtral](https://img.shields.io/badge/Voxtral%20Mini%20Transcribe%203-via%20OpenRouter-fd81a8?style=flat-square)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%205.5-ba9eff?style=flat-square&logo=anthropic&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Railway](https://img.shields.io/badge/Railway-Deployment-fd81a8?style=flat-square&logo=railway&logoColor=white)

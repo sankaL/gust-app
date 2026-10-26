@@ -25,7 +25,7 @@ from app.services.extraction import (
 from app.services.extraction_models import ExtractorPayload
 from app.services.reminders import ReminderDeliveryError, ResendReminderService
 from app.services.transcription import (
-    MistralTranscriptionService,
+    OpenRouterTranscriptionService,
     TranscriptionResult,
     TranscriptionServiceError,
 )
@@ -74,7 +74,7 @@ def build_settings() -> Settings:
             "BACKEND_PUBLIC_URL": "http://testserver",
             "SUPABASE_URL": "http://supabase.test",
             "SUPABASE_ANON_KEY": "test-anon-key",
-            "MISTRAL_API_KEY": "mistral-key",
+            "OPENROUTER_API_KEY": "openrouter-key",
             "ANTHROPIC_API_KEY": "anthropic-key",
             "RESEND_API_KEY": "resend-key",
             "RESEND_FROM_EMAIL": "gust@example.com",
@@ -84,17 +84,17 @@ def build_settings() -> Settings:
     )
 
 
-# --- Mistral transcription ---
+# --- OpenRouter transcription (Voxtral) ---
 
 
-def _mistral_service(handler, **setting_overrides: object) -> MistralTranscriptionService:
+def _transcription_service(handler, **setting_overrides: object) -> OpenRouterTranscriptionService:
     settings = build_settings()
     for key, value in setting_overrides.items():
         setattr(settings, key, value)
-    return MistralTranscriptionService(settings, transport=httpx.MockTransport(handler))
+    return OpenRouterTranscriptionService(settings, transport=httpx.MockTransport(handler))
 
 
-def _transcribe(service: MistralTranscriptionService) -> TranscriptionResult:
+def _transcribe(service: OpenRouterTranscriptionService) -> TranscriptionResult:
     return asyncio.run(
         service.transcribe(
             audio_bytes=b"fake-audio",
@@ -104,33 +104,48 @@ def _transcribe(service: MistralTranscriptionService) -> TranscriptionResult:
     )
 
 
-def _mistral_failure(service: MistralTranscriptionService) -> TranscriptionServiceError:
+def _transcription_failure(service: OpenRouterTranscriptionService) -> TranscriptionServiceError:
     with pytest.raises(TranscriptionServiceError) as exc_info:
         _transcribe(service)
     return exc_info.value
 
 
-def test_mistral_transcribes_with_one_multipart_request() -> None:
+def test_transcription_sends_one_multipart_request_to_openrouter() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(200, json={"text": "  Buy milk tomorrow  "})
 
-    result = _transcribe(_mistral_service(handler))
+    result = _transcribe(_transcription_service(handler))
 
     assert result.transcript_text == "Buy milk tomorrow"
-    assert result.provider == "mistral"
+    assert result.provider == "openrouter"
     assert len(requests) == 1
     request = requests[0]
-    assert str(request.url) == "https://api.mistral.ai/v1/audio/transcriptions"
-    assert request.headers["authorization"] == "Bearer mistral-key"
+    assert str(request.url) == "https://openrouter.ai/api/v1/audio/transcriptions"
+    assert request.headers["authorization"] == "Bearer openrouter-key"
     body = request.content
-    assert b'name="model"' in body and b"voxtral-mini-2602" in body
+    assert b'name="model"' in body and b"mistralai/voxtral-mini-transcribe-3-0" in body
     assert b'filename="capture.webm"' in body
 
 
-def test_mistral_reuses_the_shared_client() -> None:
+def test_transcription_uploads_ios_mp4_audio_as_m4a() -> None:
+    bodies: list[bytes] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(request.content)
+        return httpx.Response(200, json={"text": "Call mom"})
+
+    service = _transcription_service(handler)
+    asyncio.run(
+        service.transcribe(audio_bytes=b"a", filename="capture.mp4", content_type="audio/mp4")
+    )
+
+    assert b'filename="capture.m4a"' in bodies[0]
+
+
+def test_transcription_reuses_the_shared_client() -> None:
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -140,7 +155,7 @@ def test_mistral_reuses_the_shared_client() -> None:
 
     async def run() -> list[str]:
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            service = MistralTranscriptionService(build_settings(), client=client)
+            service = OpenRouterTranscriptionService(build_settings(), client=client)
             results = []
             for _ in range(2):
                 result = await service.transcribe(
@@ -154,16 +169,16 @@ def test_mistral_reuses_the_shared_client() -> None:
     assert calls == 2
 
 
-@pytest.mark.parametrize("status_code", [401, 403])
-def test_mistral_rejected_credentials_map_to_invalid_configuration(status_code: int) -> None:
-    service = _mistral_service(lambda request: httpx.Response(status_code, json={}))
+@pytest.mark.parametrize("status_code", [401, 403, 404])
+def test_transcription_rejected_credentials_map_to_invalid_configuration(status_code: int) -> None:
+    service = _transcription_service(lambda request: httpx.Response(status_code, json={}))
 
     with pytest.raises(InvalidConfigurationError):
         _transcribe(service)
 
 
-def test_mistral_invalid_model_maps_to_invalid_configuration() -> None:
-    service = _mistral_service(
+def test_transcription_invalid_model_maps_to_invalid_configuration() -> None:
+    service = _transcription_service(
         lambda request: httpx.Response(
             400, json={"message": "Invalid model", "type": "invalid_model"}
         )
@@ -176,78 +191,81 @@ def test_mistral_invalid_model_maps_to_invalid_configuration() -> None:
 @pytest.mark.parametrize(
     ("status_code", "payload"),
     [
-        (402, {}),
-        (400, {"message": "Insufficient credit on this workspace", "type": "invalid_request"}),
+        (402, {"error": {"code": 402, "message": "Insufficient credits."}}),
+        (400, {"error": {"code": 400, "message": "Upstream: insufficient credit on workspace"}}),
     ],
 )
-def test_mistral_exhausted_account_maps_to_quota_exceeded(
+def test_transcription_exhausted_account_maps_to_quota_exceeded(
     status_code: int, payload: dict[str, object]
 ) -> None:
-    service = _mistral_service(lambda request: httpx.Response(status_code, json=payload))
+    service = _transcription_service(lambda request: httpx.Response(status_code, json=payload))
 
-    assert _mistral_failure(service).failure_reason == "quota_exceeded"
+    assert _transcription_failure(service).failure_reason == "quota_exceeded"
 
 
 @pytest.mark.parametrize("status_code", [429, 500, 503])
-def test_mistral_rate_limit_and_server_errors_map_to_provider_unavailable(
+def test_transcription_rate_limit_and_server_errors_map_to_provider_unavailable(
     status_code: int,
 ) -> None:
-    service = _mistral_service(lambda request: httpx.Response(status_code, json={}))
+    service = _transcription_service(lambda request: httpx.Response(status_code, json={}))
 
-    assert _mistral_failure(service).failure_reason == "provider_unavailable"
+    assert _transcription_failure(service).failure_reason == "provider_unavailable"
 
 
-def test_mistral_other_client_errors_map_to_provider_rejected() -> None:
-    service = _mistral_service(
+def test_transcription_other_client_errors_map_to_provider_rejected() -> None:
+    service = _transcription_service(
         lambda request: httpx.Response(422, json={"message": "Unsupported audio format"})
     )
 
-    exc = _mistral_failure(service)
+    exc = _transcription_failure(service)
     assert exc.failure_reason == "provider_rejected"
     assert exc.provider_status_code == 422
 
 
-def test_mistral_empty_transcript_maps_to_no_speech() -> None:
-    service = _mistral_service(lambda request: httpx.Response(200, json={"text": "   "}))
+def test_transcription_empty_transcript_maps_to_no_speech() -> None:
+    service = _transcription_service(lambda request: httpx.Response(200, json={"text": "   "}))
 
-    assert _mistral_failure(service).failure_reason == "no_speech"
-
-
-def test_mistral_invalid_json_maps_to_provider_invalid_response() -> None:
-    service = _mistral_service(lambda request: httpx.Response(200, content=b"not-json"))
-
-    assert _mistral_failure(service).failure_reason == "provider_invalid_response"
+    assert _transcription_failure(service).failure_reason == "no_speech"
 
 
-def test_mistral_timeout_maps_to_timeout() -> None:
+def test_transcription_invalid_json_maps_to_provider_invalid_response() -> None:
+    service = _transcription_service(lambda request: httpx.Response(200, content=b"not-json"))
+
+    assert _transcription_failure(service).failure_reason == "provider_invalid_response"
+
+
+def test_transcription_timeout_maps_to_timeout() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("slow", request=request)
 
-    assert _mistral_failure(_mistral_service(handler)).failure_reason == "timeout"
+    assert _transcription_failure(_transcription_service(handler)).failure_reason == "timeout"
 
 
-def test_mistral_transport_failure_maps_to_provider_unavailable() -> None:
+def test_transcription_transport_failure_maps_to_provider_unavailable() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("down", request=request)
 
-    assert _mistral_failure(_mistral_service(handler)).failure_reason == "provider_unavailable"
+    assert (
+        _transcription_failure(_transcription_service(handler)).failure_reason
+        == "provider_unavailable"
+    )
 
 
-def test_mistral_missing_api_key_fails_closed() -> None:
-    service = _mistral_service(lambda request: httpx.Response(200, json={"text": "x"}))
-    service.settings.mistral_api_key = None
+def test_transcription_missing_api_key_fails_closed() -> None:
+    service = _transcription_service(lambda request: httpx.Response(200, json={"text": "x"}))
+    service.settings.openrouter_api_key = None
 
     with pytest.raises(ConfigurationError):
         _transcribe(service)
 
 
-def test_mistral_failure_log_omits_provider_message(caplog: pytest.LogCaptureFixture) -> None:
-    service = _mistral_service(
+def test_transcription_failure_log_omits_provider_message(caplog: pytest.LogCaptureFixture) -> None:
+    service = _transcription_service(
         lambda request: httpx.Response(422, json={"message": "secret transcript fragment"})
     )
 
     with caplog.at_level(logging.WARNING, logger="gust.api"):
-        _mistral_failure(service)
+        _transcription_failure(service)
 
     assert "secret transcript fragment" not in caplog.text
 

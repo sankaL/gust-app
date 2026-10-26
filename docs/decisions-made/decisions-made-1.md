@@ -1,5 +1,11 @@
 # Decisions Made
 
+## 2026-10-26 10:30:00 EDT
+
+- Switched transcription from a direct Mistral account (Voxtral Mini Transcribe V2) to Voxtral Mini Transcribe 3 through OpenRouter (`mistralai/voxtral-mini-transcribe-3-0`). OpenRouter's `/audio/transcriptions` endpoint takes the same single multipart request, and the existing OpenRouter key and billing cover it, so no new provider account is needed. Transcribe 3 is Mistral's current recorded-file model (released 2026-10-20).
+- Verified live before committing: a 4-second synthetic m4a clip transcribed correctly in 440-480 ms. Chrome `webm` uploads were not exercised live; OpenRouter documents `webm` as supported.
+- iOS recordings arrive as `audio/mp4`; they are uploaded with an `.m4a` filename (the audio-only MP4 container) because OpenRouter infers format from the extension and documents `m4a`, not `mp4`.
+
 ## 2026-10-26 09:45:00 EDT
 
 - Optimized voice capture for latency. Production logs showed a 10-word clip taking 3.4 s to transcribe and 5.4 s to extract, nearly all of it fixed overhead rather than content, so the fixes target round trips, hidden reasoning, and output length rather than model size alone.
