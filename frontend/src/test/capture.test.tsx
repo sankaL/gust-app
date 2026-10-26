@@ -443,6 +443,58 @@ describe('capture route', () => {
     }
   })
 
+  it('renders staged tasks from the voice capture response without refetching them', async () => {
+    const stagedTask = {
+      id: 'extracted-1',
+      capture_id: 'capture-1',
+      title: 'Call the dentist',
+      description: null,
+      group_id: 'inbox-1',
+      group_name: 'Inbox',
+      due_date: null,
+      reminder_at: null,
+      reminder_date: null,
+      recurrence_frequency: null,
+      recurrence_weekday: null,
+      recurrence_day_of_month: null,
+      recurrence_month: null,
+      top_confidence: 0.9,
+      needs_review: false,
+      status: 'pending',
+      subtask_titles: [],
+      created_at: '2026-10-26T12:00:00Z',
+      updated_at: '2026-10-26T12:00:00Z',
+    }
+    const fetchMock = stubSignedInFetch({
+      onVoiceCapture: () => ({
+        capture_id: 'capture-1',
+        status: 'ready_for_review',
+        transcript_text: 'call the dentist',
+        extracted_tasks: [stagedTask],
+      }),
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack]
+        } satisfies Pick<MediaStream, 'getTracks'>)
+      }
+    })
+
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start recording' }))
+    await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
+
+    expect(await screen.findByText('Call the dentist')).toBeInTheDocument()
+    const extractedTaskFetches = fetchMock.mock.calls.filter(([input]) =>
+      requestUrl(input as RequestInfo | URL).includes('/captures/capture-1/extracted-tasks')
+    )
+    expect(extractedTaskFetches).toHaveLength(0)
+  })
+
   it('shows extraction error in staging when extraction fails', async () => {
     stubSignedInFetch()
 

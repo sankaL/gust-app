@@ -1,5 +1,16 @@
 # Decisions Made
 
+## 2026-10-26 09:45:00 EDT
+
+- Optimized voice capture for latency. Production logs showed a 10-word clip taking 3.4 s to transcribe and 5.4 s to extract, nearly all of it fixed overhead rather than content, so the fixes target round trips, hidden reasoning, and output length rather than model size alone.
+- Moved transcription back to Mistral, pinned to Voxtral Mini Transcribe V2 (`voxtral-mini-2602`) instead of `voxtral-mini-latest`: one synchronous request replaces AssemblyAI's upload, submit, 1 s polling, and delete calls. Pinning keeps the alias from silently moving to Voxtral Mini Transcribe 3 (released around 2026-10-20); evaluate that model separately.
+- Moved extraction to Claude Haiku 5.5 called directly through the official Anthropic SDK rather than through OpenRouter: it avoids the proxy hop, and the direct API gives exact control over thinking, effort, structured outputs, and prompt caching. Thinking is disabled and effort is `low`; the prior Gemini setup paid for hidden medium reasoning and a written-out two-pass enumeration on every capture.
+- Replaced the two-pass enumeration prompt with rules plus three short examples and a compact wire schema (groups referenced by name, optional fields omitted, subtasks as plain strings). The backend maps names to group ids, so ids never enter the prompt. Recall protection now rests on the existing deterministic guarded-intent check and corrective re-extraction instead of a visible enumeration. The prompt now states the weekday numbering (0 = Sunday), which the old prompt left implicit.
+- Collapsed extraction retries to one payload retry in `CaptureService` plus one SDK transport retry. The old stack could make up to twelve model calls (3 inner retries x 2 outer x corrective pass), which contradicted the one-bounded-retry rule. Model refusals are not retried.
+- Overlapped database work with the provider calls (capture-row insert and group/timezone load during transcription; transcript save during extraction) and returned staged tasks in capture responses, removing a client round trip. Reused provider clients across requests via the app lifespan.
+- Kept categorization in the same extraction call. A separate classifier call would add a sequential round trip for a result the single call already produces at negligible extra cost.
+- The 0.5 s extraction target depends mostly on output length: with thinking off, a one-task capture is expected near 0.5-1 s and multi-task captures above that. This is not yet measured live; the `extraction_completed` log event now records latency and token usage to check it.
+
 ## 2026-10-24 15:25:00 EDT
 
 - Replaced Google OAuth with Supabase email + password sign-in. Gust is a private, allowlisted app with a handful of users, so the Google provider, its client secrets, the redirect/callback flow, and the PKCE verifier cookie were more moving parts than the access model needs. Supabase stays the identity provider, so access/refresh tokens, cookie sessions, JWKS validation, the allowlist, and RLS scoping are unchanged.

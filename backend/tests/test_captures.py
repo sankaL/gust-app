@@ -32,7 +32,7 @@ from app.services.auth import AuthenticatedIdentity
 from app.services.extraction import ExtractionProviderAccountError, ExtractorMalformedResponseError
 from app.services.staging import ApproveResult, StagingService
 from app.services.transcription import (
-    AssemblyAITranscriptionService,
+    MistralTranscriptionService,
     TranscriptionResult,
     TranscriptionServiceError,
 )
@@ -130,13 +130,18 @@ def _override_extraction_service(app: FastAPI, service: FakeExtractionService) -
     app.dependency_overrides[get_extraction_service] = lambda: service
 
 
-def test_transcription_dependency_uses_assemblyai_in_dev_mode() -> None:
+def test_provider_dependencies_use_the_shared_lifespan_clients() -> None:
     settings = SimpleNamespace(gust_dev_mode=True)
+    shared = SimpleNamespace(transcription=object(), extraction=object())
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(ai_clients=shared)))
 
-    service = get_transcription_service(settings)
+    transcription = get_transcription_service(request, settings)
+    extraction = get_extraction_service(request, settings)
 
-    assert isinstance(service, AssemblyAITranscriptionService)
-    assert service.settings is settings
+    assert isinstance(transcription, MistralTranscriptionService)
+    assert transcription.settings is settings
+    assert transcription._client is shared.transcription
+    assert extraction._client is shared.extraction
 
 
 async def _fixed_rate_limit_user_id(self, request) -> str:
@@ -371,7 +376,7 @@ def test_voice_capture_rate_limit_returns_429(
         FakeTranscriptionService(
             result=TranscriptionResult(
                 transcript_text="Buy coffee beans at 5pm",
-                provider="assemblyai",
+                provider="mistral",
                 latency_ms=412,
             )
         ),
@@ -476,7 +481,7 @@ def test_voice_capture_transcribes_audio_and_returns_review_state(
     fake_transcription = FakeTranscriptionService(
         result=TranscriptionResult(
             transcript_text="Buy coffee beans at 5pm",
-            provider="assemblyai",
+            provider="mistral",
             latency_ms=412,
         )
     )
@@ -493,6 +498,7 @@ def test_voice_capture_transcribes_audio_and_returns_review_state(
     payload = response.json()
     assert payload["status"] == "ready_for_review"
     assert payload["transcript_text"] == "Buy coffee beans at 5pm"
+    assert payload["extracted_tasks"] == []
     assert fake_transcription.call_count == 1
 
     with connection_scope(client.app.state.settings.database_url) as connection:
@@ -501,7 +507,7 @@ def test_voice_capture_transcribes_audio_and_returns_review_state(
         ).one()
 
     assert capture_row.status == "ready_for_review"
-    assert capture_row.transcription_provider == "assemblyai"
+    assert capture_row.transcription_provider == "mistral"
     assert capture_row.transcription_latency_ms == 412
 
 
@@ -919,6 +925,49 @@ def test_text_capture_stages_past_extracted_reminders_for_review_without_a_sched
     assert extracted_task.needs_review is True
     assert extracted_task.reminder_at is None
     assert extracted_task.reminder_date is None
+    # The response carries the staged row so the client can skip a follow-up fetch.
+    [returned_task] = response.json()["extracted_tasks"]
+    assert returned_task["id"] == extracted_task.id
+    assert returned_task["needs_review"] is True
+    assert returned_task["reminder_at"] is None
+
+
+def test_voice_capture_returns_staged_tasks_and_extracts_from_the_transcript(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    headers = _authenticated_headers(app, client)
+    _override_transcription_service(
+        app,
+        FakeTranscriptionService(
+            result=TranscriptionResult(
+                transcript_text="Call the dentist tomorrow",
+                provider="mistral",
+                latency_ms=300,
+            )
+        ),
+    )
+    fake_extraction = FakeExtractionService(
+        responses=[
+            {"tasks": [{"title": "Call the dentist", "group_name": "Inbox", "top_confidence": 0.9}]}
+        ]
+    )
+    _override_extraction_service(app, fake_extraction)
+
+    response = client.post(
+        "/captures/voice",
+        headers=headers,
+        files={"audio": ("capture.mp4", b"voice-bytes", "audio/mp4")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert [task["title"] for task in payload["extracted_tasks"]] == ["Call the dentist"]
+    assert payload["extracted_tasks"][0]["capture_id"] == payload["capture_id"]
+    assert payload["extracted_tasks"][0]["status"] == "pending"
+    [request] = fake_extraction.requests
+    assert request.transcript_text == "Call the dentist tomorrow"
+    assert request.groups and request.groups[0]["name"] == "Inbox"
 
 
 def test_submit_capture_rate_limit_returns_429(
@@ -1612,7 +1661,7 @@ def test_voice_capture_surfaces_extraction_quota_instead_of_silently_staging_not
         FakeTranscriptionService(
             result=TranscriptionResult(
                 transcript_text="Buy coffee beans",
-                provider="assemblyai",
+                provider="mistral",
                 latency_ms=300,
             )
         ),

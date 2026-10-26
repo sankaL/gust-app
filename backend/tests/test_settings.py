@@ -41,16 +41,19 @@ def test_alembic_database_url_prefers_migration_database_url(
     assert settings.alembic_database_url == "postgresql+psycopg://admin@db/admin"
 
 
-def test_extraction_model_defaults_to_gemini_3_8_flash(
+def test_ai_provider_defaults_use_voxtral_v2_and_haiku_5_5(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    monkeypatch.delenv("OPENROUTER_EXTRACTION_MODEL", raising=False)
+    for name in ("EXTRACTION_MODEL", "MISTRAL_TRANSCRIPTION_MODEL", "EXTRACTION_TIMEOUT_SECONDS"):
+        monkeypatch.delenv(name, raising=False)
 
     settings = Settings(_env_file=None)
 
-    assert settings.openrouter_extraction_model == "google/gemini-3.8-flash"
+    assert settings.extraction_model == "claude-haiku-5-5"
+    assert settings.mistral_transcription_model == "voxtral-mini-2602"
+    assert settings.extraction_timeout_seconds == 10.0
 
 
 def test_settings_reject_production_dev_mode(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -87,19 +90,3 @@ def test_trusted_hosts_include_railway_runtime_domains(
     assert "*.railway.internal" in hosts
     assert "*.up.railway.app" in hosts
     assert "*" not in hosts
-
-
-def test_assemblyai_speech_models_parse_from_csv_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APP_ENV", "test")
-    monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    monkeypatch.setenv("ASSEMBLYAI_SPEECH_MODELS", " universal-3-5-pro , universal-2 ")
-
-    assert Settings(_env_file=None).assemblyai_speech_models == (
-        "universal-3-5-pro",
-        "universal-2",
-    )
-
-    monkeypatch.setenv("ASSEMBLYAI_SPEECH_MODELS", "")
-    # Empty means "no models", which the transcription service rejects as config_missing.
-    assert Settings(_env_file=None).assemblyai_speech_models == ()
-

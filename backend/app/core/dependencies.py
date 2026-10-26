@@ -34,7 +34,7 @@ from app.services.auth import (
     build_auth_service,
 )
 from app.services.capture import CaptureService
-from app.services.extraction import LangChainExtractionService
+from app.services.extraction import ClaudeExtractionService
 from app.services.group_service import GroupService
 from app.services.pushover import PushoverService
 from app.services.reminders import (
@@ -44,7 +44,7 @@ from app.services.reminders import (
 )
 from app.services.staging import StagingService
 from app.services.task_service import TaskService
-from app.services.transcription import AssemblyAITranscriptionService
+from app.services.transcription import MistralTranscriptionService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -54,24 +54,32 @@ def get_auth_service(settings: SettingsDep) -> AuthService:
 
 
 def get_transcription_service(
+    request: Request,
     settings: SettingsDep,
-) -> AssemblyAITranscriptionService:
-    """Return the AssemblyAI transcription service in every environment."""
-    return AssemblyAITranscriptionService(settings)
+) -> MistralTranscriptionService:
+    clients = getattr(request.app.state, "ai_clients", None)
+    return MistralTranscriptionService(
+        settings,
+        client=clients.transcription if clients is not None else None,
+    )
 
 
-def get_extraction_service(settings: SettingsDep) -> LangChainExtractionService:
-    return LangChainExtractionService(settings)
+def get_extraction_service(request: Request, settings: SettingsDep) -> ClaudeExtractionService:
+    clients = getattr(request.app.state, "ai_clients", None)
+    return ClaudeExtractionService(
+        settings,
+        client=clients.extraction if clients is not None else None,
+    )
 
 
 def get_capture_service(
     settings: SettingsDep,
     transcription_service: Annotated[
-        AssemblyAITranscriptionService,
+        MistralTranscriptionService,
         Depends(get_transcription_service),
     ],
     extraction_service: Annotated[
-        LangChainExtractionService,
+        ClaudeExtractionService,
         Depends(get_extraction_service),
     ],
     staging_service: Annotated[

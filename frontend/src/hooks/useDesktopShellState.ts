@@ -57,6 +57,7 @@ export function useDesktopSession() {
 
 function useVoiceCaptureMutation(session: SessionStatus | undefined) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { notifyError, notifySuccess } = useNotifications()
   return useMutation({
     mutationFn: (audio: { blob: Blob; filename: string }) => {
@@ -65,6 +66,7 @@ function useVoiceCaptureMutation(session: SessionStatus | undefined) {
       return createVoiceCapture(audio.blob, audio.filename, csrfToken)
     },
     onSuccess: (payload) => {
+      queryClient.setQueryData(['extracted-tasks', payload.capture_id], payload.extracted_tasks)
       notifySuccess('Capture ready for review.')
       void navigate(`/desktop/capture?capture=${payload.capture_id}`)
     },

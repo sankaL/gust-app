@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile, status
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.dependencies import (
     get_capture_service,
@@ -58,28 +58,6 @@ class SubmitCaptureRequest(BaseModel):
         )
 
 
-class CaptureReviewResponse(BaseModel):
-    capture_id: str
-    status: str
-    transcript_text: str
-
-
-class SkippedCaptureItemResponse(BaseModel):
-    code: str
-    message: str
-    title: str | None = None
-
-
-class SubmitCaptureResponse(BaseModel):
-    capture_id: str
-    status: str
-    tasks_created_count: int
-    tasks_flagged_for_review_count: int
-    tasks_skipped_count: int
-    zero_actionable: bool
-    skipped_items: list[SkippedCaptureItemResponse]
-
-
 class ExtractedTaskResponse(BaseModel):
     id: str
     capture_id: str
@@ -100,6 +78,31 @@ class ExtractedTaskResponse(BaseModel):
     subtask_titles: list[str]
     created_at: str
     updated_at: str
+
+
+class CaptureReviewResponse(BaseModel):
+    capture_id: str
+    status: str
+    transcript_text: str
+    # Pending staged tasks from auto-extraction, so the client can render review without a
+    # second round trip.
+    extracted_tasks: list[ExtractedTaskResponse] = Field(default_factory=list)
+
+
+class SkippedCaptureItemResponse(BaseModel):
+    code: str
+    message: str
+    title: str | None = None
+
+
+class SubmitCaptureResponse(BaseModel):
+    capture_id: str
+    status: str
+    tasks_created_count: int
+    tasks_flagged_for_review_count: int
+    tasks_skipped_count: int
+    zero_actionable: bool
+    skipped_items: list[SkippedCaptureItemResponse]
 
 
 class ReExtractRequest(BaseModel):
@@ -206,6 +209,7 @@ def _build_review_response(result: ReviewCaptureResult) -> CaptureReviewResponse
         capture_id=result.capture_id,
         status=result.status,
         transcript_text=result.transcript_text,
+        extracted_tasks=[_build_extracted_task_response(task) for task in result.extracted_tasks],
     )
 
 
@@ -358,20 +362,13 @@ async def re_extract_capture(
     payload: ReExtractRequest,
     session_context: RequiredSessionContextDep,
     capture_service: CaptureServiceDep,
-    staging_service: StagingServiceDep,
 ) -> list[ExtractedTaskResponse]:
-    await capture_service.re_extract_capture(
+    result = await capture_service.re_extract_capture(
         user_id=session_context.user.id,
         capture_id=capture_id,
         transcript_text=payload.transcript_text,
     )
-    # Fetch the newly extracted (pending) tasks from staging
-    extracted_tasks = await staging_service.list_extracted_tasks(
-        user_id=session_context.user.id,
-        capture_id=capture_id,
-        status="pending",
-    )
-    return [_build_extracted_task_response(task) for task in extracted_tasks]
+    return [_build_extracted_task_response(task) for task in result.extracted_tasks]
 
 
 class CompleteCaptureRequest(BaseModel):

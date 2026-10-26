@@ -14,6 +14,7 @@ import {
   listExtractedTasks,
   listGroups,
   listPendingTasks,
+  type CaptureReviewResponse,
   type ExtractedTask,
   type SubmitCaptureResponse,
 } from '../../lib/api'
@@ -47,19 +48,21 @@ function useCaptureQueries(reviewCaptureId: string | null, showStaging: boolean)
 
 function useCaptureMutations(state: ReturnType<typeof useCaptureState>, session: ReturnType<typeof useCaptureQueries>['session']) {
   const queryClient = useQueryClient()
-  const beginReview = (captureId: string) => {
+  const beginReview = ({ capture_id: captureId, extracted_tasks: extractedTasks }: CaptureReviewResponse) => {
+    // The capture response already carries the staged tasks; seeding skips a second round trip.
+    queryClient.setQueryData(['extracted-tasks', captureId], extractedTasks)
     state.setSummary(null); state.setTextCaptureError(null); state.setTranscriptionError(null)
     state.setReviewCaptureId(captureId); state.setShowStaging(true)
     void queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
   }
   const text = useMutation({
     mutationFn: (value: string) => createTextCapture(value, requireCsrfToken(session.data)),
-    onSuccess: (payload) => beginReview(payload.capture_id),
+    onSuccess: beginReview,
     onError: (error) => state.setTextCaptureError(captureErrorMessage(error, 'Text capture could not be prepared.')),
   })
   const voice = useMutation({
     mutationFn: (audio: RecordedAudio) => createVoiceCapture(audio.blob, audio.filename, requireCsrfToken(session.data)),
-    onSuccess: (payload) => beginReview(payload.capture_id),
+    onSuccess: beginReview,
     onError: (error) => state.setTranscriptionError(buildVoiceCaptureError(error)),
   })
   return { text, voice }

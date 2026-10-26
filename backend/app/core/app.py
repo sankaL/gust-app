@@ -20,6 +20,7 @@ from app.core.request_security import trusted_hosts
 from app.core.settings import get_settings
 from app.db.engine import dispose_all_engines
 from app.db.migrations import MigrationVersionError, check_required_revision
+from app.services.ai_clients import open_ai_clients
 
 
 @asynccontextmanager
@@ -27,7 +28,9 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     if settings.run_startup_checks:
         check_required_revision(settings.database_url, settings.required_alembic_revision)
-    yield
+    async with open_ai_clients(settings) as ai_clients:
+        app.state.ai_clients = ai_clients
+        yield
     dispose_all_engines()
 
 

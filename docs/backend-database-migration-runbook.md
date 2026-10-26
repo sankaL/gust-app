@@ -299,7 +299,8 @@ For environments with existing deployments, use this order:
 Provider configuration changes (no schema impact) follow the same backend-before-frontend order, with
 the provider secrets set first:
 
-- AssemblyAI transcription cutover: set `ASSEMBLYAI_API_KEY` (and optionally `ASSEMBLYAI_SPEECH_MODELS`, default `universal-3-5-pro,universal-2`) on the Railway backend service, and set `OPENROUTER_EXTRACTION_MODEL=google/gemini-3.8-flash` if production overrides the default, **before** deploying the backend. A backend deployed without the key fails closed: voice capture returns `config_missing` with an administrator-contact message. The legacy `MISTRAL_*` variables are ignored and may be removed after verification.
+- Voxtral + Claude Haiku 5.5 cutover (latency work): set `MISTRAL_API_KEY` and `ANTHROPIC_API_KEY` on the Railway backend service **before** deploying the backend. Optional overrides: `MISTRAL_TRANSCRIPTION_MODEL` (default `voxtral-mini-2602`), `EXTRACTION_MODEL` (default `claude-haiku-5-5`), `TRANSCRIPTION_TIMEOUT_SECONDS` (default 20), `EXTRACTION_TIMEOUT_SECONDS` (default 10). A backend deployed without either key fails closed: voice capture returns `config_missing` (transcription) or the capture is marked `extraction_failed` with `config_invalid`/`config_missing`, both with an administrator-contact message. The frontend change (reading `extracted_tasks` from capture responses) is backward compatible with the old backend, but deploy backend first per the standard order. After verification, remove the now-ignored `ASSEMBLYAI_API_KEY`, `OPENROUTER_API_KEY`, and `OPENROUTER_EXTRACTION_MODEL` variables.
+- Earlier AssemblyAI cutover (2026-10-06, superseded): set `ASSEMBLYAI_API_KEY` before deploying; legacy `MISTRAL_*` variables were ignored at the time.
 
 Why this order:
 
@@ -348,11 +349,12 @@ Allowlist administration:
 
 ## Post-Deploy Verification
 
-After an AI provider configuration change (for example the AssemblyAI cutover):
+After an AI provider configuration change (for example the Voxtral + Claude Haiku 5.5 cutover):
 
-- Record a short voice capture and confirm a transcript returns and new `captures` rows report `transcription_provider = 'assemblyai'`.
-- Confirm backend logs show no `transcription_provider_cleanup_failed` events for that capture.
-- Submit a text capture and confirm tasks are extracted with the configured OpenRouter model.
+- Record a short voice capture and confirm a transcript returns, staged tasks appear without a second loading state, and new `captures` rows report `transcription_provider = 'mistral'`.
+- In backend logs, confirm `extraction_completed` events show `model = claude-haiku-5-5`, `stop_reason = end_turn`, and non-zero `cache_read_input_tokens` on a second capture made within five minutes of the first.
+- Check the `request_completed` `server_timing` for `POST /captures/voice`: `capture.transcription` and `capture.extraction` should each be well under the AssemblyAI/Gemini baseline (3.4 s and 5.4 s on 2026-10-24).
+- Submit a text capture and confirm tasks are extracted.
 
 Minimum verification after applying schema-affecting changes:
 

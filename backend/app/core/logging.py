@@ -61,13 +61,11 @@ def configure_logging(level: str) -> None:
     root_logger.addHandler(handler)
     root_logger.setLevel(level.upper())
 
-    # Suppress LangChain debug/info logging to prevent transcript content leakage
+    # Suppress provider SDK debug/info logging to prevent transcript content leakage
     for logger_name in (
-        "langchain",
-        "langchain_core",
-        "langchain_openai",
-        "openai",
+        "anthropic",
         "httpx",
+        "httpx2",
         "httpcore",
     ):
         logging.getLogger(logger_name).setLevel(logging.WARNING)

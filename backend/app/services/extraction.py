@@ -1,79 +1,25 @@
-"""Extraction service using LangChain with OpenRouter for task extraction."""
+"""Task extraction with Claude structured outputs."""
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from dataclasses import dataclass
-from datetime import date
-from typing import Any, Literal
+from datetime import date, datetime
+from time import perf_counter
+from typing import Literal
 
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableLambda
-from langchain_openai import ChatOpenAI
+import anthropic
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.errors import ConfigurationError
-from app.core.input_safety import sanitize_for_log
 from app.core.settings import Settings
 from app.prompts.extraction_prompts import ExtractionPromptManager
-from app.services.extraction_models import (
-    ExtractionModelConfig,
-    ExtractionModelRegistry,
-    ExtractorPayload,
-)
-from app.services.extraction_retry import (
-    ExtractionRetryError,
-    ExtractionRetryManager,
-    NonRetryableExtractionError,
-    RetryConfig,
-)
+from app.services.extraction_models import ExtractorPayload
 
 logger = logging.getLogger("gust.api")
 
-_PASS_OUTPUT_PATTERNS = (
-    r"PASS\s*2\s*OUTPUT\s*:(.*)",
-    r"PASS\s*TWO\s*OUTPUT\s*:(.*)",
-    r"PASS\s*2\s*OUTPUT\s*\n+(.*)",
-    r"```json\s*\n(.*?)\n```",
-    r"```\s*\n(.*?)\n```",
-)
-
-
-def _response_text(input_: Any) -> str:
-    if not hasattr(input_, "content"):
-        return str(input_)
-    content = input_.content
-    if not isinstance(content, list):
-        return str(content)
-    for block in content:
-        if isinstance(block, dict) and block.get("type") == "text":
-            return str(block.get("text", ""))
-        if isinstance(block, str):
-            return block
-    return ""
-
-
-def _strip_response_fence(value: str) -> str:
-    match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", value.strip(), flags=re.DOTALL)
-    return match.group(1).strip() if match else value.strip()
-
-
-def _final_output_fragment(text: str) -> str:
-    for pattern in _PASS_OUTPUT_PATTERNS:
-        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-        if match and match.group(1).strip().startswith("{"):
-            return match.group(1).strip()
-    return text
-
-
-def extract_json_from_text(input_: Any) -> dict[str, object]:
-    """Extract the final JSON object from a provider's mixed-text response."""
-    fragment = _strip_response_fence(_final_output_fragment(_response_text(input_)))
-    json_match = re.search(r"\{[\s\S]*\}", fragment)
-    payload = json_match.group(0) if json_match else fragment
-    return json.loads(payload)
+# Phrases the API uses when the organization has no usable credit.
+_QUOTA_ERROR_MARKERS = ("credit balance", "billing", "insufficient funds")
 
 
 @dataclass
@@ -90,19 +36,19 @@ class ExtractionRequest:
 class ExtractionServiceError(Exception):
     """Base exception for extraction service errors."""
 
-    pass
-
 
 class ExtractorMalformedResponseError(ExtractionServiceError):
-    """Raised when extraction provider returns malformed response."""
+    """Raised when the extraction provider returns output that does not match the schema."""
 
-    pass
+
+class ExtractionRefusedError(ExtractionServiceError):
+    """Raised when the model declines the request; retrying the same input will not help."""
 
 
 ExtractionAccountFailureReason = Literal["quota_exceeded", "credentials_invalid"]
 
 
-class ExtractionProviderAccountError(ExtractionServiceError, NonRetryableExtractionError):
+class ExtractionProviderAccountError(ExtractionServiceError):
     """Raised when the provider account itself is unusable (no credits or rejected key)."""
 
     def __init__(
@@ -117,20 +63,205 @@ class ExtractionProviderAccountError(ExtractionServiceError, NonRetryableExtract
         self.provider_status_code = provider_status_code
 
 
-def _provider_account_error(exc: Exception) -> ExtractionProviderAccountError | None:
-    """Classify provider HTTP failures that no retry can recover from."""
-    status_code = getattr(exc, "status_code", None)
-    if status_code is None:
-        status_code = getattr(getattr(exc, "response", None), "status_code", None)
-    if status_code == 402:
+# Wire schema: the compact shape the model writes. Optional fields may be omitted, which keeps
+# output short. It is translated into ExtractorPayload before anything downstream sees it.
+class _WireAlternative(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    group: str
+    confidence: float
+
+
+class _WireRecurrence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frequency: Literal["daily", "weekly", "monthly", "yearly"]
+    weekday: int | None = None
+    day_of_month: int | None = None
+    month: int | None = None
+
+
+class _WireTask(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    description: str | None = None
+    due_date: date | None = None
+    reminder_at: datetime | None = None
+    reminder_date: date | None = None
+    group: str | None = None
+    confidence: float = 0.9
+    alternatives: list[_WireAlternative] = Field(default_factory=list)
+    recurrence: _WireRecurrence | None = None
+    subtasks: list[str] = Field(default_factory=list)
+
+
+class _WirePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tasks: list[_WireTask]
+
+
+_OUTPUT_SCHEMA = anthropic.transform_schema(_WirePayload.model_json_schema())
+
+
+def build_extraction_client(settings: Settings) -> anthropic.AsyncAnthropic | None:
+    """Long-lived client so each capture reuses an open connection; None when unconfigured."""
+    if not settings.anthropic_api_key:
+        return None
+    return anthropic.AsyncAnthropic(
+        api_key=settings.anthropic_api_key,
+        base_url=settings.anthropic_base_url,
+        timeout=settings.extraction_timeout_seconds,
+        # One fast transport-level retry for 429/5xx/connection errors; payload retries live in
+        # CaptureService so the total stays bounded.
+        max_retries=1,
+    )
+
+
+class ClaudeExtractionService:
+    """Extracts task candidates from a transcript with one structured-output call."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        client: anthropic.AsyncAnthropic | None = None,
+        prompt_manager: ExtractionPromptManager | None = None,
+    ) -> None:
+        self.settings = settings
+        self._client = client
+        self.prompt_manager = prompt_manager or ExtractionPromptManager()
+        self.last_attempt_count = 0
+
+    def ensure_configured(self) -> None:
+        if not self.settings.anthropic_api_key:
+            raise ConfigurationError(
+                "Task extraction is not configured. Please contact the administrator."
+            )
+
+    async def extract(self, *, request: ExtractionRequest) -> dict[str, object]:
+        """Run one extraction attempt and return a validated ExtractorPayload as a dict."""
+        self.last_attempt_count = 0
+        self.ensure_configured()
+        client = self._client or build_extraction_client(self.settings)
+        assert client is not None
+        try:
+            return await self._extract(client, request)
+        finally:
+            if self._client is None:
+                await client.close()
+
+    async def _extract(
+        self,
+        client: anthropic.AsyncAnthropic,
+        request: ExtractionRequest,
+    ) -> dict[str, object]:
+        user_prompt = self.prompt_manager.get_user_prompt(
+            user_timezone=request.user_timezone,
+            current_local_date=request.current_local_date,
+            groups=request.groups,
+            transcript_text=request.transcript_text,
+            missing_guarded_clauses=request.missing_guarded_clauses,
+        )
+        started_at = perf_counter()
+        self.last_attempt_count = 1
+        try:
+            response = await client.messages.create(
+                model=self.settings.extraction_model,
+                max_tokens=self.settings.extraction_max_output_tokens,
+                system=[
+                    {
+                        "type": "text",
+                        "text": self.prompt_manager.get_system_prompt(),
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                messages=[{"role": "user", "content": user_prompt}],
+                thinking={"type": "disabled"},
+                output_config={
+                    "effort": "low",
+                    "format": {"type": "json_schema", "schema": _OUTPUT_SCHEMA},
+                },
+            )
+        except anthropic.APIStatusError as exc:
+            self._log_provider_error(exc)
+            account_error = _provider_account_error(exc)
+            if account_error is not None:
+                raise account_error from exc
+            raise ExtractionServiceError("Extraction provider request failed.") from exc
+        except anthropic.APIConnectionError as exc:
+            # APITimeoutError is a subclass, so timeouts land here too.
+            logger.warning(
+                "extraction_provider_unavailable",
+                extra={
+                    "event": "extraction_provider_unavailable",
+                    "model": self.settings.extraction_model,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            raise ExtractionServiceError("Extraction provider is unavailable.") from exc
+
+        latency_ms = int((perf_counter() - started_at) * 1000)
+        usage = response.usage
+        logger.info(
+            "extraction_completed",
+            extra={
+                "event": "extraction_completed",
+                "model": self.settings.extraction_model,
+                "stop_reason": response.stop_reason,
+                "latency_ms": latency_ms,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "cache_read_input_tokens": usage.cache_read_input_tokens,
+                "cache_creation_input_tokens": usage.cache_creation_input_tokens,
+                "transcript_length": len(request.transcript_text),
+                "repair": bool(request.missing_guarded_clauses),
+            },
+        )
+
+        if response.stop_reason == "refusal":
+            raise ExtractionRefusedError("Extraction provider declined the request.")
+        if response.stop_reason == "max_tokens":
+            raise ExtractorMalformedResponseError("Extraction output was truncated.")
+
+        text = next((block.text for block in response.content if block.type == "text"), None)
+        if text is None:
+            raise ExtractorMalformedResponseError("Extraction provider returned no output.")
+        try:
+            wire = _WirePayload.model_validate_json(text)
+        except ValidationError as exc:
+            raise ExtractorMalformedResponseError(
+                "Extraction provider returned output that does not match the schema."
+            ) from exc
+        return _to_extractor_payload(wire, request.groups).model_dump()
+
+    def _log_provider_error(self, exc: anthropic.APIStatusError) -> None:
+        logger.warning(
+            "extraction_provider_error",
+            extra={
+                "event": "extraction_provider_error",
+                "model": self.settings.extraction_model,
+                "error_type": type(exc).__name__,
+                "provider_status_code": exc.status_code,
+                "request_id": exc.request_id,
+            },
+        )
+
+
+def _provider_account_error(exc: anthropic.APIStatusError) -> ExtractionProviderAccountError | None:
+    """Classify provider failures that no retry can recover from."""
+    status_code = exc.status_code
+    message = str(exc.message).lower()
+    if status_code == 402 or (
+        status_code == 400 and any(marker in message for marker in _QUOTA_ERROR_MARKERS)
+    ):
         return ExtractionProviderAccountError(
             "Extraction provider account has insufficient credits.",
             failure_reason="quota_exceeded",
             provider_status_code=status_code,
         )
-    # Only 401 is a key problem: OpenRouter also uses 403 for moderation and guardrail
-    # blocks on specific input, which are not administrator issues.
-    if status_code == 401:
+    if status_code in {401, 403}:
         return ExtractionProviderAccountError(
             "Extraction provider rejected the configured credentials.",
             failure_reason="credentials_invalid",
@@ -139,329 +270,38 @@ def _provider_account_error(exc: Exception) -> ExtractionProviderAccountError | 
     return None
 
 
-class LangChainExtractionService:
-    """Extraction service using LangChain with OpenRouter."""
+def _to_extractor_payload(wire: _WirePayload, groups: list[dict[str, object]]) -> ExtractorPayload:
+    """Map group names back to ids and reshape into the internal candidate contract."""
+    groups_by_name = {str(group["name"]).strip().lower(): group for group in groups}
 
-    def __init__(
-        self,
-        settings: Settings,
-        prompt_manager: ExtractionPromptManager | None = None,
-        retry_manager: ExtractionRetryManager | None = None,
-        model_registry: ExtractionModelRegistry | None = None,
-    ) -> None:
-        self.settings = settings
-        self.prompt_manager = prompt_manager or ExtractionPromptManager()
-        self.retry_manager = retry_manager or self._create_retry_manager()
-        self.model_registry = model_registry or self._create_model_registry()
-        self.output_parser = JsonOutputParser()
-        self.last_attempt_count = 0
+    def group_ref(name: str | None) -> dict[str, object]:
+        if not name:
+            return {"group_id": None, "group_name": None}
+        group = groups_by_name.get(name.strip().lower())
+        if group is None:
+            # Unknown names stay unresolved so staging routes the task to Inbox for review.
+            return {"group_id": None, "group_name": name}
+        return {"group_id": str(group["id"]), "group_name": str(group["name"])}
 
-    def _create_retry_manager(self) -> ExtractionRetryManager:
-        """Create retry manager from settings."""
-        config = RetryConfig(
-            max_retries=self.settings.extraction_max_retries,
-            base_delay=self.settings.extraction_retry_base_delay,
-            max_delay=self.settings.extraction_retry_max_delay,
-        )
-        return ExtractionRetryManager(config=config)
-
-    def _create_model_registry(self) -> ExtractionModelRegistry:
-        """Create model registry from settings."""
-        if self.settings.extraction_model_config_path:
-            return ExtractionModelRegistry.from_yaml(
-                self.settings.extraction_model_config_path,
-                ab_test_enabled=self.settings.extraction_ab_test_enabled,
-            )
-        return ExtractionModelRegistry.default(
-            self.settings.openrouter_extraction_model,
-            ab_test_enabled=self.settings.extraction_ab_test_enabled,
-        )
-
-    def ensure_configured(self) -> None:
-        """Ensure extraction service is properly configured."""
-        if not self.settings.openrouter_api_key:
-            raise ConfigurationError(
-                "Task extraction is not configured. Please contact the administrator."
-            )
-
-    async def extract(
-        self,
-        *,
-        request: ExtractionRequest,
-    ) -> dict[str, object]:
-        """Extract tasks from transcript using LangChain with retry logic.
-
-        Args:
-            request: Extraction request with transcript and context.
-
-        Returns:
-            Validated extraction payload as dictionary.
-
-        Raises:
-            ExtractionServiceError: When extraction fails.
-            ExtractorMalformedResponseError: When response is malformed.
-        """
-        self.last_attempt_count = 0
-        self.ensure_configured()
-
-        # Select model for this extraction
-        model_config = self.model_registry.select_model()
-
-        # Create LLM once for all retry attempts
-        llm = self._create_llm(model_config)
-
-        logger.info(
-            "extraction_started",
-            extra={
-                "event": "extraction_started",
-                "model": model_config.model_id,
-                "model_name": model_config.name,
-                "transcript_length": len(request.transcript_text),
-            },
-        )
-
-        try:
-            # Execute extraction with retry logic
-            result = await self.retry_manager.execute_with_retry(
-                self._execute_extraction,
-                self._validate_result,
-                request=request,
-                model_config=model_config,
-                llm=llm,
-            )
-            self.last_attempt_count = self.retry_manager.last_attempt_count
-
-            logger.info(
-                "extraction_completed",
-                extra={
-                    "event": "extraction_completed",
-                    "model": model_config.model_id,
-                    "model_name": model_config.name,
-                    "attempt_count": self.last_attempt_count,
-                    "tasks_extracted": len(result.get("tasks", [])),
-                },
-            )
-
-            return result
-
-        except ExtractionRetryError as exc:
-            self.last_attempt_count = self.retry_manager.last_attempt_count
-            logger.error(
-                "extraction_failed",
-                extra={
-                    "event": "extraction_failed",
-                    "model": model_config.model_id,
-                    "model_name": model_config.name,
-                    "attempt_count": self.last_attempt_count,
-                    "error_type": type(exc).__name__,
-                    "last_error_type": (
-                        type(exc.last_exception).__name__ if exc.last_exception else None
-                    ),
-                },
-            )
-            raise ExtractionServiceError("Extraction failed after retries.") from exc
-
-        except ExtractionProviderAccountError as exc:
-            self.last_attempt_count = self.retry_manager.last_attempt_count
-            logger.error(
-                "extraction_provider_account_error",
-                extra={
-                    "event": "extraction_provider_account_error",
-                    "model": model_config.model_id,
-                    "model_name": model_config.name,
-                    "failure_reason": exc.failure_reason,
-                    "provider_status_code": exc.provider_status_code,
-                },
-            )
-            raise
-
-    async def _execute_extraction(
-        self,
-        request: ExtractionRequest,
-        model_config: ExtractionModelConfig,
-        llm: ChatOpenAI,
-    ) -> dict[str, object]:
-        """Execute a single extraction attempt.
-
-        Args:
-            request: Extraction request.
-            model_config: Model configuration to use.
-            llm: Pre-configured LangChain LLM instance.
-
-        Returns:
-            Raw extraction result.
-
-        Raises:
-            ExtractorMalformedResponseError: When response is malformed.
-        """
-        # Build prompts
-        system_prompt = self.prompt_manager.get_system_prompt()
-        user_prompt = self.prompt_manager.get_user_prompt(
-            user_timezone=request.user_timezone,
-            current_local_date=request.current_local_date,
-            groups=request.groups,
-            transcript_text=request.transcript_text,
-            missing_guarded_clauses=request.missing_guarded_clauses,
-        )
-
-        # Create prompt template
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", "{system_prompt}"),
-                ("user", "{user_input}"),
-            ]
-        )
-
-        chain = prompt | llm | RunnableLambda(extract_json_from_text)
-
-        # Execute chain
-        try:
-            result = await chain.ainvoke(
+    tasks = [
+        {
+            "title": task.title,
+            "description": task.description,
+            "due_date": task.due_date,
+            "reminder_at": task.reminder_at,
+            "reminder_date": task.reminder_date,
+            **group_ref(task.group),
+            "top_confidence": min(max(task.confidence, 0.0), 1.0),
+            "alternative_groups": [
                 {
-                    "system_prompt": system_prompt,
-                    "user_input": user_prompt,
+                    **group_ref(alternative.group),
+                    "confidence": min(max(alternative.confidence, 0.0), 1.0),
                 }
-            )
-        except Exception as exc:
-            error_details = {
-                "event": "extraction_chain_error",
-                "model": model_config.model_id,
-                "model_name": model_config.name,
-                "error_type": type(exc).__name__,
-                "error_message": sanitize_for_log(str(exc), max_length=160),
-            }
-
-            if hasattr(exc, "response"):
-                error_details["response_status"] = getattr(exc.response, "status_code", None)
-            if hasattr(exc, "status_code"):
-                error_details["status_code"] = exc.status_code
-
-            logger.warning("extraction_chain_error", extra=error_details)
-            account_error = _provider_account_error(exc)
-            if account_error is not None:
-                raise account_error from exc
-            raise ExtractorMalformedResponseError(
-                f"Extraction provider request failed: {type(exc).__name__}: {str(exc)}"
-            ) from exc
-
-        # Parse and normalize result
-        return self._parse_result(result)
-
-    def _create_llm(self, model_config: ExtractionModelConfig) -> ChatOpenAI:
-        """Create LangChain LLM instance.
-
-        Args:
-            model_config: Model configuration.
-
-        Returns:
-            Configured ChatOpenAI instance.
-        """
-        # Extract base URL from OpenRouter API URL
-        base_url = self.settings.openrouter_api_url.replace("/chat/completions", "")
-
-        # Log API configuration for debugging
-        logger.debug(
-            "extraction_llm_config",
-            extra={
-                "event": "extraction_llm_config",
-                "model_id": model_config.model_id,
-                "model_name": model_config.name,
-                "base_url": base_url,
-                "api_key_configured": bool(self.settings.openrouter_api_key),
-                "temperature": model_config.temperature,
-                "max_tokens": model_config.max_tokens,
-                "timeout_seconds": self.settings.extraction_timeout_seconds,
-            },
-        )
-
-        return ChatOpenAI(
-            model=model_config.model_id,
-            openai_api_key=self.settings.openrouter_api_key,
-            openai_api_base=base_url,
-            temperature=model_config.temperature,
-            max_tokens=model_config.max_tokens,
-            timeout=self.settings.extraction_timeout_seconds,
-            max_retries=0,  # We handle retries ourselves
-        )
-
-    def _parse_result(self, result: Any) -> dict[str, object]:
-        """Parse and normalize extraction result.
-
-        Args:
-            result: Raw result from LLM.
-
-        Returns:
-            Normalized dictionary result.
-
-        Raises:
-            ExtractorMalformedResponseError: When result cannot be parsed.
-        """
-        # Log the raw response for debugging
-        logger.debug(
-            "extraction_raw_response",
-            extra={
-                "event": "extraction_raw_response",
-                "result_type": type(result).__name__,
-                "result_size_chars": len(str(result)) if result is not None else 0,
-            },
-        )
-
-        if isinstance(result, dict):
-            return result
-
-        if isinstance(result, str):
-            try:
-                parsed = json.loads(self._strip_json_fence(result))
-                if isinstance(parsed, dict):
-                    return parsed
-            except json.JSONDecodeError as exc:
-                logger.warning(
-                    "extraction_parse_error",
-                    extra={
-                        "event": "extraction_parse_error",
-                        "content_length": len(result),
-                        "error_type": type(exc).__name__,
-                    },
-                )
-                raise ExtractorMalformedResponseError(
-                    "Extraction provider returned invalid JSON."
-                ) from exc
-
-        raise ExtractorMalformedResponseError(
-            "Extraction provider returned an unsupported payload."
-        )
-
-    def _validate_result(self, result: dict[str, object]) -> dict[str, object]:
-        """Validate extraction result against Pydantic schema.
-
-        Args:
-            result: Raw extraction result.
-
-        Returns:
-            Validated result as dictionary.
-
-        Raises:
-            ValidationError: When validation fails.
-        """
-        # Validate using Pydantic model
-        validated = ExtractorPayload.model_validate(result)
-        return validated.model_dump()
-
-    def _strip_json_fence(self, content: str) -> str:
-        """Strip JSON fence markers from content.
-
-        Args:
-            content: Content that may contain JSON fence.
-
-        Returns:
-            Content without fence markers.
-        """
-        stripped = content.strip()
-        match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, flags=re.DOTALL)
-        if match is not None:
-            return match.group(1).strip()
-        return stripped
-
-
-# Keep backward compatibility
-OpenRouterExtractionService = LangChainExtractionService
+                for alternative in task.alternatives
+            ],
+            "recurrence": task.recurrence.model_dump() if task.recurrence else None,
+            "subtasks": [{"title": title} for title in task.subtasks],
+        }
+        for task in wire.tasks
+    ]
+    return ExtractorPayload.model_validate({"tasks": tasks})

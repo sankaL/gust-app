@@ -178,63 +178,44 @@ class Settings(BaseSettings):
         default=7,
         validation_alias=AliasChoices("CAPTURE_RETENTION_DAYS"),
     )
-    assemblyai_api_url: str = Field(
-        default="https://api.assemblyai.com",
-        validation_alias=AliasChoices("ASSEMBLYAI_API_URL"),
+    mistral_api_url: str = Field(
+        default="https://api.mistral.ai/v1/audio/transcriptions",
+        validation_alias=AliasChoices("MISTRAL_API_URL"),
     )
-    assemblyai_api_key: str | None = Field(
+    mistral_api_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("ASSEMBLYAI_API_KEY"),
+        validation_alias=AliasChoices("MISTRAL_API_KEY"),
     )
-    assemblyai_speech_models: Annotated[tuple[str, ...], NoDecode] = Field(
-        default=("universal-3-5-pro", "universal-2"),
-        validation_alias=AliasChoices("ASSEMBLYAI_SPEECH_MODELS"),
-    )
-    assemblyai_poll_interval_seconds: float = Field(
-        default=1.0,
-        gt=0,
-        validation_alias=AliasChoices("ASSEMBLYAI_POLL_INTERVAL_SECONDS"),
+    mistral_transcription_model: str = Field(
+        default="voxtral-mini-2602",
+        validation_alias=AliasChoices("MISTRAL_TRANSCRIPTION_MODEL"),
     )
     transcription_timeout_seconds: float = Field(
-        default=30.0,
+        default=20.0,
         gt=0,
         validation_alias=AliasChoices("TRANSCRIPTION_TIMEOUT_SECONDS"),
     )
-    openrouter_api_url: str = Field(
-        default="https://openrouter.ai/api/v1/chat/completions",
-        validation_alias=AliasChoices("OPENROUTER_API_URL"),
-    )
-    openrouter_api_key: str | None = Field(
+    anthropic_api_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("OPENROUTER_API_KEY"),
+        validation_alias=AliasChoices("ANTHROPIC_API_KEY"),
     )
-    openrouter_extraction_model: str = Field(
-        default="google/gemini-3.8-flash",
-        validation_alias=AliasChoices("OPENROUTER_EXTRACTION_MODEL"),
+    anthropic_base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ANTHROPIC_BASE_URL"),
+    )
+    extraction_model: str = Field(
+        default="claude-haiku-5-5",
+        validation_alias=AliasChoices("EXTRACTION_MODEL"),
     )
     extraction_timeout_seconds: float = Field(
-        default=20.0,
+        default=10.0,
+        gt=0,
         validation_alias=AliasChoices("EXTRACTION_TIMEOUT_SECONDS"),
     )
-    extraction_max_retries: int = Field(
-        default=3,
-        validation_alias=AliasChoices("EXTRACTION_MAX_RETRIES"),
-    )
-    extraction_retry_base_delay: float = Field(
-        default=1.0,
-        validation_alias=AliasChoices("EXTRACTION_RETRY_BASE_DELAY"),
-    )
-    extraction_retry_max_delay: float = Field(
-        default=10.0,
-        validation_alias=AliasChoices("EXTRACTION_RETRY_MAX_DELAY"),
-    )
-    extraction_model_config_path: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("EXTRACTION_MODEL_CONFIG_PATH"),
-    )
-    extraction_ab_test_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("EXTRACTION_AB_TEST_ENABLED"),
+    extraction_max_output_tokens: int = Field(
+        default=2048,
+        gt=0,
+        validation_alias=AliasChoices("EXTRACTION_MAX_OUTPUT_TOKENS"),
     )
     resend_api_url: str = Field(
         default="https://api.resend.com/emails",
@@ -307,7 +288,6 @@ class Settings(BaseSettings):
     @field_validator(
         "trusted_hosts",
         "extra_allowed_origins",
-        "assemblyai_speech_models",
         "pushover_previous_credential_encryption_keys",
         mode="before",
     )

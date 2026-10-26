@@ -33,8 +33,8 @@ The frontend talks only to the backend API. It does not call the database, trans
 | Migrations | Alembic | Standard schema migration workflow |
 | Auth provider | Supabase Auth with email + password (admin-created accounts) | Managed identity for a single-user-per-account app |
 | Database | Supabase Postgres | Managed Postgres with backups and hosted auth adjacency |
-| Transcription | AssemblyAI pre-recorded API (Universal-3.5 Pro, Universal-2 fallback) | Highest-accuracy AssemblyAI model available for uploaded recordings |
-| Extraction | OpenRouter-backed LLM with JSON-schema structured outputs | Provider flexibility without sacrificing typed output |
+| Transcription | Mistral Voxtral Mini Transcribe V2 (`voxtral-mini-2602`) | One synchronous request per recording; no upload/submit/poll round trips |
+| Extraction | Anthropic Claude Haiku 5.5 via the official SDK, JSON-schema structured outputs | Lowest-latency typed extraction; thinking off, schema-constrained output |
 | Email | Resend | Simple transactional email API with idempotency support |
 | Hosting | Railway | Simple deployment for the API, frontend, and scheduled jobs |
 
@@ -297,23 +297,18 @@ Reason:
 
 ### Transcription
 
-Use AssemblyAI's pre-recorded (async) API as the speech-to-text provider.
+Use Mistral's audio transcription API (`POST /v1/audio/transcriptions`) with Voxtral Mini Transcribe V2, pinned as `voxtral-mini-2602` (`MISTRAL_TRANSCRIPTION_MODEL`). The model is pinned rather than `voxtral-mini-latest` so a provider-side alias move cannot silently change accuracy or latency.
 
-Current default `speech_models`: `["universal-3-5-pro", "universal-2"]` (Universal-3.5 Pro, with
-AssemblyAI falling back to Universal-2 for languages 3.5 Pro does not support). Universal-3.6 Pro
-is AssemblyAI's streaming-only model and is not available for uploaded recordings; adopting it would
-require moving capture to real-time streaming.
-
-Local development and production both use the real AssemblyAI provider. Dev mode changes
+Local development and production both use the real Mistral provider. Dev mode changes
 authentication and local infrastructure behavior, but it does not mock transcription;
-local voice capture therefore requires valid AssemblyAI credentials.
+local voice capture therefore requires valid Mistral credentials.
 
 Operational contract:
 
-- backend uploads audio to `/v2/upload`, submits `/v2/transcript`, and polls until `completed` or `error`
-- the whole upload/submit/poll sequence is bounded by `TRANSCRIPTION_TIMEOUT_SECONDS`; up to 3 consecutive transient poll failures (429, 5xx, connection errors) are tolerated inside that deadline because the job is already submitted
-- after every transcript (success or failure) the backend deletes it via `DELETE /v2/transcript/{id}`, which also deletes the uploaded audio; cleanup failures are logged and do not fail the capture
-- if upload succeeds but submission fails, there is no transcript to delete and AssemblyAI has no upload-delete API; AssemblyAI auto-deletes `/v2/upload` files after 2 days
+- backend sends the recording as one multipart request and receives the transcript in the response; there is no upload, job, or polling step
+- the request is bounded by `TRANSCRIPTION_TIMEOUT_SECONDS` (default 20)
+- one process-wide `httpx.AsyncClient` is opened in the app lifespan and reused, so captures skip a fresh TLS handshake; it is closed on shutdown
+- audio is sent inline and not stored as a Mistral file, so there is nothing to delete afterwards
 - raw audio is discarded after processing
 - transcription latency and failures are logged without logging the transcript body or provider error text
 
@@ -321,14 +316,14 @@ Operational contract:
 
 Exhausted credits and rejected credentials are administrator problems, not user problems:
 
-- AssemblyAI negative balance (HTTP 400 "balance is negative … top up") or HTTP 402, and OpenRouter HTTP 402, map to API error `ai_service_quota_exceeded` (HTTP 503) with a "contact the administrator" message
-- AssemblyAI HTTP 401/403 and OpenRouter HTTP 401 map to `config_invalid` (HTTP 503) with an administrator-contact message; OpenRouter 403 is not treated as an account failure because OpenRouter also uses it for moderation and guardrail blocks on specific input
-- these failures are never retried by the extraction backoff loop, and they are surfaced from voice capture, text capture, submit, and re-extract instead of being swallowed by best-effort auto-extraction
+- Mistral HTTP 402 or an insufficient-credit/billing error message, and Anthropic HTTP 402 or HTTP 400 "credit balance is too low", map to API error `ai_service_quota_exceeded` (HTTP 503) with a "contact the administrator" message
+- Mistral HTTP 401/403 or `invalid_model`, and Anthropic HTTP 401/403, map to `config_invalid` (HTTP 503) with an administrator-contact message
+- these failures are never retried, and they are surfaced from voice capture, text capture, submit, and re-extract instead of being swallowed by best-effort auto-extraction
 - the capture is marked `extraction_failed` (or `transcription_failed`) with a sanitized `error_code` so it can be re-extracted once the account is restored
 
 ### Extraction
 
-Use an OpenRouter-backed model that supports JSON-schema structured outputs.
+Call Claude through the official `anthropic` Python SDK with JSON-schema structured outputs (`output_config.format`).
 
 Model selection is an operational setting, not a product contract. The required capabilities are:
 
@@ -337,15 +332,25 @@ Model selection is an operational setting, not a product contract. The required 
 - JSON-schema structured outputs
 - acceptable latency for synchronous task creation
 
-Current default model: `google/gemini-3.8-flash`.
+Current default model: `claude-haiku-5-5` (`EXTRACTION_MODEL`), called with `thinking: disabled` and `effort: low`. Sampling parameters (`temperature`, `top_p`, `top_k`) are not sent; current Claude models reject them.
+
+Latency design:
+
+- the system prompt is static and marked `cache_control: ephemeral`, so bursts of captures reuse the cached prefix
+- the model writes a compact wire schema (group by name, optional fields omitted); the backend maps group names back to ids and reshapes it into the internal candidate contract before validation
+- no visible reasoning pass: the earlier two-pass enumeration prompt was replaced by rules plus three short examples, and the deterministic guarded-intent check below protects recall
+- one process-wide `AsyncAnthropic` client is opened in the app lifespan and reused; SDK-level retry is limited to one transport retry (429/5xx/connection), and each request is bounded by `EXTRACTION_TIMEOUT_SECONDS` (default 10)
+- the user's groups and timezone are loaded while transcription runs, and the transcript is persisted while extraction runs
+- voice, text, and re-extract responses return the staged tasks so the client renders review without a second request
+- each call logs latency, stop reason, and token usage (input, output, cache read/write), never transcript or output text
 
 Backend behavior:
 
-- construct prompt from transcript, user timezone, groups, descriptions, and recent tasks
+- construct prompt from transcript, user timezone and UTC offset, current local date with weekday, groups, descriptions, and recent tasks
 - request strict JSON-schema output
 - treat transcript content as untrusted data inside the prompt and never as instructions
 - validate every returned task candidate with Pydantic
-- perform one bounded retry on malformed full-payload output
+- perform one bounded retry on malformed full-payload output; a `refusal` stop reason is not retried
 - run a deterministic guarded-intent completeness check for medical calls, appointments, communication tasks, and similar standalone errands
 - perform one bounded corrective re-extraction when a guarded intent is missing from the extracted tasks (including subtasks)
 - synthesize a low-confidence Inbox review task when the guarded intent still cannot be recovered after the corrective retry

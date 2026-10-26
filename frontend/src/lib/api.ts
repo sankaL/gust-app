@@ -16,6 +16,7 @@ export type CaptureReviewResponse = {
   capture_id: string
   status: string
   transcript_text: string
+  extracted_tasks: ExtractedTask[]
 }
 
 export type SubmitCaptureResponse = {

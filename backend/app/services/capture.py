@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-from dataclasses import dataclass
+from collections.abc import Awaitable
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from typing import Protocol
+from typing import Protocol, TypeVar
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -37,6 +39,7 @@ from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
 from app.db.repositories import (
     CaptureRecord,
+    ExtractedTaskRecord,
     GroupContextRecord,
     GroupRecord,
     create_capture,
@@ -80,6 +83,8 @@ from app.services.transcription import (
 
 logger = logging.getLogger("gust.api")
 
+_T = TypeVar("_T")
+
 # Extraction failures only an administrator can fix; never swallowed during auto-extraction.
 _ADMIN_ACTION_EXTRACTION_ERRORS = (
     ExtractionProviderAccountError,
@@ -111,6 +116,14 @@ class ReviewCaptureResult:
     capture_id: str
     status: str
     transcript_text: str
+    extracted_tasks: list[ExtractedTaskRecord] = field(default_factory=list)
+
+
+@dataclass
+class _ExtractionContext:
+    timezone: str
+    inbox_group: GroupRecord
+    groups: list[GroupContextRecord]
 
 
 @dataclass
@@ -194,17 +207,10 @@ class CaptureService:
 
         try:
             with self._capture_lock(user_id=user_id, action="capture_voice"):
-                capture = self._create_capture(
-                    user_id=user_id,
-                    input_type="voice",
-                    status="pending_transcription",
-                )
-
                 logger.info(
                     "voice_transcription_started",
                     extra={
                         "event": "voice_transcription_started",
-                        "capture_id": capture.id,
                         "user_id": user_id,
                         "request_id": request_id,
                         "audio_filename_extension": self._filename_extension(validated_filename),
@@ -212,7 +218,17 @@ class CaptureService:
                         "audio_size_bytes": len(audio_bytes),
                     },
                 )
-
+                # Creating the capture row and loading groups/timezone don't depend on the
+                # transcript, so both run while the provider transcribes.
+                capture_create = asyncio.ensure_future(
+                    asyncio.to_thread(
+                        self._create_capture,
+                        user_id=user_id,
+                        input_type="voice",
+                        status="pending_transcription",
+                    )
+                )
+                context_load = asyncio.ensure_future(self._load_extraction_context_async(user_id))
                 try:
                     with timed_stage("capture.transcription"):
                         transcription = await self.transcription_service.transcribe(
@@ -220,10 +236,17 @@ class CaptureService:
                             filename=validated_filename,
                             content_type=validated_content_type,
                         )
-                except Exception as exc:
+                except BaseException as exc:
+                    capture_result, _ = await asyncio.gather(
+                        capture_create, context_load, return_exceptions=True
+                    )
+                    if not isinstance(exc, Exception):
+                        raise
+                    if isinstance(capture_result, BaseException):
+                        raise capture_result from exc
                     failure_reason, public_error = self._resolve_transcription_failure(exc)
                     self._log_voice_transcription_failure(
-                        capture_id=capture.id,
+                        capture_id=capture_result.id,
                         user_id=user_id,
                         request_id=request_id,
                         filename=validated_filename,
@@ -233,31 +256,45 @@ class CaptureService:
                         error=exc,
                     )
                     self._mark_capture_failure(
-                        capture_id=capture.id,
+                        capture_id=capture_result.id,
                         user_id=user_id,
                         status="transcription_failed",
                         error_code=failure_reason,
                     )
                     raise public_error from exc
 
-                with user_connection_scope(
-                    self.settings.database_url,
-                    user_id=user_id,
-                ) as connection:
-                    updated = update_capture(
-                        connection,
+                try:
+                    capture = await capture_create
+                except BaseException:
+                    await asyncio.gather(context_load, return_exceptions=True)
+                    raise
+                transcript_text = self._normalize_transcript_text(transcription.transcript_text)
+                context = await self._settled_extraction_context(
+                    context_load, user_id=user_id, capture_id=capture.id
+                )
+
+                # Persist the transcript while the model extracts; staging rows are written only
+                # after both finish.
+                saved, extracted = await asyncio.gather(
+                    asyncio.to_thread(
+                        self._save_transcript,
                         user_id=user_id,
                         capture_id=capture.id,
-                        status="ready_for_review",
-                        transcript_text=self._normalize_transcript_text(
-                            transcription.transcript_text
-                        ),
-                        transcription_provider=transcription.provider,
-                        transcription_latency_ms=transcription.latency_ms,
-                        error_code=None,
-                    )
-
-                assert updated is not None
+                        transcript_text=transcript_text,
+                        transcription=transcription,
+                    ),
+                    self._extract_for_staging(
+                        user_id=user_id,
+                        capture_id=capture.id,
+                        transcript_text=transcript_text,
+                        context=context,
+                    ),
+                    return_exceptions=True,
+                )
+                _raise_if_base_exception(saved, extracted)
+                if isinstance(saved, Exception):
+                    raise saved
+                updated = saved
                 logger.info(
                     "capture_transcribed",
                     extra={
@@ -267,28 +304,12 @@ class CaptureService:
                         "request_id": request_id,
                     },
                 )
-
-                try:
-                    with timed_stage("capture.staging"):
-                        await self._extract_and_store_in_staging(
-                            user_id=user_id,
-                            capture_id=updated.id,
-                            transcript_text=updated.transcript_text or "",
-                        )
-                except _ADMIN_ACTION_EXTRACTION_ERRORS as exc:
-                    raise self._fail_auto_extraction(
-                        user_id=user_id, capture_id=updated.id, error=exc
-                    ) from exc
-                except Exception as exc:
-                    logger.warning(
-                        "auto_extraction_failed",
-                        extra={
-                            "event": "auto_extraction_failed",
-                            "capture_id": updated.id,
-                            "user_id": user_id,
-                            "error_type": type(exc).__name__,
-                        },
-                    )
+                extracted_tasks = await self._finish_auto_extraction(
+                    user_id=user_id,
+                    capture_id=updated.id,
+                    extracted=extracted,
+                    context=context,
+                )
         except ActionLockBusyError as exc:
             raise RateLimitExceededError(
                 message="Another capture is already processing. Please wait a moment and retry."
@@ -298,6 +319,7 @@ class CaptureService:
             capture_id=updated.id,
             status=updated.status,
             transcript_text=updated.transcript_text or "",
+            extracted_tasks=extracted_tasks,
         )
 
     async def create_text_capture(self, *, user_id: str, text: str) -> ReviewCaptureResult:
@@ -307,34 +329,28 @@ class CaptureService:
 
         try:
             with self._capture_lock(user_id=user_id, action="capture_text"):
-                capture = self._create_capture(
+                capture, context = await self._with_extraction_context(
+                    asyncio.to_thread(
+                        self._create_capture,
+                        user_id=user_id,
+                        input_type="text",
+                        status="ready_for_review",
+                        source_text=normalized,
+                        transcript_text=normalized,
+                    ),
                     user_id=user_id,
-                    input_type="text",
-                    status="ready_for_review",
-                    source_text=normalized,
-                    transcript_text=normalized,
                 )
-                try:
-                    with timed_stage("capture.staging"):
-                        await self._extract_and_store_in_staging(
-                            user_id=user_id,
-                            capture_id=capture.id,
-                            transcript_text=normalized,
-                        )
-                except _ADMIN_ACTION_EXTRACTION_ERRORS as exc:
-                    raise self._fail_auto_extraction(
-                        user_id=user_id, capture_id=capture.id, error=exc
-                    ) from exc
-                except Exception as exc:
-                    logger.warning(
-                        "auto_extraction_failed",
-                        extra={
-                            "event": "auto_extraction_failed",
-                            "capture_id": capture.id,
-                            "user_id": user_id,
-                            "error_type": type(exc).__name__,
-                        },
-                    )
+                extracted_tasks = await self._finish_auto_extraction(
+                    user_id=user_id,
+                    capture_id=capture.id,
+                    extracted=await self._extract_for_staging_safely(
+                        user_id=user_id,
+                        capture_id=capture.id,
+                        transcript_text=normalized,
+                        context=context,
+                    ),
+                    context=context,
+                )
         except ActionLockBusyError as exc:
             raise RateLimitExceededError(
                 message="Another capture is already processing. Please wait a moment and retry."
@@ -344,6 +360,7 @@ class CaptureService:
             capture_id=capture.id,
             status=capture.status,
             transcript_text=capture.transcript_text or normalized,
+            extracted_tasks=extracted_tasks,
         )
 
     async def submit_capture(
@@ -1076,59 +1093,118 @@ class CaptureService:
 
         return ExtractorPayload(tasks=fallback_tasks)
 
-    async def _extract_and_store_in_staging(
-        self,
-        *,
-        user_id: str,
-        capture_id: str,
-        transcript_text: str,
-    ) -> None:
-        """Extract tasks from transcript and store in staging table.
-
-        Args:
-            user_id: User ID.
-            capture_id: Capture ID.
-            transcript_text: Transcript text to extract from.
-        """
-        normalized_transcript = self._normalize_transcript_text(transcript_text)
-        if not normalized_transcript:
-            return
-
+    def _load_extraction_context(self, user_id: str) -> _ExtractionContext:
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             user = get_user(connection, user_id)
             if user is None:
                 raise CaptureNotFoundError("Authenticated user could not be resolved.")
             inbox_group = ensure_inbox_group(connection, user_id=user_id)
             groups = list_groups_with_recent_tasks(connection, user_id=user_id)
+        return _ExtractionContext(timezone=user.timezone, inbox_group=inbox_group, groups=groups)
 
-        extraction_request = ExtractionRequest(
-            transcript_text=normalized_transcript,
-            user_timezone=user.timezone,
-            current_local_date=datetime.now(ZoneInfo(user.timezone)).date(),
-            groups=[self._group_context_payload(group) for group in groups],
+    async def _load_extraction_context_async(self, user_id: str) -> _ExtractionContext:
+        with timed_stage("capture.context"):
+            return await asyncio.to_thread(self._load_extraction_context, user_id)
+
+    async def _with_extraction_context(
+        self,
+        primary: Awaitable[_T],
+        *,
+        user_id: str,
+    ) -> tuple[_T, _ExtractionContext | None]:
+        """Await a capture write and the extraction context load side by side."""
+        primary_result, context_result = await asyncio.gather(
+            primary,
+            self._load_extraction_context_async(user_id),
+            return_exceptions=True,
         )
+        _raise_if_base_exception(primary_result, context_result)
+        if isinstance(primary_result, Exception):
+            raise primary_result
+        if isinstance(context_result, Exception):
+            logger.warning(
+                "extraction_context_failed",
+                extra={
+                    "event": "extraction_context_failed",
+                    "user_id": user_id,
+                    "error_type": type(context_result).__name__,
+                },
+            )
+            return primary_result, None
+        return primary_result, context_result
 
+    async def _settled_extraction_context(
+        self,
+        context_load: Awaitable[_ExtractionContext],
+        *,
+        user_id: str,
+        capture_id: str,
+    ) -> _ExtractionContext | None:
+        try:
+            return await context_load
+        except Exception as exc:
+            # Same contract as a failed auto-extraction: keep the transcript, stage nothing.
+            logger.warning(
+                "auto_extraction_failed",
+                extra={
+                    "event": "auto_extraction_failed",
+                    "capture_id": capture_id,
+                    "user_id": user_id,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            return None
+
+    def _save_transcript(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript_text: str,
+        transcription: TranscriptionResult,
+    ) -> CaptureRecord:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+            updated = update_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                status="ready_for_review",
+                transcript_text=transcript_text,
+                transcription_provider=transcription.provider,
+                transcription_latency_ms=transcription.latency_ms,
+                error_code=None,
+            )
+        if updated is None:
+            raise CaptureNotFoundError()
+        return updated
+
+    async def _extract_for_staging(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript_text: str,
+        context: _ExtractionContext | None,
+    ) -> ExtractorPayload | None:
+        """Run guarded extraction; None means nothing to stage (failure already logged)."""
+        if context is None or not transcript_text:
+            return None
+        extraction_request = ExtractionRequest(
+            transcript_text=transcript_text,
+            user_timezone=context.timezone,
+            current_local_date=datetime.now(ZoneInfo(context.timezone)).date(),
+            groups=[self._group_context_payload(group) for group in context.groups],
+        )
         try:
             with timed_stage("capture.extraction"):
                 extractor_payload, _attempt_count = await self._extract_payload_with_guardrails(
-                    transcript_text=normalized_transcript,
+                    transcript_text=transcript_text,
                     extraction_request=extraction_request,
-                    inbox_group=inbox_group,
+                    inbox_group=context.inbox_group,
                 )
-        except (ExtractorMalformedResponseError, ValidationError) as exc:
-            logger.warning(
-                "extraction_failed_for_staging",
-                extra={
-                    "event": "extraction_failed_for_staging",
-                    "capture_id": capture_id,
-                    "user_id": user_id,
-                    "error_type": type(exc).__name__,
-                },
-            )
-            return
         except ExtractionProviderAccountError:
             raise
-        except ExtractionServiceError as exc:
+        except (ExtractorMalformedResponseError, ValidationError, ExtractionServiceError) as exc:
             logger.warning(
                 "extraction_failed_for_staging",
                 extra={
@@ -1138,19 +1214,90 @@ class CaptureService:
                     "error_type": type(exc).__name__,
                 },
             )
-            return
+            return None
+        return extractor_payload
 
-        # Store extracted tasks in staging
+    async def _extract_for_staging_safely(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript_text: str,
+        context: _ExtractionContext | None,
+    ) -> ExtractorPayload | Exception | None:
+        """Like _extract_for_staging, but hands failures back for the caller to route."""
+        try:
+            return await self._extract_for_staging(
+                user_id=user_id,
+                capture_id=capture_id,
+                transcript_text=transcript_text,
+                context=context,
+            )
+        except Exception as exc:
+            return exc
+
+    async def _finish_auto_extraction(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        extracted: ExtractorPayload | BaseException | None,
+        context: _ExtractionContext | None,
+    ) -> list[ExtractedTaskRecord]:
+        """Stage extracted tasks, surfacing only administrator-actionable failures."""
+        if isinstance(extracted, _ADMIN_ACTION_EXTRACTION_ERRORS):
+            raise self._fail_auto_extraction(
+                user_id=user_id, capture_id=capture_id, error=extracted
+            ) from extracted
+        if isinstance(extracted, BaseException):
+            logger.warning(
+                "auto_extraction_failed",
+                extra={
+                    "event": "auto_extraction_failed",
+                    "capture_id": capture_id,
+                    "user_id": user_id,
+                    "error_type": type(extracted).__name__,
+                },
+            )
+            return []
+        if extracted is None or context is None:
+            return []
+        try:
+            return await self._store_staged_tasks(
+                user_id=user_id,
+                capture_id=capture_id,
+                extractor_payload=extracted,
+                context=context,
+            )
+        except Exception as exc:
+            logger.warning(
+                "auto_extraction_failed",
+                extra={
+                    "event": "auto_extraction_failed",
+                    "capture_id": capture_id,
+                    "user_id": user_id,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            return []
+
+    async def _store_staged_tasks(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        extractor_payload: ExtractorPayload,
+        context: _ExtractionContext,
+    ) -> list[ExtractedTaskRecord]:
         with timed_stage("capture.staging"):
-            await self.staging_service.store_extracted_tasks(
+            result = await self.staging_service.store_extracted_tasks(
                 user_id=user_id,
                 capture_id=capture_id,
                 extracted_payload=extractor_payload,
-                groups=groups,
-                inbox_group=inbox_group,
-                user_timezone=user.timezone,
+                groups=context.groups,
+                inbox_group=context.inbox_group,
+                user_timezone=context.timezone,
             )
-
         logger.info(
             "auto_extraction_completed",
             extra={
@@ -1160,6 +1307,7 @@ class CaptureService:
                 "tasks_extracted": len(extractor_payload.tasks),
             },
         )
+        return result.extracted_tasks
 
     async def re_extract_capture(
         self,
@@ -1189,43 +1337,37 @@ class CaptureService:
 
         try:
             with self._capture_lock(user_id=user_id, action="capture_reextract"):
-                with user_connection_scope(
-                    self.settings.database_url,
+                updated, context = await self._with_extraction_context(
+                    asyncio.to_thread(
+                        self._reset_capture_for_reextract,
+                        user_id=user_id,
+                        capture_id=capture_id,
+                        transcript_text=normalized_transcript,
+                    ),
                     user_id=user_id,
-                ) as connection:
-                    capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
-                    if capture is None:
-                        raise CaptureNotFoundError()
-                    if capture.status not in {"ready_for_review", "extraction_failed"}:
-                        raise CaptureStateConflictError()
-
-                    delete_extracted_tasks_by_capture(
-                        connection,
-                        user_id=user_id,
-                        capture_id=capture_id,
-                    )
-
-                    updated = update_capture(
-                        connection,
-                        user_id=user_id,
-                        capture_id=capture_id,
-                        transcript_text=normalized_transcript,
-                        transcript_edited_text=normalized_transcript,
-                        status="ready_for_review",
-                        error_code=None,
-                    )
-
-                assert updated is not None
-                try:
-                    await self._extract_and_store_in_staging(
-                        user_id=user_id,
-                        capture_id=capture_id,
-                        transcript_text=normalized_transcript,
-                    )
-                except _ADMIN_ACTION_EXTRACTION_ERRORS as exc:
+                )
+                extracted = await self._extract_for_staging_safely(
+                    user_id=user_id,
+                    capture_id=capture_id,
+                    transcript_text=normalized_transcript,
+                    context=context,
+                )
+                if isinstance(extracted, _ADMIN_ACTION_EXTRACTION_ERRORS):
                     raise self._fail_auto_extraction(
-                        user_id=user_id, capture_id=capture_id, error=exc
-                    ) from exc
+                        user_id=user_id, capture_id=capture_id, error=extracted
+                    ) from extracted
+                if isinstance(extracted, Exception):
+                    raise extracted
+                extracted_tasks = (
+                    await self._store_staged_tasks(
+                        user_id=user_id,
+                        capture_id=capture_id,
+                        extractor_payload=extracted,
+                        context=context,
+                    )
+                    if extracted is not None
+                    else []
+                )
         except ActionLockBusyError as exc:
             raise RateLimitExceededError(
                 message="Another capture is already processing. Please wait a moment and retry."
@@ -1244,7 +1386,34 @@ class CaptureService:
             capture_id=updated.id,
             status=updated.status,
             transcript_text=updated.transcript_text or "",
+            extracted_tasks=extracted_tasks,
         )
+
+    def _reset_capture_for_reextract(
+        self,
+        *,
+        user_id: str,
+        capture_id: str,
+        transcript_text: str,
+    ) -> CaptureRecord:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+            capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
+            if capture is None:
+                raise CaptureNotFoundError()
+            if capture.status not in {"ready_for_review", "extraction_failed"}:
+                raise CaptureStateConflictError()
+            delete_extracted_tasks_by_capture(connection, user_id=user_id, capture_id=capture_id)
+            updated = update_capture(
+                connection,
+                user_id=user_id,
+                capture_id=capture_id,
+                transcript_text=transcript_text,
+                transcript_edited_text=transcript_text,
+                status="ready_for_review",
+                error_code=None,
+            )
+        assert updated is not None
+        return updated
 
     def _capture_lock(self, *, user_id: str, action: str):
         return user_action_lock(
@@ -1309,3 +1478,10 @@ class CaptureService:
                 "user_id": user_id,
             },
         )
+
+
+def _raise_if_base_exception(*results: object) -> None:
+    """Re-raise cancellation and other non-Exception failures collected by gather()."""
+    for result in results:
+        if isinstance(result, BaseException) and not isinstance(result, Exception):
+            raise result
