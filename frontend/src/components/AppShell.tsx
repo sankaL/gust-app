@@ -51,7 +51,6 @@ function SignedInShell({ controller, session }: { controller: ReturnType<typeof 
           </AppShellActionsContext.Provider>
         </div>
         <BottomNavigation
-          accountInitials={controller.accountInitials}
           isAccountOpen={sheets.activeSheet === 'account'}
           onAccount={() => openSheet('account')}
           onCapture={() => openSheet('capture', 'record')}

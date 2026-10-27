@@ -359,7 +359,7 @@ html {
 }
 
 /* ----------------------------------------------------------------------------
- * Clay surfaces: the bottom nav and the capture button.
+ * Clay surfaces: the bottom nav and its capture button.
  * `.clay` is clay.css v1.0.5 by Adrian Bece (MIT, github.com/codeAdrian/clay.css),
  * copied verbatim; the modifiers below feed it Gust tokens. It lives in the
  * components layer so radius utilities still win.
@@ -375,11 +375,12 @@ html {
     --clay-shadow-inset-secondary: 6px 8px 14px 0 var(--clay-hi);
   }
 
-  .clay-accent {
-    --clay-background: rgb(var(--color-primary));
-    --clay-shadow-outset: 0 16px 24px -8px rgb(var(--color-primary-dim) / 0.6);
-    --clay-shadow-inset-primary: -6px -8px 14px 0 rgb(var(--color-primary-dim));
-    --clay-shadow-inset-secondary: 6px 8px 12px 0 rgb(255 255 255 / 0.4);
+  /* The + in the middle of the nav: ink colored so it stands apart from the accent active tab. */
+  .clay-capture {
+    --clay-background: rgb(var(--color-on-surface));
+    --clay-shadow-outset: 0 14px 22px -8px rgb(var(--color-backdrop) / 0.55);
+    --clay-shadow-inset-primary: -5px -7px 12px 0 rgb(0 0 0 / 0.35);
+    --clay-shadow-inset-secondary: 5px 7px 12px 0 rgb(255 255 255 / 0.22);
   }
 
   /* Smaller pill for the active nav tab; same recipe, tighter shadows. */

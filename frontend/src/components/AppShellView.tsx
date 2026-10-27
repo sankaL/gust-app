@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Bell, CheckCircle2, Folder, House, Plus, type LucideIcon } from 'lucide-react'
+import { Bell, CheckCircle2, Folder, House, Plus, UserRound, type LucideIcon } from 'lucide-react'
 
 import { useMobileShell } from './AppShellActions'
 import { Button } from './Button'
@@ -17,9 +17,8 @@ const navigation: NavItem[] = [
 
 // Matches the bell's h-11 w-11 (44px).
 const REVIEW_LENS = { width: 44, height: 44, radius: 22, bezel: 14, scale: 28, aberration: 0.08 }
-// The nav floats above the home indicator; the + sits 1rem above the nav's 3.875rem height.
+// The nav floats just above the home indicator.
 const NAV_BOTTOM = 'max(1rem, calc(var(--safe-area-bottom) + 0.25rem))'
-const FAB_BOTTOM = `calc(${NAV_BOTTOM} + 4.875rem)`
 
 function ReviewBell() {
   const shell = useMobileShell()
@@ -66,25 +65,10 @@ export function ScreenHeader({ eyebrow, title, actions, showBell = true }: { eye
   )
 }
 
-function NavAvatar({ initials, active, onClick }: { initials: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Open account menu"
-      aria-haspopup="dialog"
-      aria-expanded={active}
-      className="group relative flex h-full flex-1 items-center justify-center outline-none"
-    >
-      <span className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dim font-body text-[0.72rem] font-bold uppercase tracking-[0.04em] text-on-primary shadow-card ring-2 transition-all duration-300 ease-out-expo group-active:scale-90 ${active ? 'ring-primary/60 ring-offset-2 ring-offset-surface-container-high' : 'ring-transparent'}`}>
-        {initials}
-      </span>
-    </button>
-  )
-}
+// Slot order in the bar: Tasks, Completed, capture (+), Groups, Account.
+const NAV_SLOTS = [0, 1, 3]
 
-export function BottomNavigation({ accountInitials, isAccountOpen, onAccount, onCapture }: {
-  accountInitials: string
+export function BottomNavigation({ isAccountOpen, onAccount, onCapture }: {
   isAccountOpen: boolean
   onAccount: () => void
   onCapture: () => void
@@ -96,48 +80,57 @@ export function BottomNavigation({ accountInitials, isAccountOpen, onAccount, on
   if (isDetailRoute) return null
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={onCapture}
-        aria-label="Add a new task"
-        className="clay clay-accent group fixed z-[60] flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full text-on-primary transition-transform duration-300 ease-spring hover:scale-105 active:scale-90"
-        style={{ right: 'max(1.1rem, calc((100vw - 28rem) / 2 + 1.1rem))', bottom: FAB_BOTTOM }}
-      >
-        <Plus className="relative h-7 w-7 transition-transform duration-300 ease-out-expo group-hover:rotate-90" strokeWidth={2.4} aria-hidden="true" />
-      </button>
-      <nav aria-label="Primary" className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-3.5" style={{ bottom: NAV_BOTTOM }}>
-        <div className="clay clay-nav pointer-events-auto w-full max-w-[26.25rem] rounded-pill px-1.5">
-          <div className="relative grid h-[3.875rem] grid-cols-4 items-center">
-            {activeIndex >= 0 ? (
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute left-0 top-0 flex h-full w-1/4 items-center justify-center transition-transform duration-500 ease-out-expo"
-                style={{ transform: `translateX(${activeIndex * 100}%)` }}
+    <nav aria-label="Primary" className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-3.5" style={{ bottom: NAV_BOTTOM }}>
+      <div className="clay clay-nav pointer-events-auto w-full max-w-[26.25rem] rounded-pill px-1.5">
+        <div className="relative grid h-[3.875rem] grid-cols-5 items-center">
+          {activeIndex >= 0 ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-0 top-0 flex h-full w-1/5 items-center justify-center transition-transform duration-500 ease-out-expo"
+              style={{ transform: `translateX(${NAV_SLOTS[activeIndex] * 100}%)` }}
+            >
+              <span className="clay clay-accent-sm h-[2.6rem] w-[3.4rem] rounded-[1.3rem]" />
+            </span>
+          ) : null}
+          {navigation.map((item, index) => {
+            const Icon = item.icon
+            const active = index === activeIndex
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={active ? 'page' : undefined}
+                style={{ gridColumnStart: NAV_SLOTS[index] + 1, gridRowStart: 1 }}
+                className={`relative flex h-full items-center justify-center outline-none transition-colors duration-300 focus-visible:text-primary active:scale-90 ${active ? 'text-on-primary' : 'text-on-surface-variant/70 hover:text-on-surface'}`}
               >
-                <span className="clay clay-accent-sm h-[2.6rem] w-[3.4rem] rounded-[1.3rem]" />
-              </span>
-            ) : null}
-            {navigation.map((item, index) => {
-              const Icon = item.icon
-              const active = index === activeIndex
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  aria-current={active ? 'page' : undefined}
-                  className={`relative flex h-full items-center justify-center outline-none transition-colors duration-300 focus-visible:text-primary active:scale-90 ${active ? 'text-on-primary' : 'text-on-surface-variant/70 hover:text-on-surface'}`}
-                >
-                  <Icon className={`h-[1.4rem] w-[1.4rem] transition-transform duration-300 ease-spring ${active ? 'scale-105' : ''}`} strokeWidth={active ? 2.3 : 2} fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.14 : 0} aria-hidden="true" />
-                  <span className="sr-only">{item.label}</span>
-                </Link>
-              )
-            })}
-            <NavAvatar initials={accountInitials} active={isAccountOpen} onClick={onAccount} />
+                <Icon className={`h-[1.4rem] w-[1.4rem] transition-transform duration-300 ease-spring ${active ? 'scale-105' : ''}`} strokeWidth={active ? 2.3 : 2} fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.14 : 0} aria-hidden="true" />
+                <span className="sr-only">{item.label}</span>
+              </Link>
+            )
+          })}
+          <div className="relative col-start-3 row-start-1 flex h-full items-center justify-center">
+            <button
+              type="button"
+              onClick={onCapture}
+              aria-label="Add a new task"
+              className="clay clay-capture group flex h-[3.6rem] w-[3.6rem] -translate-y-3 items-center justify-center rounded-full text-surface transition-transform duration-300 ease-spring hover:scale-105 active:scale-90"
+            >
+              <Plus className="h-7 w-7 transition-transform duration-300 ease-out-expo group-hover:rotate-90" strokeWidth={2.6} aria-hidden="true" />
+            </button>
           </div>
+          <button
+            type="button"
+            onClick={onAccount}
+            aria-label="Open account menu"
+            aria-haspopup="dialog"
+            aria-expanded={isAccountOpen}
+            className={`relative col-start-5 row-start-1 flex h-full items-center justify-center outline-none transition-colors duration-300 focus-visible:text-primary active:scale-90 ${isAccountOpen ? 'text-on-surface' : 'text-on-surface-variant/70 hover:text-on-surface'}`}
+          >
+            <UserRound className="h-[1.4rem] w-[1.4rem]" strokeWidth={isAccountOpen ? 2.3 : 2} aria-hidden="true" />
+          </button>
         </div>
-      </nav>
-    </>
+      </div>
+    </nav>
   )
 }
 

@@ -289,7 +289,8 @@ describe('capture route', () => {
       )
     })
 
-    expect(await screen.findByRole('button', { name: 'Open account menu' })).toHaveTextContent('LD')
+    // The nav shows a user icon, not initials.
+    expect(await screen.findByRole('button', { name: 'Open account menu' })).not.toHaveTextContent('LD')
   })
 
   it('keeps text fallback usable when microphone permission is denied', async () => {
