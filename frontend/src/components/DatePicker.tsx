@@ -232,7 +232,8 @@ function useDatePickerViewport(isOpen: boolean, updatePosition: () => void, clos
 
 function calendarPosition(rect: DOMRect, mode: DatePickerProps['mode']) {
   const padding = 16
-  const width = Math.min(Math.max(rect.width, 280), window.innerWidth - padding * 2)
+  // Wide enough for full month and year names at the 16px select size iOS needs to avoid zooming.
+  const width = Math.min(Math.max(rect.width, 320), window.innerWidth - padding * 2)
   const height = mode === 'datetime' ? 420 : 380
   const left = Math.max(padding, Math.min(rect.left, window.innerWidth - width - padding))
   const below = rect.bottom + 8
@@ -354,7 +355,36 @@ function DatePickerCalendar(props: CalendarProps) {
 
 type CalendarHeaderProps = { viewDate: Date; yearOptions: number[]; onPrevious: () => void; onNext: () => void; onMonth: (month: number) => void; onYear: (year: number) => void }
 function CalendarHeader(props: CalendarHeaderProps) {
-  return <div className="mb-4 flex items-center justify-between"><NavButton direction="previous" onClick={props.onPrevious} /><div className="flex min-w-0 flex-1 items-center gap-2 px-2"><select value={getMonth(props.viewDate)} onChange={(event) => props.onMonth(Number(event.target.value))} className="min-w-0 flex-1 rounded-lg bg-surface-dim px-2 py-1 text-sm font-semibold text-on-surface ring-1 ring-inset ring-outline/40">{MONTHS.map((month, index) => <option key={month} value={index}>{month}</option>)}</select><select value={getYear(props.viewDate)} onChange={(event) => props.onYear(Number(event.target.value))} className="min-w-0 flex-1 rounded-lg bg-surface-dim px-2 py-1 text-sm font-semibold text-on-surface ring-1 ring-inset ring-outline/40">{props.yearOptions.map((year) => <option key={year}>{year}</option>)}</select></div><NavButton direction="next" onClick={props.onNext} /></div>
+  return (
+    <div className="mb-4 flex items-center gap-1">
+      <NavButton direction="previous" onClick={props.onPrevious} />
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+        <CalendarSelect label="Month" className="min-w-[7.5rem] flex-1" value={getMonth(props.viewDate)} onChange={(value) => props.onMonth(value)}>
+          {MONTHS.map((month, index) => <option key={month} value={index}>{month}</option>)}
+        </CalendarSelect>
+        <CalendarSelect label="Year" className="w-[5.25rem] shrink-0" value={getYear(props.viewDate)} onChange={(value) => props.onYear(value)}>
+          {props.yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+        </CalendarSelect>
+      </div>
+      <NavButton direction="next" onClick={props.onNext} />
+    </div>
+  )
+}
+
+function CalendarSelect({ label, className, value, onChange, children }: { label: string; className: string; value: number; onChange: (value: number) => void; children: React.ReactNode }) {
+  return (
+    <span className={`relative ${className}`}>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="h-9 w-full cursor-pointer appearance-none rounded-lg bg-surface-dim pl-3 pr-7 font-semibold text-on-surface outline-none ring-1 ring-inset ring-outline/40 focus-visible:ring-2 focus-visible:ring-primary/60"
+      >
+        {children}
+      </select>
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+    </span>
+  )
 }
 
 function NavButton({ direction, onClick }: { direction: 'previous' | 'next'; onClick: () => void }) {
