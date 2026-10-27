@@ -1098,6 +1098,9 @@ describe('app shell', () => {
 
   it('clears cached app data on logout so the next user sees their own tasks', async () => {
     vi.stubEnv('VITE_GUST_DEV_MODE', 'true')
+    // A phone, so signing back in lands on the mobile /tasks whether the click happens on the
+    // inline sign-in card or after logout has moved to /login (which sends desktops to /desktop).
+    setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1')
     let userKey: 'a' | 'b' = 'a'
     let signedIn = true
 
