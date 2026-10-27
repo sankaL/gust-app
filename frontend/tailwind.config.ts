@@ -21,6 +21,7 @@ const config: Config = {
         secondary: token('secondary'),
         'secondary-dim': token('secondary-dim'),
         tertiary: token('tertiary'),
+        'on-tertiary': token('on-tertiary'),
         success: token('success'),
         'success-dim': token('success-dim'),
         warning: token('warning'),
@@ -59,14 +60,13 @@ const config: Config = {
         card: '1rem',
         soft: '1.5rem',
         pill: '9999px',
-        sheet: '1.75rem'
+        sheet: '2.25rem'
       },
       boxShadow: {
         ambient: 'var(--shadow-ambient)',
         card: 'var(--shadow-card)',
         float: 'var(--shadow-float)',
-        sheet: 'var(--shadow-sheet)',
-        fab: 'var(--shadow-fab)'
+        sheet: 'var(--shadow-sheet)'
       },
       transitionTimingFunction: {
         'out-expo': 'cubic-bezier(0.16, 1, 0.3, 1)',

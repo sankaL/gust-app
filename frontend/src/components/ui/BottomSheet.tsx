@@ -2,10 +2,14 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type 
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
+import { MeasuredGlassWarp } from './MeasuredGlassWarp'
+
 const SKIP_MOTION = import.meta.env.MODE === 'test'
 const EXIT_MS = 360
 const DISMISS_VELOCITY = 0.55
 const DRAG_SLOP_PX = 6
+// Matches rounded-t-sheet (2.25rem).
+const SHEET_GLASS = { radius: 36, bezel: 22, scale: 40, aberration: 0.05 }
 
 type SheetSize = 'default' | 'auto'
 
@@ -263,7 +267,7 @@ export function BottomSheet(props: BottomSheetProps) {
         aria-hidden="true"
         data-testid="sheet-backdrop"
         onClick={requestClose}
-        className="absolute inset-0 bg-backdrop/40 backdrop-blur-[3px] transition-opacity duration-300 ease-out"
+        className="absolute inset-0 bg-backdrop/20 transition-opacity duration-300 ease-out"
         style={{ opacity: visible ? Math.max(0.15, 1 - drag.offset / 500) : 0 }}
       />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
@@ -275,7 +279,7 @@ export function BottomSheet(props: BottomSheetProps) {
           aria-label={view.labelledBy ? undefined : view.ariaLabel}
           tabIndex={-1}
           onKeyDown={trapTab}
-          className={`pointer-events-auto relative flex w-full max-w-xl flex-col overflow-hidden rounded-t-sheet bg-surface-container text-on-surface shadow-sheet outline-none ring-1 ring-outline/40 ${sizeClass}`}
+          className={`pointer-events-auto relative flex w-full max-w-xl flex-col overflow-hidden liquid-sheet rounded-t-sheet text-on-surface outline-none ${sizeClass}`}
           style={{
             transform: translate,
             transition: drag.isDragging ? 'none' : `transform ${visible ? 520 : EXIT_MS}ms var(--ease-sheet), filter 400ms ease`,
@@ -284,6 +288,7 @@ export function BottomSheet(props: BottomSheetProps) {
             willChange: 'transform',
           }}
         >
+          <MeasuredGlassWarp targetRef={panelRef} active={shouldRender} {...SHEET_GLASS} />
           <div className="shrink-0 touch-none select-none" {...drag.grabHandlers}>
             <div className="flex justify-center pb-1 pt-2.5" aria-hidden="true">
               <span className="h-1.5 w-10 rounded-pill bg-on-surface-variant/25" />
@@ -294,7 +299,7 @@ export function BottomSheet(props: BottomSheetProps) {
             {view.children}
           </div>
           {view.footer ? (
-            <div className="shrink-0 border-t border-outline/50 bg-surface-container/95 px-5 pb-[max(1rem,calc(var(--safe-area-bottom)+0.75rem))] pt-3 backdrop-blur-xl">
+            <div className="shrink-0 border-t border-outline/30 bg-surface-container-high/35 px-5 pb-[max(1rem,calc(var(--safe-area-bottom)+0.75rem))] pt-3 backdrop-blur-xl">
               {view.footer}
             </div>
           ) : <div className="h-[var(--safe-area-bottom)] shrink-0" />}
