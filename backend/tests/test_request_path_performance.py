@@ -8,6 +8,7 @@ unrelated request still answers quickly; a stalled event loop would make it wait
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -30,10 +31,10 @@ from app.core.action_locks import user_action_lock
 from app.core.dependencies import get_auth_service, get_reminder_worker_service
 from app.core.middleware import RequestContextMiddleware
 from app.core.rate_limits import RequestRateLimiter
-from app.core.security import ACCESS_TOKEN_COOKIE
+from app.core.security import ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, TokenBundle
 from app.db.engine import connection_scope
 from app.db.repositories import ensure_inbox_group, upsert_user
-from app.services.auth import AuthenticatedIdentity
+from app.services.auth import AuthenticatedIdentity, AuthenticatedSession
 from app.services.reminders import INTERNAL_JOB_SECRET_HEADER, ReminderRunSummary
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
@@ -159,16 +160,60 @@ def test_request_total_includes_time_spent_before_the_route(
     assert stages["request.total"] >= stages["ratelimit.ip"]
 
 
-def test_rate_limited_responses_carry_timing_and_request_id(client: TestClient) -> None:
+def _completed_request_records(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    return [record for record in caplog.records if record.getMessage() == "request_completed"]
+
+
+def _assert_rate_limited_response_is_complete(
+    limited: httpx.Response,
+    caplog: pytest.LogCaptureFixture,
+    *,
+    limit_stage: str,
+) -> None:
+    assert limited.status_code == 429
+    assert limited.json()["error"]["code"] == "rate_limit_exceeded"
+    assert limited.headers["X-Request-ID"]
+    assert limited.headers["Retry-After"]
+    assert limited.headers["X-RateLimit-Remaining"] == "0"
+    assert limited.headers["X-Content-Type-Options"] == "nosniff"
+    stages = _server_timing(limited)
+    assert {limit_stage, "request.total"} <= stages.keys()
+
+    record = _completed_request_records(caplog)[-1]
+    assert record.status_code == 429
+    assert record.request_id == limited.headers["X-Request-ID"]
+    assert {limit_stage, "request.total"} <= {stage["name"] for stage in record.server_timing}
+
+
+def test_ip_rate_limited_responses_are_timed_logged_and_keep_headers(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     client.app.state.settings.rate_limit_public_get_ip = "1/60"
     _middleware(client.app).rate_limiter = RequestRateLimiter(client.app.state.settings)
 
     client.get("/auth/session")
-    limited = client.get("/auth/session")
+    with caplog.at_level(logging.INFO, logger="gust.api"):
+        limited = client.get("/auth/session")
 
-    assert limited.status_code == 429
-    assert limited.headers["X-Request-ID"]
-    assert "ratelimit.ip" in _server_timing(limited)
+    _assert_rate_limited_response_is_complete(limited, caplog, limit_stage="ratelimit.ip")
+
+
+def test_user_rate_limited_responses_are_timed_logged_and_keep_headers(
+    app: FastAPI,
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    _sign_in_with_fake_auth(app, client)
+    client.app.state.settings.rate_limit_authenticated_get_user = "1/60"
+    _middleware(client.app).rate_limiter = RequestRateLimiter(client.app.state.settings)
+
+    client.get("/groups")
+    with caplog.at_level(logging.INFO, logger="gust.api"):
+        limited = client.get("/groups")
+
+    _assert_rate_limited_response_is_complete(limited, caplog, limit_stage="ratelimit.user")
+    assert "auth.token" in _server_timing(limited)
 
 
 def test_auth_service_is_built_once_and_shared_with_the_middleware(app: FastAPI) -> None:
@@ -247,6 +292,64 @@ def test_rate_limit_writes_do_not_stall_other_requests(
     latency = _health_latency_while(client, lambda: client.get("/auth/session"), entered)
 
     assert latency < RESPONSIVE_SECONDS
+
+
+def test_token_validation_does_not_stall_other_requests(
+    app: FastAPI,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The middleware validates the token first; a signing-key fetch there must not block.
+    _sign_in_with_fake_auth(app, client)
+    entered = threading.Event()
+    slowed = _slowed(FakeAuthService.validate_access_token, entered)
+    original = FakeAuthService.validate_access_token
+
+    def slow_first_call(*args, **kwargs):  # type: ignore[no-untyped-def]
+        # /health sends the same cookie, so only the slow request's check may block.
+        if entered.is_set():
+            return original(*args, **kwargs)
+        return slowed(*args, **kwargs)
+
+    monkeypatch.setattr(FakeAuthService, "validate_access_token", slow_first_call)
+
+    latency = _health_latency_while(client, lambda: client.get("/groups"), entered)
+
+    assert latency < RESPONSIVE_SECONDS
+
+
+def test_refresh_only_session_is_timed_and_user_rate_limited(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    refreshed_with: list[str] = []
+
+    class RefreshingAuthService(FakeAuthService):
+        async def refresh_session(self, *, refresh_token: str) -> AuthenticatedSession:
+            refreshed_with.append(refresh_token)
+            return AuthenticatedSession(
+                tokens=TokenBundle(
+                    access_token="access-token",
+                    refresh_token="next-refresh-token",
+                    expires_in=3600,
+                ),
+                identity=self.validate_access_token("access-token"),
+            )
+
+    _sign_in_with_fake_auth(app, client)
+    app.dependency_overrides[get_auth_service] = lambda: RefreshingAuthService()
+    _middleware(app).auth_service = RefreshingAuthService()
+    client.cookies.delete(ACCESS_TOKEN_COOKIE)
+    client.cookies.set(REFRESH_TOKEN_COOKIE, "refresh-token")
+
+    response = client.get("/groups")
+
+    assert response.status_code == 200
+    # The middleware refreshes once and hands the session to the route's auth dependency.
+    assert refreshed_with == ["refresh-token"]
+    stages = _server_timing(response)
+    assert {"auth.refresh", "ratelimit.user"} <= stages.keys()
+    assert "auth.token" not in stages
 
 
 def test_session_lookup_does_not_stall_other_requests(

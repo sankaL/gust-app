@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
+import anyio
 import sqlalchemy as sa
 
 from app.core.concurrency import run_blocking
@@ -40,13 +41,15 @@ async def user_action_lock(*, database_url: str, user_id: str, action: str) -> A
     try:
         yield
     finally:
-        # Thread work started here is not abandoned on cancellation, so the release still lands.
-        await run_blocking(
-            _release_action_lock,
-            database_url=database_url,
-            scope=lock_scope,
-            subject_key=subject_key,
-        )
+        # A cancelled request would raise at the first await here, before the release thread
+        # starts, and leave the lock held for the whole lease; shielding lets the release land.
+        with anyio.CancelScope(shield=True):
+            await run_blocking(
+                _release_action_lock,
+                database_url=database_url,
+                scope=lock_scope,
+                subject_key=subject_key,
+            )
 
 
 def _acquire_action_lock(
