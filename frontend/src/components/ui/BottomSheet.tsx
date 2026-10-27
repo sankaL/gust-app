@@ -26,6 +26,8 @@ export type BottomSheetProps = {
   footer?: ReactNode
   children: ReactNode
   bodyClassName?: string
+  /** For sheets without a header: a close button that stays hidden until a keyboard or screen reader reaches it. */
+  closeLabel?: string
   bodyRef?: RefObject<HTMLDivElement | null>
 }
 
@@ -300,6 +302,12 @@ export function BottomSheet(props: BottomSheetProps) {
           }}
         >
           <MeasuredGlassWarp targetRef={panelRef} active={shouldRender} {...SHEET_GLASS} />
+          {view.closeLabel && !view.header && dismissible ? (
+            // Swipe and backdrop tap are out of reach for screen readers, so header-less sheets keep this way out.
+            <button type="button" onClick={requestClose} aria-label={view.closeLabel} className="sheet-hidden-close clay-obsidian items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface">
+              <X aria-hidden="true" className="h-[1.1rem] w-[1.1rem]" strokeWidth={2.2} />
+            </button>
+          ) : null}
           <div className="shrink-0 touch-none select-none" {...drag.grabHandlers}>
             <div className="flex justify-center pb-1 pt-2.5" aria-hidden="true">
               <span className="h-1.5 w-10 rounded-pill bg-on-surface-variant/25" />

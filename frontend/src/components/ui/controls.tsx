@@ -170,9 +170,10 @@ export function InlineNotice({ tone = 'neutral', title, children, action, role }
   )
 }
 
-export function EmptyState({ icon: Icon, title, children, action }: { icon?: LucideIcon; title: ReactNode; children?: ReactNode; action?: ReactNode }) {
+// `bare` drops the card surface for use inside sheets, which are already a surface of their own.
+export function EmptyState({ icon: Icon, title, children, action, bare = false }: { icon?: LucideIcon; title: ReactNode; children?: ReactNode; action?: ReactNode; bare?: boolean }) {
   return (
-    <div className="animate-rise-in flex flex-col items-center rounded-soft bg-surface-container-high px-6 py-9 text-center shadow-card ring-1 ring-inset ring-outline/40">
+    <div className={`animate-rise-in flex flex-col items-center px-6 py-9 text-center ${bare ? '' : 'rounded-soft bg-surface-container-high shadow-card ring-1 ring-inset ring-outline/40'}`}>
       {Icon ? (
         <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/[0.12] text-primary">
           <Icon aria-hidden="true" className="h-6 w-6" strokeWidth={2} />

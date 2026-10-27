@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { runInThisContext } from 'node:vm'
 
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -64,10 +64,10 @@ describe('theme preference', () => {
   })
 })
 
-function renderAccountSheet(onLogout = vi.fn()) {
+function renderAccountSheet(onLogout = vi.fn(), onClose = vi.fn()) {
   render(
     <ThemeProvider>
-      <AccountSheet open onClose={vi.fn()} email="user@example.com" displayName="Gust User" initials="GU" isLoggingOut={false} canInstall={false} installLabel="Install" onInstall={vi.fn()} onCompletedTasks={vi.fn()} onSettings={vi.fn()} onDesktopMode={vi.fn()} onLogout={onLogout} />
+      <AccountSheet open onClose={onClose} email="user@example.com" displayName="Gust User" initials="GU" isLoggingOut={false} canInstall={false} installLabel="Install" onInstall={vi.fn()} onCompletedTasks={vi.fn()} onSettings={vi.fn()} onDesktopMode={vi.fn()} onLogout={onLogout} />
     </ThemeProvider>
   )
   return { onLogout }
@@ -90,6 +90,23 @@ describe('theme provider and account sheet', () => {
     localStorage.setItem('gust_theme', 'system')
     renderAccountSheet()
     expect(document.documentElement.dataset.theme).toBe('dark')
+  })
+
+  it('opens straight on the signed-in card with no visible header but stays closable', async () => {
+    const onClose = vi.fn()
+    renderAccountSheet(vi.fn(), onClose)
+    const sheet = screen.getByRole('dialog', { name: 'Account' })
+    expect(sheet.querySelector('h2')).toBeNull()
+    expect(screen.getByText('Gust User')).toBeInTheDocument()
+
+    // Swipe and backdrop tap are hidden from screen readers, so a visually hidden close button stays reachable.
+    const close = screen.getByRole('button', { name: 'Close account menu' })
+    expect(close).toHaveClass('sheet-hidden-close')
+    await userEvent.setup().click(close)
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(2)
   })
 
   it('signs out from the account sheet', async () => {

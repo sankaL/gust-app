@@ -532,6 +532,37 @@ html {
   }
 }
 
+/* Close button for header-less sheets: visually hidden until it takes keyboard focus. */
+.sheet-hidden-close {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.sheet-hidden-close:focus-visible {
+  top: 0.75rem;
+  right: 1rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  overflow: visible;
+  clip-path: none;
+}
+
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-12deg); }
+  30% { transform: rotate(9deg); }
+  40% { transform: rotate(-6deg); }
+  50% { transform: rotate(3deg); }
+  60% { transform: rotate(0deg); }
+}
+
 @keyframes check-draw {
   from {
     stroke-dashoffset: 24;
@@ -677,9 +708,37 @@ html {
   animation-delay: calc(var(--i, 0) * 0.15s);
 }
 
+.chip-bot--beckon .chip-bot__blink {
+  animation: none;
+}
+
+.chip-bot--beckon .chip-bot__eyes {
+  animation: chip-beckon 3.2s ease-in-out infinite;
+}
+
+.chip-bot--beckon .chip-bot__eye--wink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chip-wink 3.2s ease-in-out infinite;
+}
+
 @keyframes chip-blink {
   0%, 93%, 100% { transform: scaleY(1); }
   96% { transform: scaleY(0.12); }
+}
+
+/* Two glances toward the arrow on the right, then a wink once the eyes are back. */
+@keyframes chip-beckon {
+  0%, 40%, 100% { transform: translateX(0); }
+  48%, 56% { transform: translateX(3px); }
+  61% { transform: translateX(0.5px); }
+  66%, 74% { transform: translateX(3px); }
+  82% { transform: translateX(0); }
+}
+
+@keyframes chip-wink {
+  0%, 86%, 96%, 100% { transform: scaleY(1); }
+  90% { transform: scaleY(0.12); }
 }
 
 @keyframes chip-pin {

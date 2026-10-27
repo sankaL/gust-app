@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { PartyPopper, Plus } from 'lucide-react'
 
 import { Button } from '../../components/Button'
-import { BottomSheet, SheetHeader } from '../../components/ui/BottomSheet'
+import { BottomSheet } from '../../components/ui/BottomSheet'
 import { EmptyState } from '../../components/ui/controls'
 import type { ExtractedTask } from '../../lib/api'
 import { BulkReviewFooter, ExtractedTaskList } from './CaptureSheet'
@@ -37,8 +37,10 @@ export function ReviewSheet({ controller, open, onClose, onCapture }: { controll
     <BottomSheet
       open={open}
       onClose={onClose}
-      labelledBy="review-sheet-title"
-      header={<SheetHeader eyebrow="Waiting for review" title={tasks.length > 0 ? `${tasks.length} pending ${tasks.length === 1 ? 'task' : 'tasks'}` : 'Review'} titleId="review-sheet-title" onClose={onClose} closeLabel="Close review" />}
+      // No visible header; the count stays in the accessible name. Swipe, backdrop tap, Escape, back and a hidden close button all close it.
+      ariaLabel={tasks.length > 0 ? `${tasks.length} pending ${tasks.length === 1 ? 'task' : 'tasks'}` : 'Review'}
+      bodyClassName="overflow-y-auto px-5 pb-6 pt-2"
+      closeLabel="Close review"
       footer={tasks.length > 0 ? (
         <BulkReviewFooter count={tasks.length} running={bulk.running} onApproveAll={() => void bulk.run('approve', review.approveEverything)} onDiscardAll={() => void bulk.run('discard', review.discardEverything)} />
       ) : undefined}
@@ -49,7 +51,7 @@ export function ReviewSheet({ controller, open, onClose, onCapture }: { controll
         </div>
       ) : null}
       {!isLoading && tasks.length === 0 ? (
-        <EmptyState icon={PartyPopper} title="All caught up" action={<Button variant="primary" onClick={onCapture}><Plus className="h-4 w-4" strokeWidth={2.4} />New capture</Button>}>
+        <EmptyState bare icon={PartyPopper} title="All caught up" action={<Button variant="primary" onClick={onCapture}><Plus className="h-4 w-4" strokeWidth={2.4} />New capture</Button>}>
           Extracted tasks you haven&apos;t approved yet will wait here until you review them.
         </EmptyState>
       ) : null}

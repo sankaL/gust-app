@@ -2,7 +2,7 @@ import { useId } from 'react'
 import { CheckCircle2, ChevronRight, Download, Laptop, LogOut, Monitor, Moon, Settings, Sun, type LucideIcon } from 'lucide-react'
 
 import { useTheme } from '../../hooks/useTheme'
-import { BottomSheet, SheetHeader } from '../ui/BottomSheet'
+import { BottomSheet } from '../ui/BottomSheet'
 import { SegmentedControl } from '../ui/controls'
 import type { ThemePreference } from '../../lib/theme'
 
@@ -70,8 +70,10 @@ export function AccountSheet({ open, onClose, email, displayName, initials, isLo
     <BottomSheet
       open={open}
       onClose={onClose}
-      labelledBy="account-sheet-title"
-      header={<SheetHeader eyebrow="Account" title="You" titleId="account-sheet-title" onClose={onClose} closeLabel="Close account menu" />}
+      ariaLabel="Account"
+      // No header: the signed-in card names the sheet, and swipe, backdrop tap, Escape, back and a hidden close button all close it.
+      bodyClassName="overflow-y-auto px-5 pb-6 pt-2"
+      closeLabel="Close account menu"
     >
       <div className="space-y-6">
         <div className="animate-rise-in flex items-center gap-4 rounded-soft bg-surface-container-high p-4 shadow-card ring-1 ring-inset ring-outline/40">

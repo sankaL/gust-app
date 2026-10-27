@@ -353,5 +353,13 @@ describe('capture pending list dedupe', () => {
 
     await waitFor(() => expect(state.approveAllCalls).toEqual(['capture-1', 'capture-2']))
     expect(await within(reviewSheet).findByText('All caught up')).toBeInTheDocument()
+    // Inside a sheet the empty state sits on the sheet itself, not in a nested card.
+    expect(within(reviewSheet).getByText('All caught up').parentElement).not.toHaveClass('shadow-card')
+    // The review sheet has no visible header; a hidden close button keeps it closable for screen readers.
+    expect(within(reviewSheet).queryByRole('heading')).not.toBeInTheDocument()
+    const close = within(reviewSheet).getByRole('button', { name: 'Close review' })
+    expect(close).toHaveClass('sheet-hidden-close')
+    await user.click(close)
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Review' })).not.toBeInTheDocument())
   })
 })

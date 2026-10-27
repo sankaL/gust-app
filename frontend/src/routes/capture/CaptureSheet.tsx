@@ -188,12 +188,12 @@ function ReviewView({ controller, tasks, handledCount, isLoading, olderPendingCo
     <div className="space-y-4">
       {isLoading && tasks.length === 0 ? <p className="py-6 text-center font-body text-sm text-on-surface-variant">Loading extracted tasks...</p> : null}
       {!isLoading && tasks.length === 0 && handledCount > 0 ? (
-        <EmptyState icon={CheckCheck} title="Everything reviewed" action={<Button variant="primary" onClick={onFinish}>Done</Button>}>
+        <EmptyState bare icon={CheckCheck} title="Everything reviewed" action={<Button variant="primary" onClick={onFinish}>Done</Button>}>
           {handledCount === 1 ? 'That task is' : `All ${handledCount} tasks are`} sorted. Approved tasks are already on your list.
         </EmptyState>
       ) : null}
       {!isLoading && tasks.length === 0 && handledCount === 0 ? (
-        <EmptyState icon={SearchX} title="No newly captured tasks to review" action={<Button variant="soft" onClick={() => void controller.completeReview()}>Capture something else</Button>}>
+        <EmptyState bare icon={SearchX} title="No newly captured tasks to review" action={<Button variant="soft" onClick={() => void controller.completeReview()}>Capture something else</Button>}>
           Gust didn&apos;t find anything actionable. Try again with a little more detail.
         </EmptyState>
       ) : null}
