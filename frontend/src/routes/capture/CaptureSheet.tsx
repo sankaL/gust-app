@@ -279,6 +279,7 @@ export function CaptureSheet({ controller, open, launchMode, onConsumeLaunchMode
           eyebrow={header.eyebrow}
           title={phase === 'review' ? reviewTitle : header.title}
           titleId="capture-sheet-title"
+          centered
           onClose={phase === 'recording' ? undefined : onClose}
           closeLabel="Close capture"
           actions={phase === 'review' ? <Button variant="soft" size="sm" onClick={() => void finishReview()}>Done</Button> : undefined}

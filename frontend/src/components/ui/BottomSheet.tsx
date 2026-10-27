@@ -310,23 +310,26 @@ export function BottomSheet(props: BottomSheetProps) {
   )
 }
 
-export function SheetHeader({ eyebrow, title, titleId, onClose, closeLabel = 'Close', actions, children }: {
+export function SheetHeader({ eyebrow, title, titleId, onClose, closeLabel = 'Close', actions, centered = false, children }: {
   eyebrow?: ReactNode
   title: ReactNode
   titleId?: string
   onClose?: () => void
   closeLabel?: string
   actions?: ReactNode
+  // Centers the eyebrow and title on the sheet; side controls sit in balanced outer columns.
+  centered?: boolean
   children?: ReactNode
 }) {
   return (
     <div className="px-5 pb-3 pt-1">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+      <div className={centered ? 'grid grid-cols-[1fr_auto_1fr] items-start gap-3' : 'flex items-start justify-between gap-3'}>
+        {centered ? <span aria-hidden="true" /> : null}
+        <div className={centered ? 'min-w-0 text-center' : 'min-w-0 flex-1'}>
           {eyebrow ? <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">{eyebrow}</p> : null}
           <h2 id={titleId} className="mt-0.5 font-display text-[1.45rem] font-bold leading-tight tracking-[-0.01em] text-on-surface">{title}</h2>
         </div>
-        <div className="flex shrink-0 items-center gap-2" onPointerDown={(event) => event.stopPropagation()}>
+        <div className={centered ? 'flex shrink-0 items-center justify-end gap-2' : 'flex shrink-0 items-center gap-2'} onPointerDown={(event) => event.stopPropagation()}>
           {actions}
           {onClose ? (
             <button
