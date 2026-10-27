@@ -1,5 +1,17 @@
 # Decisions Made
 
+## 2026-10-26 22:59:00 EDT
+
+- Revamped the mobile UI around two token-driven themes: light "Sage" (default) and dark "Midnight", modelled on the owner's reference screens. Colors are CSS variables holding RGB channels so Tailwind opacity modifiers work in every palette; the theme is set with `data-theme` on `<html>`.
+- Kept desktop's layout and its existing dark look: desktop dark switches to a `classic` palette (the original violet values) instead of Midnight, and the public landing page is pinned to it. Desktop gained only the light theme and a top-bar toggle.
+- Stored the theme preference in `localStorage` (`gust_theme`). It is a non-sensitive UI preference; auth state still never touches browser storage.
+- Moved capture from a dedicated screen into a bottom sheet opened by the floating + button, which starts recording immediately (voice-first, one tap). Typing is one segment away and is the automatic fallback when the microphone is denied. The sheet can be swiped away while extraction runs; a toast offers to reopen it, and unreviewed tasks remain in Review.
+- Made shell sheets URL state (`?sheet=capture|review|account`) so the hardware/browser Back gesture closes them and deep links still work. `/capture` now redirects to `/tasks?sheet=capture`.
+- Signed-in phones land on the task home (`/tasks`) instead of the capture screen; non-phones still land on `/desktop`. This reverses the earlier "Capture screen is the launch screen" commitment because capture is now available everywhere in one tap; it needs the owner's confirmation during testing.
+- Split review: the capture sheet reviews only the capture just made; every other pending extracted task lives in a Review sheet reached from a bell badge and a home banner. "Approve All" in each place acts on exactly what that place shows.
+- Mobile modals take three quarters of the screen as requested; short confirmations (delete, restore) use an auto-height sheet so two buttons do not float in empty space.
+- Replaced expand/collapse task cards with always-visible timeline cards (time column, two-line description, chips) plus swipe right to complete and swipe left to delete. One `CheckCircle` control now handles completion, approval, and subtask toggles.
+
 ## 2026-10-26 11:00:00 EDT
 
 - Routed Claude Haiku 5.5 extraction through OpenRouter's Anthropic-compatible Messages API instead of a direct Anthropic account, so one existing OpenRouter key and bill cover both transcription and extraction. The `anthropic` SDK is kept (base URL `https://openrouter.ai/api`, key as bearer token), so thinking control, structured outputs, and prompt caching pass through unchanged; verified live.

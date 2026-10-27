@@ -42,7 +42,7 @@ function renderCaptureRoute(initialEntry = '/capture') {
       {
         path: '/',
         element: <AppShell />,
-        children: [{ path: 'capture', element: <CaptureRoute /> }]
+        children: [{ path: 'capture', element: <CaptureRoute /> }, { path: 'tasks', element: <div data-testid="tasks-route" /> }]
       }
     ],
     { initialEntries: [initialEntry] }
@@ -311,7 +311,8 @@ describe('capture route', () => {
     expect(
       await screen.findByText('Microphone permission was denied. Text capture is still available.')
     ).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Type or paste here...')).toBeInTheDocument()
+    expect(screen.getByLabelText('Write it instead')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Type' })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('routes text capture through staging review before submit', async () => {
@@ -319,8 +320,9 @@ describe('capture route', () => {
 
     renderCaptureRoute()
 
-    // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
+    // The capture sheet offers speaking first, with typing one tap away.
+    expect(await screen.findByRole('radio', { name: 'Speak' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Type' })).toBeInTheDocument()
   })
 
   it('opens the written-task composer when navigating to compose=1', async () => {
@@ -328,12 +330,10 @@ describe('capture route', () => {
 
     const { router } = renderCaptureRoute('/capture?compose=1')
 
-    expect(await screen.findByPlaceholderText('Type or paste here...')).toBeInTheDocument()
-    await waitFor(() => expect(router.state.location.search).toBe(''))
-    expect(screen.getByRole('link', { name: 'Add a new task' })).toHaveAttribute(
-      'href',
-      '/capture?record=1'
-    )
+    expect(await screen.findByLabelText('Write it instead')).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.search).toBe('?sheet=capture'))
+    expect(router.state.location.pathname).toBe('/tasks')
+    expect(screen.getByRole('button', { name: 'Add a new task' })).toBeInTheDocument()
   })
 
   it('starts recording when clicking the quick-add capture link or opening with record=1', async () => {
@@ -350,10 +350,10 @@ describe('capture route', () => {
     const { router } = renderCaptureRoute('/capture?record=1')
 
     expect(await screen.findByRole('button', { name: 'Stop recording' })).toBeInTheDocument()
-    await waitFor(() => expect(router.state.location.search).toBe(''))
+    await waitFor(() => expect(router.state.location.search).toBe('?sheet=capture'))
   })
 
-  it('disables the shell mic action while microphone startup is pending', async () => {
+  it('ignores repeat quick-add taps while microphone startup is pending', async () => {
     stubSignedInFetch()
     let resolveMicrophone: ((stream: MediaStream) => void) | undefined
     const getUserMedia = vi.fn(
@@ -368,10 +368,9 @@ describe('capture route', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Start recording' }))
-    const shellMic = screen.getByRole('link', { name: 'Add a new task' })
-    await waitFor(() => expect(shellMic).toHaveAttribute('aria-disabled', 'true'))
+    expect(await screen.findByText('Opening microphone…')).toBeInTheDocument()
 
-    await user.click(shellMic)
+    await user.click(screen.getByRole('button', { name: 'Add a new task' }))
     expect(getUserMedia).toHaveBeenCalledTimes(1)
 
     await act(async () => {
@@ -434,7 +433,7 @@ describe('capture route', () => {
     await user.click(await screen.findByRole('button', { name: 'Start recording' }))
     await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
 
-    expect(await screen.findByText('Analyzing your voice...')).toBeInTheDocument()
+    expect(await screen.findByText('Loading extracted tasks...')).toBeInTheDocument()
     expect(screen.queryByText('No newly captured tasks to review')).not.toBeInTheDocument()
 
     if (resolveExtractedTasks) {
@@ -500,8 +499,9 @@ describe('capture route', () => {
 
     renderCaptureRoute()
 
-    // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
+    // The capture sheet offers speaking first, with typing one tap away.
+    expect(await screen.findByRole('radio', { name: 'Speak' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Type' })).toBeInTheDocument()
   })
 
   it('handles voice transcription error gracefully', async () => {

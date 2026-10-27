@@ -15,6 +15,8 @@ import {
   Plus,
   Settings2,
   Smartphone,
+  Moon,
+  Sun,
 } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 
@@ -22,6 +24,7 @@ import type { GroupSummary, SessionStatus, TaskSummary } from '../lib/api'
 import { buildGroupNavigationSignals, type GroupNavigationSignal } from '../lib/desktopData'
 import { markDeviceRedirectOverride } from '../hooks/useDeviceRedirect'
 import type { DesktopHeaderContent, DesktopOutletContext } from './DesktopShellContext'
+import { useTheme } from '../hooks/useTheme'
 
 const primaryNavigation = [
   { to: '/desktop', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -150,7 +153,7 @@ function GroupNavigation({ groups, collapsed, signals }: { groups: GroupSummary[
 function DesktopSidebar({ groups, signals, logout, collapsed, onToggle }: { groups: GroupSummary[]; signals: Map<string, GroupNavigationSignal>; logout: LogoutAction; collapsed: boolean; onToggle: () => void }) {
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose
   return (
-    <aside id="desktop-sidebar" className={['sticky top-0 flex h-[100dvh] flex-col border-r border-white/10 bg-surface-dim/85 py-5 backdrop-blur-xl transition-[padding] duration-300 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] max-lg:hidden', collapsed ? 'px-3' : 'px-4'].join(' ')}>
+    <aside id="desktop-sidebar" className={['sticky top-0 flex h-[100dvh] flex-col border-r border-outline/60 bg-surface-dim/85 py-5 backdrop-blur-xl transition-[padding] duration-300 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] max-lg:hidden', collapsed ? 'px-3' : 'px-4'].join(' ')}>
       <div className={['flex items-center', collapsed ? 'flex-col gap-3' : 'justify-between gap-3'].join(' ')}>
         <Link to="/desktop" className={['flex min-w-0 items-center gap-3 px-2', collapsed ? 'justify-center' : ''].join(' ')} aria-label="Gust mission control" title={collapsed ? 'Gust' : undefined}>
           <img src="/logos/gust-wind-electric.svg" alt="" className="h-8 w-8 shrink-0" />
@@ -167,7 +170,7 @@ function DesktopSidebar({ groups, signals, logout, collapsed, onToggle }: { grou
       <GroupNavigation groups={groups} collapsed={collapsed} signals={signals} />
       <button type="button" onClick={logout.mutate} disabled={logout.isPending}
         aria-label={collapsed ? 'Logout' : undefined} title={collapsed ? 'Logout' : undefined}
-        className="mt-5 flex w-full items-center justify-center gap-2 px-3 py-2 font-body text-sm font-semibold text-red-400 transition hover:text-red-300 disabled:opacity-60">
+        className="mt-5 flex w-full items-center justify-center gap-2 px-3 py-2 font-body text-sm font-semibold text-tertiary transition hover:text-error disabled:opacity-60">
         <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.8} />
         <span className={collapsed ? 'sr-only' : ''}>{logout.isPending ? 'Logging out' : 'Logout'}</span>
       </button>
@@ -190,8 +193,8 @@ function AccountMenu({ initials, email, isOpen, setIsOpen, menuRef }: AccountMen
         aria-haspopup="menu" aria-expanded={isOpen} aria-label="Open account menu" onClick={() => setIsOpen(!isOpen)}>
         <span>{initials}</span><ChevronDown className={['h-3.5 w-3.5 transition-transform duration-200', isOpen ? 'rotate-180' : ''].join(' ')} strokeWidth={2} />
       </button>
-      {isOpen ? <div role="menu" className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-card bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)] py-1 shadow-[0_18px_40px_rgba(0,0,0,0.58)]">
-        <div className="mb-1 bg-white/[0.03] px-3 py-3"><p className="font-body text-[0.65rem] uppercase tracking-[0.15em] text-on-surface-variant">Signed in</p><p className="truncate font-body text-sm text-on-surface">{email}</p></div>
+      {isOpen ? <div role="menu" className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-card bg-surface-container-high ring-1 ring-outline/50 py-1 shadow-float">
+        <div className="mb-1 bg-on-surface/[0.03] px-3 py-3"><p className="font-body text-[0.65rem] uppercase tracking-[0.15em] text-on-surface-variant">Signed in</p><p className="truncate font-body text-sm text-on-surface">{email}</p></div>
         {accountNavigation.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} role="menuitem"
           onClick={() => { if (to === '/capture') markDeviceRedirectOverride(); setIsOpen(false) }}
           className={({ isActive }) => ['flex w-full items-center gap-3 px-3 py-2 text-left font-body text-sm hover:bg-surface-container-highest', isActive ? 'text-primary' : 'text-on-surface'].join(' ')}>
@@ -202,14 +205,27 @@ function AccountMenu({ initials, email, isOpen, setIsOpen, menuRef }: AccountMen
   )
 }
 
+function DesktopThemeToggle() {
+  const { resolvedTheme, setPreference } = useTheme()
+  const isDark = resolvedTheme === 'dark'
+  const label = isDark ? 'Switch to light mode' : 'Switch to dark mode'
+  const Icon = isDark ? Sun : Moon
+  return (
+    <button type="button" onClick={() => setPreference(isDark ? 'light' : 'dark')} aria-label={label} title={label}
+      className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container text-on-surface-variant ring-1 ring-inset ring-outline/50 transition hover:bg-surface-container-high hover:text-on-surface active:scale-[0.96]">
+      <Icon key={resolvedTheme} className="animate-pop-in h-4 w-4" strokeWidth={2} />
+    </button>
+  )
+}
+
 type TopBarProps = AccountMenuProps & { header: DesktopHeaderContent; logout: LogoutAction }
 
 function DesktopTopBar({ header, logout, ...account }: TopBarProps) {
   return (
-    <header className="sticky top-0 z-20 border-b border-white/10 bg-surface/90 px-6 py-4 backdrop-blur-xl max-lg:px-4">
+    <header className="sticky top-0 z-20 border-b border-outline/60 bg-surface/90 px-6 py-4 backdrop-blur-xl max-lg:px-4">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 flex-1"><p className="truncate font-body text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-primary">{header.eyebrow}</p><h1 className="truncate font-display text-[1.55rem] leading-7 tracking-tight text-on-surface">{header.title}</h1>{header.subtitle ? <p className="truncate font-body text-xs leading-4 text-on-surface-variant">{header.subtitle}</p> : null}</div>
-        <div className="flex shrink-0 items-center gap-2">{header.action}<Link to="/capture" onClick={markDeviceRedirectOverride} className="hidden items-center gap-2 rounded-pill bg-surface-container px-3 py-2 font-body text-sm text-on-surface-variant max-lg:flex"><Mic className="h-4 w-4" />Capture</Link><AccountMenu {...account} /><button type="button" onClick={logout.mutate} disabled={logout.isPending} className="inline-flex items-center gap-2 rounded-pill bg-surface-container px-3 py-2 font-body text-sm text-on-surface-variant lg:hidden"><LogOut className="h-4 w-4" />{logout.isPending ? 'Logging out' : 'Logout'}</button></div>
+        <div className="flex shrink-0 items-center gap-2">{header.action}<DesktopThemeToggle /><Link to="/capture" onClick={markDeviceRedirectOverride} className="hidden items-center gap-2 rounded-pill bg-surface-container px-3 py-2 font-body text-sm text-on-surface-variant max-lg:flex"><Mic className="h-4 w-4" />Capture</Link><AccountMenu {...account} /><button type="button" onClick={logout.mutate} disabled={logout.isPending} className="inline-flex items-center gap-2 rounded-pill bg-surface-container px-3 py-2 font-body text-sm text-on-surface-variant lg:hidden"><LogOut className="h-4 w-4" />{logout.isPending ? 'Logging out' : 'Logout'}</button></div>
       </div>
     </header>
   )
@@ -218,10 +234,10 @@ function DesktopTopBar({ header, logout, ...account }: TopBarProps) {
 function QuickActions({ isRecording, isLoading, isSaving, start, stop }: { isRecording: boolean; isLoading: boolean; isSaving: boolean; start: () => Promise<void>; stop: () => void }) {
   return <div className="fixed bottom-7 right-7 z-50 hidden flex-col items-center gap-4 lg:flex">
     <button type="button" onClick={isRecording ? stop : () => void start()} disabled={(isLoading || isSaving) && !isRecording}
-      className={['group relative flex h-14 w-14 items-center justify-center rounded-full transition-all', isRecording ? 'translate-y-[4px] bg-rose-600 text-white' : 'bg-white text-black shadow-ambient'].join(' ')} aria-label={isRecording ? 'Stop desktop recording' : 'Start desktop recording'}>
+      className={['group relative flex h-14 w-14 items-center justify-center rounded-full transition-all', isRecording ? 'translate-y-[4px] bg-rose-600 text-white' : 'bg-on-surface text-surface shadow-ambient'].join(' ')} aria-label={isRecording ? 'Stop desktop recording' : 'Start desktop recording'}>
       {isRecording ? <span className="h-4 w-4 rounded-[4px] bg-white" /> : <Mic className="h-6 w-6" strokeWidth={2.2} />}
     </button>
-    <Link to="/desktop/tasks/new" className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-ambient" aria-label="Create desktop task"><Plus className="h-7 w-7" strokeWidth={2.5} /></Link>
+    <Link to="/desktop/tasks/new" className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-ambient" aria-label="Create desktop task"><Plus className="h-7 w-7" strokeWidth={2.5} /></Link>
   </div>
 }
 

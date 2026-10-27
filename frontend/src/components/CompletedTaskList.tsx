@@ -1,6 +1,10 @@
-import { RotateCcw } from 'lucide-react'
+import { CheckCheck, Folder, Repeat2, RotateCcw } from 'lucide-react'
 
 import type { TaskSummary } from '../lib/api'
+import { formatRecurrence } from '../lib/taskFormatters'
+import { TaskListSkeleton } from './AllTasksView'
+import { Chip, EmptyState } from './ui/controls'
+import { groupTone } from './ui/chipStyles'
 
 function completedLabel(task: TaskSummary) {
   if (!task.completed_at) return 'Completed'
@@ -10,6 +14,12 @@ function completedLabel(task: TaskSummary) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(task.completed_at))
+}
+
+function completedColumn(task: TaskSummary) {
+  if (!task.completed_at) return { top: '✓', bottom: 'Done' }
+  const date = new Date(task.completed_at)
+  return { top: String(date.getDate()), bottom: new Intl.DateTimeFormat(undefined, { month: 'short' }).format(date).toUpperCase() }
 }
 
 function CompletedTaskCard({
@@ -24,23 +34,38 @@ function CompletedTaskCard({
   onRestore: () => void
 }) {
   function handleKeyDown(event: React.KeyboardEvent<HTMLElement>) {
-    if (event.key !== 'Enter' && event.key !== ' ') return
+    if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
     event.preventDefault()
     onOpen()
   }
+  const column = completedColumn(task)
   return (
-    <article key={task.id} role="button" tabIndex={0} onClick={onOpen} onKeyDown={handleKeyDown} className="rounded-card bg-surface-container-high px-3 py-2.5 transition hover:bg-surface-container-highest/80 active:scale-[0.99]">
-      <div className="flex min-w-0 items-center gap-3">
+    <article role="button" tabIndex={0} onClick={onOpen} onKeyDown={handleKeyDown} className="group cursor-pointer rounded-[1.4rem] bg-surface-container-high p-4 shadow-card outline-none ring-1 ring-inset ring-outline/40 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-[0.99] active:bg-surface-container-highest">
+      <div className="flex gap-3.5">
+        <div className="flex w-12 shrink-0 flex-col items-center pt-0.5" aria-hidden="true">
+          <span className="font-display text-[1.02rem] font-extrabold leading-none text-on-surface-variant">{column.top}</span>
+          <span className="mt-1.5 font-body text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">{column.bottom}</span>
+        </div>
         <div className="min-w-0 flex-1">
-          <h3 className="min-w-0 truncate pr-1 font-display text-[0.98rem] font-medium leading-tight text-on-surface" title={task.title}>{task.title}</h3>
-          <div className="mt-1 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden font-body text-[0.62rem] uppercase tracking-[0.12em] text-on-surface-variant">
-            <span className="min-w-0 max-w-[36%] shrink truncate font-medium text-on-surface-variant/85">{task.group?.name || 'Inbox'}</span>
-            <span className="shrink-0 text-on-surface-variant/35">•</span>
-            <span className="min-w-0 shrink truncate font-bold text-tertiary">{completedLabel(task)}</span>
-            {task.recurrence_frequency && <span className="recurrence-badge shrink-0" title={`Recurring: ${task.recurrence_frequency}`}>{task.recurrence_frequency.toUpperCase()}</span>}
+          <div className="flex items-start gap-2">
+            <h3 className="min-w-0 flex-1 truncate font-display text-[1.02rem] font-bold leading-snug text-on-surface/75 line-through decoration-on-surface-variant/40" title={task.title}>{task.title}</h3>
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); onRestore() }}
+              disabled={isBusy}
+              className="-my-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-on-surface-variant outline-none ring-1 ring-inset ring-outline/60 transition-all duration-200 hover:bg-chip-amber hover:text-chip-amber-ink hover:ring-transparent focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-90 disabled:opacity-50"
+              aria-label={`Restore ${task.title}`}
+              title="Restore"
+            >
+              <RotateCcw className="h-4 w-4" strokeWidth={2.2} />
+            </button>
+          </div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <Chip tone={groupTone(task.group?.name)} icon={Folder}>{task.group?.name || 'Inbox'}</Chip>
+            <Chip tone="green" icon={CheckCheck}>{completedLabel(task)}</Chip>
+            {task.recurrence_frequency ? <Chip icon={Repeat2} title={`Recurring: ${task.recurrence_frequency}`}>{formatRecurrence(task.recurrence_frequency)}</Chip> : null}
           </div>
         </div>
-        <button type="button" onClick={(event) => { event.stopPropagation(); onRestore() }} disabled={isBusy} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-dim text-on-surface-variant shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] transition-all hover:-translate-y-0.5 hover:bg-surface-container-highest hover:text-on-surface active:translate-y-0 active:scale-95 disabled:opacity-50 disabled:hover:-translate-y-0 disabled:active:scale-100" aria-label={`Restore ${task.title}`} title="Restore"><RotateCcw className="h-4 w-4" strokeWidth={2} /></button>
       </div>
     </article>
   )
@@ -62,10 +87,14 @@ export function CompletedTaskList({
   onRestore: (task: TaskSummary) => void
 }) {
   return (
-    <section className="space-y-4">
-      {isLoading && <div className="rounded-card bg-surface-container p-6 text-sm text-on-surface-variant">Loading completed tasks.</div>}
-      {hasResult && tasks.length === 0 && <div className="rounded-soft bg-surface-container p-6 shadow-ambient"><p className="font-display text-2xl text-on-surface">No completed tasks here</p><p className="mt-3 font-body text-sm leading-6 text-on-surface-variant">Complete tasks from the open list, then review them here.</p></div>}
-      <div className="space-y-2">{tasks.map((task) => <CompletedTaskCard key={task.id} task={task} isBusy={pendingTaskIds.includes(task.id)} onOpen={() => onOpen(task.id)} onRestore={() => onRestore(task)} />)}</div>
+    <section className="space-y-3 pt-2">
+      {isLoading ? <><span className="sr-only">Loading completed tasks.</span><TaskListSkeleton /></> : null}
+      {hasResult && tasks.length === 0 ? <EmptyState icon={CheckCheck} title="No completed tasks here">Complete tasks from the open list, then review them here.</EmptyState> : null}
+      {tasks.map((task, index) => (
+        <div key={task.id} className="animate-rise-in" style={{ ['--stagger' as string]: Math.min(index, 8) }}>
+          <CompletedTaskCard task={task} isBusy={pendingTaskIds.includes(task.id)} onOpen={() => onOpen(task.id)} onRestore={() => onRestore(task)} />
+        </div>
+      ))}
     </section>
   )
 }

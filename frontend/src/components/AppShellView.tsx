@@ -1,284 +1,165 @@
-import type { ReactNode, RefObject } from 'react'
-import { Link, NavLink } from 'react-router-dom'
-import { CheckCircle2, Folder, Laptop, ListTodo, LogOut, Mic, Plus, Settings } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { Bell, CheckCircle2, Folder, House, Plus, type LucideIcon } from 'lucide-react'
 
-import type { SessionStatus } from '../lib/api'
+import { useMobileShell } from './AppShellActions'
 import { Button } from './Button'
-import { Card } from './Card'
+import { InlineNotice } from './ui/controls'
 
-const navigation = [
-  { to: '/capture', label: 'Capture', icon: Mic, end: true },
-  { to: '/tasks', label: 'Tasks', icon: ListTodo, end: true },
-  { to: '/tasks/groups', label: 'Groups', icon: Folder, end: false },
+type NavItem = { to: string; label: string; icon: LucideIcon; isActive: (pathname: string) => boolean }
+
+const navigation: NavItem[] = [
+  { to: '/tasks', label: 'Tasks', icon: House, isActive: (pathname) => pathname === '/tasks' || (/^\/tasks\/[^/]+$/.test(pathname) && !['/tasks/groups', '/tasks/completed'].includes(pathname)) },
+  { to: '/tasks/completed', label: 'Completed', icon: CheckCircle2, isActive: (pathname) => pathname === '/tasks/completed' },
+  { to: '/tasks/groups', label: 'Groups', icon: Folder, isActive: (pathname) => pathname === '/tasks/groups' },
 ]
 
-type AccountMenuProps = {
-  accountInitials: string
-  email?: string
-  isOpen: boolean
-  isLoggingOut: boolean
-  menuRef: RefObject<HTMLDivElement | null>
-  onToggle: () => void
-  onCompletedTasks: () => void
-  onDesktopMode: () => void
-  onLogout: () => void
+function ReviewBell() {
+  const shell = useMobileShell()
+  if (!shell) return null
+  const count = shell.pendingReviewCount
+  const label = count > 0 ? `Review pending tasks (${count})` : 'Review pending tasks'
+  return (
+    <button
+      type="button"
+      onClick={() => shell.openSheet('review')}
+      aria-label={label}
+      title={label}
+      className="clay-obsidian relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-on-surface outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+    >
+      <Bell className={`h-[1.2rem] w-[1.2rem] ${count > 0 ? 'origin-top animate-[bell-ring_1.6s_ease-in-out_1]' : ''}`} strokeWidth={2.2} fill={count > 0 ? 'currentColor' : 'none'} fillOpacity={count > 0 ? 0.12 : 0} />
+      {count > 0 ? (
+        <span key={count} className="animate-pop-in absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-tertiary px-1 font-body text-[0.65rem] font-bold leading-none text-white ring-2 ring-surface">
+          {count > 99 ? '99+' : count}
+        </span>
+      ) : null}
+    </button>
+  )
 }
 
-function AccountMenu({
-  accountInitials,
-  email,
-  isOpen,
-  isLoggingOut,
-  menuRef,
-  onToggle,
-  onCompletedTasks,
-  onDesktopMode,
-  onLogout,
-}: AccountMenuProps) {
+export function ScreenHeader({ eyebrow, title, actions, showBell = true }: { eyebrow: ReactNode; title: ReactNode; actions?: ReactNode; showBell?: boolean }) {
+  const shell = useMobileShell()
   return (
-    <div className="relative" ref={menuRef}>
+    <header className="flex items-start justify-between gap-3 pb-1 pt-4">
+      <div className="min-w-0 animate-rise-in">
+        <p className="font-body text-[1.02rem] font-semibold text-on-surface/80 dark:text-[0.78rem] dark:uppercase dark:tracking-[0.16em] dark:text-on-surface-variant">{eyebrow}</p>
+        <h1 className="mt-0.5 truncate font-display text-[clamp(1.6rem,7.4vw,2.05rem)] font-extrabold leading-[1.12] tracking-[-0.025em] text-on-surface">{title}</h1>
+      </div>
+      <div className="flex shrink-0 items-center gap-2 pt-1.5">
+        {actions}
+        {shell?.topBarAction}
+        {showBell ? <ReviewBell /> : null}
+      </div>
+    </header>
+  )
+}
+
+function NavAvatar({ initials, active, onClick }: { initials: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Open account menu"
+      aria-haspopup="dialog"
+      aria-expanded={active}
+      className="group relative flex h-full flex-1 items-center justify-center outline-none"
+    >
+      <span className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dim font-body text-[0.72rem] font-bold uppercase tracking-[0.04em] text-on-primary shadow-card ring-2 transition-all duration-300 ease-out-expo group-active:scale-90 ${active ? 'ring-primary/60 ring-offset-2 ring-offset-nav' : 'ring-transparent'}`}>
+        {initials}
+      </span>
+    </button>
+  )
+}
+
+export function BottomNavigation({ accountInitials, isAccountOpen, onAccount, onCapture }: {
+  accountInitials: string
+  isAccountOpen: boolean
+  onAccount: () => void
+  onCapture: () => void
+}) {
+  const { pathname } = useLocation()
+  const activeIndex = navigation.findIndex((item) => item.isActive(pathname))
+  // The task detail page brings its own action dock, so the global chrome steps aside.
+  const isDetailRoute = /^\/tasks\/[^/]+$/.test(pathname) && !['/tasks/groups', '/tasks/completed'].includes(pathname)
+  if (isDetailRoute) return null
+
+  return (
+    <>
       <button
         type="button"
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-b from-white to-neutral-200 font-body text-xs font-bold uppercase tracking-[0.08em] text-black shadow-[0_0_18px_rgba(168,85,247,0.55),_0_0_32px_rgba(139,92,246,0.25)] ring-1 ring-white/40 transition-all duration-200 outline-none hover:scale-105 active:scale-95"
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-        aria-label="Open account menu"
-        onClick={onToggle}
+        onClick={onCapture}
+        aria-label="Add a new task"
+        className="group fixed z-[60] flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full bg-primary text-on-primary shadow-fab outline-none transition-transform duration-300 ease-spring hover:scale-105 focus-visible:ring-4 focus-visible:ring-primary/40 active:scale-90"
+        style={{ right: 'max(1.1rem, calc((100vw - 28rem) / 2 + 1.1rem))', bottom: 'calc(var(--safe-area-bottom) + 5.1rem)' }}
       >
-        {accountInitials}
+        <span aria-hidden="true" className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 to-transparent" />
+        <Plus className="relative h-7 w-7 transition-transform duration-300 ease-out-expo group-hover:rotate-90" strokeWidth={2.4} aria-hidden="true" />
       </button>
-      {isOpen && (
-        <AccountMenuPanel
-          email={email}
-          isLoggingOut={isLoggingOut}
-          onCompletedTasks={onCompletedTasks}
-          onDesktopMode={onDesktopMode}
-          onClose={onToggle}
-          onLogout={onLogout}
-        />
-      )}
-    </div>
-  )
-}
-
-function AccountMenuPanel({
-  email,
-  isLoggingOut,
-  onCompletedTasks,
-  onDesktopMode,
-  onClose,
-  onLogout,
-}: Omit<AccountMenuProps, 'accountInitials' | 'isOpen' | 'menuRef' | 'onToggle'> & { onClose: () => void }) {
-  return (
-    <div
-      role="menu"
-      className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-2xl border border-purple-500/30 bg-black p-2 shadow-[0_20px_50px_rgba(0,0,0,0.95),_0_0_25px_rgba(139,92,246,0.2),_inset_0_2px_3px_rgba(255,255,255,0.22),_inset_0_1px_1px_rgba(216,180,254,0.35),_inset_0_-4px_8px_rgba(0,0,0,0.9)] transition-all duration-200"
-    >
-      <div className="mb-1.5 rounded-xl border border-purple-400/20 bg-[#140b29] px-3.5 py-3 shadow-[inset_0_1px_2px_rgba(255,255,255,0.18),_inset_0_-2px_4px_rgba(0,0,0,0.7)]">
-        <p className="font-body text-[0.65rem] font-bold uppercase tracking-[0.18em] text-purple-300">
-          Signed in
-        </p>
-        <p className="truncate font-body text-sm font-semibold text-white mt-0.5">{email}</p>
-      </div>
-      <div className="flex flex-col gap-1">
-        <button
-          type="button"
-          role="menuitem"
-          onClick={onCompletedTasks}
-          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-body text-sm font-medium text-zinc-200 transition-all hover:bg-[#1a1136] hover:text-white active:scale-[0.98]"
-        >
-          <CheckCircle2 className="h-4 w-4 text-purple-400 transition-colors group-hover:text-purple-300" strokeWidth={1.9} />
-          <span>Completed Tasks</span>
-        </button>
-        <button
-          type="button"
-          role="menuitem"
-          onClick={onDesktopMode}
-          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-body text-sm font-medium text-zinc-200 transition-all hover:bg-[#1a1136] hover:text-white active:scale-[0.98]"
-        >
-          <Laptop className="h-4 w-4 text-purple-400 transition-colors group-hover:text-purple-300" strokeWidth={1.9} />
-          <span>Desktop Mode</span>
-        </button>
-        <Link
-          to="/settings"
-          role="menuitem"
-          onClick={onClose}
-          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-body text-sm font-medium text-zinc-200 transition-all hover:bg-[#1a1136] hover:text-white"
-        >
-          <Settings className="h-4 w-4 text-purple-400" strokeWidth={1.9} />
-          <span>Settings</span>
-        </Link>
-        <div className="my-0.5 h-px bg-purple-500/20" />
-        <button
-          type="button"
-          role="menuitem"
-          onClick={onLogout}
-          disabled={isLoggingOut}
-          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-body text-sm font-medium text-rose-300 transition-all hover:bg-[#2b0c16] hover:text-rose-200 active:scale-[0.98] disabled:opacity-60"
-        >
-          <LogOut className="h-4 w-4 text-rose-400 transition-colors group-hover:text-rose-300" strokeWidth={1.9} />
-          <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function InstallNotice() {
-  return (
-    <Card className="overflow-hidden bg-surface-container-high/90 shadow-[0_0_40px_rgba(186,158,255,0.08)]">
-      <div className="space-y-2">
-        <p className="font-body text-[0.65rem] uppercase tracking-[0.2em] text-primary">Install on iPhone</p>
-        <p className="font-body text-sm leading-6 text-on-surface">Open Safari&apos;s Share menu, then choose <span className="font-semibold text-primary">Add to Home Screen</span> to install Gust.</p>
-      </div>
-    </Card>
-  )
-}
-
-function UpdateNotice({ onUpdate }: { onUpdate: () => void }) {
-  return (
-    <Card className="overflow-hidden bg-surface-container-highest shadow-[0_0_48px_rgba(186,158,255,0.12)]">
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-1"><p className="font-body text-[0.65rem] uppercase tracking-[0.2em] text-primary">Update ready</p><p className="font-body text-sm leading-6 text-on-surface">A newer build is available. Reload to update the app shell.</p></div>
-        <Button type="button" variant="primary" size="sm" onClick={onUpdate}>Update</Button>
-      </div>
-    </Card>
-  )
-}
-
-export function BottomNavigation({
-  isRecording = false,
-  isRecordingActionDisabled = false,
-  onToggleRecording,
-}: {
-  isRecording?: boolean
-  isRecordingActionDisabled?: boolean
-  onToggleRecording?: (() => void) | null
-}) {
-  const handleActionClick = (event: React.MouseEvent) => {
-    if (isRecordingActionDisabled) {
-      event.preventDefault()
-      return
-    }
-    if (onToggleRecording) {
-      event.preventDefault()
-      onToggleRecording()
-    }
-  }
-
-  return (
-    <nav aria-label="Primary" className="pointer-events-none fixed inset-x-0 bottom-0 z-50 bg-transparent px-4 pb-[calc(var(--safe-area-bottom)+0.75rem)] pt-2">
-      <div className="mx-auto flex w-full max-w-md items-center gap-3">
-        {/* Left Pill Container with sleek black obsidian & dark purple floating styling */}
-        <div className="clay-obsidian pointer-events-auto flex h-14 flex-1 items-center justify-around rounded-[2rem] px-3">
-          {navigation.map((item) => {
-            const Icon = item.icon
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) => [
-                  'group relative flex h-full flex-1 flex-col items-center justify-center transition-all duration-200 outline-none',
-                  isActive
-                    ? 'text-white'
-                    : 'text-zinc-400/50 hover:text-purple-200 active:scale-95',
-                ].join(' ')}
+      <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-50 flex justify-center">
+        <div className="w-full max-w-md rounded-t-[1.75rem] bg-nav/95 px-3 pb-[var(--safe-area-bottom)] shadow-sheet ring-1 ring-outline/40 backdrop-blur-xl">
+          <div className="relative grid h-16 grid-cols-4 items-center">
+            {activeIndex >= 0 ? (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute left-0 top-0 flex h-full w-1/4 items-center justify-center transition-transform duration-500 ease-out-expo"
+                style={{ transform: `translateX(${activeIndex * 100}%)` }}
               >
-                {({ isActive }) => (
-                  <>
-                    <Icon
-                      className={`h-6 w-6 transition-transform duration-200 ${
-                        isActive ? 'scale-110 drop-shadow-[0_0_10px_rgba(186,158,255,0.5)]' : ''
-                      }`}
-                      strokeWidth={1.75}
-                      aria-hidden="true"
-                    />
-                    {isActive && (
-                      <span className="absolute bottom-1.5 h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_#a855f7,_0_0_12px_#ba9eff]" />
-                    )}
-                    <span className="sr-only">{item.label}</span>
-                  </>
-                )}
-              </NavLink>
-            )
-          })}
+                <span className="h-10 w-[3.6rem] rounded-pill bg-surface-container-highest dark:bg-transparent" />
+                <span className="absolute bottom-2 hidden h-1 w-1 rounded-full bg-primary dark:block" />
+              </span>
+            ) : null}
+            {navigation.map((item, index) => {
+              const Icon = item.icon
+              const active = index === activeIndex
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  aria-current={active ? 'page' : undefined}
+                  className={`relative flex h-full items-center justify-center outline-none transition-colors duration-300 focus-visible:text-primary active:scale-90 ${active ? 'text-on-surface dark:text-primary' : 'text-on-surface-variant/70 hover:text-on-surface'}`}
+                >
+                  <Icon className={`h-[1.4rem] w-[1.4rem] transition-transform duration-300 ease-spring ${active ? 'scale-105' : ''}`} strokeWidth={active ? 2.3 : 2} fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.14 : 0} aria-hidden="true" />
+                  <span className="sr-only">{item.label}</span>
+                </Link>
+              )
+            })}
+            <NavAvatar initials={accountInitials} active={isAccountOpen} onClick={onAccount} />
+          </div>
         </div>
-
-        {/* Right Circular Action Button */}
-        <Link
-          to="/capture?record=1"
-          replace
-          onClick={handleActionClick}
-          className={[
-            'pointer-events-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition-all duration-300 active:scale-95 outline-none',
-            isRecordingActionDisabled ? 'cursor-not-allowed opacity-50' : '',
-            isRecording
-              ? 'bg-[radial-gradient(circle_at_42%_32%,_#fda4af_0%,_#f43f5e_30%,_#e11d48_60%,_#9f1239_85%,_#881337_100%)] text-white shadow-[0_0_28px_rgba(244,63,94,0.65),_0_0_50px_rgba(225,29,72,0.35),_inset_0_1.5px_2px_rgba(255,255,255,0.7)] border border-rose-300/30 animate-pulse'
-              : 'bg-[radial-gradient(circle_at_35%_28%,_#c084fc_0%,_#8b5cf6_40%,_#6d28d9_75%,_#4c1d95_100%)] text-white shadow-[0_12px_28px_rgba(139,92,246,0.45),_0_4px_12px_rgba(0,0,0,0.6),_inset_0_1.5px_2px_rgba(255,255,255,0.6),_inset_0_-2px_4px_rgba(0,0,0,0.4)] border border-purple-300/30 hover:scale-105 hover:shadow-[0_16px_32px_rgba(147,51,234,0.55),_0_6px_16px_rgba(0,0,0,0.5),_inset_0_2px_3px_rgba(255,255,255,0.7)]',
-          ].join(' ')}
-          aria-label={isRecording ? 'Stop recording' : 'Add a new task'}
-          aria-disabled={isRecordingActionDisabled || undefined}
-        >
-          {isRecording ? (
-            <svg className="h-6 w-6 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="6" width="12" height="12" rx="2.5" />
-            </svg>
-          ) : (
-            <Plus className="h-7 w-7 text-white drop-shadow-sm" strokeWidth={2.4} aria-hidden="true" />
-          )}
-        </Link>
-      </div>
-    </nav>
+      </nav>
+    </>
   )
 }
 
-export type AppShellHeaderProps = {
-  session: SessionStatus
-  topBarAction: ReactNode
-  accountInitials: string
-  shouldShowInstallButton: boolean
-  hasInstallPrompt: boolean
-  isAccountMenuOpen: boolean
-  isLoggingOut: boolean
-  showIosInstallHelp: boolean
-  needRefresh: boolean
-  offlineReady: boolean
-  accountMenuRef: RefObject<HTMLDivElement | null>
-  onInstall: () => void
-  onToggleAccountMenu: () => void
-  onCompletedTasks: () => void
-  onDesktopMode: () => void
-  onLogout: () => void
-  onUpdate: () => void
-}
-
-export function AppShellHeader(props: AppShellHeaderProps) {
+export function ShellNotices({ showIosInstallHelp, needRefresh, offlineReady, onUpdate }: { showIosInstallHelp: boolean; needRefresh: boolean; offlineReady: boolean; onUpdate: () => void }) {
+  if (!showIosInstallHelp && !needRefresh && !offlineReady) return null
   return (
-    <header className="safe-area-sticky-top sticky top-0 z-40 -mx-4 -mt-3 mb-3 px-4 pt-3 pb-3 bg-[#090614]/90 backdrop-blur-xl border-b border-purple-500/15 shadow-[0_8px_24px_rgba(0,0,0,0.6)] transition-all">
-      <div className="flex items-center justify-between gap-3">
-        <Link to="/capture" className="flex items-center gap-2.5 transition-opacity hover:opacity-90">
-          <img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-6 w-6 drop-shadow-[0_0_8px_rgba(186,158,255,0.4)]" />
-          <h1 className="font-display text-2xl font-bold tracking-tight text-on-surface">Gust</h1>
-        </Link>
-        <div className="flex items-center gap-3">
-          {props.shouldShowInstallButton && <Button type="button" variant="primary" size="sm" onClick={props.onInstall} aria-label={props.hasInstallPrompt ? 'Install Gust app' : 'Show iPhone install instructions'}>{props.hasInstallPrompt ? 'Install' : 'Add to Home'}</Button>}
-          {props.topBarAction}
-          <AccountMenu accountInitials={props.accountInitials} email={props.session.user?.email} isOpen={props.isAccountMenuOpen} isLoggingOut={props.isLoggingOut} menuRef={props.accountMenuRef} onToggle={props.onToggleAccountMenu} onCompletedTasks={props.onCompletedTasks} onDesktopMode={props.onDesktopMode} onLogout={props.onLogout} />
-        </div>
-      </div>
-      {props.showIosInstallHelp && <InstallNotice />}
-      {props.needRefresh && <UpdateNotice onUpdate={props.onUpdate} />}
-      {props.offlineReady && <Card className="overflow-hidden bg-surface-container-high/90"><p className="font-body text-sm leading-6 text-on-surface-variant">App shell cached for faster launches.</p></Card>}
-    </header>
+    <div className="space-y-2 pt-3">
+      {showIosInstallHelp ? (
+        <InlineNotice title="Install on iPhone">
+          Open Safari&apos;s Share menu, then choose <span className="font-semibold text-primary">Add to Home Screen</span> to install Gust.
+        </InlineNotice>
+      ) : null}
+      {needRefresh ? (
+        <InlineNotice title="Update ready" action={<Button variant="primary" size="sm" onClick={onUpdate}>Update</Button>}>
+          A newer build is available. Reload to update the app shell.
+        </InlineNotice>
+      ) : null}
+      {offlineReady ? <InlineNotice>App shell cached for faster launches.</InlineNotice> : null}
+    </div>
   )
 }
 
 export function AppShellLoading() {
   return (
-    <div className="safe-area-shell min-h-screen bg-surface text-on-surface">
-      <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
-        <section className="w-full space-y-3" aria-busy="true"><p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">Session check</p><h1 className="font-display text-3xl text-on-surface">Loading workspace</h1><p className="font-body text-sm leading-6 text-on-surface-variant">Verifying your account before loading Gust.</p></section>
+    <div className="safe-area-shell min-h-screen text-on-surface">
+      <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-5">
+        <section className="w-full space-y-3 text-center" aria-busy="true">
+          <img src="/logos/gust-wind-electric.svg" alt="" className="mx-auto h-10 w-10 animate-orb-breathe" />
+          <p className="font-body text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">Session check</p>
+          <h1 className="font-display text-3xl font-extrabold tracking-[-0.02em] text-on-surface">Loading workspace</h1>
+          <p className="font-body text-sm leading-6 text-on-surface-variant">Verifying your account before loading Gust.</p>
+        </section>
       </div>
     </div>
   )

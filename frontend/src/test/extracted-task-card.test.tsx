@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ExtractedTaskCard } from '../components/ExtractedTaskCard'
 
 describe('extracted task card', () => {
-  it('keeps metadata to one row with a full-detail overflow cue and keeps confidence visible', () => {
+  it('shows wrapping metadata chips, confidence, and the shared approve/discard controls', () => {
     render(
       <ExtractedTaskCard
         task={{
@@ -36,17 +36,16 @@ describe('extracted task card', () => {
     expect(screen.getByText('Confirm the final card layout')).toBeInTheDocument()
     expect(screen.getByText('Use the full card width and tighten the metadata rows.')).toBeInTheDocument()
     expect(screen.getByText('High')).toBeInTheDocument()
+    expect(screen.getByTitle('Confidence Score: High')).toBeInTheDocument()
 
-    const metadataRow = screen.getByText('Inbox').parentElement
+    const metadataRow = screen.getByText('Inbox').closest('div')
     if (!metadataRow) {
-      throw new Error('Expected compact metadata row')
+      throw new Error('Expected metadata chip row')
     }
 
-    expect(metadataRow).not.toHaveClass('flex-wrap')
-    expect(metadataRow).toHaveClass('text-[0.58rem]')
-    expect(screen.getByText('Inbox')).toHaveClass('max-w-[42%]')
-    expect(within(metadataRow).getByText(/^Due:/)).toBeInTheDocument()
-    expect(screen.getByLabelText(/More task details: Inbox · Due: 4\/3\/2026 · WEEKLY/)).toBeInTheDocument()
+    expect(metadataRow).toHaveClass('flex-wrap')
+    expect(within(metadataRow).getByText('Apr 3')).toBeInTheDocument()
+    expect(within(metadataRow).getByText('Weekly')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument()
   })

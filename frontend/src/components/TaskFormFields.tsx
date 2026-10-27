@@ -54,8 +54,8 @@ export function TaskFormFields(props: Props) {
 function TaskIdentityFields({ title, description, disabled, onTitleChange, onDescriptionChange }: Props & { disabled: boolean }) {
   return (
     <div className="space-y-3">
-      <input value={title} onChange={(event) => onTitleChange(event.target.value)} className="w-full rounded-[1.25rem] bg-surface/60 px-4 py-3 font-display text-[1.5rem] leading-tight text-on-surface outline-none placeholder:text-on-surface-variant/40 focus:bg-surface/75 focus:text-white sm:text-[1.85rem]" style={{ fontSize: '16px' }} aria-label="Task title" placeholder="Task title" disabled={disabled} />
-      <textarea value={description} onChange={(event) => onDescriptionChange(event.target.value)} rows={3} className="w-full resize-none rounded-[1.25rem] bg-surface/55 px-4 py-3 text-sm leading-6 text-on-surface-variant outline-none placeholder:text-on-surface-variant/45 focus:bg-surface/70 focus:text-on-surface" style={{ fontSize: '16px' }} aria-label="Task description" placeholder="Add context that helps you act on this later" disabled={disabled} />
+      <input value={title} onChange={(event) => onTitleChange(event.target.value)} className="w-full rounded-card bg-surface-container-high px-4 py-3 font-display text-[1.35rem] font-bold leading-tight text-on-surface outline-none ring-1 ring-inset ring-outline/50 placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/60 sm:text-[1.6rem]" style={{ fontSize: '16px' }} aria-label="Task title" placeholder="Task title" disabled={disabled} />
+      <textarea value={description} onChange={(event) => onDescriptionChange(event.target.value)} rows={3} className="w-full resize-none rounded-card bg-surface-container-high px-4 py-3 text-sm leading-6 text-on-surface outline-none ring-1 ring-inset ring-outline/50 placeholder:text-on-surface-variant/55 focus:ring-2 focus:ring-primary/60" style={{ fontSize: '16px' }} aria-label="Task description" placeholder="Add context that helps you act on this later" disabled={disabled} />
     </div>
   )
 }
@@ -93,13 +93,13 @@ function TaskScheduleFields(props: Props & { disabled: boolean }) {
       <ScheduleField label="Group" isOpen={props.isGroupDropdownOpen}>
         <SelectDropdown label="" options={props.groups.map((group) => ({ value: group.id, label: group.name }))} value={props.groupId} onChange={(value) => props.onGroupIdChange(String(value))} onOpenChange={props.onGroupDropdownOpenChange} placeholder="No Group" disabled={props.disabled} />
       </ScheduleField>
-      <ScheduleField label="Recurrence"><p className="text-base font-medium text-on-surface">{formatRecurrence(props.recurrence)}</p></ScheduleField>
+      <ScheduleField label="Recurrence"><p className="py-1 text-base font-semibold text-on-surface">{formatRecurrence(props.recurrence)}</p></ScheduleField>
     </div>
   )
 }
 
 function ScheduleField({ label, children, isOpen = false }: { label: string; children: React.ReactNode; isOpen?: boolean }) {
-  return <div className={['min-w-0 overflow-visible rounded-[1.35rem] bg-black/20 p-3 backdrop-blur-sm sm:p-4', isOpen ? 'relative z-40' : ''].join(' ')}><p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">{label}</p><div className="mt-3">{children}</div></div>
+  return <div className={['min-w-0 overflow-visible rounded-[1.1rem] bg-surface-dim/70 p-3 ring-1 ring-inset ring-outline/30 sm:p-4', isOpen ? 'relative z-40' : ''].join(' ')}><p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">{label}</p><div className="mt-3">{children}</div></div>
 }
 
 function formatRecurrence(recurrence: TaskRecurrence | null): string {

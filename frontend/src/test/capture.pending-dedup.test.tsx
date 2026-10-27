@@ -83,7 +83,7 @@ function renderCaptureRoute() {
       {
         path: '/',
         element: <AppShell />,
-        children: [{ path: 'capture', element: <CaptureRoute /> }]
+        children: [{ path: 'capture', element: <CaptureRoute /> }, { path: 'tasks', element: <div data-testid="tasks-route" /> }]
       }
     ],
     { initialEntries: ['/capture'] }
@@ -272,103 +272,86 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+async function submitTextCapture(user: ReturnType<typeof userEvent.setup>, text: string) {
+  await user.click(await screen.findByRole('radio', { name: 'Type' }))
+  await user.type(screen.getByLabelText('Write it instead'), text)
+  await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+}
+
 describe('capture pending list dedupe', () => {
   it('opens review when the pending-task refresh is stalled', async () => {
     const { fetchMock, state } = createStalledPendingRefreshFetchMock()
     vi.stubGlobal('fetch', fetchMock)
-
     renderCaptureRoute()
     const user = userEvent.setup()
 
-    await user.click(await screen.findByText('Write it instead'))
     await waitFor(() => expect(state.pendingRequestCount).toBeGreaterThan(0))
-    await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Capture despite refresh issue')
-    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+    await submitTextCapture(user, 'Capture despite refresh issue')
 
     expect(await screen.findByText('Capture ready despite pending refresh')).toBeInTheDocument()
     expect(screen.queryByText('Preparing...')).not.toBeInTheDocument()
   })
 
-  it('keeps unresolved tasks visible across consecutive captures', async () => {
+  it('keeps unresolved tasks from earlier captures one tap away across consecutive captures', async () => {
     vi.stubGlobal('fetch', createSequentialCaptureFetchMock())
-
     renderCaptureRoute()
     const user = userEvent.setup()
 
-    await user.click(await screen.findByText('Write it instead'))
-    await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Capture several tasks')
-
-    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+    await submitTextCapture(user, 'Capture several tasks')
     expect(await screen.findByText('Captured task 1')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: /Old pending tasks/i })).not.toBeInTheDocument()
-    expect(screen.getAllByText('Captured task 1')).toHaveLength(1)
+    expect(screen.queryByText(/from earlier captures/)).not.toBeInTheDocument()
 
+    // The + button starts a fresh capture; without a microphone it falls back to typing.
+    await user.click(screen.getByRole('button', { name: 'Add a new task' }))
+    await user.type(await screen.findByLabelText('Write it instead'), 'Capture another task')
     await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+
     expect(await screen.findByText('Captured task 2')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Old pending tasks 1' })).toBeInTheDocument()
-    expect(screen.getAllByText('Captured task 1')).toHaveLength(1)
-    expect(screen.getAllByText('Captured task 2')).toHaveLength(1)
+    expect(screen.queryByText('Captured task 1')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /1 more task from earlier captures/ }))
 
-    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
-    expect(await screen.findByText('Captured task 3')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Old pending tasks 2' })).toBeInTheDocument()
-    expect(screen.getAllByText('Captured task 1')).toHaveLength(1)
-    expect(screen.getAllByText('Captured task 2')).toHaveLength(1)
-    expect(screen.getAllByText('Captured task 3')).toHaveLength(1)
+    const reviewSheet = await screen.findByRole('dialog', { name: '2 pending tasks' })
+    expect(within(reviewSheet).getAllByText('Captured task 1')).toHaveLength(1)
+    expect(within(reviewSheet).getAllByText('Captured task 2')).toHaveLength(1)
   })
 
-  it('hides active-capture pending tasks during review and restores them after Done', async () => {
+  it('reviews only the active capture in the capture sheet and closes after Done', async () => {
     const { fetchMock } = createFetchMock()
     vi.stubGlobal('fetch', fetchMock)
-
     renderCaptureRoute()
     const user = userEvent.setup()
 
-    await user.click(await screen.findByText('Write it instead'))
-    await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Review active capture')
-    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+    await submitTextCapture(user, 'Review active capture')
 
-    const newlyCapturedHeading = await screen.findByRole('heading', { name: /Newly extracted tasks/i })
-    const olderPendingHeading = await screen.findByRole('heading', { name: /Old pending tasks/i })
-    expect(
-      newlyCapturedHeading.compareDocumentPosition(olderPendingHeading) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy()
-    expect(screen.getByText('Other capture task')).toBeInTheDocument()
-    expect(screen.getAllByText('Active capture task')).toHaveLength(1)
+    const captureSheet = await screen.findByRole('dialog', { name: '1 new task' })
+    expect(within(captureSheet).getAllByText('Active capture task')).toHaveLength(1)
+    expect(within(captureSheet).queryByText('Other capture task')).not.toBeInTheDocument()
+    expect(within(captureSheet).getByRole('button', { name: /1 more task from earlier captures/ })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Done' }))
-
-    expect(await screen.findByRole('heading', { name: /Old pending tasks/i })).toBeInTheDocument()
+    await user.click(within(captureSheet).getByRole('button', { name: 'Done' }))
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('dialog', { name: '1 new task' })).not.toBeInTheDocument()
     })
-    expect(screen.queryByRole('heading', { name: /Newly extracted tasks/i })).not.toBeInTheDocument()
-    expect(screen.getByText('Active capture task')).toBeInTheDocument()
-    expect(screen.getByText('Other capture task')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([input, init]) => requestUrl(input as RequestInfo).endsWith('/captures/capture-1/complete') && (init)?.method === 'POST')).toBe(true)
   })
 
-  it('runs pending Approve All only for visible pending captures during active review', async () => {
+  it('scopes Approve All to the active capture in the capture sheet and to every capture in Review', async () => {
     const { fetchMock, state } = createFetchMock()
     vi.stubGlobal('fetch', fetchMock)
-
     renderCaptureRoute()
     const user = userEvent.setup()
 
-    await user.click(await screen.findByText('Write it instead'))
-    await user.type(screen.getByPlaceholderText('Type or paste here...'), 'Review active capture')
-    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+    await submitTextCapture(user, 'Review active capture')
+    const captureSheet = await screen.findByRole('dialog', { name: '1 new task' })
+    await user.click(within(captureSheet).getByRole('button', { name: 'Approve All' }))
+    await waitFor(() => expect(state.approveAllCalls).toEqual(['capture-1']))
 
-    const pendingHeading = await screen.findByRole('heading', { name: /Old pending tasks/i })
-    const pendingSection = pendingHeading.parentElement?.parentElement?.parentElement
-    if (!pendingSection) {
-      throw new Error('Could not resolve pending section container')
-    }
+    await user.click(await screen.findByRole('button', { name: /1 more task from earlier captures/ }))
+    const reviewSheet = await screen.findByRole('dialog', { name: '1 pending task' })
+    expect(within(reviewSheet).getByText('Other capture task')).toBeInTheDocument()
+    await user.click(within(reviewSheet).getByRole('button', { name: 'Approve All' }))
 
-    await user.click(within(pendingSection).getByRole('button', { name: 'Approve All' }))
-
-    await waitFor(() => {
-      expect(state.approveAllCalls).toEqual(['capture-2'])
-    })
+    await waitFor(() => expect(state.approveAllCalls).toEqual(['capture-1', 'capture-2']))
+    expect(await within(reviewSheet).findByText('All caught up')).toBeInTheDocument()
   })
 })

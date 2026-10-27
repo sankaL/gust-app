@@ -1,4 +1,4 @@
-import { Bell, CalendarDays, CheckCircle2, ListTodo, PencilLine, Repeat2, RotateCcw, Save, TextQuote, Trash2, X } from 'lucide-react'
+import { Bell, CalendarDays, CheckCircle2, Folder, ListTodo, PencilLine, Repeat2, RotateCcw, Save, TextQuote, Trash2, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { GroupSummary, TaskDetail } from '../lib/api'
 import type { TaskDetailDraft } from '../lib/taskFormModel'
@@ -6,8 +6,13 @@ import { formatDate, formatDateTime, formatRecurrence } from '../lib/taskFormatt
 import { shiftReminderDateTimeLocal, shouldShiftReminderForDueDate } from '../lib/dateTime'
 import { TaskFormFields } from './TaskFormFields'
 import { SaveConfirmationToast } from './SaveConfirmationToast'
+import { Button } from './Button'
+import { BottomSheet } from './ui/BottomSheet'
+import { CheckCircle, Chip } from './ui/controls'
+import { groupTone } from './ui/chipStyles'
 
 type Props = {
+  open: boolean
   task?: TaskDetail
   draft: TaskDetailDraft | null
   groups: GroupSummary[]
@@ -33,6 +38,9 @@ type Props = {
   friendlyError: (error: unknown, fallback: string) => string
 }
 
+const PREVIEW_TILE_CLASS =
+  'group cursor-pointer rounded-[1.1rem] bg-surface-dim/70 p-3.5 text-left ring-1 ring-inset ring-outline/30 outline-none transition-[background-color,transform] duration-200 hover:bg-surface-dim focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-[0.99]'
+
 function MetadataTile({
   label,
   icon: Icon,
@@ -57,7 +65,7 @@ function MetadataTile({
       onDoubleClick={onDoubleClick}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
-      className="group min-w-0 cursor-pointer rounded-[1.2rem] bg-surface-container/55 p-3.5 text-left transition-[background-color,transform] hover:bg-surface-container-high/80 active:scale-[0.99]"
+      className={`${PREVIEW_TILE_CLASS} min-w-0`}
       title="Tap or double-click to edit"
     >
       <div className="flex items-center gap-2">
@@ -91,67 +99,60 @@ function PreviewHeader({
   onClose: () => void
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 p-5 pb-3 pt-[max(1.25rem,calc(env(safe-area-inset-top)+0.75rem))] sm:p-6 sm:pb-4">
-      <div className="min-w-0 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-pill bg-white/6 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-            Task preview
-          </span>
+    <div className="px-5 pb-3 pt-1">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 pt-1.5">
+          <Chip tone="neutral">Task preview</Chip>
           {task ? (
             <>
-              <span className="rounded-pill bg-surface-container-high px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                {task.status === 'completed' ? 'Completed' : 'Open'}
-              </span>
-              <span className="max-w-[12rem] truncate rounded-pill bg-surface-container-high px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                {task.group.name}
-              </span>
-              {task.needs_review ? (
-                <span className="rounded-pill bg-warning/20 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-warning">
-                  Needs review
-                </span>
-              ) : null}
+              <Chip tone={task.status === 'completed' ? 'green' : 'neutral'}>{task.status === 'completed' ? 'Completed' : 'Open'}</Chip>
+              <Chip tone={groupTone(task.group.name)} icon={Folder}>{task.group.name}</Chip>
+              {task.needs_review ? <Chip tone="amber">Needs review</Chip> : null}
             </>
           ) : null}
         </div>
-        {isEditable && isTitleEditing ? (
-          <>
-            <h2 id="task-preview-title" className="sr-only">{draft?.title || task?.title || 'Untitled task'}</h2>
-            <input
-              autoFocus
-              value={draft?.title ?? task?.title ?? ''}
-              onChange={(event) => onTitleChange(event.target.value)}
-              className="w-full rounded-[1.25rem] bg-surface/60 px-4 py-3 font-display text-[1.5rem] leading-tight text-on-surface outline-none placeholder:text-on-surface-variant/40 focus:bg-surface/75 focus:text-white sm:text-[1.85rem]"
-              style={{ fontSize: '16px' }}
-              aria-label="Task title"
-              placeholder="Task title"
-              disabled={isBusy}
-            />
-          </>
-        ) : (
-          <h2 id="task-preview-title" className="pl-3.5 font-display text-2xl leading-tight text-on-surface sm:text-3xl">
-            {isEditable ? (
-              <button
-                type="button"
-                onClick={onStartTitleEdit}
-                onDoubleClick={onStartTitleEdit}
-                className="group flex w-full items-start gap-2 text-left outline-none"
-                title="Tap or double-click to edit title"
-              >
-                <span className="text-balance">{draft?.title || task?.title || 'Loading task'}</span>
-                <PencilLine className="mt-1 h-4 w-4 shrink-0 text-primary/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" strokeWidth={1.8} />
-              </button>
-            ) : (draft?.title || task?.title || 'Loading task')}
-          </h2>
-        )}
+        <button
+          type="button"
+          onClick={onClose}
+          onPointerDown={(event) => event.stopPropagation()}
+          className="clay-obsidian flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface"
+          aria-label="Close task preview"
+        >
+          <X className="h-[1.1rem] w-[1.1rem]" strokeWidth={2.2} />
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="clay-obsidian flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface"
-        aria-label="Close task preview"
-      >
-        <X className="h-5 w-5" strokeWidth={2} />
-      </button>
+      {isEditable && isTitleEditing ? (
+        <>
+          <h2 id="task-preview-title" className="sr-only">{draft?.title || task?.title || 'Untitled task'}</h2>
+          <input
+            autoFocus
+            value={draft?.title ?? task?.title ?? ''}
+            onChange={(event) => onTitleChange(event.target.value)}
+            onPointerDown={(event) => event.stopPropagation()}
+            className="mt-3 w-full rounded-card bg-surface-dim px-4 py-3 font-display text-[1.35rem] font-bold leading-tight text-on-surface outline-none ring-1 ring-inset ring-outline/40 placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/60"
+            style={{ fontSize: '16px' }}
+            aria-label="Task title"
+            placeholder="Task title"
+            disabled={isBusy}
+          />
+        </>
+      ) : (
+        <h2 id="task-preview-title" className="mt-2.5 font-display text-[1.5rem] font-bold leading-tight tracking-[-0.015em] text-on-surface">
+          {isEditable ? (
+            <button
+              type="button"
+              onClick={onStartTitleEdit}
+              onDoubleClick={onStartTitleEdit}
+              onPointerDown={(event) => event.stopPropagation()}
+              className="group flex w-full items-start gap-2 text-left outline-none"
+              title="Tap or double-click to edit title"
+            >
+              <span className="text-balance">{draft?.title || task?.title || 'Loading task'}</span>
+              <PencilLine className="mt-1.5 h-4 w-4 shrink-0 text-primary/70 opacity-60 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" strokeWidth={2} />
+            </button>
+          ) : (draft?.title || task?.title || 'Loading task')}
+        </h2>
+      )}
     </div>
   )
 }
@@ -214,7 +215,7 @@ function ReadOnlyTask({
         onDoubleClick={onStartEdit}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        className="group w-full cursor-pointer rounded-[1.25rem] bg-surface-container/55 p-3.5 text-left transition-[background-color,transform] hover:bg-surface-container-high/80 active:scale-[0.99]"
+        className={`${PREVIEW_TILE_CLASS} w-full`}
         title="Tap or double-click to edit"
       >
         <div className="flex items-center justify-between gap-2">
@@ -227,7 +228,7 @@ function ReadOnlyTask({
               Context
             </p>
           </div>
-          <span className="text-[0.62rem] text-primary/60 opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="text-[0.62rem] text-primary opacity-0 transition-opacity group-hover:opacity-100">
             Tap or double-click to edit
           </span>
         </div>
@@ -236,7 +237,7 @@ function ReadOnlyTask({
         </p>
       </button>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <MetadataTile
           label="Due date"
           icon={CalendarDays}
@@ -297,39 +298,34 @@ function Checklist({
   onToggle: (subtaskId: string, is_completed: boolean) => void
   onDelete: (id: string) => void
 }) {
+  const doneCount = task.subtasks.filter((item) => item.is_completed).length
+  const progress = task.subtasks.length ? Math.round((doneCount / task.subtasks.length) * 100) : 0
   return (
-    <section className="rounded-[1.25rem] bg-surface-container/90 p-4 shadow-ambient">
-      <div className="flex items-center justify-between">
+    <section className="rounded-[1.25rem] bg-surface-container-high p-4 shadow-card ring-1 ring-inset ring-outline/40">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="font-display text-lg text-on-surface">Checklist</p>
-          <p className="mt-1 text-xs text-on-surface-variant">{task.subtasks.length} subtasks</p>
+          <p className="font-display text-lg font-bold text-on-surface">Checklist</p>
+          <p className="mt-0.5 text-xs text-on-surface-variant">{task.subtasks.length} subtasks</p>
         </div>
-        <span className="rounded-pill bg-surface-container-high px-3 py-1 text-[0.68rem] uppercase text-on-surface-variant">
-          {task.subtasks.filter((item) => item.is_completed).length} done
-        </span>
+        <Chip tone={doneCount && doneCount === task.subtasks.length ? 'green' : 'neutral'}>{doneCount} done</Chip>
       </div>
-      <div className="mt-3 space-y-2">
+      {task.subtasks.length ? (
+        <div className="mt-3 h-1.5 overflow-hidden rounded-pill bg-surface-dim" aria-hidden="true">
+          <div className="h-full rounded-pill bg-primary transition-[width] duration-500 ease-out-expo" style={{ width: `${progress}%` }} />
+        </div>
+      ) : null}
+      <div className="mt-3 space-y-1">
         {task.subtasks.length ? (
           task.subtasks.map((subtask) => (
-            <div key={subtask.id} className="flex items-center gap-3 rounded-card bg-surface-dim p-3">
-              <button
-                type="button"
-                onClick={() => onToggle(subtask.id, !subtask.is_completed)}
+            <div key={subtask.id} className="group/row flex min-h-[2.75rem] items-center gap-3 rounded-xl px-1 py-1.5">
+              <CheckCircle
+                size="sm"
+                label={`Toggle ${subtask.title}`}
+                checked={subtask.is_completed}
                 disabled={busy}
-                aria-label={`Toggle ${subtask.title}`}
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all ${
-                  subtask.is_completed
-                    ? 'bg-primary text-surface shadow-[0_0_10px_rgba(196,181,253,0.35)]'
-                    : 'border border-outline/40 bg-surface-container hover:border-primary/60'
-                }`}
-              >
-                {subtask.is_completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
-              </button>
-              <p
-                className={`min-w-0 flex-1 text-sm ${
-                  subtask.is_completed ? 'text-on-surface-variant line-through' : 'text-on-surface'
-                }`}
-              >
+                onClick={() => onToggle(subtask.id, !subtask.is_completed)}
+              />
+              <p className={`min-w-0 flex-1 text-sm transition-colors duration-300 ${subtask.is_completed ? 'text-on-surface-variant line-through' : 'text-on-surface'}`}>
                 {subtask.title}
               </p>
               {editable ? (
@@ -338,7 +334,7 @@ function Checklist({
                   onClick={() => onDelete(subtask.id)}
                   disabled={busy}
                   aria-label={`Delete ${subtask.title}`}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-tertiary/15 hover:text-tertiary"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-chip-rose hover:text-chip-rose-ink"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -346,9 +342,7 @@ function Checklist({
             </div>
           ))
         ) : (
-          <div className="rounded-card bg-surface-dim px-4 py-4 text-sm text-on-surface-variant">
-            No subtasks yet.
-          </div>
+          <p className="px-1 py-2 text-sm text-on-surface-variant">No subtasks yet.</p>
         )}
       </div>
       {editable ? (
@@ -359,18 +353,11 @@ function Checklist({
             onKeyDown={(event) => {
               if (event.key === 'Enter' && title.trim() && !busy) onCreate()
             }}
-            className="min-w-0 flex-1 rounded-card bg-surface-dim px-3 py-3 text-sm text-on-surface"
+            className="min-w-0 flex-1 rounded-pill bg-surface-dim px-4 py-2.5 text-sm text-on-surface outline-none ring-1 ring-inset ring-outline/40 placeholder:text-on-surface-variant/60 focus:ring-2 focus:ring-primary/60"
             placeholder="Add a subtask..."
             disabled={busy}
           />
-          <button
-            type="button"
-            onClick={onCreate}
-            disabled={!title.trim() || busy}
-            className="rounded-pill bg-primary px-4 py-2 text-sm font-semibold text-surface disabled:opacity-50"
-          >
-            Add
-          </button>
+          <Button variant="primary" size="md" onClick={onCreate} disabled={!title.trim() || busy}>Add</Button>
         </div>
       ) : null}
     </section>
@@ -401,10 +388,10 @@ type PreviewBodyProps = {
 
 function PreviewBody(props: PreviewBodyProps) {
   if (props.isLoading)
-    return <div className="h-40 animate-pulse rounded-card bg-surface-container-high" aria-busy="true" />
+    return <div className="space-y-3" aria-busy="true"><div className="skeleton-shimmer h-24 rounded-[1.1rem]" /><div className="grid grid-cols-2 gap-3"><div className="skeleton-shimmer h-20 rounded-[1.1rem]" /><div className="skeleton-shimmer h-20 rounded-[1.1rem]" /></div></div>
   if (props.error)
     return (
-      <div className="rounded-card bg-[rgba(80,18,18,0.92)] p-4 text-sm text-red-100">
+      <div role="alert" className="rounded-card bg-chip-rose p-4 text-sm text-chip-rose-ink">
         {props.friendlyError(props.error, 'Task preview could not be loaded.')}
       </div>
     )
@@ -431,7 +418,7 @@ function PreviewBody(props: PreviewBodyProps) {
       )}
 
       {props.saveError ? (
-        <p className="rounded-xl bg-error/15 px-3 py-2 text-sm text-error">{props.saveError}</p>
+        <p role="alert" className="rounded-card bg-chip-rose px-4 py-3 text-sm text-chip-rose-ink">{props.saveError}</p>
       ) : null}
 
       <Checklist
@@ -446,7 +433,7 @@ function PreviewBody(props: PreviewBodyProps) {
       />
 
       {!props.isEditing && props.isEditable && (
-        <p className="pt-1 text-center text-xs text-on-surface-variant/60">
+        <p className="pt-1 text-center text-xs text-on-surface-variant/70">
           Tap or double-click any section to edit
         </p>
       )}
@@ -473,88 +460,46 @@ function PreviewFooter({
   onRestore?: () => void
   onDelete?: () => void
 }) {
+  const deleteButton = onDelete ? (
+    <button
+      type="button"
+      onClick={onDelete}
+      disabled={busy}
+      aria-label="Delete task"
+      className="flex h-[3.25rem] w-[3.25rem] shrink-0 items-center justify-center rounded-full bg-chip-rose text-chip-rose-ink transition-transform active:scale-90 disabled:opacity-50"
+    >
+      <Trash2 className="h-5 w-5" />
+    </button>
+  ) : null
   return (
-    <div className="shrink-0 border-t border-white/10 bg-[rgba(20,20,20,0.86)] p-4 pb-[max(1rem,calc(env(safe-area-inset-bottom)+1rem))] sm:pb-4">
-      <div className="flex items-center gap-3">
-        {isEditing ? (
-          <>
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={busy || !isDirty}
-              className="flex-1 rounded-pill bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_8px_0_#4c1d95,_0_16px_22px_rgba(0,0,0,0.35),_inset_0_2px_3px_rgba(255,255,255,0.38)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] disabled:cursor-not-allowed disabled:opacity-40 disabled:grayscale disabled:shadow-none"
-              aria-label="Save changes"
-            >
-              <Save className="mr-2 inline h-4 w-4" />
-              Save Changes
-            </button>
-
-            {task?.status === 'open' && onComplete ? (
-              <button
-                type="button"
-                onClick={onComplete}
-                disabled={busy}
-                aria-label="Complete"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-success/20 text-success transition hover:bg-success/30 disabled:opacity-50"
-              >
-                <CheckCircle2 className="h-5 w-5" />
-              </button>
-            ) : null}
-
-            {onDelete ? (
-              <button
-                type="button"
-                onClick={onDelete}
-                disabled={busy}
-                aria-label="Delete task"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/5 text-tertiary transition hover:bg-tertiary/10 disabled:opacity-50"
-              >
-                <Trash2 className="h-5 w-5" />
-              </button>
-            ) : null}
-          </>
-        ) : (
-          <>
-            {task?.status === 'open' && onComplete ? (
-              <button
-                type="button"
-                onClick={onComplete}
-                disabled={busy}
-                aria-label="Complete"
-                className="flex-1 rounded-pill bg-[radial-gradient(circle_at_top,_#6ee7b7_10%,_#059669_90%)] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_8px_0_#065f46,_0_16px_22px_rgba(0,0,0,0.35),_inset_0_2px_3px_rgba(255,255,255,0.38)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <CheckCircle2 className="h-5 w-5" />
-                Mark as Complete
-              </button>
-            ) : null}
-
-            {task?.status === 'completed' && onRestore ? (
-              <button
-                type="button"
-                onClick={onRestore}
-                disabled={busy}
-                aria-label="Restore"
-                className="flex-1 rounded-pill bg-surface-container-high px-4 py-3 text-center text-sm font-semibold text-on-surface transition hover:bg-surface-bright flex items-center justify-center gap-2"
-              >
-                <RotateCcw className="h-5 w-5" />
-                Restore
-              </button>
-            ) : null}
-
-            {onDelete ? (
-              <button
-                type="button"
-                onClick={onDelete}
-                disabled={busy}
-                aria-label="Delete task"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/5 text-on-surface-variant transition hover:bg-tertiary/10 hover:text-tertiary disabled:opacity-50"
-              >
-                <Trash2 className="h-5 w-5" />
-              </button>
-            ) : null}
-          </>
-        )}
-      </div>
+    <div className="flex items-center gap-2.5">
+      {isEditing ? (
+        <>
+          <Button variant="primary" size="lg" className="flex-1" onClick={onSave} disabled={busy || !isDirty} aria-label="Save changes">
+            <Save className="h-4 w-4" />
+            Save Changes
+          </Button>
+          {task?.status === 'open' && onComplete ? (
+            <CheckCircle mode="action" size="lg" label="Complete" checked={false} disabled={busy} onClick={onComplete} className="!h-[3.25rem] !w-[3.25rem]" />
+          ) : null}
+        </>
+      ) : (
+        <>
+          {task?.status === 'open' && onComplete ? (
+            <Button variant="primary" size="lg" className="flex-1" onClick={onComplete} disabled={busy} aria-label="Complete">
+              <CheckCircle2 className="h-5 w-5" />
+              Mark as Complete
+            </Button>
+          ) : null}
+          {task?.status === 'completed' && onRestore ? (
+            <Button variant="secondary" size="lg" className="flex-1" onClick={onRestore} disabled={busy} aria-label="Restore">
+              <RotateCcw className="h-5 w-5" />
+              Restore
+            </Button>
+          ) : null}
+        </>
+      )}
+      {deleteButton}
     </div>
   )
 }
@@ -591,61 +536,57 @@ export function TaskPreviewView(props: Props) {
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-[120] flex items-center justify-center bg-surface p-0 sm:bg-black/65 sm:p-5 sm:backdrop-blur-md"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="task-preview-title"
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) props.onClose()
-        }}
-      >
-        <div className="flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-none bg-[radial-gradient(circle_at_top_left,_rgba(186,158,255,0.18),_rgba(32,32,31,0.98)_42%,_rgba(14,14,14,1)_100%)] shadow-[0_28px_80px_rgba(0,0,0,0.62)] sm:h-auto sm:max-h-[92dvh] sm:rounded-[1.7rem]">
-        <PreviewHeader
-          task={props.task}
-          draft={props.draft}
-          isEditable={props.isEditable}
-          isTitleEditing={isTitleEditing}
-          isBusy={props.isBusy}
-          onStartTitleEdit={() => setIsTitleEditing(true)}
-          onTitleChange={(title) => props.onDraftChange((current) => ({ ...current, title }))}
-          onClose={props.onClose}
-        />
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 sm:px-6">
-          <PreviewBody
+      <BottomSheet
+        open={props.open}
+        onClose={props.onClose}
+        labelledBy="task-preview-title"
+        header={
+          <PreviewHeader
             task={props.task}
             draft={props.draft}
-            groups={props.groups}
-            isLoading={props.isLoading}
-            error={props.error}
-            isEditing={isEditing}
             isEditable={props.isEditable}
+            isTitleEditing={isTitleEditing}
             isBusy={props.isBusy}
-            saveError={props.saveError}
-            newSubtaskTitle={props.newSubtaskTitle}
-            onStartEdit={() => setIsEditing(true)}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            onDraftChange={props.onDraftChange}
-            onNewSubtaskTitleChange={props.onNewSubtaskTitleChange}
-            onCreateSubtask={props.onCreateSubtask}
-            onToggleSubtask={props.onToggleSubtask}
-            onDeleteSubtask={props.onDeleteSubtask}
-            friendlyError={props.friendlyError}
+            onStartTitleEdit={() => setIsTitleEditing(true)}
+            onTitleChange={(title) => props.onDraftChange((current) => ({ ...current, title }))}
+            onClose={props.onClose}
           />
-        </div>
-        <PreviewFooter
+        }
+        footer={
+          <PreviewFooter
+            task={props.task}
+            isEditing={isEditing || isTitleEditing}
+            busy={props.isBusy}
+            isDirty={Boolean(props.isDirty)}
+            onSave={() => { setIsTitleEditing(false); props.onSave() }}
+            onComplete={props.onComplete}
+            onRestore={props.onRestore}
+            onDelete={props.onDelete}
+          />
+        }
+      >
+        <PreviewBody
           task={props.task}
-          isEditing={isEditing || isTitleEditing}
-          busy={props.isBusy}
-          isDirty={Boolean(props.isDirty)}
-          onSave={() => { setIsTitleEditing(false); props.onSave() }}
-          onComplete={props.onComplete}
-          onRestore={props.onRestore}
-          onDelete={props.onDelete}
+          draft={props.draft}
+          groups={props.groups}
+          isLoading={props.isLoading}
+          error={props.error}
+          isEditing={isEditing}
+          isEditable={props.isEditable}
+          isBusy={props.isBusy}
+          saveError={props.saveError}
+          newSubtaskTitle={props.newSubtaskTitle}
+          onStartEdit={() => setIsEditing(true)}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onDraftChange={props.onDraftChange}
+          onNewSubtaskTitleChange={props.onNewSubtaskTitleChange}
+          onCreateSubtask={props.onCreateSubtask}
+          onToggleSubtask={props.onToggleSubtask}
+          onDeleteSubtask={props.onDeleteSubtask}
+          friendlyError={props.friendlyError}
         />
-        </div>
-      </div>
+      </BottomSheet>
       <SaveConfirmationToast message={props.saveNotice} onDismiss={props.onDismissSaveNotice} />
     </>
   )

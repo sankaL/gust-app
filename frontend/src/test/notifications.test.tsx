@@ -106,7 +106,8 @@ describe('notification center', () => {
     expect(screen.getByText('Second message')).toBeInTheDocument()
 
     const viewport = screen.getByText('Second message').closest('section')?.parentElement
-    expect(viewport?.className).toContain('z-[80]')
+    // Toasts sit above bottom sheets (z-110+) so feedback stays visible during sheet flows.
+    expect(viewport?.className).toContain('z-[300]')
     expect(viewport).toHaveClass('top-0', 'sm:bottom-0', 'sm:top-auto')
   })
 

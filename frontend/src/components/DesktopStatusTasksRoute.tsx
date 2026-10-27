@@ -71,9 +71,9 @@ export function DesktopStatusTasksRoute({
   }
   if (tasksQuery.isError) {
     return (
-      <section className="rounded-soft bg-[rgba(80,18,18,0.92)] p-6">
+      <section className="rounded-soft bg-chip-rose p-6">
         <h1 className="font-display text-3xl text-on-surface">{errorTitle}</h1>
-        <p className="mt-2 font-body text-sm text-red-100">Refresh and try again.</p>
+        <p className="mt-2 font-body text-sm text-chip-rose-ink">Refresh and try again.</p>
       </section>
     )
   }

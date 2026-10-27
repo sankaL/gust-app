@@ -419,15 +419,16 @@ describe('AllTasksView', () => {
       </QueryClientProvider>
     )
 
-    expect(await screen.findByText('Today')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument()
     expect(screen.getByText('Delete from today section')).toBeInTheDocument()
     expect(screen.getByText('Keep in later section')).toBeInTheDocument()
 
-    const othersHeaderBeforeDelete = screen.getByText('Others').parentElement
+    const othersHeaderBeforeDelete = screen.getByRole('heading', { name: 'No date' }).closest('[data-index]')
     if (!othersHeaderBeforeDelete) {
-      throw new Error('Expected Others section header before delete')
+      throw new Error('Expected No date section header before delete')
     }
-    expect(othersHeaderBeforeDelete).toHaveStyle({ transform: 'translateY(148px)' })
+    // Header (52px) + one task card (132px) sit above the No date section.
+    expect(othersHeaderBeforeDelete).toHaveStyle({ transform: 'translateY(184px)' })
 
     await act(async () => {
       await client.invalidateQueries({ queryKey: ['tasks', 'all', 'open', 'infinite'] })
@@ -435,14 +436,14 @@ describe('AllTasksView', () => {
 
     await waitFor(() => {
       expect(mockedListAllTasks).toHaveBeenCalledTimes(2)
-      expect(screen.queryByText('Today')).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Today' })).not.toBeInTheDocument()
       expect(screen.queryByText('Delete from today section')).not.toBeInTheDocument()
     })
 
     await waitFor(() => {
-      const othersHeaderAfterDelete = screen.getByText('Others').parentElement
+      const othersHeaderAfterDelete = screen.getByRole('heading', { name: 'No date' }).closest('[data-index]')
       if (!othersHeaderAfterDelete) {
-        throw new Error('Expected Others section header after delete')
+        throw new Error('Expected No date section header after delete')
       }
       expect(othersHeaderAfterDelete).toHaveStyle({ transform: 'translateY(0px)' })
     })

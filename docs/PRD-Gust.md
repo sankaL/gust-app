@@ -59,13 +59,14 @@ It must:
 - offer a `Log in` CTA to the authenticated product
 - send only successfully signed-in users straight to the authenticated app
 
-The protected mobile app entry lives at `/capture`.
-Successful login redirects land on `/capture`. Installed PWA launches start at `/`; signed-out or incognito users see the landing page, while signed-in users continue to the app.
+The protected mobile app entry lives at `/tasks` (the Today agenda).
+Successful login redirects land on `/tasks` on phones and `/desktop` on larger screens. Installed PWA launches start at `/`; signed-out or incognito users see the landing page, while signed-in users continue to the app.
 
 ### 1. Capture
 
-The Capture screen is the default authenticated screen on launch.
-The public website entry remains `/`, while the protected mobile app entry is `/capture`.
+Capture is always one tap away: the floating + button on every mobile screen opens a capture sheet (about three quarters of the screen) and starts recording immediately. `/capture` stays a deep link that opens the same sheet.
+The sheet carries the whole flow: speak or type → processing → review of the newly extracted tasks → approve, edit, or discard. It can be swiped away while extraction runs; finished tasks then wait in Review.
+Extracted tasks that have not been approved or discarded stay visible through the bell (with a count badge) and a banner on the task home, which open a Review sheet grouped by capture.
 
 It supports two input modes:
 

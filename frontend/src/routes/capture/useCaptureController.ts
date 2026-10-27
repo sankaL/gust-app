@@ -35,15 +35,25 @@ function useCaptureState() {
   return { textExpanded, setTextExpanded, textDraft, setTextDraft, reviewCaptureId, setReviewCaptureId, showStaging, setShowStaging, transcriptionError, setTranscriptionError, textCaptureError, setTextCaptureError, summary, setSummary, editTask, setEditTask }
 }
 
-function useCaptureQueries(reviewCaptureId: string | null, showStaging: boolean) {
+const EMPTY_EXTRACTED_TASKS: ExtractedTask[] = []
+
+function asTaskList(data: unknown): ExtractedTask[] {
+  return Array.isArray(data) ? (data as ExtractedTask[]) : EMPTY_EXTRACTED_TASKS
+}
+
+function useCaptureQueries(reviewCaptureId: string | null, showStaging: boolean, needsGroups: boolean) {
   const session = useQuery({ queryKey: ['session-status'], queryFn: getSessionStatus, retry: false })
   const pending = useQuery({ queryKey: ['pending-tasks'], queryFn: listPendingTasks, enabled: !!session.data?.signed_in })
   const extracted = useQuery({ queryKey: ['extracted-tasks', reviewCaptureId], queryFn: () => listExtractedTasks(reviewCaptureId!), enabled: !!reviewCaptureId && showStaging })
-  const groups = useQuery({ queryKey: ['groups'], queryFn: listGroups, enabled: !!session.data?.signed_in })
+  // Groups only matter while capture or review UI is on screen; other routes load them lazily themselves.
+  const groups = useQuery({ queryKey: ['groups'], queryFn: listGroups, enabled: !!session.data?.signed_in && needsGroups })
+  // The shell reads these lists on every screen, so an unexpected payload must not take it down.
+  const pendingTasks = asTaskList(pending.data).filter((task) => task.status === 'pending')
+  const extractedTasks = asTaskList(extracted.data)
   const visiblePending = showStaging && reviewCaptureId
-    ? (pending.data ?? []).filter((task) => task.capture_id !== reviewCaptureId)
-    : (pending.data ?? [])
-  return { session, pending, extracted, groups, visiblePending }
+    ? pendingTasks.filter((task) => task.capture_id !== reviewCaptureId)
+    : pendingTasks
+  return { session, pending, extracted, groups, pendingTasks, extractedTasks, visiblePending }
 }
 
 function useCaptureMutations(state: ReturnType<typeof useCaptureState>, session: ReturnType<typeof useCaptureQueries>['session']) {
@@ -75,10 +85,8 @@ type ReviewContext = {
   notifySuccess: (message: string) => string
 }
 
-const EMPTY_EXTRACTED_TASKS: ExtractedTask[] = []
-
-function availableTasks(tasks: ExtractedTask[] | undefined) {
-  return tasks || EMPTY_EXTRACTED_TASKS
+function availableTasks(tasks: unknown) {
+  return asTaskList(tasks)
 }
 
 function taskCaptureId(context: ReviewContext, taskId: string) {
@@ -113,12 +121,21 @@ function useCaptureReviewActions(context: ReviewContext) {
     await Promise.all(uniqueCaptureIds(context.queries.visiblePending).map((id) => action(id, csrf)))
     await refresh(null); context.notifySuccess(success)
   }
-  return { refresh, approve: (id: string) => taskAction(id, approveExtractedTask, 'Task approved.', 'Failed to approve task.'), discard: (id: string) => taskAction(id, discardExtractedTask, 'Task discarded.', 'Failed to discard task.'), approveAll: () => captureAction(approveAllExtractedTasks, 'Approved all extracted tasks.'), discardAll: () => captureAction(discardAllExtractedTasks, 'Discarded all extracted tasks.'), approvePending: () => pendingAction(approveAllExtractedTasks, 'Approved all older pending tasks.'), discardPending: () => pendingAction(discardAllExtractedTasks, 'Discarded all older pending tasks.') }
+  const everyPendingAction = async (action: (captureId: string, csrfToken: string) => Promise<unknown>, success: string) => {
+    const pending = availableTasks(context.queries.pending.data)
+    if (!pending.length) return
+    const csrf = requireCsrfToken(context.queries.session.data)
+    await Promise.all(uniqueCaptureIds(pending).map((id) => action(id, csrf)))
+    await refresh(context.state.reviewCaptureId); context.notifySuccess(success)
+  }
+  return {
+    approveEverything: () => everyPendingAction(approveAllExtractedTasks, 'Approved all pending tasks.'),
+    discardEverything: () => everyPendingAction(discardAllExtractedTasks, 'Discarded all pending tasks.'), refresh, approve: (id: string) => taskAction(id, approveExtractedTask, 'Task approved.', 'Failed to approve task.'), discard: (id: string) => taskAction(id, discardExtractedTask, 'Task discarded.', 'Failed to discard task.'), approveAll: () => captureAction(approveAllExtractedTasks, 'Approved all extracted tasks.'), discardAll: () => captureAction(discardAllExtractedTasks, 'Discarded all extracted tasks.'), approvePending: () => pendingAction(approveAllExtractedTasks, 'Approved all older pending tasks.'), discardPending: () => pendingAction(discardAllExtractedTasks, 'Discarded all older pending tasks.') }
 }
 
-export function useCaptureController() {
+export function useCaptureController({ isActive = true }: { isActive?: boolean } = {}) {
   const state = useCaptureState()
-  const queries = useCaptureQueries(state.reviewCaptureId, state.showStaging)
+  const queries = useCaptureQueries(state.reviewCaptureId, state.showStaging, isActive || state.editTask !== null)
   const { notifyError, notifySuccess } = useNotifications()
   const mutations = useCaptureMutations(state, queries.session)
   const retryAudio = useRef<RecordedAudio | null>(null)
@@ -132,11 +149,12 @@ export function useCaptureController() {
     state.setTranscriptionError(null); state.setTextCaptureError(null); state.setReviewCaptureId(null); state.setSummary(null); retryAudio.current = null
     const started = await recorder.start(); if (!started) state.setTextExpanded(true)
   }
+  const cancelRecording = () => { retryAudio.current = null; recorder.cancel() }
   const retryVoice = () => { if (retryAudio.current) { state.setTranscriptionError(null); mutations.voice.mutate(retryAudio.current) } }
   const completeReview = async () => {
     if (!state.reviewCaptureId) return
     try { await completeCapture(state.reviewCaptureId, requireCsrfToken(queries.session.data)); state.setShowStaging(false); state.setReviewCaptureId(null); notifySuccess('Capture review completed.') }
     catch (error) { notifyError(captureErrorMessage(error, 'Failed to complete capture.')) }
   }
-  return { state, queries, mutations, recorder, review, retryVoice, canRetry: !!retryAudio.current, startRecording, completeReview }
+  return { state, queries, mutations, recorder, review, retryVoice, canRetry: !!retryAudio.current, startRecording, cancelRecording, completeReview }
 }

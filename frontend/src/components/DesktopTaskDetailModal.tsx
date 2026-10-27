@@ -16,7 +16,7 @@ function TaskDetailEditor({ controller, groups, groupOpen, setGroupOpen, busyTas
   onRestore?: (task: TaskDetail) => void }) {
   const { notifyError } = useNotifications()
   const { query, draft, setDraft, pending } = controller
-  if (query.isError) return <div className="rounded-card bg-red-950 p-4 text-red-100">Task detail could not be loaded.</div>
+  if (query.isError) return <div className="rounded-card bg-chip-rose p-4 text-chip-rose-ink">Task detail could not be loaded.</div>
   if (query.isLoading || !draft || !query.data) return <div className="h-72 animate-pulse rounded-card bg-surface-container-high" aria-busy="true" />
   const busy = controller.save.isPending || controller.createSubtask.isPending || controller.updateSubtask.isPending || controller.deleteSubtask.isPending
   const task = query.data
@@ -30,7 +30,7 @@ function TaskDetailEditor({ controller, groups, groupOpen, setGroupOpen, busyTas
 
 function TaskDetailSurface({ modal, children, onClose }: { modal: boolean; children: ReactNode; onClose?: () => void }) {
   if (!modal) return <section className="overflow-hidden rounded-soft bg-surface-container shadow-ambient">{children}</section>
-  return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/65 p-5 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="desktop-task-editor-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose?.() }}><div className="flex max-h-[90dvh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.35rem] bg-surface-container shadow-ambient">{children}</div></div>
+  return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-backdrop/55 p-5 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="desktop-task-editor-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose?.() }}><div className="flex max-h-[90dvh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.35rem] bg-surface-container shadow-ambient">{children}</div></div>
 }
 
 export function DesktopTaskDetailModal({ taskId, isOpen, onClose, session, groups, mode = 'modal', onComplete, onRestore, busyTaskIds = [] }: Props) {

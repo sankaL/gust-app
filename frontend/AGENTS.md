@@ -10,7 +10,7 @@ Keep this file focused on **durable frontend engineering rules** for Gust. Do no
 
 ## Frontend Commitments
 - Build for a **mobile-first, voice-first** task capture flow.
-- The Capture screen is the primary launch experience.
+- Capture is the primary action: the floating + button opens the capture sheet and starts recording in one tap.
 - Voice input is primary; manual text input is a fallback and should remain visually secondary.
 - Show transcript review before any task-creation write.
 - Keep edited transcript state locally until submission succeeds or the user explicitly discards it.
@@ -38,5 +38,6 @@ Keep this file focused on **durable frontend engineering rules** for Gust. Do no
 ## Styling & PWA Constraints
 - Follow `docs/Design.md`, not generic component-library defaults.
 - Use Tailwind plus CSS variables/tokens for styling decisions; avoid ad-hoc visual systems.
-- Preserve the dark, layered, voice-reactive visual language and mobile ergonomics described in the design doc.
+- Support both themes (light default, dark) through the shared tokens; never hardcode colors that only work in one theme.
+- Mobile modals are bottom sheets (`components/ui/BottomSheet`); reuse the shared primitives (`Button`, `CheckCircle`, `Chip`, `Switch`, `SegmentedControl`) instead of one-off styles.
 - Service worker caching must be limited to app shell/static assets. Do **not** cache authenticated API responses or task data.

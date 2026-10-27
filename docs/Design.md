@@ -1,5 +1,34 @@
 # Design System Strategy: The Gust Minimalist
 
+## 0. Theme System (2026-10 revamp)
+
+The mobile app was redesigned around two palettes that share one component system. Light is the default.
+
+| | Light ("Sage") | Dark ("Midnight") |
+|---|---|---|
+| Canvas | soft sage-gray `#ECF1ED` | navy `#12172B` |
+| Cards | warm paper `#FDFDFA`, soft shadow, hairline ring | `#1E253E`, hairline ring |
+| Accent | sage green `#4F7D66` (white on top) | lavender `#AC92FC` (deep indigo on top) |
+| Ink | deep green-black `#1B2A22` | near-white `#F2F4FB` |
+| Section labels | title case, bold display font | small uppercase, letter-spaced, muted |
+| Selected day | outlined ring | filled accent circle |
+
+Desktop keeps its existing layout; it gets the light palette, and its dark mode keeps the original violet "Digital Void" palette (`data-palette="classic"`). The public landing page stays on that palette.
+
+**Tokens.** All colors are CSS variables (RGB channels) behind Tailwind names: `surface*`, `primary`, `on-primary`, `on-surface*`, `outline`, `card-active`, `nav`, `backdrop`, and chip pairs `chip-{neutral,blue,violet,amber,green,rose}` / `-ink`. Shadows are tokens too (`shadow-card`, `shadow-float`, `shadow-sheet`, `shadow-fab`). Hardcoded hex/rgba values are not allowed in components.
+
+**Shared primitives** (`frontend/src/components/ui/`, `Button.tsx`):
+- `BottomSheet` — every mobile modal. Default height is 75% of the viewport (`size="auto"` for short confirmations). Drag the grabber or pull down from the top of the content to dismiss; backdrop tap and Escape also close. Stacked sheets recede (scale 0.94) under the one on top. Focus is trapped and restored; page scroll is locked.
+- `CheckCircle` — the only check control: completing tasks, approving extracted tasks, toggling subtasks. The ring fills with the accent and the check draws in.
+- `Chip` — metadata pills; groups get a stable color derived from their name.
+- `Button` (primary / secondary / ghost / danger / soft), `Switch`, `SegmentedControl`, `SectionLabel`, `InlineNotice`, `EmptyState`.
+
+**Mobile layout.** Screen header = eyebrow + large date/title + round action buttons (refresh, review bell with count). The task home adds a 7-day strip (today selected; other days filter the agenda) and agenda sections Today / Overdue / Upcoming / No date. Task cards follow the reference timeline: a time column (reminder time, else due date) with a fading rule, then title, two-line description, and chips; the check sits top-right. Swipe right completes, swipe left deletes. A bottom nav (Tasks, Completed, Groups, account avatar) with a sliding active indicator, plus a floating + for capture.
+
+**Motion.** Sheets slide on `cubic-bezier(0.32, 0.72, 0, 1)` (~520 ms in, 360 ms out). Lists rise in with a 45 ms stagger; route changes fade up. The capture orb breathes when idle, and its aura scales with live microphone level while recording. Enter animations use `animation-fill-mode: backwards` so no transform lingers (a leftover transform breaks `position: fixed` children). `prefers-reduced-motion` collapses all of it.
+
+The sections below describe the original dark direction; where they conflict with this section (for example the "No-Line" rule — the revamp uses low-opacity hairline rings), this section wins.
+
 ## 1. Overview & Creative North Star
 The Creative North Star for this design system is **"The Digital Void."**
 

@@ -46,7 +46,7 @@ function TrendRangePicker({ value, onChange }: { value: CompletionTrendRange; on
 }
 
 function chartBarClass(count: number) {
-  return count > 0 ? 'bg-success shadow-[0_0_18px_rgba(78,219,121,0.24)]' : 'bg-white/8'
+  return count > 0 ? 'bg-success shadow-[0_0_18px_rgba(78,219,121,0.24)]' : 'bg-on-surface/[0.06]'
 }
 
 function chartBarHeight(count: number, maxCount: number, scale: (typeof BAR_SCALE)[CompletionTrendRange]) {
@@ -76,7 +76,7 @@ function CompletionChart({ analytics, range }: { analytics: Analytics; range: Co
   const scale = BAR_SCALE[range]
   const maxCount = Math.max(...trend.points.map((point) => point.count), 1)
   const labelEvery = Math.max(1, Math.ceil(trend.points.length / 8))
-  return <div className="mt-3 flex min-h-44 flex-1 flex-col rounded-card bg-surface-dim/70 px-3 pb-2.5 pt-3"><div className="flex flex-1 items-end gap-2 border-b border-white/10">{trend.points.map((point) => <CompletionBar key={point.date} point={point} maxCount={maxCount} scale={scale} />)}</div><div className="mt-1.5 flex gap-2">{trend.points.map((point, index) => <CompletionLabel key={point.date} point={point} show={showTrendLabel(index, trend.points.length - 1, labelEvery)} />)}</div></div>
+  return <div className="mt-3 flex min-h-44 flex-1 flex-col rounded-card bg-surface-dim/70 px-3 pb-2.5 pt-3"><div className="flex flex-1 items-end gap-2 border-b border-outline/60">{trend.points.map((point) => <CompletionBar key={point.date} point={point} maxCount={maxCount} scale={scale} />)}</div><div className="mt-1.5 flex gap-2">{trend.points.map((point, index) => <CompletionLabel key={point.date} point={point} show={showTrendLabel(index, trend.points.length - 1, labelEvery)} />)}</div></div>
 }
 
 function CompletionTrend({ analytics, range, onRangeChange }: { analytics: Analytics; range: CompletionTrendRange; onRangeChange: (range: CompletionTrendRange) => void }) {

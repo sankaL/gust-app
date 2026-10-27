@@ -106,7 +106,7 @@ export function DesktopEditExtractedTaskModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-5 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-backdrop/55 p-5 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="desktop-extracted-task-title"
@@ -114,8 +114,8 @@ export function DesktopEditExtractedTaskModal({
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="flex max-h-[90dvh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.35rem] bg-[radial-gradient(circle_at_top_left,_rgba(186,158,255,0.14),_rgba(31,31,30,0.98)_40%,_rgba(14,14,14,1)_100%)] shadow-[0_28px_80px_rgba(0,0,0,0.62)]">
-        <header className="flex items-start justify-between gap-5 border-b border-white/10 px-6 py-5">
+      <div className="flex max-h-[90dvh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.35rem] bg-surface-container ring-1 ring-outline/50 shadow-float dark:bg-[radial-gradient(circle_at_top_left,_rgba(186,158,255,0.14),_rgba(31,31,30,0.98)_40%,_rgba(14,14,14,1)_100%)] dark:ring-0">
+        <header className="flex items-start justify-between gap-5 border-b border-outline/60 px-6 py-5">
           <div>
             <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
               Extracted task
@@ -128,7 +128,7 @@ export function DesktopEditExtractedTaskModal({
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/8 text-on-surface-variant transition hover:bg-white/12 hover:text-on-surface disabled:opacity-50"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-on-surface/[0.06] text-on-surface-variant transition hover:bg-on-surface/[0.08] hover:text-on-surface disabled:opacity-50"
             aria-label="Close edit task"
           >
             <X className="h-4 w-4" strokeWidth={2} />
@@ -136,17 +136,17 @@ export function DesktopEditExtractedTaskModal({
         </header>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
-          {error ? <div className="rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] p-3 text-sm text-red-100">{error}</div> : null}
+          {error ? <div className="rounded-card border border-error/35 bg-chip-rose p-3 text-sm text-chip-rose-ink">{error}</div> : null}
           <TaskFormFields title={draft.title} description={draft.description} groupId={draft.groupId} dueDate={draft.dueDate} reminderAt={draft.reminderAt} reminderDate={draft.reminderDate} recurrence={draft.recurrence} groups={groups} isGroupDropdownOpen={isGroupDropdownOpen} disabled={isSaving} onTitleChange={(title) => updateDraft((current) => ({ ...current, title }))} onDescriptionChange={(description) => updateDraft((current) => ({ ...current, description }))} onGroupIdChange={(groupId) => updateDraft((current) => ({ ...current, groupId }))} onDueDateChange={(dueDate) => updateDraft((current) => ({ ...current, dueDate }))} onReminderAtChange={(reminderAt) => updateDraft((current) => ({ ...current, reminderAt }))} onReminderDateChange={(reminderDate) => updateDraft((current) => ({ ...current, reminderDate }))} onRecurrenceChange={(recurrence) => updateDraft((current) => ({ ...current, recurrence }))} onGroupDropdownOpenChange={setIsGroupDropdownOpen} />
           <SubtaskDrafts titles={draft.subtaskTitles} newTitle={newSubtaskTitle} disabled={isSaving} onTitlesChange={(subtaskTitles) => updateDraft((current) => ({ ...current, subtaskTitles }))} onNewTitleChange={setNewSubtaskTitle} onAdd={addSubtaskDraft} />
         </div>
 
-        <footer className="flex justify-end gap-3 border-t border-white/10 bg-[rgba(20,20,20,0.86)] px-6 py-4 backdrop-blur-xl">
+        <footer className="flex justify-end gap-3 border-t border-outline/60 bg-surface-container/95 px-6 py-4 backdrop-blur-xl">
           <button
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="rounded-pill bg-white/5 px-5 py-2.5 text-sm font-medium text-on-surface transition hover:bg-white/10 disabled:opacity-50"
+            className="rounded-pill bg-on-surface/[0.06] px-5 py-2.5 text-sm font-medium text-on-surface transition hover:bg-on-surface/[0.08] disabled:opacity-50"
           >
             Cancel
           </button>

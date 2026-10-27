@@ -11,7 +11,7 @@ type Actions = {
   onMoveDueDate?: (task: TaskSummary, dueDate: string | null) => void; onTaskOpen?: (taskId: string) => void
 }
 const labels: Record<DesktopSortKey, string> = { title: 'Title', group: 'Group', due_date: 'Due', created_at: 'Created', completed_at: 'Completed', review: 'Review', recurrence: 'Recurrence' }
-const selectStyle = { className: 'space-y-1', labelClassName: 'font-body text-[0.68rem] uppercase tracking-[0.16em] text-on-surface-variant', triggerClassName: 'h-10 px-3 font-body text-sm ring-1 ring-white/10 focus:ring-primary' }
+const selectStyle = { className: 'space-y-1', labelClassName: 'font-body text-[0.68rem] uppercase tracking-[0.16em] text-on-surface-variant', triggerClassName: 'h-10 px-3 font-body text-sm ring-1 ring-outline/50 focus:ring-primary' }
 
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (value: string) => void }) {
   return <SelectDropdown label={label} options={options} value={value} onChange={(value) => onChange(String(value))} {...selectStyle} />
@@ -19,7 +19,7 @@ function FilterSelect({ label, value, options, onChange }: { label: string; valu
 
 function TaskFilterMenu({ state, groups, status, lockedGroupId }: { state: State; groups: GroupSummary[]; status: string; lockedGroupId?: string }) {
   if (!state.showFilters) return null
-  return <div className="absolute right-0 top-12 z-50 w-64 rounded-card bg-surface-container-highest p-4 shadow-ambient ring-1 ring-white/10"><div className="flex flex-col gap-4">
+  return <div className="absolute right-0 top-12 z-50 w-64 rounded-card bg-surface-container-highest p-4 shadow-ambient ring-1 ring-outline/50"><div className="flex flex-col gap-4">
     {lockedGroupId ? null : <FilterSelect label="Group" value={state.filters.groupId} options={[{ value: 'all', label: 'All groups' }, ...groups.map((group) => ({ value: group.id, label: group.name }))]} onChange={(value) => state.setParam('group', value)} />}
     {status === 'completed' ? null : <FilterSelect label="Bucket" value={state.filters.dueBucket} options={[{ value: 'all', label: 'All buckets' }, { value: 'overdue', label: 'Overdue' }, { value: 'due_soon', label: 'Due soon' }, { value: 'no_date', label: 'No date' }]} onChange={(value) => state.setParam('bucket', value)} />}
     <FilterSelect label="Review" value={state.filters.review} options={[{ value: 'all', label: 'All review states' }, { value: 'needs_review', label: 'Needs review' }, { value: 'clear', label: 'Clear' }]} onChange={(value) => state.setParam('review', value)} />

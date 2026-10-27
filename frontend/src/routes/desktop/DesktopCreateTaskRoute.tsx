@@ -81,7 +81,7 @@ export function DesktopCreateTaskRoute() {
 
   return (
     <section className="mx-auto max-w-3xl">
-      <div className="rounded-soft border border-white/10 bg-surface-dim/80 p-6 shadow-ambient">
+      <div className="rounded-soft border border-outline/60 bg-surface-dim/80 p-6 shadow-ambient">
         <TaskForm
           mode="create"
           groups={groups}

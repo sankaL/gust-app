@@ -84,7 +84,8 @@ describe('EditExtractedTaskModal', () => {
     expect(taskHeading).toBeInTheDocument()
     expect(taskHeading).not.toHaveClass('sr-only')
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
-    expect(screen.getByRole('dialog')).toHaveClass('!mt-0')
+    // Mobile modals open as a three-quarter-height bottom sheet.
+    expect(screen.getByRole('dialog')).toHaveClass('sheet-h-default')
     expect(screen.getByText('Subtasks')).toBeInTheDocument()
     expect(screen.getByText('Remove lint screen')).toBeInTheDocument()
 

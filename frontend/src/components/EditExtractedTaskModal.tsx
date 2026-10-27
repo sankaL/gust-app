@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Bell, CalendarDays, FolderKanban, ListTodo, PencilLine, Repeat2, TextQuote, X } from 'lucide-react'
+import { Button } from './Button'
+import { BottomSheet } from './ui/BottomSheet'
+import { Chip } from './ui/controls'
+import { groupTone } from './ui/chipStyles'
 import type { LucideIcon } from 'lucide-react'
 import { ExtractedTask, GroupSummary, createSubtask, createTask, updateExtractedTask } from '../lib/api'
 import type { ExtractedTaskUpdates } from '../lib/api'
@@ -36,6 +40,9 @@ type PendingTaskCreation = {
   nextSubtaskIndex: number
 }
 
+const READONLY_TILE_CLASS =
+  'group relative block w-full cursor-pointer rounded-[1.1rem] bg-surface-dim/70 p-3.5 text-left ring-1 ring-inset ring-outline/30 outline-none transition-[background-color,transform] duration-200 hover:bg-surface-dim focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-[0.99]'
+
 const sectionIcons: Record<Exclude<EditableSection, 'title'>, LucideIcon> = {
   context: TextQuote,
   dueDate: CalendarDays,
@@ -63,7 +70,7 @@ function ReadOnlySectionCard({
       type="button"
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      className="group relative block w-full cursor-pointer rounded-[1.25rem] bg-surface-container/55 p-3.5 text-left transition-[background-color,transform] hover:bg-surface-container-high/80 active:scale-[0.99]"
+      className={READONLY_TILE_CLASS}
       title="Tap or double-click to edit"
     >
       <div className="flex items-center justify-between gap-2">
@@ -73,7 +80,7 @@ function ReadOnlySectionCard({
             {label}
           </p>
         </div>
-        <span className="text-[0.62rem] text-primary/60 opacity-0 transition-opacity group-hover:opacity-100 sm:inline">
+        <span className="text-[0.62rem] text-primary opacity-0 transition-opacity group-hover:opacity-100 sm:inline">
           Tap or double-click to edit
         </span>
       </div>
@@ -100,7 +107,7 @@ function ReadOnlyMetadataTile({
       type="button"
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      className="group relative block w-full min-w-0 cursor-pointer rounded-[1.25rem] bg-surface-container/55 p-3.5 text-left transition-[background-color,transform] hover:bg-surface-container-high/80 active:scale-[0.99]"
+      className={`${READONLY_TILE_CLASS} min-w-0`}
       title="Tap or double-click to edit"
     >
       <div className="flex items-center gap-2">
@@ -128,14 +135,14 @@ function ReadOnlySubtasksSection({
       type="button"
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      className="group relative block w-full cursor-pointer rounded-card bg-surface-container/65 p-3.5 text-left transition-[background-color,transform] hover:bg-surface-container-high/80 active:scale-[0.99]"
+      className={READONLY_TILE_CLASS}
       title="Tap or double-click to edit"
     >
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
             <ListTodo className="h-4 w-4 text-primary/80" strokeWidth={1.8} />
-            <p className="font-display text-lg text-on-surface">Subtasks</p>
+            <p className="font-display text-lg font-bold text-on-surface">Subtasks</p>
           </div>
           <p className="mt-1 font-body text-xs text-on-surface-variant">
             {subtasks.length} {subtasks.length === 1 ? 'subtask' : 'subtasks'}
@@ -156,7 +163,7 @@ function ReadOnlySubtasksSection({
               key={`${title}-${index}`}
               className="flex items-center gap-3 py-2.5 text-sm text-on-surface"
             >
-              <span className="h-2 w-2 rounded-full bg-primary/70" />
+              <span className="h-4 w-4 shrink-0 rounded-full border-2 border-on-surface-variant/35" />
               <span className="min-w-0 flex-1">{title}</span>
             </div>
           ))
@@ -176,7 +183,7 @@ function EditableContextSection({
   onChange: (value: string) => void
 }) {
   return (
-    <section className="rounded-[1.25rem] bg-surface-container/75 p-3.5">
+    <section className="rounded-[1.1rem] bg-surface-dim/70 p-3.5 ring-1 ring-inset ring-outline/30">
       <div className="flex items-center gap-2">
         <TextQuote className="h-3.5 w-3.5 text-primary" strokeWidth={1.8} />
         <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">Context</p>
@@ -186,7 +193,7 @@ function EditableContextSection({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         rows={3}
-        className="mt-2 w-full resize-none rounded-[1rem] bg-surface-dim px-3 py-3 text-sm leading-6 text-on-surface outline-none placeholder:text-on-surface-variant/45 focus:bg-surface-container-high focus:ring-1 focus:ring-primary"
+        className="mt-2 w-full resize-none rounded-[0.9rem] bg-surface-container-high px-3 py-3 text-sm leading-6 text-on-surface outline-none ring-1 ring-inset ring-outline/40 placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/60"
         style={{ fontSize: '16px' }}
         aria-label="Task description"
         placeholder="Add context that helps you act on this later"
@@ -198,7 +205,7 @@ function EditableContextSection({
 
 function EditableMetadataTile({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="min-w-0 rounded-[1.25rem] bg-surface-container/75 p-3.5">
+    <div className="min-w-0 rounded-[1.1rem] bg-surface-dim/70 p-3.5 ring-1 ring-inset ring-outline/30">
       <p className="text-[0.62rem] font-semibold uppercase tracking-[0.15em] text-on-surface-variant">
         {label}
       </p>
@@ -222,16 +229,9 @@ function EditTaskModalFooter({
   const isEnabled = isCreateMode ? isDirty : isDirty && !isSaving
 
   return (
-    <div className="shrink-0 border-t border-white/10 bg-surface-container/95 px-5 py-4 pb-[max(1rem,calc(env(safe-area-inset-bottom)+1rem))] backdrop-blur-xl sm:px-6 sm:pb-4">
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={!isEnabled || isSaving}
-        className="w-full rounded-pill bg-[radial-gradient(circle_at_top,_#c4b5fd_10%,_#7c3aed_90%)] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_8px_0_#4c1d95,_0_16px_22px_rgba(0,0,0,0.35),_inset_0_2px_3px_rgba(255,255,255,0.38)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] active:shadow-[0_0px_0_#4c1d95,_0_4px_10px_rgba(0,0,0,0.35),_inset_0_2px_4px_rgba(255,255,255,0.18)] disabled:cursor-not-allowed disabled:opacity-40 disabled:grayscale disabled:shadow-none disabled:hover:translate-y-0 disabled:active:translate-y-0"
-      >
-        {submitLabel}
-      </button>
-    </div>
+    <Button variant="primary" size="lg" fullWidth onClick={onSave} disabled={!isEnabled || isSaving}>
+      {submitLabel}
+    </Button>
   )
 }
 
@@ -297,8 +297,6 @@ export function EditExtractedTaskModal({
     if (JSON.stringify(draft.subtaskTitles) !== JSON.stringify(initialDraft.subtaskTitles)) return true
     return false
   }, [draft, initialDraft, isCreateMode, task])
-
-  if (!isOpen) return null
 
   const updateDraft = (updater: (prev: TaskFormDraft) => TaskFormDraft) => {
     setDraft((prev) => updater(prev))
@@ -398,268 +396,252 @@ export function EditExtractedTaskModal({
     }
   }
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose()
-    }
-  }
-
   const selectedGroupName =
     groups.find((g) => g.id === draft.groupId)?.name ?? task?.group_name ?? 'Inbox'
 
-  return (
-    <div
-      className="fixed !mt-0 inset-0 z-[120] flex items-center justify-center bg-surface p-0 sm:bg-black/65 sm:p-5 sm:backdrop-blur-md"
-      onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="edit-extracted-task-title"
-    >
-      <div className="flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-none bg-[radial-gradient(circle_at_top_left,_rgba(186,158,255,0.18),_rgba(32,32,31,0.98)_42%,_rgba(14,14,14,1)_100%)] shadow-[0_28px_80px_rgba(0,0,0,0.62)] sm:h-auto sm:max-h-[92dvh] sm:rounded-[1.7rem]">
-        {/* Header */}
-        <div className="flex flex-col gap-2 p-5 pb-3 pr-2 pt-[max(1.25rem,calc(env(safe-area-inset-top)+0.75rem))] sm:p-6 sm:pb-4 sm:pr-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <span className="rounded-pill bg-white/6 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                {isCreateMode ? 'New task' : 'Task review'}
-              </span>
-              <span className="max-w-[12rem] truncate rounded-pill bg-surface-container-high px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                {selectedGroupName}
-              </span>
-            </div>
-            <div className="flex shrink-0 items-center">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSaving}
-                className="clay-obsidian flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface disabled:opacity-50"
-                aria-label="Close edit task"
-              >
-                <X className="h-5 w-5" strokeWidth={2} />
-              </button>
-            </div>
-          </div>
-          {isSectionEditing('title') ? (
-            <>
-              <h2 id="edit-extracted-task-title" className="sr-only">
-                {draft.title || 'Untitled task'}
-              </h2>
-              <input
-                autoFocus
-                value={draft.title}
-                onChange={(event) => updateDraft((prev) => ({ ...prev, title: event.target.value }))}
-                className="w-full rounded-[1.25rem] bg-surface/60 px-4 py-3 font-display text-[1.5rem] leading-tight text-on-surface outline-none placeholder:text-on-surface-variant/40 focus:bg-surface/75 focus:text-white sm:text-[1.85rem]"
-                style={{ fontSize: '16px' }}
-                aria-label="Task title"
-                placeholder="Task title"
-                disabled={isSaving}
-              />
-            </>
-          ) : (
-            <h2
-              id="edit-extracted-task-title"
-              className={isCreateMode ? 'sr-only' : 'font-display text-2xl leading-tight text-on-surface sm:text-3xl'}
-            >
-              {isCreateMode ? 'Add Task' : (
-                <button
-                  type="button"
-                  onClick={() => startEditing('title')}
-                  onDoubleClick={() => startEditing('title')}
-                  className="group flex w-full items-start gap-2 pl-3.5 text-left outline-none"
-                  title="Tap or double-click to edit title"
-                >
-                  <span className="text-balance">{draft.title || 'Untitled task'}</span>
-                  <PencilLine className="mt-1 h-4 w-4 shrink-0 text-primary/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" strokeWidth={1.8} />
-                </button>
-              )}
-            </h2>
-          )}
+  const header = (
+    <div className="px-5 pb-3 pt-1">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <Chip tone="neutral">{isCreateMode ? 'New task' : 'Task review'}</Chip>
+          <Chip tone={groupTone(selectedGroupName)} icon={FolderKanban}>{selectedGroupName}</Chip>
         </div>
-
-        {/* Content Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-6">
-          {error ? (
-            <div className="mb-4 rounded-card border border-error/35 bg-[rgba(80,18,18,0.92)] p-3 text-sm text-red-100">
-              {error}
-            </div>
-          ) : null}
-
-          {isCreateMode ? (
-            <div className="space-y-5">
-              <TaskFormFields
-                title={draft.title}
-                description={draft.description}
-                groupId={draft.groupId}
-                dueDate={draft.dueDate}
-                reminderAt={draft.reminderAt}
-                reminderDate={draft.reminderDate}
-                recurrence={draft.recurrence}
-                groups={groups}
-                isGroupDropdownOpen={isGroupDropdownOpen}
-                disabled={isSaving}
-                onTitleChange={(title) => updateDraft((prev) => ({ ...prev, title }))}
-                onDescriptionChange={(description) =>
-                  updateDraft((prev) => ({ ...prev, description }))
-                }
-                onGroupIdChange={(groupId) => updateDraft((prev) => ({ ...prev, groupId }))}
-                onDueDateChange={(dueDate) => updateDraft((prev) => ({ ...prev, dueDate }))}
-                onReminderAtChange={(reminderAt) =>
-                  updateDraft((prev) => ({ ...prev, reminderAt }))
-                }
-                onReminderDateChange={(reminderDate) =>
-                  updateDraft((prev) => ({ ...prev, reminderDate }))
-                }
-                onRecurrenceChange={(recurrence) =>
-                  updateDraft((prev) => ({ ...prev, recurrence }))
-                }
-                onGroupDropdownOpenChange={setIsGroupDropdownOpen}
-              />
-              <SubtaskDrafts
-                titles={draft.subtaskTitles}
-                newTitle={newSubtaskTitle}
-                disabled={isSaving}
-                onTitlesChange={(subtaskTitles) =>
-                  updateDraft((prev) => ({ ...prev, subtaskTitles }))
-                }
-                onNewTitleChange={setNewSubtaskTitle}
-                onAdd={addSubtask}
-              />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {isSectionEditing('context') ? (
-                <EditableContextSection
-                  value={draft.description}
-                  disabled={isSaving}
-                  onChange={(description) => updateDraft((prev) => ({ ...prev, description }))}
-                />
-              ) : (
-                <ReadOnlySectionCard
-                  label="Context"
-                  icon={sectionIcons.context}
-                  onClick={() => startEditing('context')}
-                  onDoubleClick={() => startEditing('context')}
-                >
-                  <p className="text-sm leading-6 text-on-surface-variant">
-                    {draft.description || 'No description yet.'}
-                  </p>
-                </ReadOnlySectionCard>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {isSectionEditing('dueDate') ? (
-                  <EditableMetadataTile label="Due date">
-                    <DatePicker
-                      value={draft.dueDate || null}
-                      onChange={updateDueDate}
-                      mode="date"
-                      disabled={isSaving}
-                      placeholder="Select a date"
-                    />
-                  </EditableMetadataTile>
-                ) : (
-                  <ReadOnlyMetadataTile
-                    label="Due date"
-                    icon={sectionIcons.dueDate}
-                    value={formatDate(draft.dueDate)}
-                    onClick={() => startEditing('dueDate')}
-                    onDoubleClick={() => startEditing('dueDate')}
-                  />
-                )}
-                {isSectionEditing('reminder') ? (
-                  <EditableMetadataTile label="Reminder">
-                    <DatePicker
-                      value={draft.reminderAt || null}
-                      onChange={(reminderAt) => updateDraft((prev) => ({ ...prev, reminderAt }))}
-                      mode="datetime"
-                      disabled={!draft.dueDate || isSaving}
-                      placeholder="Select date & time"
-                    />
-                  </EditableMetadataTile>
-                ) : (
-                  <ReadOnlyMetadataTile
-                    label="Reminder"
-                    icon={sectionIcons.reminder}
-                    value={formatDateTime(draft.reminderAt)}
-                    onClick={() => startEditing('reminder')}
-                    onDoubleClick={() => startEditing('reminder')}
-                  />
-                )}
-                {isSectionEditing('group') ? (
-                  <EditableMetadataTile label="Group">
-                    <SelectDropdown
-                      label=""
-                      options={groups.map((group) => ({ value: group.id, label: group.name }))}
-                      value={draft.groupId}
-                      onChange={(groupId) => updateDraft((prev) => ({ ...prev, groupId: String(groupId) }))}
-                      onOpenChange={setIsGroupDropdownOpen}
-                      placeholder="No Group"
-                      disabled={isSaving}
-                    />
-                  </EditableMetadataTile>
-                ) : (
-                  <ReadOnlyMetadataTile
-                    label="Group"
-                    icon={sectionIcons.group}
-                    value={selectedGroupName}
-                    onClick={() => startEditing('group')}
-                    onDoubleClick={() => startEditing('group')}
-                  />
-                )}
-                {isSectionEditing('recurrence') ? (
-                  <div className="sm:col-span-2">
-                    <TaskRecurrenceFields
-                      dueDate={draft.dueDate}
-                      recurrence={draft.recurrence}
-                      disabled={isSaving}
-                      onChange={(recurrence) => updateDraft((prev) => ({ ...prev, recurrence }))}
-                    />
-                  </div>
-                ) : (
-                  <ReadOnlyMetadataTile
-                    label="Recurrence"
-                    icon={sectionIcons.recurrence}
-                    value={formatRecurrence(draft.recurrence)}
-                    onClick={() => startEditing('recurrence')}
-                    onDoubleClick={() => startEditing('recurrence')}
-                  />
-                )}
-              </div>
-
-              {isSectionEditing('subtasks') ? (
-                <SubtaskDrafts
-                  titles={draft.subtaskTitles}
-                  newTitle={newSubtaskTitle}
-                  disabled={isSaving}
-                  onTitlesChange={(subtaskTitles) =>
-                    updateDraft((prev) => ({ ...prev, subtaskTitles }))
-                  }
-                  onNewTitleChange={setNewSubtaskTitle}
-                  onAdd={addSubtask}
-                />
-              ) : (
-                <ReadOnlySubtasksSection
-                  subtasks={draft.subtaskTitles}
-                  onClick={() => startEditing('subtasks')}
-                  onDoubleClick={() => startEditing('subtasks')}
-                />
-              )}
-
-              <p className="pt-1 text-center text-xs text-on-surface-variant/60">
-                Tap or double-click any section to edit
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <EditTaskModalFooter
-          isCreateMode={isCreateMode}
-          isSaving={isSaving}
-          isDirty={isDirty}
-          onSave={() => void handleSave()}
-        />
+        <button
+          type="button"
+          onClick={onClose}
+          onPointerDown={(event) => event.stopPropagation()}
+          disabled={isSaving}
+          className="clay-obsidian flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface disabled:opacity-50"
+          aria-label="Close edit task"
+        >
+          <X className="h-[1.1rem] w-[1.1rem]" strokeWidth={2.2} />
+        </button>
       </div>
+      {isSectionEditing('title') ? (
+        <>
+          <h2 id="edit-extracted-task-title" className="sr-only">
+            {draft.title || 'Untitled task'}
+          </h2>
+          <input
+            autoFocus
+            value={draft.title}
+            onChange={(event) => updateDraft((prev) => ({ ...prev, title: event.target.value }))}
+            onPointerDown={(event) => event.stopPropagation()}
+            className="mt-3 w-full rounded-card bg-surface-dim px-4 py-3 font-display text-[1.35rem] font-bold leading-tight text-on-surface outline-none ring-1 ring-inset ring-outline/40 placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/60"
+            style={{ fontSize: '16px' }}
+            aria-label="Task title"
+            placeholder="Task title"
+            disabled={isSaving}
+          />
+        </>
+      ) : (
+        <h2
+          id="edit-extracted-task-title"
+          className={isCreateMode ? 'sr-only' : 'mt-2 font-display text-[1.45rem] font-bold leading-tight tracking-[-0.01em] text-on-surface'}
+        >
+          {isCreateMode ? 'Add Task' : (
+            <button
+              type="button"
+              onClick={() => startEditing('title')}
+              onDoubleClick={() => startEditing('title')}
+              onPointerDown={(event) => event.stopPropagation()}
+              className="group flex w-full items-start gap-2 text-left outline-none"
+              title="Tap or double-click to edit title"
+            >
+              <span className="text-balance">{draft.title || 'Untitled task'}</span>
+              <PencilLine className="mt-1.5 h-4 w-4 shrink-0 text-primary/70 opacity-60 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" strokeWidth={2} />
+            </button>
+          )}
+        </h2>
+      )}
     </div>
+  )
+
+  return (
+    <BottomSheet
+      open={isOpen}
+      onClose={() => { if (!isSaving) onClose() }}
+      dismissible={!isSaving}
+      labelledBy="edit-extracted-task-title"
+      header={header}
+      footer={<EditTaskModalFooter isCreateMode={isCreateMode} isSaving={isSaving} isDirty={isDirty} onSave={() => void handleSave()} />}
+    >
+    {/* Content Body */}
+    <div className="pb-2">
+      {error ? (
+        <div role="alert" className="mb-4 rounded-card bg-chip-rose px-4 py-3 text-sm text-chip-rose-ink ring-1 ring-inset ring-tertiary/25">
+          {error}
+        </div>
+      ) : null}
+
+      {isCreateMode ? (
+        <div className="space-y-5">
+          <TaskFormFields
+            title={draft.title}
+            description={draft.description}
+            groupId={draft.groupId}
+            dueDate={draft.dueDate}
+            reminderAt={draft.reminderAt}
+            reminderDate={draft.reminderDate}
+            recurrence={draft.recurrence}
+            groups={groups}
+            isGroupDropdownOpen={isGroupDropdownOpen}
+            disabled={isSaving}
+            onTitleChange={(title) => updateDraft((prev) => ({ ...prev, title }))}
+            onDescriptionChange={(description) =>
+              updateDraft((prev) => ({ ...prev, description }))
+            }
+            onGroupIdChange={(groupId) => updateDraft((prev) => ({ ...prev, groupId }))}
+            onDueDateChange={(dueDate) => updateDraft((prev) => ({ ...prev, dueDate }))}
+            onReminderAtChange={(reminderAt) =>
+              updateDraft((prev) => ({ ...prev, reminderAt }))
+            }
+            onReminderDateChange={(reminderDate) =>
+              updateDraft((prev) => ({ ...prev, reminderDate }))
+            }
+            onRecurrenceChange={(recurrence) =>
+              updateDraft((prev) => ({ ...prev, recurrence }))
+            }
+            onGroupDropdownOpenChange={setIsGroupDropdownOpen}
+          />
+          <SubtaskDrafts
+            titles={draft.subtaskTitles}
+            newTitle={newSubtaskTitle}
+            disabled={isSaving}
+            onTitlesChange={(subtaskTitles) =>
+              updateDraft((prev) => ({ ...prev, subtaskTitles }))
+            }
+            onNewTitleChange={setNewSubtaskTitle}
+            onAdd={addSubtask}
+          />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {isSectionEditing('context') ? (
+            <EditableContextSection
+              value={draft.description}
+              disabled={isSaving}
+              onChange={(description) => updateDraft((prev) => ({ ...prev, description }))}
+            />
+          ) : (
+            <ReadOnlySectionCard
+              label="Context"
+              icon={sectionIcons.context}
+              onClick={() => startEditing('context')}
+              onDoubleClick={() => startEditing('context')}
+            >
+              <p className="text-sm leading-6 text-on-surface-variant">
+                {draft.description || 'No description yet.'}
+              </p>
+            </ReadOnlySectionCard>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            {isSectionEditing('dueDate') ? (
+              <EditableMetadataTile label="Due date">
+                <DatePicker
+                  value={draft.dueDate || null}
+                  onChange={updateDueDate}
+                  mode="date"
+                  disabled={isSaving}
+                  placeholder="Select a date"
+                />
+              </EditableMetadataTile>
+            ) : (
+              <ReadOnlyMetadataTile
+                label="Due date"
+                icon={sectionIcons.dueDate}
+                value={formatDate(draft.dueDate)}
+                onClick={() => startEditing('dueDate')}
+                onDoubleClick={() => startEditing('dueDate')}
+              />
+            )}
+            {isSectionEditing('reminder') ? (
+              <EditableMetadataTile label="Reminder">
+                <DatePicker
+                  value={draft.reminderAt || null}
+                  onChange={(reminderAt) => updateDraft((prev) => ({ ...prev, reminderAt }))}
+                  mode="datetime"
+                  disabled={!draft.dueDate || isSaving}
+                  placeholder="Select date & time"
+                />
+              </EditableMetadataTile>
+            ) : (
+              <ReadOnlyMetadataTile
+                label="Reminder"
+                icon={sectionIcons.reminder}
+                value={formatDateTime(draft.reminderAt)}
+                onClick={() => startEditing('reminder')}
+                onDoubleClick={() => startEditing('reminder')}
+              />
+            )}
+            {isSectionEditing('group') ? (
+              <EditableMetadataTile label="Group">
+                <SelectDropdown
+                  label=""
+                  options={groups.map((group) => ({ value: group.id, label: group.name }))}
+                  value={draft.groupId}
+                  onChange={(groupId) => updateDraft((prev) => ({ ...prev, groupId: String(groupId) }))}
+                  onOpenChange={setIsGroupDropdownOpen}
+                  placeholder="No Group"
+                  disabled={isSaving}
+                />
+              </EditableMetadataTile>
+            ) : (
+              <ReadOnlyMetadataTile
+                label="Group"
+                icon={sectionIcons.group}
+                value={selectedGroupName}
+                onClick={() => startEditing('group')}
+                onDoubleClick={() => startEditing('group')}
+              />
+            )}
+            {isSectionEditing('recurrence') ? (
+              <div className="col-span-2">
+                <TaskRecurrenceFields
+                  dueDate={draft.dueDate}
+                  recurrence={draft.recurrence}
+                  disabled={isSaving}
+                  onChange={(recurrence) => updateDraft((prev) => ({ ...prev, recurrence }))}
+                />
+              </div>
+            ) : (
+              <ReadOnlyMetadataTile
+                label="Recurrence"
+                icon={sectionIcons.recurrence}
+                value={formatRecurrence(draft.recurrence)}
+                onClick={() => startEditing('recurrence')}
+                onDoubleClick={() => startEditing('recurrence')}
+              />
+            )}
+          </div>
+
+          {isSectionEditing('subtasks') ? (
+            <SubtaskDrafts
+              titles={draft.subtaskTitles}
+              newTitle={newSubtaskTitle}
+              disabled={isSaving}
+              onTitlesChange={(subtaskTitles) =>
+                updateDraft((prev) => ({ ...prev, subtaskTitles }))
+              }
+              onNewTitleChange={setNewSubtaskTitle}
+              onAdd={addSubtask}
+            />
+          ) : (
+            <ReadOnlySubtasksSection
+              subtasks={draft.subtaskTitles}
+              onClick={() => startEditing('subtasks')}
+              onDoubleClick={() => startEditing('subtasks')}
+            />
+          )}
+
+          <p className="pt-1 text-center text-xs text-on-surface-variant/60">
+            Tap or double-click any section to edit
+          </p>
+        </div>
+      )}
+    </div>
+
+    </BottomSheet>
   )
 }

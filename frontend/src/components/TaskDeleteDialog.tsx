@@ -1,3 +1,8 @@
+import { Trash2 } from 'lucide-react'
+
+import { Button } from './Button'
+import { BottomSheet } from './ui/BottomSheet'
+
 type TaskDeleteDialogProps = {
   isOpen: boolean
   taskTitle: string
@@ -19,85 +24,34 @@ export function TaskDeleteDialog({
   onDeleteSeries,
   onClose
 }: TaskDeleteDialogProps) {
-  if (!isOpen) {
-    return null
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-      <div className="w-full max-w-md rounded-card bg-surface-container p-4 shadow-ambient">
+    <BottomSheet open={isOpen} onClose={() => { if (!isDeleting) onClose() }} dismissible={!isDeleting} size="auto" labelledBy="task-delete-dialog-title" bodyClassName="overflow-y-auto px-5 pb-5 pt-2">
+      <div className="flex flex-col items-center text-center">
+        <span className="animate-pop-in flex h-14 w-14 items-center justify-center rounded-full bg-chip-rose text-chip-rose-ink">
+          <Trash2 className="h-6 w-6" strokeWidth={2.1} aria-hidden="true" />
+        </span>
+        <p id="task-delete-dialog-title" className="mt-4 font-display text-xl font-bold text-on-surface">{isRecurring ? 'Delete recurring task' : 'Delete task'}</p>
+        <p className="mt-1.5 max-w-full truncate font-body text-sm font-semibold text-on-surface">{taskTitle}</p>
+        <p className="mt-1.5 max-w-xs font-body text-sm leading-6 text-on-surface-variant">
+          {isRecurring
+            ? 'Choose whether to delete only this occurrence or this and future open occurrences.'
+            : 'Are you sure you want to delete this task?'}
+        </p>
+        {followUpMessage ? (
+          <p className="mt-2 font-body text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant">{followUpMessage}</p>
+        ) : null}
+      </div>
+      <div className="mt-6 flex flex-col gap-2.5">
         {isRecurring ? (
           <>
-            <p className="font-display text-xl text-on-surface">Delete recurring task</p>
-            <p className="mt-2 font-body text-sm text-on-surface-variant">
-              Choose whether to delete only this occurrence or this and future open occurrences.
-            </p>
-            <p className="mt-2 truncate font-body text-sm text-on-surface">{taskTitle}</p>
-            {followUpMessage ? (
-              <p className="mt-2 font-body text-xs uppercase tracking-[0.12em] text-on-surface-variant">
-                {followUpMessage}
-              </p>
-            ) : null}
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={onDeleteOccurrence}
-                disabled={isDeleting}
-                className="w-full rounded-pill bg-surface-container-high px-4 py-2 text-sm font-medium text-on-surface transition hover:bg-surface-container-highest disabled:opacity-50"
-              >
-                Delete this occurrence
-              </button>
-              <button
-                type="button"
-                onClick={onDeleteSeries}
-                disabled={isDeleting}
-                className="w-full rounded-pill bg-tertiary px-4 py-2 text-sm font-medium text-surface transition hover:bg-tertiary/85 disabled:opacity-50"
-              >
-                Delete this and future
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isDeleting}
-                className="w-full rounded-pill bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:bg-surface-container-high disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
+            <Button variant="secondary" size="lg" fullWidth onClick={onDeleteOccurrence} disabled={isDeleting}>Delete this occurrence</Button>
+            <Button variant="danger" size="lg" fullWidth onClick={onDeleteSeries} disabled={isDeleting}>Delete this and future</Button>
           </>
         ) : (
-          <>
-            <p className="font-display text-xl text-on-surface">Delete task</p>
-            <p className="mt-2 truncate font-body text-sm text-on-surface">{taskTitle}</p>
-            <p className="mt-2 font-body text-sm text-on-surface-variant">
-              Are you sure you want to delete this task?
-            </p>
-            {followUpMessage ? (
-              <p className="mt-2 font-body text-xs uppercase tracking-[0.12em] text-on-surface-variant">
-                {followUpMessage}
-              </p>
-            ) : null}
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={onDeleteOccurrence}
-                disabled={isDeleting}
-                className="w-full rounded-pill bg-tertiary px-4 py-2 text-sm font-medium text-surface transition hover:bg-tertiary/85 disabled:opacity-50"
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isDeleting}
-                className="w-full rounded-pill bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:bg-surface-container-high disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </>
+          <Button variant="danger" size="lg" fullWidth onClick={onDeleteOccurrence} disabled={isDeleting}>Delete</Button>
         )}
+        <Button variant="ghost" size="lg" fullWidth onClick={onClose} disabled={isDeleting}>Cancel</Button>
       </div>
-    </div>
+    </BottomSheet>
   )
 }

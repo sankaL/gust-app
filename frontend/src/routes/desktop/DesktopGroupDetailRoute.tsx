@@ -29,6 +29,6 @@ export function DesktopGroupDetailRoute() {
 
   if (!group) return <GroupMissing />
   if (tasks.openQuery.isLoading || tasks.completedQuery.isLoading) return <div className="h-96 animate-pulse rounded-soft bg-surface-container" aria-busy="true" />
-  if (tasks.openQuery.isError || tasks.completedQuery.isError) return <section className="rounded-soft bg-[rgba(80,18,18,0.92)] p-6"><h1 className="font-display text-3xl text-on-surface">Group tasks could not load</h1><p className="mt-2 font-body text-sm text-red-100">Refresh and try again.</p></section>
+  if (tasks.openQuery.isError || tasks.completedQuery.isError) return <section className="rounded-soft bg-chip-rose p-6"><h1 className="font-display text-3xl text-on-surface">Group tasks could not load</h1><p className="mt-2 font-body text-sm text-chip-rose-ink">Refresh and try again.</p></section>
   return <DesktopGroupDetailView group={group} openTasks={tasks.openTasks} completedTasks={tasks.completedTasks} dueThisWeek={dueThisWeek} groups={groups} session={session} actions={actions} selectedTaskId={preview.selectedTaskId} onOpen={preview.openTaskPreview} onClose={preview.closeTaskPreview} />
 }

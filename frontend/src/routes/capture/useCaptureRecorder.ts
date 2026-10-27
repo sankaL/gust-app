@@ -35,7 +35,9 @@ export function useCaptureRecorder(onAudio: (audio: RecordedAudio) => void) {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const isStartingRef = useRef(false)
+  const discardNextRef = useRef(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [stream, setStream] = useState<MediaStream | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useRecordingWakeLock(isRecording)
@@ -43,6 +45,7 @@ export function useCaptureRecorder(onAudio: (audio: RecordedAudio) => void) {
   const clearRecorder = useCallback(() => {
     recorderRef.current = null
     streamRef.current = null
+    setStream(null)
     setIsRecording(false)
   }, [])
   const start = useCallback(async () => {
@@ -57,12 +60,18 @@ export function useCaptureRecorder(onAudio: (audio: RecordedAudio) => void) {
     setIsLoading(true)
     try {
       const opened = await openRecorder({
-        onAudio: (audio) => { clearRecorder(); onAudio(audio) },
+        onAudio: (audio) => {
+          clearRecorder()
+          if (discardNextRef.current) { discardNextRef.current = false; return }
+          onAudio(audio)
+        },
         onError: (message) => { clearRecorder(); setError(message) },
         onStart: () => setIsRecording(true),
       })
       recorderRef.current = opened.recorder
       streamRef.current = opened.stream
+      discardNextRef.current = false
+      setStream(opened.stream)
       return true
     } catch (reason) {
       clearRecorder()
@@ -84,5 +93,11 @@ export function useCaptureRecorder(onAudio: (audio: RecordedAudio) => void) {
   const stop = () => {
     if (recorderRef.current?.state !== 'inactive') recorderRef.current?.stop()
   }
-  return { isRecording, isLoading, error, setError, start, stop }
+  /** Stops the microphone and throws the recording away instead of submitting it. */
+  const cancel = () => {
+    if (!recorderRef.current || recorderRef.current.state === 'inactive') return
+    discardNextRef.current = true
+    recorderRef.current.stop()
+  }
+  return { isRecording, isLoading, error, setError, start, stop, cancel, stream }
 }
