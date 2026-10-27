@@ -79,8 +79,8 @@ export function PortraitOrientationGuard() {
   }
 
   return (
-    <div className="safe-area-overlay fixed inset-0 z-[120] flex items-center justify-center bg-surface/95 backdrop-blur-md">
-      <Card className="w-full max-w-sm bg-surface-container-high/95 shadow-[0_0_48px_rgba(186,158,255,0.18)]">
+    <div className="safe-area-overlay fixed inset-0 z-[400] flex items-center justify-center bg-surface/95 backdrop-blur-md">
+      <Card className="w-full max-w-sm bg-surface-container-high shadow-float ring-1 ring-outline/50">
         <div className="space-y-3 text-center">
           <p className="font-body text-[0.65rem] uppercase tracking-[0.2em] text-primary">
             Portrait Only
@@ -93,7 +93,7 @@ export function PortraitOrientationGuard() {
           <button
             type="button"
             onClick={() => setDismissed(true)}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 font-body text-sm font-medium text-on-surface-variant transition-colors hover:bg-white/10 active:bg-white/[0.03]"
+            className="mt-2 w-full rounded-pill bg-surface-dim py-2.5 font-body text-sm font-semibold text-on-surface-variant ring-1 ring-inset ring-outline/50 transition-colors hover:text-on-surface"
           >
             Continue anyway
           </button>

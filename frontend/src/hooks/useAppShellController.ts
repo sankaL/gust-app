@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { useNavigate } from 'react-router-dom'
@@ -60,26 +60,6 @@ function useInstallState() {
   return { installPrompt, isStandalone, showIosInstallHelp, requestInstall }
 }
 
-function useDismissibleMenu(isOpen: boolean, close: () => void) {
-  const menuRef = useRef<HTMLDivElement | null>(null)
-  useEffect(() => {
-    if (!isOpen) return
-    const closeOutside = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) close()
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close()
-    }
-    document.addEventListener('mousedown', closeOutside)
-    window.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('mousedown', closeOutside)
-      window.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [close, isOpen])
-  return menuRef
-}
-
 function usePwaStatus() {
   const [needRefresh, setNeedRefresh] = useState(false)
   const [offlineReady, setOfflineReady] = useState(false)
@@ -90,7 +70,7 @@ function usePwaStatus() {
   return { needRefresh, offlineReady, update: () => void updateServiceWorker(true) }
 }
 
-function useLogout({ token, closeMenu, onError }: { token?: string | null; closeMenu: () => void; onError: (message: string) => void }) {
+function useLogout({ token, onError }: { token?: string | null; onError: (message: string) => void }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   return useMutation({
@@ -98,7 +78,7 @@ function useLogout({ token, closeMenu, onError }: { token?: string | null; close
       if (!token) throw new ApiError('Your session is missing a CSRF token.', 'csrf_missing', 403)
       return logoutSession(token)
     },
-    onSuccess: () => { closeMenu(); queryClient.clear(); void navigate('/login', { replace: true }) },
+    onSuccess: () => { queryClient.clear(); void navigate('/login', { replace: true }) },
     onError: (error) => onError(error instanceof ApiError ? error.message : 'Logout failed. Refresh and try again.'),
   })
 }
@@ -110,23 +90,16 @@ export function useAppShellController() {
   const timezoneSync = useSessionTimezoneSync(sessionQuery.data)
   const install = useInstallState()
   const pwa = usePwaStatus()
-  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
   const [topBarAction, setTopBarAction] = useState<ReactNode | null>(null)
-  const [isRecording, setIsRecording] = useState(false)
-  const [isRecordingActionDisabled, setIsRecordingActionDisabled] = useState(false)
-  const [onToggleRecording, setOnToggleRecording] = useState<(() => void) | null>(null)
-  const closeMenu = useCallback(() => setIsAccountMenuOpen(false), [])
-  const accountMenuRef = useDismissibleMenu(isAccountMenuOpen, closeMenu)
-  const shellActions = useMemo(
-    () => ({ setTopBarAction, setIsRecording, setIsRecordingActionDisabled, setOnToggleRecording }),
-    []
-  )
-  const logout = useLogout({ token: sessionQuery.data?.csrf_token, closeMenu, onError: notifyError })
+  const shellActions = useMemo(() => ({ setTopBarAction }), [])
+  const logout = useLogout({ token: sessionQuery.data?.csrf_token, onError: notifyError })
   const user = sessionQuery.data?.user
   const accountInitials = user ? buildAvatarLabel(user.display_name, user.email) : 'G'
 
-  function openCompletedTasks() { closeMenu(); void navigate('/tasks/completed?group=all') }
-  function openDesktopMode() { closeMenu(); markDeviceRedirectOverride(); void navigate('/desktop') }
+  // Account actions replace the open account sheet's history entry so Back returns to the prior screen.
+  function openCompletedTasks() { void navigate('/tasks/completed?group=all', { replace: true }) }
+  function openSettings() { void navigate('/settings', { replace: true }) }
+  function openDesktopMode() { markDeviceRedirectOverride(); void navigate('/desktop') }
 
   return {
     sessionQuery,
@@ -134,18 +107,13 @@ export function useAppShellController() {
     install,
     needRefresh: pwa.needRefresh,
     offlineReady: pwa.offlineReady,
-    isAccountMenuOpen,
     topBarAction,
-    isRecording,
-    isRecordingActionDisabled,
-    onToggleRecording,
-    accountMenuRef,
     shellActions,
     accountInitials,
     logout,
     shouldShowInstallButton: !install.isStandalone && (install.installPrompt !== null || isIosDevice()),
-    toggleAccountMenu: () => setIsAccountMenuOpen((current) => !current),
     openCompletedTasks,
+    openSettings,
     openDesktopMode,
     update: pwa.update,
   }

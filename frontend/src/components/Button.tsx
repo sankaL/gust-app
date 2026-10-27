@@ -1,46 +1,45 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react'
 
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'soft' | 'tertiary' | 'solid' | 'mic'
+type ButtonSize = 'sm' | 'md' | 'lg'
+
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'mic' | 'solid'
-  size?: 'sm' | 'md' | 'lg'
+  variant?: ButtonVariant
+  size?: ButtonSize
   fullWidth?: boolean
 }
 
+const BASE_CLASS =
+  'inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-pill font-body font-semibold tracking-[-0.005em] outline-none transition-[transform,background-color,box-shadow,color,opacity] duration-200 ease-out-expo focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:scale-[0.97] disabled:pointer-events-none disabled:opacity-45'
+
+const SIZE_CLASSES: Record<ButtonSize, string> = {
+  sm: 'h-9 px-3.5 text-[0.8rem]',
+  md: 'h-11 px-5 text-sm',
+  lg: 'h-[3.25rem] px-6 text-[0.95rem]',
+}
+
+const VARIANT_CLASSES: Record<ButtonVariant, string> = {
+  primary: 'bg-primary text-on-primary shadow-[0_8px_20px_-10px_rgb(var(--color-primary-dim))] hover:bg-primary-dim',
+  secondary: 'bg-surface-container-high text-on-surface ring-1 ring-inset ring-outline/70 hover:bg-surface-container-highest',
+  ghost: 'bg-transparent text-on-surface-variant hover:bg-on-surface/[0.06] hover:text-on-surface',
+  danger: 'bg-chip-rose text-chip-rose-ink hover:bg-tertiary hover:text-white',
+  soft: 'bg-primary/[0.12] text-primary hover:bg-primary/20',
+  // Legacy aliases kept so older call sites inherit the unified styling.
+  tertiary: 'bg-chip-rose text-chip-rose-ink hover:bg-tertiary hover:text-white',
+  solid: 'bg-primary text-on-primary hover:bg-primary-dim',
+  mic: 'bg-primary text-on-primary hover:bg-primary-dim',
+}
+
+function buttonClass({ variant = 'secondary', size = 'md', fullWidth = false, className = '' }: { variant?: ButtonVariant; size?: ButtonSize; fullWidth?: boolean; className?: string } = {}) {
+  return [BASE_CLASS, SIZE_CLASSES[size], VARIANT_CLASSES[variant], fullWidth ? 'w-full' : '', className].filter(Boolean).join(' ')
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className = '', variant = 'secondary', size = 'md', fullWidth = false, children, ...props }, ref) => {
-    const baseClasses = 'inline-flex items-center justify-center font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95'
-    
-    const sizeClasses = {
-      sm: 'px-3 py-1.5 text-xs rounded-pill',
-      md: 'px-4 py-2 text-sm rounded-pill font-display tracking-wide',
-      lg: 'px-5 py-3 text-base rounded-pill font-display tracking-wide'
-    }
-
-    const variantClasses = {
-      primary: 'bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.92),_rgba(132,85,239,0.82))] text-surface shadow-[0_0_40px_rgba(186,158,255,0.4)] hover:shadow-[0_0_60px_rgba(186,158,255,0.6)]',
-      solid: 'bg-[#9333ea] text-white hover:bg-[#7e22ce] border-0 shadow-none',
-      secondary: 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest hover:shadow-ambient border border-outline/20',
-      tertiary: 'bg-tertiary/10 text-tertiary hover:bg-tertiary/20 hover:shadow-ambient',
-      ghost: 'bg-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/30',
-      mic: 'flex h-48 w-48 items-center justify-center rounded-pill border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(186,158,255,0.92),_rgba(132,85,239,0.82))] text-surface shadow-[0_0_40px_rgba(186,158,255,0.4)] hover:shadow-[0_0_60px_rgba(186,158,255,0.6)] font-display text-xl transition-all duration-300'
-    }
-    
-    const widthClass = fullWidth ? 'w-full' : ''
-
-    const buttonClasses = [
-      baseClasses,
-      variant !== 'mic' ? sizeClasses[size] : '', // mic uses defined h-48 w-48
-      variantClasses[variant],
-      widthClass,
-      className
-    ].filter(Boolean).join(' ')
-
-    return (
-      <button ref={ref} className={buttonClasses} {...props}>
-        {children}
-      </button>
-    )
-  }
+  ({ className = '', variant = 'secondary', size = 'md', fullWidth = false, children, type = 'button', ...props }, ref) => (
+    <button ref={ref} type={type} className={buttonClass({ variant, size, fullWidth, className })} {...props}>
+      {children}
+    </button>
+  )
 )
 
 Button.displayName = 'Button'

@@ -13,3 +13,8 @@ export function isMobilePhoneDevice(): boolean {
 
   return (isIPhone || isAndroidPhone || isOtherPhone) && !isIPad
 }
+
+/** Where a signed-in visitor lands when no specific destination was requested. */
+export function defaultSignedInPath(): string {
+  return isMobilePhoneDevice() ? '/tasks' : '/desktop'
+}

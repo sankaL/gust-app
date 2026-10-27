@@ -28,7 +28,7 @@ function desktopToMobileDestination(pathname: string, search: string) {
   if (mappedPath) return `${mappedPath}${search}`
   return /^\/desktop\/tasks\/[^/]+$/.test(pathname)
     ? `${pathname.replace('/desktop', '')}${search}`
-    : '/capture'
+    : '/tasks'
 }
 
 export function markDeviceRedirectOverride() {

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
@@ -331,15 +331,32 @@ describe('tasks flow', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     renderTaskRoute(['/tasks?group=personal-1'])
-    const user = userEvent.setup()
 
     expect(await screen.findByText('Organize garage shelving')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Expand Organize garage shelving' }))
+    // Review indicators show on the card itself; there is no expand step any more.
     expect(screen.getByText(/Needs Review/i)).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/tasks?group_id=personal-1'),
       expect.objectContaining({ credentials: 'include' })
     )
+  })
+
+  it('falls back to today when the ?day= filter is not a real date', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/auth/session')) return Promise.resolve(jsonResponse(buildSessionResponse()))
+      if (url.includes('/groups')) return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      if (url.includes('/tasks?group_id=personal-1')) {
+        return Promise.resolve(jsonResponse([{ id: 'task-1', title: 'Organize garage shelving', status: 'open', needs_review: false, due_date: null, reminder_at: null, due_bucket: 'no_date', group: { id: 'personal-1', name: 'Personal', is_system: false }, completed_at: null, deleted_at: null }]))
+      }
+      return Promise.resolve(jsonResponse([]))
+    }))
+
+    // A hand-edited or stale link used to throw a RangeError while formatting the header date.
+    renderTaskRoute(['/tasks?group=personal-1&day=2026-02-30'])
+
+    expect(await screen.findByText('Organize garage shelving')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /^Today/ })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('loads /tasks as all tasks without fetching Inbox first', async () => {
@@ -569,10 +586,7 @@ describe('tasks flow', () => {
     renderTaskRoute(['/tasks?group=inbox-1'])
     const user = userEvent.setup()
 
-    expect(await screen.findByText(/Swipe right to complete/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Complete Review extraction contract' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Expand Review extraction contract' }))
-    await user.click(screen.getByRole('button', { name: 'Complete Review extraction contract' }))
+    await user.click(await screen.findByRole('button', { name: 'Complete Review extraction contract' }))
 
     expect(
       await screen.findByText(/Completed Review extraction contract/i)
@@ -673,7 +687,7 @@ describe('tasks flow', () => {
     expect(await screen.findByText('Personal only task')).toBeInTheDocument()
   })
 
-  it('keeps task cards collapsed by default, expands inline from the chevron, and opens preview on body click', async () => {
+  it('shows task card details at a glance and opens preview on body click', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
       const method = init?.method ?? 'GET'
@@ -748,30 +762,17 @@ describe('tasks flow', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByText('Review extraction contract')).toBeInTheDocument()
-    // Collapsed state shows subtask count badge (just the number)
-    expect(screen.getByText('2')).toBeInTheDocument()
-    expect(screen.getByText('DAILY')).toBeInTheDocument()
-    expect(screen.getByText(/Due: Tomorrow/i)).toBeInTheDocument()
-    expect(screen.queryByText('Compare the new capture layout against the old hierarchy.')).not.toBeInTheDocument()
-    // Note: Ops Desk now appears in the GroupTabs dropdown, so we check it's not in the task card context
-    expect(screen.queryByText(/Reminder:/i)).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Expand Review extraction contract' }))
-
+    // The card shows the reminder time column, description, and metadata chips at a glance.
     expect(screen.getByText('Compare the new capture layout against the old hierarchy.')).toBeInTheDocument()
-    // Expanded state shows full subtask label
-    expect(screen.getByText('2 subtasks')).toBeInTheDocument()
-    // Ops Desk appears in both dropdown and expanded task card now
-    expect(screen.getAllByText(/^Ops Desk$/).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText(/Reminder:/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('Reminder at 1:00 PM')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('Daily')).toBeInTheDocument()
+    expect(screen.getByText(/Needs Review/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete Review extraction contract' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Complete Review extraction contract' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save and return' })).not.toBeInTheDocument()
 
-    await user.click(
-      screen.getByRole('button', {
-        name: /Review extraction contract.*Compare the new capture layout against the old hierarchy/s
-      })
-    )
+    await user.click(screen.getByRole('button', { name: 'Open Review extraction contract' }))
 
     await waitFor(() => {
       expect(router.state.location.search).toContain('task=task-1')
@@ -923,10 +924,15 @@ describe('tasks flow', () => {
     expect(screen.getByText('Submit reimbursement')).toBeInTheDocument()
     expect(screen.getByText('Call landlord')).toBeInTheDocument()
     
-    // Check due badges are rendered (format: "Due: [badge]")
-    expect(screen.getByText(/Due: Overdue/i)).toBeInTheDocument()
-    expect(screen.getByText(/Due: Today/i)).toBeInTheDocument()
-    expect(screen.getByText(/Due: Tomorrow/i)).toBeInTheDocument()
+    // The time column reads the due date; overdue work also gets a rose chip.
+    const overdueCard = screen.getByText('Renew passport').closest('article') as HTMLElement
+    const todayCard = screen.getByText('Submit reimbursement').closest('article') as HTMLElement
+    const tomorrowCard = screen.getByText('Call landlord').closest('article') as HTMLElement
+    expect(within(overdueCard).getByText(/^Overdue · /)).toBeInTheDocument()
+    expect(within(todayCard).getByText('Today')).toBeInTheDocument()
+    expect(within(todayCard).queryByText(/^Overdue/)).not.toBeInTheDocument()
+    expect(within(tomorrowCard).getByText(String(Number(localDate(1).slice(8))))).not.toHaveClass('text-tertiary')
+    expect(within(tomorrowCard).queryByText(/^Overdue/)).not.toBeInTheDocument()
   })
 
   it('uses the same collapsed and expanded task card behavior in the all-tasks view', async () => {
@@ -1273,7 +1279,7 @@ describe('tasks flow', () => {
 
     // Check Inbox group is shown with LOCKED badge
     expect(await screen.findByText('Inbox')).toBeInTheDocument()
-    expect(screen.getByText('LOCKED')).toBeInTheDocument()
+    expect(screen.getByText('Locked')).toBeInTheDocument()
     
     // Check Personal group is also shown
     expect(screen.getByText('Personal')).toBeInTheDocument()
@@ -1281,7 +1287,11 @@ describe('tasks flow', () => {
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Edit group' }))
     const saveGroupButton = await screen.findByRole('button', { name: 'Save Group' })
-    expect(saveGroupButton.parentElement).toHaveClass('justify-end')
+    expect(saveGroupButton).toHaveClass('bg-primary')
+    expect(screen.getByRole('button', { name: 'Delete Group & Reassign Tasks' })).toBeInTheDocument()
+
+    // Tapping a group card opens the task home filtered to that group.
+    expect(screen.getByRole('link', { name: 'Show Personal tasks' })).toHaveAttribute('href', '/tasks?group=personal-1')
   })
 
   it('opens non-review task detail in read mode first and enters edit mode from the sticky dock', async () => {
@@ -1571,11 +1581,7 @@ describe('tasks flow', () => {
     renderTaskRoute(['/tasks?group=inbox-1'])
     const user = userEvent.setup()
 
-    expect((await screen.findAllByText('Swipe right to complete')).length).toBeGreaterThan(0)
-    expect(screen.queryByRole('button', { name: 'Delete Weekly planning' })).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Expand Weekly planning' }))
-    await user.click(screen.getByRole('button', { name: 'Delete Weekly planning' }))
+    await user.click(await screen.findByRole('button', { name: 'Delete Weekly planning' }))
 
     expect(await screen.findByText('Delete recurring task')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete this occurrence' })).toBeInTheDocument()

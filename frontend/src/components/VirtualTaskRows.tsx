@@ -2,10 +2,13 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 
 import type { TaskSummary } from '../lib/api'
 import { OpenTaskCard } from './OpenTaskCard'
+import { SECTION_ICONS } from '../lib/taskSections'
+import { SectionLabel } from './ui/controls'
 
 export type VirtualTaskItem =
   | { type: 'header'; sectionKey: string; label: string; count: number }
-  | { type: 'task'; task: TaskSummary }
+  | { type: 'task'; task: TaskSummary; highlighted?: boolean }
+
 
 const rowStyle = (start: number) => ({
   position: 'absolute' as const,
@@ -17,9 +20,8 @@ const rowStyle = (start: number) => ({
 
 function SectionHeaderRow({ row, item, offset, measure }: { row: VirtualItem; item: Extract<VirtualTaskItem, { type: 'header' }>; offset: number; measure: (node: Element | null) => void }) {
   return (
-    <div key={row.key} data-index={row.index} ref={measure} style={rowStyle(offset)} className="flex items-center justify-between px-1">
-      <h3 className="font-display text-xl text-on-surface">{item.label}</h3>
-      <span className="font-body text-xs uppercase tracking-[0.1em] text-on-surface-variant">{item.count} tasks</span>
+    <div key={row.key} data-index={row.index} ref={measure} style={rowStyle(offset)} className="pb-2.5 pt-4">
+      <SectionLabel icon={SECTION_ICONS[item.sectionKey]} count={item.count} tone={item.sectionKey === 'overdue' ? 'alert' : 'default'}>{item.label}</SectionLabel>
     </div>
   )
 }
@@ -37,8 +39,8 @@ function TaskRow({ row, item, todayIso, offset, measure, busy, onOpen, onPrepare
   onDelete: (task: TaskSummary) => void
 }) {
   return (
-    <div key={row.key} data-index={row.index} ref={measure} style={rowStyle(offset)} className="px-1 py-1">
-      <OpenTaskCard task={item.task} todayIso={todayIso} onOpen={onOpen} onPrepareOpen={onPrepareOpen} onComplete={onComplete} onDelete={onDelete} isBusy={busy} showCollapsedGroupLabel />
+    <div key={row.key} data-index={row.index} ref={measure} style={rowStyle(offset)} className="py-1.5">
+      <OpenTaskCard task={item.task} todayIso={todayIso} onOpen={onOpen} onPrepareOpen={onPrepareOpen} onComplete={onComplete} onDelete={onDelete} isBusy={busy} highlighted={item.highlighted} enableSwipe showCollapsedGroupLabel />
     </div>
   )
 }

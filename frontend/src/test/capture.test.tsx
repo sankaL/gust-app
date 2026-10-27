@@ -42,7 +42,7 @@ function renderCaptureRoute(initialEntry = '/capture') {
       {
         path: '/',
         element: <AppShell />,
-        children: [{ path: 'capture', element: <CaptureRoute /> }]
+        children: [{ path: 'capture', element: <CaptureRoute /> }, { path: 'tasks', element: <div data-testid="tasks-route" /> }]
       }
     ],
     { initialEntries: [initialEntry] }
@@ -102,6 +102,7 @@ type FetchMock = ReturnType<typeof vi.fn>
 
 function stubSignedInFetch(overrides?: {
   onVoiceCapture?: () => unknown
+  onTextCapture?: () => Response
   onExtractedTasks?: () => unknown
   onPendingTasks?: () => unknown
   onGroups?: () => unknown
@@ -127,6 +128,10 @@ function stubSignedInFetch(overrides?: {
       return Promise.resolve(
         jsonResponse(overrides?.onVoiceCapture?.() ?? { capture_id: 'capture-1', transcript_text: 'voice note' })
       )
+    }
+
+    if (url.includes('/captures/text') && method === 'POST' && overrides?.onTextCapture) {
+      return Promise.resolve(overrides.onTextCapture())
     }
 
     if (url.includes('/captures/pending-tasks')) {
@@ -205,6 +210,28 @@ function stubSignedInFetchWithVoiceError(options: {
 
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
+}
+
+const stagedTaskFixture = {
+  id: 'extracted-1',
+  capture_id: 'capture-1',
+  title: 'Call the dentist',
+  description: null,
+  group_id: 'inbox-1',
+  group_name: 'Inbox',
+  due_date: null,
+  reminder_at: null,
+  reminder_date: null,
+  recurrence_frequency: null,
+  recurrence_weekday: null,
+  recurrence_day_of_month: null,
+  recurrence_month: null,
+  top_confidence: 0.9,
+  needs_review: false,
+  status: 'pending',
+  subtask_titles: [],
+  created_at: '2026-10-26T12:00:00Z',
+  updated_at: '2026-10-26T12:00:00Z',
 }
 
 beforeEach(() => {
@@ -289,7 +316,8 @@ describe('capture route', () => {
       )
     })
 
-    expect(await screen.findByRole('button', { name: 'Open account menu' })).toHaveTextContent('LD')
+    // The nav shows a user icon, not initials.
+    expect(await screen.findByRole('button', { name: 'Open account menu' })).not.toHaveTextContent('LD')
   })
 
   it('keeps text fallback usable when microphone permission is denied', async () => {
@@ -311,16 +339,28 @@ describe('capture route', () => {
     expect(
       await screen.findByText('Microphone permission was denied. Text capture is still available.')
     ).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Type or paste here...')).toBeInTheDocument()
+    expect(screen.getByLabelText('Write it instead')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Type' })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('routes text capture through staging review before submit', async () => {
-    stubSignedInFetch()
+    const fetchMock = stubSignedInFetch({
+      onTextCapture: () => jsonResponse({ capture_id: 'capture-1', status: 'ready_for_review', extracted_tasks: [stagedTaskFixture] }),
+    })
 
     renderCaptureRoute()
+    const user = userEvent.setup()
 
-    // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
+    // The capture sheet offers speaking first, with typing one tap away.
+    expect(await screen.findByRole('radio', { name: 'Speak' })).toHaveAttribute('aria-checked', 'true')
+    await user.click(screen.getByRole('radio', { name: 'Type' }))
+    await user.type(screen.getByLabelText('Write it instead'), 'call the dentist')
+    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+
+    // The task is staged for review, not saved straight to the list.
+    expect(await screen.findByText('Call the dentist')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Approve All' })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/captures/text'), expect.objectContaining({ method: 'POST', body: JSON.stringify({ text: 'call the dentist' }) }))
   })
 
   it('opens the written-task composer when navigating to compose=1', async () => {
@@ -328,12 +368,10 @@ describe('capture route', () => {
 
     const { router } = renderCaptureRoute('/capture?compose=1')
 
-    expect(await screen.findByPlaceholderText('Type or paste here...')).toBeInTheDocument()
-    await waitFor(() => expect(router.state.location.search).toBe(''))
-    expect(screen.getByRole('link', { name: 'Add a new task' })).toHaveAttribute(
-      'href',
-      '/capture?record=1'
-    )
+    expect(await screen.findByLabelText('Write it instead')).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.search).toBe('?sheet=capture'))
+    expect(router.state.location.pathname).toBe('/tasks')
+    expect(screen.getByRole('button', { name: 'Add a new task' })).toBeInTheDocument()
   })
 
   it('starts recording when clicking the quick-add capture link or opening with record=1', async () => {
@@ -350,10 +388,10 @@ describe('capture route', () => {
     const { router } = renderCaptureRoute('/capture?record=1')
 
     expect(await screen.findByRole('button', { name: 'Stop recording' })).toBeInTheDocument()
-    await waitFor(() => expect(router.state.location.search).toBe(''))
+    await waitFor(() => expect(router.state.location.search).toBe('?sheet=capture'))
   })
 
-  it('disables the shell mic action while microphone startup is pending', async () => {
+  it('ignores repeat quick-add taps while microphone startup is pending', async () => {
     stubSignedInFetch()
     let resolveMicrophone: ((stream: MediaStream) => void) | undefined
     const getUserMedia = vi.fn(
@@ -368,10 +406,9 @@ describe('capture route', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Start recording' }))
-    const shellMic = screen.getByRole('link', { name: 'Add a new task' })
-    await waitFor(() => expect(shellMic).toHaveAttribute('aria-disabled', 'true'))
+    expect(await screen.findByText('Opening microphone…')).toBeInTheDocument()
 
-    await user.click(shellMic)
+    await user.click(screen.getByRole('button', { name: 'Add a new task' }))
     expect(getUserMedia).toHaveBeenCalledTimes(1)
 
     await act(async () => {
@@ -434,7 +471,7 @@ describe('capture route', () => {
     await user.click(await screen.findByRole('button', { name: 'Start recording' }))
     await user.click(await screen.findByRole('button', { name: 'Stop recording' }))
 
-    expect(await screen.findByText('Analyzing your voice...')).toBeInTheDocument()
+    expect(await screen.findByText('Loading extracted tasks...')).toBeInTheDocument()
     expect(screen.queryByText('No newly captured tasks to review')).not.toBeInTheDocument()
 
     if (resolveExtractedTasks) {
@@ -496,12 +533,62 @@ describe('capture route', () => {
   })
 
   it('shows extraction error in staging when extraction fails', async () => {
-    stubSignedInFetch()
+    stubSignedInFetch({
+      onTextCapture: () => jsonResponse({ error: { code: 'extraction_failed', message: 'Task extraction failed. Try again.' }, request_id: null }, { status: 502 }),
+    })
 
     renderCaptureRoute()
+    const user = userEvent.setup()
 
-    // Verify the capture UI is rendered
-    expect(await screen.findByText('Write it instead')).toBeInTheDocument()
+    await user.click(await screen.findByRole('radio', { name: 'Type' }))
+    await user.type(screen.getByLabelText('Write it instead'), 'call the dentist')
+    await user.click(screen.getByRole('button', { name: 'Review Text Capture' }))
+
+    expect(await screen.findByText('Task extraction failed. Try again.')).toBeInTheDocument()
+    // The draft survives so the user can retry without retyping.
+    expect(screen.getByLabelText('Write it instead')).toHaveValue('call the dentist')
+  })
+
+  it('submits the recording when the back gesture hides the capture sheet mid-recording', async () => {
+    const fetchMock = stubSignedInFetch()
+    const stopTrack = vi.fn()
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: stopTrack } as unknown as MediaStreamTrack] }) }
+    })
+
+    const { router } = renderCaptureRoute('/tasks')
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Add a new task' }))
+    expect(await screen.findByRole('button', { name: 'Stop recording' })).toBeInTheDocument()
+
+    // Browser back drops ?sheet=capture; the swipe and close guards never see it.
+    await act(async () => { await router.navigate('/tasks') })
+
+    await waitFor(() => expect(MediaRecorderMock.instances[0]?.state).toBe('inactive'))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/captures/voice'), expect.objectContaining({ method: 'POST' })))
+  })
+
+  it('reports a capture that fails after the sheet was closed and keeps the recording for retry', async () => {
+    stubSignedInFetchWithVoiceError({ code: 'transcription_timeout', message: 'provider timed out' })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() } as unknown as MediaStreamTrack] }) }
+    })
+
+    const { router } = renderCaptureRoute('/tasks')
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Add a new task' }))
+    expect(await screen.findByRole('button', { name: 'Stop recording' })).toBeInTheDocument()
+    // Back mid-recording submits the note in the background, where it then fails.
+    await act(async () => { await router.navigate('/tasks') })
+
+    expect(await screen.findByText('Your capture could not be processed.')).toBeInTheDocument()
+
+    // Reopening from the + button shows the failure with Retry instead of starting a new recording.
+    await user.click(screen.getByRole('button', { name: 'Add a new task' }))
+    expect(await screen.findByRole('button', { name: 'Retry Same Recording' })).toBeInTheDocument()
+    expect(MediaRecorderMock.instances).toHaveLength(1)
   })
 
   it('handles voice transcription error gracefully', async () => {

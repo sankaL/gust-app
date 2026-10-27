@@ -1,33 +1,56 @@
 import type { Config } from 'tailwindcss'
 
+const token = (name: string) => `rgb(var(--color-${name}) / <alpha-value>)`
+
 const config: Config = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        surface: 'var(--color-surface)',
-        'surface-dim': 'var(--color-surface-dim)',
-        'surface-container': 'var(--color-surface-container)',
-        'surface-container-high': 'var(--color-surface-container-high)',
-        'surface-container-highest': 'var(--color-surface-container-highest)',
-        'surface-bright': 'var(--color-surface-bright)',
-        'surface-variant': 'var(--color-surface-variant)',
-        primary: 'var(--color-primary)',
-        'primary-dim': 'var(--color-primary-dim)',
-        secondary: 'var(--color-secondary)',
-        'secondary-dim': 'var(--color-secondary-dim)',
-        tertiary: 'var(--color-tertiary)',
-        success: 'var(--color-success)',
-        'success-dim': 'var(--color-success-dim)',
-        warning: 'var(--color-warning)',
-        'warning-dim': 'var(--color-warning-dim)',
-        error: 'var(--color-error)',
-        'error-dim': 'var(--color-error-dim)',
-        info: 'var(--color-info)',
-        'info-dim': 'var(--color-info-dim)',
-        'on-surface': 'var(--color-on-surface)',
-        'on-surface-variant': 'var(--color-on-surface-variant)',
-        outline: 'var(--color-outline)'
+        surface: token('surface'),
+        'surface-dim': token('surface-dim'),
+        'surface-container': token('surface-container'),
+        'surface-container-high': token('surface-container-high'),
+        'surface-container-highest': token('surface-container-highest'),
+        'surface-bright': token('surface-bright'),
+        'surface-variant': token('surface-variant'),
+        primary: token('primary'),
+        'primary-dim': token('primary-dim'),
+        'on-primary': token('on-primary'),
+        secondary: token('secondary'),
+        'secondary-dim': token('secondary-dim'),
+        tertiary: token('tertiary'),
+        'on-tertiary': token('on-tertiary'),
+        success: token('success'),
+        'success-dim': token('success-dim'),
+        warning: token('warning'),
+        'warning-dim': token('warning-dim'),
+        error: token('error'),
+        'error-dim': token('error-dim'),
+        info: token('info'),
+        'info-dim': token('info-dim'),
+        'on-surface': token('on-surface'),
+        'on-surface-variant': token('on-surface-variant'),
+        outline: token('outline'),
+        'card-active': token('card-active'),
+        'card-active-line': token('card-active-line'),
+        nav: token('nav'),
+        backdrop: token('backdrop'),
+        chip: {
+          neutral: token('chip-neutral'),
+          'neutral-ink': token('chip-neutral-ink'),
+          blue: token('chip-blue'),
+          'blue-ink': token('chip-blue-ink'),
+          violet: token('chip-violet'),
+          'violet-ink': token('chip-violet-ink'),
+          amber: token('chip-amber'),
+          'amber-ink': token('chip-amber-ink'),
+          green: token('chip-green'),
+          'green-ink': token('chip-green-ink'),
+          rose: token('chip-rose'),
+          'rose-ink': token('chip-rose-ink')
+        }
       },
       fontFamily: {
         display: ['Manrope', 'sans-serif'],
@@ -36,10 +59,19 @@ const config: Config = {
       borderRadius: {
         card: '1rem',
         soft: '1.5rem',
-        pill: '9999px'
+        pill: '9999px',
+        sheet: '2.25rem'
       },
       boxShadow: {
-        ambient: '0 0 40px rgba(132, 85, 239, 0.12)'
+        ambient: 'var(--shadow-ambient)',
+        card: 'var(--shadow-card)',
+        float: 'var(--shadow-float)',
+        sheet: 'var(--shadow-sheet)'
+      },
+      transitionTimingFunction: {
+        'out-expo': 'cubic-bezier(0.16, 1, 0.3, 1)',
+        sheet: 'cubic-bezier(0.32, 0.72, 0, 1)',
+        spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
       },
       spacing: {
         4: '1.4rem',

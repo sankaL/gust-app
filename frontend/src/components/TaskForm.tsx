@@ -157,7 +157,7 @@ function TaskFormView({ groups, values, subtaskTitles, newSubtaskTitle, showSubt
     <form id={formId} className="space-y-5" onSubmit={(event) => { event.preventDefault(); onSubmit() }}>
       {/* Error display */}
       {error && (
-        <div className="rounded-lg border border-error/35 bg-[rgba(80,18,18,0.92)] p-3 text-sm text-red-100 shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
+        <div className="rounded-lg border border-error/35 bg-chip-rose p-3 text-sm text-chip-rose-ink shadow-card">
           {error}
         </div>
       )}

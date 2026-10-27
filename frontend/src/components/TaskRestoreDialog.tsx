@@ -1,4 +1,7 @@
-import { AlertTriangle } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
+
+import { Button } from './Button'
+import { BottomSheet } from './ui/BottomSheet'
 
 type TaskRestoreDialogProps = {
   isOpen: boolean
@@ -15,52 +18,22 @@ export function TaskRestoreDialog({
   onRestore,
   onClose,
 }: TaskRestoreDialogProps) {
-  if (!isOpen) {
-    return null
-  }
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-4 sm:items-center">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="task-restore-dialog-title"
-        className="w-full max-w-md rounded-card bg-surface-container p-4 shadow-ambient"
-      >
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning">
-            <AlertTriangle className="h-4 w-4" strokeWidth={2} />
-          </div>
-          <div className="min-w-0">
-            <p id="task-restore-dialog-title" className="font-display text-xl text-on-surface">
-              Restore task
-            </p>
-            <p className="mt-2 truncate font-body text-sm text-on-surface">{taskTitle}</p>
-            <p className="mt-2 font-body text-sm leading-6 text-on-surface-variant">
-              This moves the task back to To-do and removes it from completed history.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={onRestore}
-            disabled={isRestoring}
-            className="w-full rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface transition hover:bg-primary/90 disabled:opacity-50"
-          >
-            Restore to To-do
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isRestoring}
-            className="w-full rounded-pill bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:bg-surface-container-high disabled:opacity-50"
-          >
-            Cancel
-          </button>
-        </div>
+    <BottomSheet open={isOpen} onClose={() => { if (!isRestoring) onClose() }} dismissible={!isRestoring} size="auto" labelledBy="task-restore-dialog-title" bodyClassName="overflow-y-auto px-5 pb-5 pt-2">
+      <div className="flex flex-col items-center text-center">
+        <span className="animate-pop-in flex h-14 w-14 items-center justify-center rounded-full bg-chip-amber text-chip-amber-ink">
+          <RotateCcw className="h-6 w-6" strokeWidth={2.1} aria-hidden="true" />
+        </span>
+        <p id="task-restore-dialog-title" className="mt-4 font-display text-xl font-bold text-on-surface">Restore task</p>
+        <p className="mt-1.5 max-w-full truncate font-body text-sm font-semibold text-on-surface">{taskTitle}</p>
+        <p className="mt-1.5 max-w-xs font-body text-sm leading-6 text-on-surface-variant">
+          This moves the task back to To-do and removes it from completed history.
+        </p>
       </div>
-    </div>
+      <div className="mt-6 flex flex-col gap-2.5">
+        <Button variant="primary" size="lg" fullWidth onClick={onRestore} disabled={isRestoring}>Restore to To-do</Button>
+        <Button variant="ghost" size="lg" fullWidth onClick={onClose} disabled={isRestoring}>Cancel</Button>
+      </div>
+    </BottomSheet>
   )
 }

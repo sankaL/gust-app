@@ -225,6 +225,8 @@ export function LandingRoute({ authErrorCode }: LandingRouteProps = {}) {
   return (
     <main
       ref={containerRef}
+      data-theme="dark"
+      data-palette="classic"
       className="relative flex h-screen w-screen items-center justify-center overflow-hidden bg-surface text-on-surface antialiased"
       style={{ perspective: '1500px' }}
     >

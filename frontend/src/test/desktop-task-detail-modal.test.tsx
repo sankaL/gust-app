@@ -134,7 +134,7 @@ describe('DesktopTaskDetailModal', () => {
       'href',
       '/desktop/tasks/task-1'
     )
-    expect(screen.getByRole('button', { name: 'None' })).toHaveClass('bg-primary')
+    expect(await screen.findByRole('button', { name: 'None' })).toHaveClass('bg-primary')
 
     await user.click(screen.getByRole('button', { name: 'Select a date' }))
     await user.click(await screen.findByRole('button', { name: 'Today' }))

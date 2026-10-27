@@ -1,5 +1,33 @@
 # Decisions Made
 
+## 2026-10-27 00:37:06 EDT
+
+- Changed bottom sheets from clay to the clear liquid-glass material, at the owner's request after seeing the opaque clay drawer. The nav and the + stay clay; the review bell stays a liquid-glass lens. This supersedes the sheet part of the 2026-10-27 00:22 entry below.
+- Kept sheet text readable over the list with a 12px backdrop blur and a 55% (Sage) / 60% (Midnight) tint, and left the cards inside sheets solid. The scrim behind a sheet dropped from 40% plus blur to a plain 20% tint, otherwise the glass only shows a grey wash.
+- Refraction on sheets uses a displacement map generated for the sheet's measured size (rounded-rectangle edge, 22px bezel). Maps are cached per size and capped at eight entries so viewport changes cannot grow memory without bound. Like the bell, refraction is Chromium-only; iPhone users get clear frosted glass with the rim. This reverses the earlier "keep refraction to small chrome" limit for sheets: the cost is one filtered backdrop while a sheet is open, accepted for the look the owner asked for.
+
+## 2026-10-27 00:22:00 EDT
+
+- Chose two materials for the mobile chrome that floats over tasks, picked by the owner from eight side-by-side variants (glassmorphism, neumorphism, claymorphism, liquid glass; two takes each) in the Gust Surface Lab artifact: **clay** for bottom sheets, the bottom nav and the + capture button, and **liquid glass ("clear lens")** for the review bell and its count badge.
+- Used clay.css (Adrian Bece, MIT) by copying its single `.clay` rule into `styles.css` instead of installing the npm package. The rule is one line, the package was last released in 2022, and copying it lets Gust's own tokens drive it through modifiers (`clay-sheet`, `clay-nav`, `clay-accent`, `clay-accent-sm`). It sits in Tailwind's components layer so radius utilities still win.
+- Did not use liquid-glass-react, even though it supports React 19. The component centers itself with a transform and ships pre-made displacement maps sized for a pill, which does not fit a fixed 44px bell. Gust instead generates a lens displacement map for the bell's exact size and applies it as an SVG filter in `backdrop-filter`, porting that library's filter chain (displacement plus a slight red/green/blue split at the rim).
+- Accepted that the refraction only renders in Chromium. WebKit, which runs every iOS browser and the installed iPhone PWA, and Gecko ignore SVG filters on backdrops, so the bell shows clear glass with a specular rim there. The filter is attached only when the browser reports Chromium client-hint brands, so other browsers never receive a filter they would mishandle. Limited liquid glass to the bell because refraction over large surfaces is the most expensive effect in the comparison.
+- Turned the bottom nav from an edge-to-edge bar into a floating pill above the home indicator, because the clay finish needs visible edges on all sides. The + button moved down to sit 1rem above it.
+- Rejected neumorphism: its low-contrast edges fall under WCAG's 3:1 for UI parts, and Gust's white cards scrolling under the chrome break the same-color-canvas illusion it depends on.
+- Added an `on-tertiary` token so the review count is dark on the pink badge in Midnight. The old white-on-pink measured about 2.4:1.
+
+## 2026-10-26 22:59:00 EDT
+
+- Revamped the mobile UI around two token-driven themes: light "Sage" (default) and dark "Midnight", modelled on the owner's reference screens. Colors are CSS variables holding RGB channels so Tailwind opacity modifiers work in every palette; the theme is set with `data-theme` on `<html>`.
+- Kept desktop's layout and its existing dark look: desktop dark switches to a `classic` palette (the original violet values) instead of Midnight, and the public landing page is pinned to it. Desktop gained only the light theme and a top-bar toggle.
+- Stored the theme preference in `localStorage` (`gust_theme`). It is a non-sensitive UI preference; auth state still never touches browser storage.
+- Moved capture from a dedicated screen into a bottom sheet opened by the floating + button, which starts recording immediately (voice-first, one tap). Typing is one segment away and is the automatic fallback when the microphone is denied. The sheet can be swiped away while extraction runs; a toast offers to reopen it, and unreviewed tasks remain in Review.
+- Made shell sheets URL state (`?sheet=capture|review|account`) so the hardware/browser Back gesture closes them and deep links still work. `/capture` now redirects to `/tasks?sheet=capture`.
+- Signed-in phones land on the task home (`/tasks`) instead of the capture screen; non-phones still land on `/desktop`. This reverses the earlier "Capture screen is the launch screen" commitment because capture is now available everywhere in one tap; the owner confirmed the Home landing on 2026-10-26.
+- Split review: the capture sheet reviews only the capture just made; every other pending extracted task lives in a Review sheet reached from a bell badge and a home banner. "Approve All" in each place acts on exactly what that place shows.
+- Mobile modals take three quarters of the screen as requested; short confirmations (delete, restore) use an auto-height sheet so two buttons do not float in empty space.
+- Replaced expand/collapse task cards with always-visible timeline cards (time column, two-line description, chips) plus swipe right to complete and swipe left to delete. One `CheckCircle` control now handles completion, approval, and subtask toggles.
+
 ## 2026-10-26 11:00:00 EDT
 
 - Routed Claude Haiku 5.5 extraction through OpenRouter's Anthropic-compatible Messages API instead of a direct Anthropic account, so one existing OpenRouter key and bill cover both transcription and extraction. The `anthropic` SDK is kept (base URL `https://openrouter.ai/api`, key as bearer token), so thinking control, structured outputs, and prompt caching pass through unchanged; verified live.

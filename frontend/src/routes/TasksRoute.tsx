@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAppShellActions } from '../components/AppShellActions'
 import { useNotifications } from '../components/Notifications'
@@ -7,7 +7,9 @@ import { TasksRouteView } from '../components/TasksRouteView'
 import { useOpenTaskActions } from '../hooks/useOpenTaskActions'
 import { useOpenTaskRouteQueries } from '../hooks/useTaskRouteQueries'
 import { useTaskListRouteState } from '../hooks/useTaskListRouteState'
+import { countTasksByDueDate, useAllOpenTasksQuery } from '../hooks/useAllTasksViewModel'
 import { type TaskSummary } from '../lib/api'
+import { getTodayIsoDate, isValidIsoDate } from '../lib/desktopData'
 import { refreshTaskScreenQueries } from '../lib/taskScreenCache'
 
 function normalizeTaskItems(data: unknown): TaskSummary[] {
@@ -68,6 +70,18 @@ export function TasksRoute() {
   useTasksRefreshButton(shellActions, !isAllView, isRefreshing, refreshCurrentTasks)
 
   const tasks = normalizeTaskItems(tasksQuery.data)
+  const allOpen = useAllOpenTasksQuery(routeState.debouncedSearchQuery, isAllView && sessionQuery.data?.signed_in === true)
+  const dueCounts = useMemo(() => countTasksByDueDate(isAllView ? allOpen.tasks : tasks), [allOpen.tasks, isAllView, tasks])
+  const todayIso = getTodayIsoDate(sessionQuery.data?.timezone ?? null)
+  // ?day= is user-editable; an invalid date would make date formatting throw, so treat it as today.
+  const rawDayFilter = routeState.searchParams.get('day')
+  const dayFilter = rawDayFilter && isValidIsoDate(rawDayFilter) ? rawDayFilter : null
+  function selectDay(isoDate: string) {
+    const next = new URLSearchParams(routeState.searchParams)
+    if (isoDate === todayIso) next.delete('day')
+    else next.set('day', isoDate)
+    routeState.setSearchParams(next, { replace: true })
+  }
   function closePreviewAndComplete(task: TaskSummary) {
     actions.complete(task)
     routeState.closeTaskPreview()
@@ -88,5 +102,5 @@ export function TasksRoute() {
     (!isAllView && tasksQuery.isFetching && Boolean(routeState.debouncedSearchQuery))
   )
 
-  return <TasksRouteView session={sessionQuery.data} isSessionLoading={sessionQuery.isLoading} isSessionError={sessionQuery.isError} groups={groupsQuery.data ?? []} effectiveGroupId={effectiveGroupId} isAllView={isAllView} tasks={tasks} isTasksLoading={tasksQuery.isLoading} isTasksError={tasksQuery.isError} hasTaskResult={tasksQuery.data !== undefined} isRefreshing={isRefreshing} searchQuery={routeState.searchQuery} requestSearchQuery={routeState.debouncedSearchQuery} isSearchActive={routeState.isSearchActive} isSearchPending={isSearchPending} pendingTaskIds={routeState.pendingTaskIds} selectedTaskId={routeState.selectedTaskId} pendingDeleteTask={pendingDeleteTask} isDeleting={actions.isDeleting} refresh={refreshCurrentTasks} retryTasks={() => { void tasksQuery.refetch() }} onSelectGroup={(groupId) => routeState.setSearchParams({ group: groupId })} onSearchOpen={routeState.openTaskSearch} onSearchChange={routeState.setTaskSearchQuery} onSearchClear={routeState.clearTaskSearch} onOpen={routeState.openTaskPreview} onPrepareOpen={routeState.prefetchTaskDetail} onComplete={actions.complete} onDeleteRequest={setPendingDeleteTask} onDeleteOccurrence={deleteOccurrence} onDeleteSeries={deleteSeries} onCloseDelete={() => setPendingDeleteTask(null)} onClosePreview={routeState.closeTaskPreview} onPreviewComplete={closePreviewAndComplete} onPreviewDelete={closePreviewAndDelete} />
+  return <TasksRouteView session={sessionQuery.data} isSessionLoading={sessionQuery.isLoading} isSessionError={sessionQuery.isError} groups={groupsQuery.data ?? []} effectiveGroupId={effectiveGroupId} isAllView={isAllView} tasks={tasks} isTasksLoading={tasksQuery.isLoading} isTasksError={tasksQuery.isError} hasTaskResult={tasksQuery.data !== undefined} isRefreshing={isRefreshing} searchQuery={routeState.searchQuery} requestSearchQuery={routeState.debouncedSearchQuery} isSearchActive={routeState.isSearchActive} isSearchPending={isSearchPending} pendingTaskIds={routeState.pendingTaskIds} selectedTaskId={routeState.selectedTaskId} pendingDeleteTask={pendingDeleteTask} isDeleting={actions.isDeleting} refresh={refreshCurrentTasks} retryTasks={() => { void tasksQuery.refetch() }} todayIso={todayIso} selectedDay={dayFilter ?? todayIso} dueCounts={dueCounts} onSelectDay={selectDay} onSelectGroup={(groupId) => { const next = new URLSearchParams({ group: groupId }); if (dayFilter) next.set('day', dayFilter); routeState.setSearchParams(next) }} onSearchOpen={routeState.openTaskSearch} onSearchChange={routeState.setTaskSearchQuery} onSearchClear={routeState.clearTaskSearch} onOpen={routeState.openTaskPreview} onPrepareOpen={routeState.prefetchTaskDetail} onComplete={actions.complete} onDeleteRequest={setPendingDeleteTask} onDeleteOccurrence={deleteOccurrence} onDeleteSeries={deleteSeries} onCloseDelete={() => setPendingDeleteTask(null)} onClosePreview={routeState.closeTaskPreview} onPreviewComplete={closePreviewAndComplete} onPreviewDelete={closePreviewAndDelete} />
 }

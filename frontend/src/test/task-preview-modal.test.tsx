@@ -134,7 +134,7 @@ describe('TaskPreviewModal', () => {
 
     expect(screen.getByText('Loading task')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Review extraction contract' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Review extraction contract' })).toHaveClass('pl-3.5')
+    expect(screen.getByRole('dialog', { name: 'Review extraction contract' })).toHaveClass('sheet-h-default')
     expect(screen.getByText('Needs review')).toBeInTheDocument()
     expect(screen.getByText('Inbox')).toBeInTheDocument()
     expect(screen.getByText('Check the structured output rules before rollout.')).toBeInTheDocument()
@@ -345,7 +345,7 @@ describe('TaskPreviewModal', () => {
       ],
     })
 
-    await user.click(await screen.findByRole('button', { name: 'Toggle Check retry contract' }))
+    await user.click(await screen.findByRole('checkbox', { name: 'Toggle Check retry contract' }))
 
     expect(mockedUpdateSubtask).toHaveBeenCalledWith(
       'task-1',
@@ -390,7 +390,7 @@ describe('TaskPreviewModal', () => {
       ],
     })
 
-    const toggle = await screen.findByRole('button', { name: 'Toggle Check retry contract' })
+    const toggle = await screen.findByRole('checkbox', { name: 'Toggle Check retry contract' })
     const remove = screen.getByRole('button', { name: 'Delete Check retry contract' })
     const add = screen.getByRole('button', { name: 'Add' })
     await user.click(toggle)

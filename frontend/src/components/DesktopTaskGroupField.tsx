@@ -21,7 +21,7 @@ export function DesktopTaskGroupField({
   onOpenChange,
 }: DesktopTaskGroupFieldProps) {
   return (
-    <div className={`grid border-b border-white/10 px-4 py-3 ${labelWidthClass} sm:items-center`}>
+    <div className={`grid border-b border-outline/60 px-4 py-3 ${labelWidthClass} sm:items-center`}>
       <p className="font-body text-xs font-semibold uppercase tracking-[0.13em] text-on-surface-variant">Group</p>
       <div className={isOpen ? 'relative z-40' : ''}>
         <SelectDropdown

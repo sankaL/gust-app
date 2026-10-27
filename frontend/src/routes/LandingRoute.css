@@ -1,4 +1,4 @@
-/* Landing page cinematic styles — processed by PostCSS/Tailwind */
+/* Landing page cinematic styles, processed by PostCSS/Tailwind */
 
 .gust-film-grain {
   position: absolute;
@@ -15,28 +15,28 @@
 .gust-bg-grid-theme {
   background-size: 60px 60px;
   background-image:
-    linear-gradient(to right, color-mix(in srgb, var(--color-on-surface) 5%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--color-on-surface) 5%, transparent) 1px, transparent 1px);
+    linear-gradient(to right, color-mix(in srgb, rgb(var(--color-on-surface)) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, rgb(var(--color-on-surface)) 5%, transparent) 1px, transparent 1px);
   mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
   -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
 }
 
 .gust-text-3d-matte {
-  color: var(--color-on-surface);
+  color: rgb(var(--color-on-surface));
   text-shadow:
-    0 10px 30px color-mix(in srgb, var(--color-on-surface) 20%, transparent),
-    0 2px 4px color-mix(in srgb, var(--color-on-surface) 10%, transparent);
+    0 10px 30px color-mix(in srgb, rgb(var(--color-on-surface)) 20%, transparent),
+    0 2px 4px color-mix(in srgb, rgb(var(--color-on-surface)) 10%, transparent);
 }
 
 .gust-text-silver-matte {
-  background: linear-gradient(180deg, var(--color-on-surface) 0%, color-mix(in srgb, var(--color-primary) 28%, var(--color-on-surface-variant)) 100%);
+  background: linear-gradient(180deg, rgb(var(--color-on-surface)) 0%, color-mix(in srgb, rgb(var(--color-primary)) 28%, rgb(var(--color-on-surface-variant))) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   transform: translateZ(0);
   filter:
-    drop-shadow(0px 10px 20px color-mix(in srgb, var(--color-primary) 18%, transparent))
-    drop-shadow(0px 2px 4px color-mix(in srgb, var(--color-on-surface) 10%, transparent));
+    drop-shadow(0px 10px 20px color-mix(in srgb, rgb(var(--color-primary)) 18%, transparent))
+    drop-shadow(0px 2px 4px color-mix(in srgb, rgb(var(--color-on-surface)) 10%, transparent));
 }
 
 .gust-text-card-silver-matte {

@@ -440,7 +440,7 @@ describe('app shell', () => {
     expect(screen.queryByText('Verifying your current session.')).not.toBeInTheDocument()
   })
 
-  it('redirects signed-in mobile root visits to capture', async () => {
+  it('redirects signed-in mobile root visits to the task home', async () => {
     vi.mocked(fetch).mockImplementationOnce((input: RequestInfo | URL) => {
       const url = requestUrl(input)
       return Promise.resolve(
@@ -453,9 +453,8 @@ describe('app shell', () => {
     const { router } = renderWithRoute(['/'])
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/capture')
+      expect(router.state.location.pathname).toBe('/tasks')
     })
-    expect(await screen.findByText('Tap to record')).toBeInTheDocument()
   })
 
   it('shows the allowlist error on the landing route', async () => {
@@ -615,11 +614,11 @@ describe('app shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('redirects signed-in users from /login to /capture by default', async () => {
+  it('redirects signed-in desktop users from /login to mission control by default', async () => {
     const { router } = renderWithRoute(['/login'])
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/capture')
+      expect(router.state.location.pathname).toBe('/desktop')
     })
   })
 
@@ -805,7 +804,7 @@ describe('app shell', () => {
   })
 
   it('opens the account menu and navigates to desktop mission control', async () => {
-    renderWithRoute(['/capture'])
+    renderWithRoute(['/tasks'])
 
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
@@ -1027,7 +1026,7 @@ describe('app shell', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    renderWithRoute(['/capture'])
+    renderWithRoute(['/tasks'])
 
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
@@ -1080,7 +1079,7 @@ describe('app shell', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    renderWithRoute(['/capture'])
+    renderWithRoute(['/tasks'])
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
     await user.click(screen.getByRole('menuitem', { name: 'Logout' }))
@@ -1285,7 +1284,7 @@ describe('app shell', () => {
     const prompt = vi.fn().mockResolvedValue(undefined)
     const userChoice = Promise.resolve({ outcome: 'accepted' as const, platform: 'web' })
 
-    renderWithRoute(['/capture'])
+    renderWithRoute(['/tasks'])
 
     const installEvent = new Event('beforeinstallprompt') as BeforeInstallPromptEvent
     Object.assign(installEvent, { prompt, userChoice })
@@ -1293,14 +1292,15 @@ describe('app shell', () => {
       window.dispatchEvent(installEvent)
     })
 
-    const installButton = await screen.findByRole('button', { name: 'Install Gust app' })
+    await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
+    const installButton = await screen.findByRole('menuitem', { name: 'Install Gust app' })
     await user.click(installButton)
 
     expect(prompt).toHaveBeenCalledTimes(1)
   })
 
   it('hides the install CTA after the appinstalled event fires', async () => {
-    renderWithRoute(['/capture'])
+    renderWithRoute(['/tasks'])
 
     const installEvent = new Event('beforeinstallprompt') as BeforeInstallPromptEvent
     Object.assign(installEvent, {
@@ -1311,14 +1311,15 @@ describe('app shell', () => {
       window.dispatchEvent(installEvent)
     })
 
-    expect(await screen.findByRole('button', { name: 'Install Gust app' })).toBeInTheDocument()
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Open account menu' }))
+    expect(await screen.findByRole('menuitem', { name: 'Install Gust app' })).toBeInTheDocument()
 
     act(() => {
       window.dispatchEvent(new Event('appinstalled'))
     })
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Install Gust app' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('menuitem', { name: 'Install Gust app' })).not.toBeInTheDocument()
     })
   })
 
@@ -1326,14 +1327,12 @@ describe('app shell', () => {
     const user = userEvent.setup()
     setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')
 
-    renderWithRoute(['/capture'])
+    renderWithRoute(['/tasks'])
 
-    const installButton = await screen.findByRole('button', {
-      name: 'Show iPhone install instructions'
-    })
-    await user.click(installButton)
+    await user.click(await screen.findByRole('button', { name: 'Open account menu' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Add to Home Screen' }))
 
-    expect(screen.getByText(/Add to Home Screen/i)).toBeInTheDocument()
+    expect(await screen.findByText('Install on iPhone')).toBeInTheDocument()
   })
 
   it('shows an update banner and reloads when a new service worker is ready', async () => {

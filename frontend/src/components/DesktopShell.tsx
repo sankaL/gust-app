@@ -6,6 +6,7 @@ import { useAccountMenu, useDesktopRecorder, useDesktopSession } from '../hooks/
 import { resolveLoginPath } from '../lib/sessionPresentation'
 import { DesktopShellLayout } from './DesktopShellLayout'
 import { DEFAULT_DESKTOP_HEADER, type DesktopHeaderContent } from './DesktopShellContext'
+import { useClassicDarkPalette } from '../hooks/useTheme'
 import { TimezoneSyncGate } from './TimezoneSyncGate'
 
 function DesktopSessionLoading() {
@@ -24,6 +25,7 @@ function DesktopSessionLoading() {
 
 export function DesktopShell() {
   useDeviceRedirect()
+  useClassicDarkPalette()
   const location = useLocation()
   const [header, setHeader] = useState<DesktopHeaderContent>(DEFAULT_DESKTOP_HEADER)
   const { sessionQuery, timezoneSync, groupsQuery, openTasksQuery, logoutMutation, accountInitials } = useDesktopSession()

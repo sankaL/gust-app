@@ -5,6 +5,7 @@ import { isMobilePhoneDevice } from '../lib/device'
 import { AppProviders } from '../providers'
 import { AppShell } from '../components/AppShell'
 import { DesktopShell } from '../components/DesktopShell'
+import { CaptureRoute } from '../routes/CaptureRoute'
 import { RootRoute } from '../routes/RootRoute'
 import {
   DEVICE_REDIRECT_OVERRIDE_KEY,
@@ -159,7 +160,7 @@ describe('Device deep-link mapping', () => {
 
   it('keeps existing non-task device defaults', () => {
     expect(resolveDeviceRedirect('/capture', '', false)).toBe('/desktop')
-    expect(resolveDeviceRedirect('/desktop', '', true)).toBe('/capture')
+    expect(resolveDeviceRedirect('/desktop', '', true)).toBe('/tasks')
     expect(resolveDeviceRedirect('/tasks', '?group=all', true)).toBeNull()
   })
 })
@@ -200,7 +201,8 @@ describe('Device-specific routing redirection', () => {
           path: '/',
           element: <AppShell />,
           children: [
-            { path: 'capture', element: <div data-testid="mobile-capture">Mobile Capture</div> }
+            { path: 'capture', element: <CaptureRoute /> },
+            { path: 'tasks', element: <div data-testid="mobile-tasks">Mobile Tasks</div> }
           ]
         },
         {
@@ -243,7 +245,8 @@ describe('Device-specific routing redirection', () => {
       expect(router.state.location.pathname).toBe('/desktop')
     })
     expect(await screen.findByTestId('desktop-dashboard')).toBeInTheDocument()
-    expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBe('true')
+    // Desktop lands on mission control directly, so no device-redirect override is recorded.
+    expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBeNull()
   })
 
   it('keeps the public landing page at / for signed-out desktop visitors', async () => {
@@ -278,7 +281,7 @@ describe('Device-specific routing redirection', () => {
     expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBe('true')
   })
 
-  it('redirects mobile phone users from /desktop to /capture on initial visit', async () => {
+  it('redirects mobile phone users from /desktop to the mobile task home on initial visit', async () => {
     setUserAgent(
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       'iPhone',
@@ -288,7 +291,7 @@ describe('Device-specific routing redirection', () => {
     const { router } = renderRoutes(['/desktop'])
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/capture')
+      expect(router.state.location.pathname).toBe('/tasks')
     })
     expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBe('true')
   })
@@ -307,7 +310,7 @@ describe('Device-specific routing redirection', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 100))
     })
-    expect(router.state.location.pathname).toBe('/capture')
+    expect(router.state.location.pathname).toBe('/tasks')
   })
 
   it('keeps desktop users in mobile mode after using the desktop capture shortcut', async () => {
@@ -325,12 +328,12 @@ describe('Device-specific routing redirection', () => {
     fireEvent.click(mobileCaptureLink)
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/capture')
+      expect(router.state.location.pathname).toBe('/tasks')
     })
     expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBe('true')
   })
 
-  it('redirects signed-in mobile phone visitors from / to /capture', async () => {
+  it('redirects signed-in mobile phone visitors from / to the mobile task home', async () => {
     vi.mocked(fetch).mockImplementationOnce((input: RequestInfo | URL) => {
       const url = requestUrl(input)
       return Promise.resolve(
@@ -346,9 +349,9 @@ describe('Device-specific routing redirection', () => {
     const { router } = renderRoutes(['/'])
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/capture')
+      expect(router.state.location.pathname).toBe('/tasks')
     })
-    expect(await screen.findByTestId('mobile-capture')).toBeInTheDocument()
+    expect(await screen.findByTestId('mobile-tasks')).toBeInTheDocument()
     expect(sessionStorage.getItem(DEVICE_REDIRECT_OVERRIDE_KEY)).toBeNull()
   })
 

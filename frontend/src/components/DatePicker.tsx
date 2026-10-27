@@ -232,7 +232,8 @@ function useDatePickerViewport(isOpen: boolean, updatePosition: () => void, clos
 
 function calendarPosition(rect: DOMRect, mode: DatePickerProps['mode']) {
   const padding = 16
-  const width = Math.min(Math.max(rect.width, 280), window.innerWidth - padding * 2)
+  // Wide enough for full month and year names at the 16px select size iOS needs to avoid zooming.
+  const width = Math.min(Math.max(rect.width, 320), window.innerWidth - padding * 2)
   const height = mode === 'datetime' ? 420 : 380
   const left = Math.max(padding, Math.min(rect.left, window.innerWidth - width - padding))
   const below = rect.bottom + 8
@@ -342,23 +343,52 @@ function useDatePickerViewProps({
 type DatePickerViewProps = { triggerRef: React.RefObject<HTMLButtonElement | null>; disabled: boolean; selected: boolean; displayValue: string; isOpen: boolean; calendarDropdown: React.ReactNode; onToggle: () => void }
 
 function DatePickerView({ triggerRef, disabled, selected, displayValue, isOpen, calendarDropdown, onToggle }: DatePickerViewProps) {
-  const stateClass = disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-surface-container-highest focus:ring-1 focus:ring-primary'
-  return <div className="relative"><button ref={triggerRef} type="button" onClick={onToggle} disabled={disabled} className={`flex w-full items-center justify-between rounded-card bg-surface-dim px-3 py-3 text-left text-sm font-medium outline-none transition-all ${stateClass}`}><span className={selected ? 'text-on-surface' : 'text-on-surface-variant/40'}>{displayValue}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-on-surface-variant transition-transform ${isOpen ? 'rotate-180' : ''}`}><path d="M8 9l4 4 4-4" /></svg></button>{calendarDropdown && typeof document !== 'undefined' ? createPortal(calendarDropdown, document.body) : null}</div>
+  const stateClass = disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-surface-container-highest focus-visible:ring-2 focus-visible:ring-primary/60'
+  return <div className="relative"><button ref={triggerRef} type="button" onClick={onToggle} disabled={disabled} className={`flex w-full items-center justify-between rounded-card bg-surface-container-high px-3 py-3 ring-1 ring-inset ring-outline/50 text-left text-sm font-medium outline-none transition-all ${stateClass}`}><span className={selected ? 'text-on-surface' : 'text-on-surface-variant/60'}>{displayValue}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-on-surface-variant transition-transform ${isOpen ? 'rotate-180' : ''}`}><path d="M8 9l4 4 4-4" /></svg></button>{calendarDropdown && typeof document !== 'undefined' ? createPortal(calendarDropdown, document.body) : null}</div>
 }
 
 type CalendarProps = { calendarRef: React.RefObject<HTMLDivElement | null>; position: { top: number; left: number; width: number }; viewDate: Date; selectedDate: Date | null; selectedTime: string; mode: 'date' | 'datetime'; days: Date[]; startDay: number; yearOptions: number[]; min?: string; max?: string; onPrevious: () => void; onNext: () => void; onMonth: (month: number) => void; onYear: (year: number) => void; onDate: (date: Date) => void; onTime: (time: string) => void; onToday: () => void; onClear: () => void; onDone: () => void }
 
 function DatePickerCalendar(props: CalendarProps) {
-  return <div ref={props.calendarRef} className="fixed z-[140] overflow-hidden rounded-card shadow-[0_24px_60px_rgba(0,0,0,0.6)]" style={{ ...props.position, maxHeight: 'calc(100vh - 2rem)' }}><div className="max-h-[calc(100vh-2rem)] overflow-y-auto bg-[linear-gradient(180deg,_rgb(38,38,38)_0%,_rgb(26,26,26)_100%)] p-4"><CalendarHeader viewDate={props.viewDate} yearOptions={props.yearOptions} onPrevious={props.onPrevious} onNext={props.onNext} onMonth={props.onMonth} onYear={props.onYear} /><CalendarGrid days={props.days} startDay={props.startDay} selectedDate={props.selectedDate} min={props.min} max={props.max} onDate={props.onDate} />{props.mode === 'datetime' ? <TimeField value={props.selectedTime} onChange={props.onTime} /> : null}<CalendarActions mode={props.mode} onToday={props.onToday} onClear={props.onClear} onDone={props.onDone} /></div></div>
+  return <div ref={props.calendarRef} className="animate-rise-in fixed z-[240] overflow-hidden rounded-2xl shadow-float ring-1 ring-outline/50" style={{ ...props.position, maxHeight: 'calc(100vh - 2rem)' }}><div className="max-h-[calc(100vh-2rem)] overflow-y-auto bg-surface-container-high p-4"><CalendarHeader viewDate={props.viewDate} yearOptions={props.yearOptions} onPrevious={props.onPrevious} onNext={props.onNext} onMonth={props.onMonth} onYear={props.onYear} /><CalendarGrid days={props.days} startDay={props.startDay} selectedDate={props.selectedDate} min={props.min} max={props.max} onDate={props.onDate} />{props.mode === 'datetime' ? <TimeField value={props.selectedTime} onChange={props.onTime} /> : null}<CalendarActions mode={props.mode} onToday={props.onToday} onClear={props.onClear} onDone={props.onDone} /></div></div>
 }
 
 type CalendarHeaderProps = { viewDate: Date; yearOptions: number[]; onPrevious: () => void; onNext: () => void; onMonth: (month: number) => void; onYear: (year: number) => void }
 function CalendarHeader(props: CalendarHeaderProps) {
-  return <div className="mb-4 flex items-center justify-between"><NavButton direction="previous" onClick={props.onPrevious} /><div className="flex min-w-0 flex-1 items-center gap-2 px-2"><select value={getMonth(props.viewDate)} onChange={(event) => props.onMonth(Number(event.target.value))} className="min-w-0 flex-1 rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface">{MONTHS.map((month, index) => <option key={month} value={index}>{month}</option>)}</select><select value={getYear(props.viewDate)} onChange={(event) => props.onYear(Number(event.target.value))} className="min-w-0 flex-1 rounded-lg bg-surface-container-high px-2 py-1 text-sm text-on-surface">{props.yearOptions.map((year) => <option key={year}>{year}</option>)}</select></div><NavButton direction="next" onClick={props.onNext} /></div>
+  return (
+    <div className="mb-4 flex items-center gap-1">
+      <NavButton direction="previous" onClick={props.onPrevious} />
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+        <CalendarSelect label="Month" className="min-w-[7.5rem] flex-1" value={getMonth(props.viewDate)} onChange={(value) => props.onMonth(value)}>
+          {MONTHS.map((month, index) => <option key={month} value={index}>{month}</option>)}
+        </CalendarSelect>
+        <CalendarSelect label="Year" className="w-[5.25rem] shrink-0" value={getYear(props.viewDate)} onChange={(value) => props.onYear(value)}>
+          {props.yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+        </CalendarSelect>
+      </div>
+      <NavButton direction="next" onClick={props.onNext} />
+    </div>
+  )
+}
+
+function CalendarSelect({ label, className, value, onChange, children }: { label: string; className: string; value: number; onChange: (value: number) => void; children: React.ReactNode }) {
+  return (
+    <span className={`relative ${className}`}>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="h-9 w-full cursor-pointer appearance-none rounded-lg bg-surface-dim pl-3 pr-7 font-semibold text-on-surface outline-none ring-1 ring-inset ring-outline/40 focus-visible:ring-2 focus-visible:ring-primary/60"
+      >
+        {children}
+      </select>
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+    </span>
+  )
 }
 
 function NavButton({ direction, onClick }: { direction: 'previous' | 'next'; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className="rounded-lg p-1 text-on-surface-variant hover:bg-surface-container-high" aria-label={`${direction} month`}><span aria-hidden="true">{direction === 'previous' ? '‹' : '›'}</span></button>
+  return <button type="button" onClick={onClick} className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface" aria-label={`${direction} month`}><span aria-hidden="true">{direction === 'previous' ? '‹' : '›'}</span></button>
 }
 
 type CalendarGridProps = { days: Date[]; startDay: number; selectedDate: Date | null; min?: string; max?: string; onDate: (date: Date) => void }
@@ -371,8 +401,8 @@ function DayButton({ day, selectedDate, min, max, onSelect }: { day: Date; selec
   const selected = selectedDate ? token === formatDateToken(selectedDate, 'yyyy-MM-dd') : false
   const today = token === formatDateToken(new Date(), 'yyyy-MM-dd')
   const disabled = Boolean((min && token < min) || (max && token > max))
-  const color = selected ? 'bg-primary text-surface' : today ? 'border border-primary/30 bg-surface-container-high text-primary' : 'text-on-surface hover:bg-surface-container-high'
-  return <button type="button" onClick={() => onSelect(day)} disabled={disabled} className={`flex h-9 w-full items-center justify-center rounded-lg text-sm font-medium transition-all ${color} ${disabled ? 'cursor-not-allowed opacity-30' : 'cursor-pointer'}`}>{formatDateToken(day, 'd')}</button>
+  const color = selected ? 'bg-primary text-on-primary shadow-card' : today ? 'ring-1 ring-inset ring-primary/50 text-primary' : 'text-on-surface hover:bg-surface-container-highest'
+  return <button type="button" onClick={() => onSelect(day)} disabled={disabled} className={`flex h-9 w-full items-center justify-center rounded-full text-sm font-semibold transition-all ${color} ${disabled ? 'cursor-not-allowed opacity-30' : 'cursor-pointer'}`}>{formatDateToken(day, 'd')}</button>
 }
 
 function TimeField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -385,5 +415,5 @@ function CalendarActions(props: CalendarActionsProps) {
 }
 
 function CalendarAction({ children, onClick, primary = false }: { children: React.ReactNode; onClick: () => void; primary?: boolean }) {
-  return <button type="button" onClick={onClick} className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${primary ? 'bg-primary text-surface' : 'bg-surface-container-high text-on-surface-variant'}`}>{children}</button>
+  return <button type="button" onClick={onClick} className={`flex-1 rounded-pill px-3 py-2 text-sm font-semibold transition-colors ${primary ? 'bg-primary text-on-primary' : 'bg-surface-dim text-on-surface-variant hover:text-on-surface'}`}>{children}</button>
 }

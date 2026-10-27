@@ -41,15 +41,6 @@ function usePreviewDraftSync({ isOpen, task, timezone, draftTaskId, isDirty, set
   }, [draftTaskId, isDirty, isOpen, setDirty, setDraft, setDraftTaskId, setError, setTitle, task, timezone])
 }
 
-function useEscapeClose(isOpen: boolean, requestClose: () => void) {
-  useEffect(() => {
-    if (!isOpen) return undefined
-    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') requestClose() }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, requestClose])
-}
-
 function usePreviewRequests({ draft, task, isBusy, mutationPending, isDirty, title, acquire, onClose, onComplete, onRestore, onDelete, save, create, updateSubtask, remove }: { draft: TaskDetailDraft | null; task?: TaskDetail; isBusy: boolean; mutationPending: boolean; isDirty: boolean; title: string; acquire: () => (() => void) | null; onClose: () => void; onComplete?: (task: TaskDetail) => void; onRestore?: (task: TaskDetail) => void; onDelete?: (task: TaskDetail) => void; save: (release: () => void) => void; create: (release: () => void) => void; updateSubtask: (variables: { subtaskId: string; is_completed: boolean }) => void; remove: (variables: { subtaskId: string; release?: () => void }) => void }) {
   const close = useCallback(() => { if (!mutationPending && (!isDirty || window.confirm('Discard unsaved task changes?'))) onClose() }, [isDirty, mutationPending, onClose])
   function run(action: (() => void) | undefined) { if (!isBusy && action && (!isDirty || window.confirm('Discard unsaved task changes?'))) action() }
@@ -72,7 +63,7 @@ function usePreviewState() {
 
 export function TaskPreviewModal(props: TaskPreviewModalProps) {
   const controller = useTaskPreviewController(props)
-  return controller.visible ? <TaskPreviewView {...controller.view} /> : null
+  return <TaskPreviewView open={controller.visible} {...controller.view} />
 }
 
 function useTaskPreviewController({ taskId, isOpen, onClose, onComplete, onRestore, onRequestDelete, busyTaskIds = [], session, groups = [] }: TaskPreviewModalProps) {
@@ -93,6 +84,5 @@ function useTaskPreviewController({ taskId, isOpen, onClose, onComplete, onResto
   const requests = usePreviewRequests({ draft, task, isBusy, mutationPending, isDirty: isDraftDirty, title: newSubtaskTitle, acquire, onClose, onComplete, onRestore, onDelete: onRequestDelete, save: saveMutation.mutate, create: createMutation.mutate, updateSubtask: updateMutation.mutate, remove: deleteMutation.mutate })
 
   usePreviewDraftSync({ isOpen, task, timezone: session?.timezone ?? undefined, draftTaskId, isDirty: isDraftDirty, setDraft, setDraftTaskId, setDirty: setIsDraftDirty, setTitle: setNewSubtaskTitle, setError: setSaveError })
-  useEscapeClose(isOpen, requests.close)
   return { visible: Boolean(isOpen && taskId), view: { task, draft, groups, isLoading: taskQuery.isLoading, error: taskQuery.error, isEditable, isBusy, isDirty: isDraftDirty, saveError, saveNotice, newSubtaskTitle, onDraftChange: updateDraft, onNewSubtaskTitleChange: setNewSubtaskTitle, onDismissSaveNotice: () => setSaveNotice(null), onClose: requests.close, onSave: requests.saveTask, onCreateSubtask: requests.createSubtask, onToggleSubtask: requests.toggleSubtask, onDeleteSubtask: requests.deleteSubtask, onComplete: requests.complete, onRestore: requests.restore, onDelete: requests.deleteTask, friendlyError: buildFriendlyMessage } }
 }

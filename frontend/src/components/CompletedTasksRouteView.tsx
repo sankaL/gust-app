@@ -1,4 +1,5 @@
 import type { GroupSummary, SessionStatus, TaskSummary } from '../lib/api'
+import { ScreenHeader } from './AppShellView'
 import { CompletedTaskList } from './CompletedTaskList'
 import { PullToRefresh } from './TaskScreenRefresh'
 import { SessionGuard } from './SessionGuard'
@@ -84,6 +85,7 @@ export function CompletedTasksRouteView({
 }) {
   return (
     <SessionGuard session={session} isLoading={isSessionLoading} isError={isSessionError} title="Completed Tasks" eyebrow="Completed history" description={completedDescription(isAllGroupsView)}>
+      <ScreenHeader eyebrow="History" title="Completed" />
       <PullToRefresh isRefreshing={isRefreshing} onRefresh={refresh}><CompletedTaskList tasks={tasks} isLoading={isTasksLoading} hasResult={hasTaskResult} pendingTaskIds={pendingTaskIds} onOpen={onOpen} onRestore={onRequestRestore} /></PullToRefresh>
       <CompletedTaskOverlays session={session} groups={groups} selectedTaskId={selectedTaskId} pendingTaskIds={pendingTaskIds} restoreCandidate={restoreCandidate} isRestoring={isRestoring} onClosePreview={onClosePreview} onRequestRestore={onRequestRestore} onConfirmRestore={onConfirmRestore} onCancelRestore={onCancelRestore} />
     </SessionGuard>

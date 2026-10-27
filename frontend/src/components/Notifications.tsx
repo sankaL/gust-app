@@ -81,41 +81,27 @@ function CloseIcon({ className }: IconProps) {
   )
 }
 
-const NOTIFICATION_COLORS: Record<NotificationType, string> = {
-  success: '#4F7942',
-  error: '#F54927',
-  warning: '#F58027',
-  info: '#4682B4',
-  loading: '#A684FF',
+const notificationStyles: Record<NotificationType, { icon: string; accent: string; action: string }> = {
+  success: { icon: 'bg-chip-green text-chip-green-ink', accent: 'bg-success', action: 'bg-chip-green text-chip-green-ink' },
+  error: { icon: 'bg-chip-rose text-chip-rose-ink', accent: 'bg-error', action: 'bg-chip-rose text-chip-rose-ink' },
+  warning: { icon: 'bg-chip-amber text-chip-amber-ink', accent: 'bg-warning', action: 'bg-chip-amber text-chip-amber-ink' },
+  info: { icon: 'bg-chip-blue text-chip-blue-ink', accent: 'bg-info', action: 'bg-chip-blue text-chip-blue-ink' },
+  loading: { icon: 'bg-chip-violet text-chip-violet-ink', accent: 'bg-primary', action: 'bg-chip-violet text-chip-violet-ink' },
 }
 
-const notificationStyles: Record<
-  NotificationType,
-  {
-    background: string
-    actionButton: string
+function NotificationGlyph({ type }: { type: NotificationType }) {
+  if (type === 'loading') return <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
+  const paths: Record<Exclude<NotificationType, 'loading'>, string> = {
+    success: 'M5 12.5l4.5 4.5L19 7.5',
+    error: 'M7 7l10 10M17 7L7 17',
+    warning: 'M12 7v6m0 4h.01',
+    info: 'M12 11v6m0-10h.01',
   }
-> = {
-  success: {
-    background: NOTIFICATION_COLORS.success,
-    actionButton: 'bg-white text-[#4F7942] hover:bg-white/90 active:scale-95',
-  },
-  error: {
-    background: NOTIFICATION_COLORS.error,
-    actionButton: 'bg-white text-[#F54927] hover:bg-white/90 active:scale-95',
-  },
-  warning: {
-    background: NOTIFICATION_COLORS.warning,
-    actionButton: 'bg-white text-[#F58027] hover:bg-white/90 active:scale-95',
-  },
-  info: {
-    background: NOTIFICATION_COLORS.info,
-    actionButton: 'bg-white text-[#4682B4] hover:bg-white/90 active:scale-95',
-  },
-  loading: {
-    background: NOTIFICATION_COLORS.loading,
-    actionButton: 'bg-white text-[#A684FF] hover:bg-white/90 active:scale-95',
-  },
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-3.5 w-3.5">
+      <path d={paths[type]} stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 }
 
 function SwipeableNotification({
@@ -141,16 +127,15 @@ function SwipeableNotification({
         opacity,
         transition: isDragging ? 'none' : 'transform 160ms ease-out, opacity 160ms ease-out',
       }}
-      className={[
-        'pointer-events-auto relative select-none overflow-hidden rounded-lg shadow-lg touch-pan-y',
-      ].join(' ')}
+      className="animate-toast-enter pointer-events-auto relative select-none overflow-hidden rounded-2xl bg-surface-container-high shadow-float ring-1 ring-outline/50 touch-pan-y"
+      data-type={notification.type}
       {...handlers}
     >
-      <div
-        className="flex items-center gap-2 px-3 py-2"
-        style={{ backgroundColor: style.background }}
-      >
-        <p className="min-w-0 flex-1 font-body text-xs font-medium leading-4 text-white">
+      <div className="flex items-center gap-3 py-2.5 pl-3 pr-2.5">
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${style.icon}`}>
+          <NotificationGlyph type={notification.type} />
+        </span>
+        <p className="min-w-0 flex-1 font-body text-[0.82rem] font-medium leading-5 text-on-surface">
           {notification.message}
         </p>
 
@@ -161,10 +146,7 @@ function SwipeableNotification({
               e.stopPropagation()
               void notification.onAction?.()
             }}
-            className={[
-              'shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all',
-              style.actionButton,
-            ].join(' ')}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-transform active:scale-95 ${style.action}`}
           >
             {notification.actionLabel}
           </button>
@@ -177,7 +159,7 @@ function SwipeableNotification({
               e.stopPropagation()
               onDismiss()
             }}
-            className="flex h-6 w-6 shrink-0 items-center justify-center text-white/70 transition-colors hover:text-white"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-on-surface/[0.06] hover:text-on-surface"
             aria-label="Dismiss notification"
           >
             <CloseIcon className="h-3.5 w-3.5" />
@@ -202,7 +184,7 @@ function NotificationViewport({
   return (
     <div
       aria-live="polite"
-      className="toast-viewport pointer-events-none fixed inset-x-0 top-0 z-[80] mx-auto flex w-full max-w-md flex-col-reverse gap-1.5 px-2 sm:bottom-0 sm:top-auto"
+      className="toast-viewport pointer-events-none fixed inset-x-0 top-0 z-[300] mx-auto flex w-full max-w-md flex-col-reverse gap-2 px-3 sm:bottom-0 sm:top-auto"
     >
       {notifications.map((notification) => (
         <SwipeableNotification

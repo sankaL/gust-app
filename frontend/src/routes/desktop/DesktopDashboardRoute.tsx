@@ -87,7 +87,7 @@ export function DesktopDashboardRoute() {
 
   const state = dashboardState(openQuery, completedQuery)
   if (state === 'loading') return <section className="space-y-6" aria-busy="true"><div className="h-16 animate-pulse rounded-soft bg-surface-container" /><div className="h-64 animate-pulse rounded-soft bg-surface-container" /></section>
-  if (state === 'error') return <section className="rounded-soft bg-[rgba(80,18,18,0.92)] p-6"><h1 className="font-display text-3xl text-on-surface">Desktop data could not load</h1><p className="mt-2 font-body text-sm text-red-100">Refresh the page and try again. The task data stays protected behind your session.</p></section>
+  if (state === 'error') return <section className="rounded-soft bg-chip-rose p-6"><h1 className="font-display text-3xl text-on-surface">Desktop data could not load</h1><p className="mt-2 font-body text-sm text-chip-rose-ink">Refresh the page and try again. The task data stays protected behind your session.</p></section>
 
   const handleDragEnd = (event: DragEndEvent) => moveKanbanTask(event, tasksById, columnsByKey, taskActions)
   const detail = <DashboardDetail preview={preview} session={session} groups={groups} actions={taskActions} />

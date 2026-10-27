@@ -1,4 +1,7 @@
-import { CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Folder, Pencil, Trash2 } from 'lucide-react'
+import { Button } from '../../components/Button'
+import { CheckCircle, Chip } from '../../components/ui/controls'
+import { chipClass, groupTone } from '../../components/ui/chipStyles'
 import { TaskDeleteDialog } from '../../components/TaskDeleteDialog'
 import { TaskFormFields } from '../../components/TaskFormFields'
 import { shiftReminderDateTimeLocal, shouldShiftReminderForDueDate } from '../../lib/dateTime'
@@ -68,7 +71,7 @@ type TaskOverviewProps = {
 }
 
 function TaskOverview(props: TaskOverviewProps) {
-  return <div className="relative z-20 rounded-[1.7rem] bg-[radial-gradient(circle_at_top_left,_rgba(186,158,255,0.16),_rgba(32,32,31,0.98)_40%,_rgba(14,14,14,1)_100%)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.48)]"><div className="flex flex-wrap gap-2"><span className="rounded-pill bg-white/6 px-3 py-1 text-xs uppercase text-on-surface-variant">{props.isEditMode ? 'Editing task' : 'Task summary'}</span><span className="rounded-pill bg-surface-container-high px-3 py-1 text-xs uppercase text-on-surface-variant">{props.groupName}</span>{props.task.needs_review ? <span className="rounded-pill bg-warning/20 px-3 py-1 text-xs uppercase text-warning">Needs review</span> : null}</div><div className="mt-4">{props.isEditMode ? <TaskEditor originalDueDate={props.task.due_date} draft={props.draft} groups={props.groups} isBusy={props.isBusy} isGroupDropdownOpen={props.isGroupDropdownOpen} onDraft={props.onDraft} onGroupDropdown={props.onGroupDropdown} /> : <ReadOnlySummary draft={props.draft} groupName={props.groupName} />}</div></div>
+  return <div className="animate-rise-in relative z-20 rounded-[1.6rem] bg-surface-container-high p-5 shadow-card ring-1 ring-inset ring-outline/40"><div className="flex flex-wrap gap-1.5"><Chip tone={props.isEditMode ? 'violet' : 'neutral'}>{props.isEditMode ? 'Editing task' : 'Task summary'}</Chip><Chip tone={groupTone(props.groupName)} icon={Folder}>{props.groupName}</Chip>{props.task.needs_review ? <Chip tone="amber">Needs review</Chip> : null}</div><div className="mt-4">{props.isEditMode ? <TaskEditor originalDueDate={props.task.due_date} draft={props.draft} groups={props.groups} isBusy={props.isBusy} isGroupDropdownOpen={props.isGroupDropdownOpen} onDraft={props.onDraft} onGroupDropdown={props.onGroupDropdown} /> : <ReadOnlySummary draft={props.draft} groupName={props.groupName} />}</div></div>
 }
 
 type TaskEditorProps = {
@@ -96,16 +99,16 @@ function TaskEditor(props: TaskEditorProps) {
 }
 
 function ReadOnlySummary(props: { draft: TaskDetailDraft; groupName: string }) {
-  return <div className="space-y-4"><h2 className="font-display text-[2.15rem] leading-tight text-on-surface">{props.draft.title}</h2><p className="text-sm leading-6 text-on-surface-variant">{props.draft.description || 'No additional context yet. Edit this task to add the detail that helps you act faster later.'}</p><div className="grid gap-3 sm:grid-cols-2"><Metadata label="Due date" value={formatDate(props.draft.dueDate, 'No due date')} /><Metadata label="Reminder" value={formatDate(props.draft.reminderAt || props.draft.reminderDate, 'No reminder')} /><Metadata label="Group" value={props.groupName} /><Metadata label="Recurrence" value={recurrenceLabel(props.draft.recurrence)} /></div><div className="rounded-[1.35rem] bg-surface/45 p-4 text-sm text-on-surface-variant">Open edit mode when you want to change details. Delete still asks for confirmation before it removes this task.</div></div>
+  return <div className="space-y-4"><h2 className="font-display text-[1.9rem] font-extrabold leading-tight tracking-[-0.02em] text-on-surface">{props.draft.title}</h2><p className="text-sm leading-6 text-on-surface-variant">{props.draft.description || 'No additional context yet. Edit this task to add the detail that helps you act faster later.'}</p><div className="grid grid-cols-2 gap-3"><Metadata label="Due date" value={formatDate(props.draft.dueDate, 'No due date')} /><Metadata label="Reminder" value={formatDate(props.draft.reminderAt || props.draft.reminderDate, 'No reminder')} /><Metadata label="Group" value={props.groupName} /><Metadata label="Recurrence" value={recurrenceLabel(props.draft.recurrence)} /></div><div className="rounded-[1.1rem] bg-surface-dim/60 p-4 text-sm leading-6 text-on-surface-variant">Open edit mode when you want to change details. Delete still asks for confirmation before it removes this task.</div></div>
 }
 
 function Metadata({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-[1.35rem] bg-black/20 p-4"><p className="text-xs font-semibold uppercase text-on-surface-variant">{label}</p><p className="mt-3 text-base font-medium text-on-surface">{value}</p></div>
+  return <div className="rounded-[1.1rem] bg-surface-dim/70 p-3.5 ring-1 ring-inset ring-outline/30"><p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-on-surface-variant">{label}</p><p className="mt-2 truncate text-[0.95rem] font-semibold text-on-surface">{value}</p></div>
 }
 
 function RecurrenceCard({ recurrence, hidden }: { recurrence: TaskRecurrence | null; hidden: boolean }) {
   if (hidden) return null
-  return <div className="rounded-soft bg-surface-container p-4 shadow-ambient"><p className="font-display text-xl text-on-surface">Recurrence</p><div className="mt-3 rounded-card bg-surface-dim px-4 py-4 text-on-surface">{recurrenceLabel(recurrence)}</div></div>
+  return <div className="animate-rise-in rounded-[1.4rem] bg-surface-container-high p-4 shadow-card ring-1 ring-inset ring-outline/40"><p className="font-display text-lg font-bold text-on-surface">Recurrence</p><div className="mt-3 rounded-card bg-surface-dim/70 px-4 py-3.5 font-semibold text-on-surface">{recurrenceLabel(recurrence)}</div></div>
 }
 
 type SubtasksCardProps = {
@@ -123,7 +126,7 @@ type SubtasksCardProps = {
 
 function SubtasksCard(props: SubtasksCardProps) {
   const subtitle = props.isEditMode ? 'Add, rename, complete, or remove checklist items.' : 'These are the smaller actions that drive this task forward.'
-  return <div className="rounded-soft bg-surface-container p-4 shadow-ambient"><div className="flex items-center justify-between"><div><p className="font-display text-xl text-on-surface">Subtasks</p><p className="mt-1 text-xs text-on-surface-variant">{subtitle}</p></div><span className="rounded-pill bg-surface-container-high px-3 py-1 text-xs text-on-surface-variant">{props.task.subtasks.length} {props.task.subtasks.length === 1 ? 'subtask' : 'subtasks'}</span></div><div className="mt-3 space-y-2">{props.task.subtasks.length ? props.task.subtasks.map((subtask) => <SubtaskRow key={subtask.id} subtask={subtask} isEditMode={props.isEditMode} pending={props.pendingSubtaskIds.includes(subtask.id)} draftTitle={props.subtaskDrafts[subtask.id] ?? subtask.title} subtaskDrafts={props.subtaskDrafts} onSubtaskDrafts={props.onSubtaskDrafts} onUpdateSubtask={props.onUpdateSubtask} onDeleteSubtask={props.onDeleteSubtask} />) : <div className="rounded-card bg-surface-dim px-4 py-4 text-sm text-on-surface-variant">No subtasks yet.</div>}</div>{props.isEditMode ? <AddSubtask title={props.newSubtaskTitle} onTitle={props.onNewSubtaskTitle} onCreate={props.onCreateSubtask} /> : null}</div>
+  return <div className="animate-rise-in rounded-[1.4rem] bg-surface-container-high p-4 shadow-card ring-1 ring-inset ring-outline/40"><div className="flex items-center justify-between gap-3"><div><p className="font-display text-lg font-bold text-on-surface">Subtasks</p><p className="mt-1 text-xs text-on-surface-variant">{subtitle}</p></div><span className={chipClass('neutral')}>{props.task.subtasks.length} {props.task.subtasks.length === 1 ? 'subtask' : 'subtasks'}</span></div><div className="mt-3 space-y-2">{props.task.subtasks.length ? props.task.subtasks.map((subtask) => <SubtaskRow key={subtask.id} subtask={subtask} isEditMode={props.isEditMode} pending={props.pendingSubtaskIds.includes(subtask.id)} draftTitle={props.subtaskDrafts[subtask.id] ?? subtask.title} subtaskDrafts={props.subtaskDrafts} onSubtaskDrafts={props.onSubtaskDrafts} onUpdateSubtask={props.onUpdateSubtask} onDeleteSubtask={props.onDeleteSubtask} />) : <p className="px-1 py-2 text-sm text-on-surface-variant">No subtasks yet.</p>}</div>{props.isEditMode ? <AddSubtask title={props.newSubtaskTitle} onTitle={props.onNewSubtaskTitle} onCreate={props.onCreateSubtask} /> : null}</div>
 }
 
 type SubtaskRowProps = {
@@ -138,24 +141,20 @@ type SubtaskRowProps = {
 }
 
 function SubtaskRow(props: SubtaskRowProps) {
-  return <div className="rounded-card bg-surface-dim p-3"><div className="flex gap-2"><SubtaskToggle subtask={props.subtask} pending={props.pending} onUpdate={props.onUpdateSubtask} /><SubtaskContent subtask={props.subtask} isEditMode={props.isEditMode} pending={props.pending} draftTitle={props.draftTitle} subtaskDrafts={props.subtaskDrafts} onSubtaskDrafts={props.onSubtaskDrafts} onUpdate={props.onUpdateSubtask} onDelete={props.onDeleteSubtask} /></div></div>
+  return <div className="rounded-xl px-1 py-2"><div className="flex items-start gap-3"><SubtaskToggle subtask={props.subtask} pending={props.pending} onUpdate={props.onUpdateSubtask} /><SubtaskContent subtask={props.subtask} isEditMode={props.isEditMode} pending={props.pending} draftTitle={props.draftTitle} subtaskDrafts={props.subtaskDrafts} onSubtaskDrafts={props.onSubtaskDrafts} onUpdate={props.onUpdateSubtask} onDelete={props.onDeleteSubtask} /></div></div>
 }
 
 function SubtaskToggle(props: { subtask: TaskDetail['subtasks'][number]; pending: boolean; onUpdate: (change: SubtaskChange) => void }) {
   return (
-    <button
-      type="button"
-      onClick={() => props.onUpdate({ subtaskId: props.subtask.id, is_completed: !props.subtask.is_completed })}
+    <CheckCircle
+      size="sm"
+      className="mt-0.5"
+      label={`Toggle ${props.subtask.title}`}
+      checked={props.subtask.is_completed}
+      pending={props.pending}
       disabled={props.pending}
-      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all ${
-        props.subtask.is_completed
-          ? 'bg-primary text-surface shadow-[0_0_10px_rgba(196,181,253,0.35)]'
-          : 'border border-outline/40 bg-surface-container hover:border-primary/60'
-      }`}
-      aria-label={`Toggle ${props.subtask.title}`}
-    >
-      {props.subtask.is_completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
-    </button>
+      onClick={() => props.onUpdate({ subtaskId: props.subtask.id, is_completed: !props.subtask.is_completed })}
+    />
   )
 }
 
@@ -177,7 +176,7 @@ function SubtaskContent(props: SubtaskContentProps) {
 
 function SubtaskReadOnly({ subtask }: { subtask: TaskDetail['subtasks'][number] }) {
   const titleClass = subtask.is_completed ? 'line-through text-on-surface-variant' : 'text-on-surface'
-  return <div className="flex-1"><p className={titleClass}>{subtask.title}</p></div>
+  return <div className="flex-1"><p className={`text-sm transition-colors ${titleClass}`}>{subtask.title}</p></div>
 }
 
 type SubtaskEditorProps = {
@@ -191,13 +190,28 @@ type SubtaskEditorProps = {
 }
 
 function SubtaskEditor(props: SubtaskEditorProps) {
-  return <div className="flex-1"><input value={props.draftTitle} onChange={(event) => props.onSubtaskDrafts({ ...props.subtaskDrafts, [props.subtask.id]: event.target.value })} className="w-full rounded-card bg-surface-container px-3 py-2 text-on-surface" aria-label={`Subtask ${props.subtask.title}`} /><div className="mt-2 flex gap-2"><button type="button" onClick={() => props.onUpdate({ subtaskId: props.subtask.id, title: props.draftTitle })} disabled={props.pending} className="rounded-pill bg-primary px-3 py-1.5 text-sm text-surface">Save</button><button type="button" onClick={() => props.onDelete(props.subtask.id)} disabled={props.pending} className="rounded-pill border border-outline/30 px-3 py-1.5 text-sm text-on-surface-variant">Delete</button></div></div>
+  return <div className="flex-1"><input value={props.draftTitle} onChange={(event) => props.onSubtaskDrafts({ ...props.subtaskDrafts, [props.subtask.id]: event.target.value })} className="w-full rounded-card bg-surface-dim px-3 py-2 text-on-surface outline-none ring-1 ring-inset ring-outline/50 focus:ring-2 focus:ring-primary/60" aria-label={`Subtask ${props.subtask.title}`} /><div className="mt-2 flex gap-2"><Button variant="primary" size="sm" onClick={() => props.onUpdate({ subtaskId: props.subtask.id, title: props.draftTitle })} disabled={props.pending}>Save</Button><Button variant="ghost" size="sm" onClick={() => props.onDelete(props.subtask.id)} disabled={props.pending}>Delete</Button></div></div>
 }
 
 function AddSubtask(props: { title: string; onTitle: (title: string) => void; onCreate: () => void }) {
-  return <div className="mt-3 flex gap-2"><input value={props.title} onChange={(event) => props.onTitle(event.target.value)} placeholder="Add a subtask..." className="flex-1 rounded-card border border-dashed border-outline/30 bg-surface-dim px-3 py-3 text-on-surface" /><button type="button" onClick={props.onCreate} disabled={!props.title.trim()} className="rounded-pill bg-primary px-4 py-2 text-sm text-surface disabled:opacity-50">Add</button></div>
+  return <div className="mt-3 flex gap-2"><input value={props.title} onChange={(event) => props.onTitle(event.target.value)} placeholder="Add a subtask..." className="min-w-0 flex-1 rounded-pill bg-surface-dim px-4 py-2.5 text-sm text-on-surface outline-none ring-1 ring-inset ring-outline/50 placeholder:text-on-surface-variant/60 focus:ring-2 focus:ring-primary/60" /><Button variant="primary" onClick={props.onCreate} disabled={!props.title.trim()}>Add</Button></div>
 }
 
 export function TaskActionDock({ isEditMode, isBusy, onBack, onSave, onEdit, onDelete }: { isEditMode: boolean; isBusy: boolean; onBack: () => void; onSave: () => void; onEdit: () => void; onDelete: () => void }) {
-  return <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40"><div className="mx-auto w-full max-w-md px-3 pb-3"><div className="pointer-events-auto rounded-[1.8rem] bg-[rgba(20,20,20,0.9)] p-3"><p className="px-1 pb-3 text-xs uppercase text-on-surface-variant">{isEditMode ? 'Save writes your changes and closes this detail view.' : 'Edit unlocks every field. Delete asks before it removes this task.'}</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3"><button type="button" onClick={onBack} className="rounded-pill border border-white/10 bg-white/5 px-3 py-3 text-left text-sm text-on-surface">Back to tasks</button>{isEditMode ? <button type="button" onClick={onSave} disabled={isBusy} className="rounded-pill bg-primary px-4 py-3 text-sm font-semibold text-surface disabled:opacity-50">Save and return</button> : <button type="button" onClick={onEdit} className="rounded-pill bg-primary px-4 py-3 text-sm font-semibold text-surface">Edit task</button>}<button type="button" onClick={onDelete} disabled={isBusy} className="col-span-2 rounded-pill border border-tertiary/35 bg-tertiary/10 px-4 py-3 text-sm text-tertiary disabled:opacity-50 sm:col-span-1">Delete task</button></div></div></div></div>
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[55]">
+      <div className="mx-auto w-full max-w-md px-3 pb-[calc(var(--safe-area-bottom)+0.75rem)]">
+        <div className="pointer-events-auto rounded-[1.75rem] bg-surface-container-high/95 p-3 shadow-sheet ring-1 ring-outline/50 backdrop-blur-xl">
+          <p className="px-1.5 pb-2.5 text-[0.7rem] font-medium text-on-surface-variant">{isEditMode ? 'Save writes your changes and closes this detail view.' : 'Edit unlocks every field. Delete asks before it removes this task.'}</p>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onBack} aria-label="Back to tasks" className="clay-obsidian flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-on-surface"><ArrowLeft className="h-5 w-5" strokeWidth={2.2} /></button>
+            {isEditMode
+              ? <Button variant="primary" size="lg" className="flex-1" onClick={onSave} disabled={isBusy}>Save and return</Button>
+              : <Button variant="primary" size="lg" className="flex-1" onClick={onEdit}><Pencil className="h-4 w-4" />Edit task</Button>}
+            <button type="button" onClick={onDelete} disabled={isBusy} aria-label="Delete task" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-chip-rose text-chip-rose-ink transition-transform active:scale-90 disabled:opacity-50"><Trash2 className="h-5 w-5" /></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }

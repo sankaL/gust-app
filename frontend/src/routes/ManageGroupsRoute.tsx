@@ -1,7 +1,15 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { ChevronRight, Folder, Inbox, ListTodo, Lock, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+
+import { ScreenHeader } from '../components/AppShellView'
+import { Button } from '../components/Button'
 import { SessionGuard } from '../components/SessionGuard'
+import { BottomSheet, SheetHeader } from '../components/ui/BottomSheet'
+import { Chip } from '../components/ui/controls'
+import { groupTone, type ChipTone } from '../components/ui/chipStyles'
 import { useNotifications } from '../components/Notifications'
 import { SelectDropdown } from '../components/SelectDropdown'
 import {
@@ -43,22 +51,103 @@ type ManageGroupCardProps = {
   onDelete: (groupId: string) => void
 }
 
+const FIELD_CLASS = 'w-full rounded-card bg-surface-container-high px-4 py-3 text-on-surface outline-none ring-1 ring-inset ring-outline/50 transition-shadow placeholder:text-on-surface-variant/60 focus:ring-2 focus:ring-primary/60'
+
+const TONE_TILE: Record<ChipTone, string> = {
+  neutral: 'bg-chip-neutral text-chip-neutral-ink',
+  blue: 'bg-chip-blue text-chip-blue-ink',
+  violet: 'bg-chip-violet text-chip-violet-ink',
+  amber: 'bg-chip-amber text-chip-amber-ink',
+  green: 'bg-chip-green text-chip-green-ink',
+  rose: 'bg-chip-rose text-chip-rose-ink',
+}
+
 function GroupCardHeader({ group, isEditing, onToggle }: { group: GroupSummary; isEditing: boolean; onToggle: () => void }) {
-  return <div className="flex items-start justify-between gap-4"><div className="min-w-0 flex-1"><h3 className="truncate font-display text-lg font-medium leading-tight text-on-surface">{group.name}</h3>{group.description ? <p className="mt-1 line-clamp-2 font-body text-xs text-on-surface-variant">{group.description}</p> : null}</div><div className="flex shrink-0 flex-col items-end gap-2"><div className="flex items-center gap-2"><span className="rounded-pill bg-surface-dim px-2 py-0.5 font-body text-[0.65rem] uppercase tracking-widest text-on-surface-variant">{group.open_task_count} TASKS</span>{group.is_system ? <span className="rounded-pill bg-primary/20 px-2 py-0.5 font-body text-[0.65rem] uppercase tracking-widest text-primary">LOCKED</span> : null}</div>{!group.is_system ? <button type="button" onClick={onToggle} className="mt-1 rounded-pill bg-surface-dim px-3 py-1 font-body text-[0.65rem] font-bold uppercase tracking-widest text-on-surface shadow-[0_4px_12px_rgba(0,0,0,0.5),_inset_0_2px_4px_rgba(255,255,255,0.1)] transition-all hover:-translate-y-0.5 active:scale-95" aria-label={isEditing ? 'Cancel editing' : 'Edit group'}>{isEditing ? 'Cancel' : 'Edit'}</button> : null}</div></div>
+  const Icon = group.is_system ? Inbox : Folder
+  return (
+    <div className="flex items-start gap-3">
+      <Link
+        to={`/tasks?group=${encodeURIComponent(group.id)}`}
+        aria-label={`Show ${group.name} tasks`}
+        className="group/link -m-2 flex min-w-0 flex-1 items-start gap-3.5 rounded-2xl p-2 outline-none transition-colors duration-200 hover:bg-on-surface/[0.03] focus-visible:ring-2 focus-visible:ring-primary/60 active:bg-on-surface/[0.05]"
+      >
+        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-transform duration-300 ease-spring group-active/link:scale-90 ${TONE_TILE[groupTone(group.name)]}`}>
+          <Icon className="h-5 w-5" strokeWidth={2.1} aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1">
+            <h3 className="truncate font-display text-[1.05rem] font-bold leading-tight text-on-surface">{group.name}</h3>
+            <ChevronRight className="h-4 w-4 shrink-0 text-on-surface-variant/60 transition-transform duration-200 group-hover/link:translate-x-0.5" strokeWidth={2.2} aria-hidden="true" />
+          </span>
+          {group.description ? <span className="mt-1 line-clamp-2 block font-body text-[0.82rem] leading-5 text-on-surface-variant">{group.description}</span> : null}
+          <span className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <Chip icon={ListTodo}>{`${group.open_task_count} ${group.open_task_count === 1 ? 'task' : 'tasks'}`}</Chip>
+            {group.is_system ? <Chip tone="violet" icon={Lock}>Locked</Chip> : null}
+          </span>
+        </span>
+      </Link>
+      {!group.is_system ? (
+        <Button variant={isEditing ? 'ghost' : 'secondary'} size="sm" onClick={onToggle} aria-label={isEditing ? 'Cancel editing' : 'Edit group'}>
+          {isEditing ? 'Cancel' : <><Pencil className="h-3.5 w-3.5" strokeWidth={2.4} />Edit</>}
+        </Button>
+      ) : null}
+    </div>
+  )
 }
 
 function GroupDangerZone({ groupId, groups, value, onChange, onDelete }: { groupId: string; groups: GroupSummary[]; value: string; onChange: (value: string) => void; onDelete: () => void }) {
   const options = groups.filter((candidate) => candidate.id !== groupId).map((candidate) => ({ value: candidate.id, label: candidate.name }))
-  return <div className="rounded-card bg-surface-dim p-4"><div className="space-y-4"><p className="font-body text-[0.65rem] font-bold uppercase tracking-widest text-error">Danger Zone</p><SelectDropdown label="" value={value} onChange={(next) => onChange(String(next))} placeholder="Move all tasks to..." options={options} /><button type="button" onClick={onDelete} className="w-full rounded-pill bg-error/20 px-4 py-2 text-sm font-medium text-error shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition-all hover:-translate-y-0.5 active:scale-95">Delete Group &amp; Reassign Tasks</button></div></div>
+  return (
+    <div className="space-y-3 rounded-[1.1rem] bg-chip-rose/60 p-4 ring-1 ring-inset ring-tertiary/20">
+      <p className="font-body text-[0.7rem] font-bold uppercase tracking-[0.14em] text-chip-rose-ink">Danger Zone</p>
+      <SelectDropdown label="" value={value} onChange={(next) => onChange(String(next))} placeholder="Move all tasks to..." options={options} />
+      <Button variant="danger" size="md" fullWidth onClick={onDelete}><Trash2 className="h-4 w-4" />Delete Group &amp; Reassign Tasks</Button>
+    </div>
+  )
 }
 
 function GroupEditPanel({ group, groups, draft, deleteTarget, onDraftChange, onDeleteTargetChange, onSave, onCancel, onDelete }: Omit<ManageGroupCardProps, 'onEdit'> & { draft: GroupDraft }) {
-  return <><div className="grid gap-3 border-t border-white/5 pt-4"><input value={draft.name} onChange={(event) => onDraftChange(group.id, { ...draft, name: event.target.value })} className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none transition-all placeholder:text-on-surface-variant/40 focus:ring-1 focus:ring-primary" placeholder="Group name" /><textarea value={draft.description} onChange={(event) => onDraftChange(group.id, { ...draft, description: event.target.value })} rows={3} className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none transition-all placeholder:text-on-surface-variant/40 focus:ring-1 focus:ring-primary" placeholder="Group description" /></div><div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => onSave(group.id)} className="rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface">Save Group</button><button type="button" onClick={() => onCancel(group.id)} className="rounded-pill border border-outline/30 px-4 py-2 text-sm text-on-surface-variant">Cancel</button></div><GroupDangerZone groupId={group.id} groups={groups} value={deleteTarget} onChange={(value) => onDeleteTargetChange(group.id, value)} onDelete={() => onDelete(group.id)} /></>
+  return (
+    <div className="animate-rise-in space-y-4 border-t border-outline/60 pt-4">
+      <div className="grid gap-3">
+        <input value={draft.name} onChange={(event) => onDraftChange(group.id, { ...draft, name: event.target.value })} className={FIELD_CLASS} placeholder="Group name" aria-label="Group name" />
+        <textarea value={draft.description} onChange={(event) => onDraftChange(group.id, { ...draft, description: event.target.value })} rows={3} className={`${FIELD_CLASS} resize-none`} placeholder="Group description" aria-label="Group description" />
+      </div>
+      <div className="flex gap-2">
+        <Button variant="ghost" size="md" className="flex-1" onClick={() => onCancel(group.id)}>Cancel</Button>
+        <Button variant="primary" size="md" className="flex-[1.4]" onClick={() => onSave(group.id)}>Save Group</Button>
+      </div>
+      <GroupDangerZone groupId={group.id} groups={groups} value={deleteTarget} onChange={(value) => onDeleteTargetChange(group.id, value)} onDelete={() => onDelete(group.id)} />
+    </div>
+  )
 }
 
 function ManageGroupCard(props: ManageGroupCardProps) {
   const { group, draft } = props
-  return <section className="flex flex-col gap-4 rounded-card border border-white/5 bg-surface-container-high p-4"><GroupCardHeader group={group} isEditing={Boolean(draft)} onToggle={() => draft ? props.onCancel(group.id) : props.onEdit(group)} />{draft ? <GroupEditPanel {...props} draft={draft} /> : null}</section>
+  return (
+    <section className={`flex flex-col gap-4 rounded-[1.4rem] p-4 shadow-card ring-1 ring-inset transition-colors duration-300 ${draft ? 'bg-card-active ring-card-active-line/30' : 'bg-surface-container-high ring-outline/40'}`}>
+      <GroupCardHeader group={group} isEditing={Boolean(draft)} onToggle={() => draft ? props.onCancel(group.id) : props.onEdit(group)} />
+      {draft ? <GroupEditPanel {...props} draft={draft} /> : null}
+    </section>
+  )
+}
+
+function AddGroupSheet({ open, name, description, onNameChange, onDescriptionChange, onClose, onCreate }: { open: boolean; name: string; description: string; onNameChange: (value: string) => void; onDescriptionChange: (value: string) => void; onClose: () => void; onCreate: () => void }) {
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      labelledBy="add-group-title"
+      header={<SheetHeader eyebrow="Organize" title="Add a new group" titleId="add-group-title" onClose={onClose} closeLabel="Close modal" />}
+      footer={<div className="flex gap-2.5"><Button variant="secondary" size="lg" className="flex-1" onClick={onClose}>Cancel</Button><Button variant="primary" size="lg" className="flex-[1.4]" onClick={onCreate} disabled={!name.trim()}>Create Group</Button></div>}
+    >
+      <div className="space-y-3 pt-1">
+        <input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder="Group name" aria-label="Group name" className={FIELD_CLASS} autoFocus />
+        <textarea value={description} onChange={(event) => onDescriptionChange(event.target.value)} placeholder="Optional description for AI routing" aria-label="Group description" rows={4} className={`${FIELD_CLASS} resize-none`} />
+        <p className="px-1 font-body text-xs leading-5 text-on-surface-variant">Gust uses the description to decide which captured tasks belong in this group.</p>
+      </div>
+    </BottomSheet>
+  )
 }
 
 export function ManageGroupsRoute() {
@@ -169,80 +258,40 @@ export function ManageGroupsRoute() {
       eyebrow="Workflow structure"
       description="Create, rename, describe, and safely delete groups without breaking Inbox protections."
     >
-      <section className="space-y-4">
+      <ScreenHeader eyebrow="Organize" title="Groups" />
+      <section className="space-y-3 pt-2">
         <button
           type="button"
           onClick={() => setShowAddGroupModal(true)}
-          className="group relative flex w-full items-center justify-center gap-2 rounded-soft p-4 transition-all duration-200 outline-none select-none bg-[radial-gradient(circle_at_top_left,_#5b21b6_0%,_#2e1065_100%)] text-white shadow-[0_6px_0_#171033,_0_8px_15px_rgba(0,0,0,0.4),_inset_0_1px_2px_rgba(255,255,255,0.2)] hover:-translate-y-[1px] hover:shadow-[0_7px_0_#171033,_0_12px_20px_rgba(0,0,0,0.5),_inset_0_1px_2px_rgba(255,255,255,0.2)] active:translate-y-[6px] active:shadow-[0_0px_0_#171033,_0_2px_4px_rgba(0,0,0,0.4),_inset_0_2px_6px_rgba(0,0,0,0.3)]"
+          className="group flex w-full items-center gap-3.5 rounded-[1.4rem] border-2 border-dashed border-outline p-4 text-left outline-none transition-all duration-200 hover:border-primary/60 hover:bg-primary/[0.04] focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-[0.99]"
         >
-          <span className="font-display text-lg drop-shadow-sm">+</span>
-          <span className="font-body text-sm font-medium drop-shadow-sm">Add Group</span>
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-on-primary shadow-card transition-transform duration-300 ease-spring group-hover:rotate-90">
+            <Plus className="h-5 w-5" strokeWidth={2.5} aria-hidden="true" />
+          </span>
+          <span>
+            <span className="block font-display text-[1.02rem] font-bold text-on-surface">Add Group</span>
+            <span className="block font-body text-xs text-on-surface-variant">Projects, areas, people, or anything you sort by</span>
+          </span>
         </button>
 
-        {showAddGroupModal ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-soft bg-surface-container p-6 shadow-ambient">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-display text-xl text-on-surface">Add a new group</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAddGroupModal(false)
-                      setNewGroupName('')
-                      setNewGroupDescription('')
-                    }}
-                    className="rounded-full bg-surface-container-high p-2 text-on-surface-variant transition-colors hover:bg-surface-container-highest"
-                    aria-label="Close modal"
-                  >
-                      <span className="font-body text-xs font-bold uppercase tracking-widest">Close</span>
-                  </button>
-                </div>
-                <input
-                  value={newGroupName}
-                  onChange={(event) => setNewGroupName(event.target.value)}
-                  placeholder="Group name"
-                  className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40 transition-all"
-                />
-                <textarea
-                  value={newGroupDescription}
-                  onChange={(event) => setNewGroupDescription(event.target.value)}
-                  placeholder="Optional description for AI routing"
-                  rows={3}
-                  className="w-full rounded-card bg-surface-dim px-3 py-3 text-on-surface outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40 transition-all"
-                />
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAddGroupModal(false)
-                      setNewGroupName('')
-                      setNewGroupDescription('')
-                    }}
-                    className="flex-1 rounded-pill border border-outline/30 px-4 py-2 text-sm text-on-surface-variant"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      createGroupMutation.mutate()
-                      setShowAddGroupModal(false)
-                    }}
-                    disabled={!newGroupName.trim()}
-                    className="flex-1 rounded-pill bg-primary px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
-                  >
-                    Create Group
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <AddGroupSheet
+          open={showAddGroupModal}
+          name={newGroupName}
+          description={newGroupDescription}
+          onNameChange={setNewGroupName}
+          onDescriptionChange={setNewGroupDescription}
+          onClose={() => {
+            setShowAddGroupModal(false)
+            setNewGroupName('')
+            setNewGroupDescription('')
+          }}
+          onCreate={() => {
+            createGroupMutation.mutate()
+            setShowAddGroupModal(false)
+          }}
+        />
 
-        <div className="space-y-3">
-          {groupsQuery.data?.map((group) => <ManageGroupCard key={group.id} group={group} groups={groupsQuery.data ?? []} draft={drafts[group.id]} deleteTarget={deleteTargets[group.id] ?? ''} onEdit={(value) => setDrafts((current) => ({ ...current, [value.id]: { name: value.name, description: value.description ?? '' } }))} onCancel={(groupId) => setDrafts((current) => { const next = { ...current }; delete next[groupId]; return next })} onDraftChange={(groupId, value) => setDrafts((current) => ({ ...current, [groupId]: value }))} onDeleteTargetChange={(groupId, value) => setDeleteTargets((current) => ({ ...current, [groupId]: value }))} onSave={(groupId) => updateGroupMutation.mutate(groupId)} onDelete={(groupId) => deleteGroupMutation.mutate(groupId)} />)}
-        </div>
+        {groupsQuery.data?.map((group, index) => <div key={group.id} className="animate-rise-in" style={{ ['--stagger' as string]: Math.min(index, 8) }}><ManageGroupCard group={group} groups={groupsQuery.data ?? []} draft={drafts[group.id]} deleteTarget={deleteTargets[group.id] ?? ''} onEdit={(value) => setDrafts((current) => ({ ...current, [value.id]: { name: value.name, description: value.description ?? '' } }))} onCancel={(groupId) => setDrafts((current) => { const next = { ...current }; delete next[groupId]; return next })} onDraftChange={(groupId, value) => setDrafts((current) => ({ ...current, [groupId]: value }))} onDeleteTargetChange={(groupId, value) => setDeleteTargets((current) => ({ ...current, [groupId]: value }))} onSave={(groupId) => updateGroupMutation.mutate(groupId)} onDelete={(groupId) => deleteGroupMutation.mutate(groupId)} /></div>)}
       </section>
     </SessionGuard>
   )

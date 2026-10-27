@@ -118,7 +118,7 @@ export function DesktopGroupsRoute() {
                 </p>
 
                 <div className="mt-6 flex flex-wrap items-center gap-4">
-                  <div className="flex items-center gap-1.5 rounded-pill bg-[rgba(30,30,30,0.5)] px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                  <div className="flex items-center gap-1.5 rounded-pill bg-surface-dim/70 px-3 py-1.5 ring-1 ring-inset ring-outline/40">
                     <CircleDashed className="h-3.5 w-3.5 text-warning" strokeWidth={2.5} />
                     <span className="font-body text-[0.7rem] font-semibold tracking-wide text-on-surface">
                       {group.open_task_count}
@@ -127,7 +127,7 @@ export function DesktopGroupsRoute() {
                       open
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 rounded-pill bg-[rgba(30,30,30,0.5)] px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                  <div className="flex items-center gap-1.5 rounded-pill bg-surface-dim/70 px-3 py-1.5 ring-1 ring-inset ring-outline/40">
                     <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2.5} />
                     <span className="font-body text-[0.7rem] font-semibold tracking-wide text-on-surface">
                       {group.completed_task_count ?? 0}
@@ -140,7 +140,7 @@ export function DesktopGroupsRoute() {
               </div>
               
               {/* Card Footer / Interaction Hint */}
-              <div className="border-t border-white/5 bg-[rgba(20,20,20,0.4)] px-5 py-3 transition-colors group-hover:bg-[rgba(30,30,30,0.6)]">
+              <div className="border-t border-outline/40 bg-surface-dim/50 px-5 py-3 transition-colors group-hover:bg-surface-dim/80">
                 <div className="flex items-center justify-between">
                   <span className="font-body text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-primary">
                     View Tasks

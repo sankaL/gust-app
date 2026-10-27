@@ -12,7 +12,7 @@ describe('SaveConfirmationToast', () => {
     render(<SaveConfirmationToast message="Changes saved" onDismiss={onDismiss} />)
 
     const notification = screen.getByRole('status')
-    expect(notification).toHaveClass('rounded-lg', 'bg-[#4F7942]')
+    expect(notification).toHaveClass('rounded-2xl', 'bg-surface-container-high', 'shadow-float')
     await user.click(screen.getByRole('button', { name: 'Dismiss notification' }))
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })

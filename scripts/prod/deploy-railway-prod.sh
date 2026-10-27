@@ -56,6 +56,7 @@ service_path() {
     frontend) printf 'frontend\n' ;;
     digest-daily-cron) printf 'deploy/digest-daily-cron\n' ;;
     digest-weekly-cron) printf 'deploy/digest-weekly-cron\n' ;;
+    db-keepalive) printf 'deploy/db-keepalive\n' ;;
     *) fail "Unknown service: $1" ;;
   esac
 }

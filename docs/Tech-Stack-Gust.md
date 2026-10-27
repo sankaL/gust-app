@@ -48,6 +48,7 @@ Production topology:
   - `backend/railway.json`
   - `deploy/digest-daily-cron/railway.json`
   - `deploy/digest-weekly-cron/railway.json`
+  - `deploy/db-keepalive/railway.json`
 
 ## Principles
 
@@ -68,7 +69,7 @@ Responsibilities:
 
 - Session-aware public landing entry at `/`
 - Dedicated login entry at `/login`
-- Protected mobile app shell rooted at `/capture`
+- Protected mobile app shell rooted at `/tasks`, with capture, pending review, and account as URL-driven bottom sheets (`?sheet=capture|review|account`)
 - Protected desktop workspace rooted at `/desktop`
 - Authentication entry and session-aware routing
 - Protected app-shell redirect to `/login` when signed out
@@ -81,19 +82,27 @@ Responsibilities:
 - Group management
 - PWA install experience
 
+### Theming
+
+- Light is the default theme; users can switch to Dark or Auto (follows the OS) from the mobile account sheet, Settings, or the desktop top bar.
+- The preference is the one value kept in `localStorage` (`gust_theme`); it is non-sensitive UI state.
+- Colors are CSS variables holding RGB channels, consumed through Tailwind tokens (`rgb(var(--color-x) / <alpha-value>)`), applied via `data-theme` on `<html>`.
+- Desktop dark keeps the original violet palette through `data-palette="classic"`; the public landing page is pinned to it.
+
 ### Route Contract
 
 Committed frontend routes:
 
-- `/` is a public, session-aware landing entry: signed-out users see landing content, and signed-in users redirect to `/capture`.
-- `/login` is the dedicated auth entry and defaults successful sign-in to `/capture`.
-- `/capture`, `/tasks`, `/tasks/completed`, `/tasks/groups`, and `/tasks/:taskId` are protected mobile-app routes under `AppShell`.
+- `/` is a public, session-aware landing entry: signed-out users see landing content, and signed-in users redirect to `/tasks` on phones and `/desktop` elsewhere.
+- `/login` is the dedicated auth entry and defaults successful sign-in to the same device-aware home (`/tasks` or `/desktop`).
+- `/tasks`, `/tasks/completed`, `/tasks/groups`, and `/tasks/:taskId` are protected mobile-app routes under `AppShell`. `/capture` remains a deep link that redirects to `/tasks?sheet=capture` (`?record=1` → `&mode=record`, `?compose=1` → `&mode=type`).
+- Mobile sheets are URL state: opening one pushes a history entry so Back closes it; `?day=YYYY-MM-DD` filters the task agenda to one day.
 - `/desktop` and its child routes are protected desktop workspace routes under `DesktopShell`.
 
 Responsive entry behavior:
 
 - desktop and iPad-class devices default from `/capture` to `/desktop` on initial visit
-- phone-class devices default from `/desktop` to `/capture` on initial visit
+- phone-class devices default from `/desktop` to `/tasks` on initial visit
 - session-scoped override state prevents redirect loops when a user explicitly switches surfaces
 
 Landing-page implementation contract:
@@ -197,7 +206,7 @@ Committed model:
 
 The frontend learns whether the user is signed in by calling the backend session endpoint, not by reading tokens from browser storage.
 Logout must clear client-side query caches before the next account signs in so stale user data is not reused.
-Unsuccessful or blocked sign-ins return a sanitized JSON error and set no session cookies; only successful sign-ins set the session cookies, after which the login route redirects to the requested path (default `/capture`).
+Unsuccessful or blocked sign-ins return a sanitized JSON error and set no session cookies; only successful sign-ins set the session cookies, after which the login route redirects to the requested path (default `/tasks` on phones, `/desktop` elsewhere).
 
 ### Backend Auth Handling
 
@@ -379,6 +388,7 @@ Committed cron split:
 - `digest-daily-cron` calls `POST /internal/reminders/run?mode=daily`
 - `digest-weekly-cron` calls `POST /internal/reminders/run?mode=weekly`
 - `task-reminder-cron` calls `POST /internal/reminders/run?mode=task` every five minutes. It is intentionally short-lived, uses the existing shared-secret boundary, and accepts a small delivery variance.
+- `db-keepalive` runs `select now()` with `psql` every six hours (`17 */6 * * *` UTC) so the Supabase Free Plan project is not auto-paused after 7 days of low activity. It connects straight to Postgres through `DATABASE_URL=${{backend.DATABASE_URL}}` (the non-bypass runtime role), so it keeps working even if the backend or the other crons are stopped. Its schedule, `NEVER` restart policy, and Dockerfile path are also set on the Railway service itself, because Railway did not apply this service's `railway.json` on its first deploys.
 - both jobs use the same shared-secret header as other internal jobs
 - no separate cron microservice codebase is required; this is deployment configuration only
 - each cron service is deployed from a dedicated Railway service directory with its own `cronSchedule`

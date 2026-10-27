@@ -4,25 +4,26 @@ import { Navigate, useSearchParams } from 'react-router-dom'
 import { PortraitOrientationGuard } from '../components/PortraitOrientationGuard'
 import { SessionRequiredCard } from '../components/SessionRequiredCard'
 import { ApiError, getSessionStatus } from '../lib/api'
+import { defaultSignedInPath } from '../lib/device'
 import { EMAIL_NOT_ALLOWED_MESSAGE } from '../lib/sessionPresentation'
 
 function resolveNextPath(nextPath: string | null): string {
   if (!nextPath) {
-    return '/capture'
+    return defaultSignedInPath()
   }
 
   let normalizedPath: string
   try {
     normalizedPath = decodeURIComponent(nextPath)
   } catch {
-    return '/capture'
+    return defaultSignedInPath()
   }
 
   if (!normalizedPath.startsWith('/')) {
-    return '/capture'
+    return defaultSignedInPath()
   }
   if (normalizedPath.startsWith('//')) {
-    return '/capture'
+    return defaultSignedInPath()
   }
   return normalizedPath
 }
@@ -53,7 +54,7 @@ export function LoginRoute() {
             <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
               Session check
             </p>
-            <h1 className="font-display text-3xl text-on-surface">Loading login</h1>
+            <h1 className="font-display text-3xl font-extrabold tracking-[-0.02em] text-on-surface">Loading login</h1>
             <p className="font-body text-sm leading-6 text-on-surface-variant">
               Verifying your current session.
             </p>
@@ -72,13 +73,13 @@ export function LoginRoute() {
       <PortraitOrientationGuard />
       <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8">
         <section className="w-full space-y-6">
-          <div className="space-y-2 flex flex-col items-center text-center">
-            <div className="flex items-center justify-center gap-2">
-              <img src="/logos/gust-wind-electric.svg" alt="Gust" className="h-7 w-7" />
-              <h1 className="font-display text-3xl text-on-surface">Gust</h1>
-            </div>
-            <p className="font-body text-sm leading-6 text-on-surface-variant">
-              Sign in to open your personal task workspace.
+          <div className="animate-rise-in flex flex-col items-center space-y-3 text-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-surface-container-high shadow-float ring-1 ring-outline/50">
+              <img src="/logos/gust-wind-electric.svg" alt="" className="h-9 w-9" />
+            </span>
+            <h1 className="font-display text-[2.2rem] font-extrabold tracking-[-0.03em] text-on-surface">Gust</h1>
+            <p className="max-w-[16rem] font-body text-[0.95rem] leading-6 text-on-surface-variant">
+              Say it once. Gust turns your voice into tasks.
             </p>
           </div>
 

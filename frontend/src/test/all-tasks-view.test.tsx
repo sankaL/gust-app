@@ -17,8 +17,6 @@ vi.mock('@tanstack/react-virtual', async () => {
     getItemKey?: (index: number) => string
     scrollMargin?: number
   }) => {
-    const cacheRef = React.useRef(new Map<string, number>())
-    const [revision, setRevision] = React.useState(0)
     const measureElement = React.useMemo(() => vi.fn(), [])
     const keys = React.useMemo(
       () => Array.from({ length: count }, (_, index) => String(getItemKey?.(index) ?? index)),
@@ -32,46 +30,19 @@ vi.mock('@tanstack/react-virtual', async () => {
       () => sizes.reduce((sum, size) => sum + size, 0),
       [sizes]
     )
-
-    React.useEffect(() => {
-      if (cacheRef.current.size > 0 || keys.length === 0) {
-        return
-      }
-
-      let offset = 0
-      const nextCache = new Map<string, number>()
-      keys.forEach((key, index) => {
-        nextCache.set(key, offset)
-        offset += sizes[index]
-      })
-      cacheRef.current = nextCache
-    }, [keys, sizes])
-
     const measure = React.useCallback(() => {
       mockVirtualizerMeasureCallCount += 1
-      let offset = 0
-      const nextCache = new Map<string, number>()
-      keys.forEach((key, index) => {
-        nextCache.set(key, offset)
-        offset += sizes[index]
-      })
-      cacheRef.current = nextCache
-      setRevision((current) => current + 1)
-    }, [keys, sizes])
+    }, [])
 
+    // Like @tanstack/react-virtual, offsets are recomputed from item sizes whenever the items change.
     const virtualItems = React.useMemo(() => {
-      void revision
-      let fallbackOffset = 0
+      let offset = 0
       return keys.map((key, index) => {
-        const start = cacheRef.current.get(key) ?? fallbackOffset
-        fallbackOffset += sizes[index]
-        return {
-          index,
-          key,
-          start,
-        }
+        const start = offset
+        offset += sizes[index]
+        return { index, key, start }
       })
-    }, [keys, sizes, revision])
+    }, [keys, sizes])
 
     const instanceRef = React.useRef({
       getTotalSize: () => totalSize,
@@ -419,15 +390,16 @@ describe('AllTasksView', () => {
       </QueryClientProvider>
     )
 
-    expect(await screen.findByText('Today')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument()
     expect(screen.getByText('Delete from today section')).toBeInTheDocument()
     expect(screen.getByText('Keep in later section')).toBeInTheDocument()
 
-    const othersHeaderBeforeDelete = screen.getByText('Others').parentElement
+    const othersHeaderBeforeDelete = screen.getByRole('heading', { name: 'No date' }).closest('[data-index]')
     if (!othersHeaderBeforeDelete) {
-      throw new Error('Expected Others section header before delete')
+      throw new Error('Expected No date section header before delete')
     }
-    expect(othersHeaderBeforeDelete).toHaveStyle({ transform: 'translateY(148px)' })
+    // Header (52px) + one task card (132px) sit above the No date section.
+    expect(othersHeaderBeforeDelete).toHaveStyle({ transform: 'translateY(184px)' })
 
     await act(async () => {
       await client.invalidateQueries({ queryKey: ['tasks', 'all', 'open', 'infinite'] })
@@ -435,18 +407,19 @@ describe('AllTasksView', () => {
 
     await waitFor(() => {
       expect(mockedListAllTasks).toHaveBeenCalledTimes(2)
-      expect(screen.queryByText('Today')).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Today' })).not.toBeInTheDocument()
       expect(screen.queryByText('Delete from today section')).not.toBeInTheDocument()
     })
 
     await waitFor(() => {
-      const othersHeaderAfterDelete = screen.getByText('Others').parentElement
+      const othersHeaderAfterDelete = screen.getByRole('heading', { name: 'No date' }).closest('[data-index]')
       if (!othersHeaderAfterDelete) {
-        throw new Error('Expected Others section header after delete')
+        throw new Error('Expected No date section header after delete')
       }
       expect(othersHeaderAfterDelete).toHaveStyle({ transform: 'translateY(0px)' })
     })
 
-    expect(mockVirtualizerMeasureCallCount).toBeGreaterThanOrEqual(2)
+    // Measured heights must survive list changes; a measure() reset would drop them back to estimates.
+    expect(mockVirtualizerMeasureCallCount).toBe(0)
   })
 })

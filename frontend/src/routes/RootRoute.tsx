@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Navigate, useSearchParams } from 'react-router-dom'
 
 import { ApiError, getSessionStatus } from '../lib/api'
+import { defaultSignedInPath } from '../lib/device'
 
 type AuthErrorCode = 'email_not_allowed'
 
@@ -23,7 +24,7 @@ function RootSessionLoading() {
           <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
             Session check
           </p>
-          <h1 className="font-display text-3xl text-on-surface">Opening Gust</h1>
+          <h1 className="font-display text-3xl font-extrabold tracking-[-0.02em] text-on-surface">Opening Gust</h1>
           <p className="font-body text-sm leading-6 text-on-surface-variant">
             Verifying your current session.
           </p>
@@ -48,12 +49,12 @@ function RootErrorState({ eyebrow, title, description, actionLabel, onAction }: 
             <p className="font-body text-xs uppercase tracking-[0.15em] text-on-surface-variant">
               {eyebrow}
             </p>
-            <h1 className="font-display text-3xl text-on-surface">{title}</h1>
+            <h1 className="font-display text-3xl font-extrabold tracking-[-0.02em] text-on-surface">{title}</h1>
             <p className="font-body text-sm leading-6 text-on-surface-variant">{description}</p>
           </div>
           <button
             type="button"
-            className="rounded-card bg-white px-5 py-3 font-display text-base font-bold text-black shadow-[0_5px_0_#a1a1aa,_0_8px_15px_rgba(0,0,0,0.4)] transition-all hover:-translate-y-[1px] active:translate-y-[4px] active:shadow-[0_0px_0_#a1a1aa,_0_2px_4px_rgba(0,0,0,0.4)]"
+            className="inline-flex h-12 items-center justify-center rounded-pill bg-primary px-6 font-body text-sm font-semibold text-on-primary transition-transform active:scale-95"
             onClick={onAction}
           >
             {actionLabel}
@@ -92,7 +93,7 @@ function RootSessionResolution({
   }
 
   if (isSignedIn) {
-    return <Navigate to="/capture" replace />
+    return <Navigate to={defaultSignedInPath()} replace />
   }
 
   if (isError && !authErrorCode) {

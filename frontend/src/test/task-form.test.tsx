@@ -29,8 +29,8 @@ describe('task form actions', () => {
 
     expect(footer?.className).toContain('grid')
     expect(footer?.className).toContain('grid-cols-2')
-    expect(cancelButton.className).toContain('w-full')
-    expect(saveButton.className).toContain('w-full')
-    expect(saveButton.className).toContain('disabled:shadow-none')
+    expect(cancelButton).toBeDisabled()
+    expect(saveButton).toBeDisabled()
+    expect(saveButton.className).toContain('disabled:opacity-45')
   })
 })
