@@ -36,7 +36,7 @@ export function TaskLoadError({ searching, onRetry }: { searching: boolean; onRe
 
 function EmptyTasks({ refreshing, refresh, searchQuery, isDayFiltered }: { refreshing: boolean; refresh: () => Promise<void>; searchQuery: string; isDayFiltered: boolean }) {
   if (searchQuery) return <div className="pt-4"><EmptyState icon={SearchX} title={`No tasks match "${searchQuery}"`}>Try a different task title or detail.</EmptyState></div>
-  if (isDayFiltered) return <div className="pt-4"><EmptyState icon={Coffee} title="Nothing due this day">Enjoy the breathing room — or tap + to plan something.</EmptyState></div>
+  if (isDayFiltered) return <div className="pt-4"><EmptyState icon={Coffee} title="Nothing due this day">Enjoy the breathing room, or tap + to plan something.</EmptyState></div>
   return <PullToRefresh isRefreshing={refreshing} onRefresh={refresh}><div className="pt-4"><EmptyState icon={Sparkles} title="No tasks across any group">Capture a voice note to create tasks, or move tasks into groups.</EmptyState></div></PullToRefresh>
 }
 

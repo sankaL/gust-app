@@ -1271,6 +1271,9 @@ describe('tasks flow', () => {
     const saveGroupButton = await screen.findByRole('button', { name: 'Save Group' })
     expect(saveGroupButton).toHaveClass('bg-primary')
     expect(screen.getByRole('button', { name: 'Delete Group & Reassign Tasks' })).toBeInTheDocument()
+
+    // Tapping a group card opens the task home filtered to that group.
+    expect(screen.getByRole('link', { name: 'Show Personal tasks' })).toHaveAttribute('href', '/tasks?group=personal-1')
   })
 
   it('opens non-review task detail in read mode first and enters edit mode from the sticky dock', async () => {

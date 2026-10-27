@@ -40,7 +40,7 @@ function ReviewBell() {
 export function ScreenHeader({ eyebrow, title, actions, showBell = true }: { eyebrow: ReactNode; title: ReactNode; actions?: ReactNode; showBell?: boolean }) {
   const shell = useMobileShell()
   return (
-    <header className="flex items-start justify-between gap-3 pb-1 pt-4">
+    <header className="flex items-start justify-between gap-3 pb-5 pt-4">
       <div className="min-w-0 animate-rise-in">
         <p className="font-body text-[1.02rem] font-semibold text-on-surface/80 dark:text-[0.78rem] dark:uppercase dark:tracking-[0.16em] dark:text-on-surface-variant">{eyebrow}</p>
         <h1 className="mt-0.5 truncate font-display text-[clamp(1.6rem,7.4vw,2.05rem)] font-extrabold leading-[1.12] tracking-[-0.025em] text-on-surface">{title}</h1>
@@ -90,7 +90,7 @@ export function BottomNavigation({ accountInitials, isAccountOpen, onAccount, on
         onClick={onCapture}
         aria-label="Add a new task"
         className="group fixed z-[60] flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full bg-primary text-on-primary shadow-fab outline-none transition-transform duration-300 ease-spring hover:scale-105 focus-visible:ring-4 focus-visible:ring-primary/40 active:scale-90"
-        style={{ right: 'max(1.1rem, calc((100vw - 28rem) / 2 + 1.1rem))', bottom: 'calc(var(--safe-area-bottom) + 5.1rem)' }}
+        style={{ right: 'max(1.1rem, calc((100vw - 28rem) / 2 + 1.1rem))', bottom: 'calc(var(--safe-area-bottom) + 6.25rem)' }}
       >
         <span aria-hidden="true" className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 to-transparent" />
         <Plus className="relative h-7 w-7 transition-transform duration-300 ease-out-expo group-hover:rotate-90" strokeWidth={2.4} aria-hidden="true" />

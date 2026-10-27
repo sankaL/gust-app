@@ -106,7 +106,7 @@ function ComposeView({ controller }: { controller: CaptureController }) {
         value={mode}
         onChange={(next) => state.setTextExpanded(next === 'type')}
         options={[{ value: 'speak', label: 'Speak', icon: Mic }, { value: 'type', label: 'Type', icon: Keyboard }]}
-        className="mx-auto w-full max-w-[16rem]"
+        className="w-full"
       />
       <CaptureErrors
         permissionError={recorder.error}
@@ -169,7 +169,7 @@ function ProcessingView({ isVoice }: { isVoice: boolean }) {
     <div className="flex min-h-full flex-col items-center gap-4 pb-2 text-center" role="status" aria-label={isVoice ? 'Transcribing voice' : 'Extracting tasks'}>
       <VoiceOrb state="processing" stream={null} disabled label={isVoice ? 'Transcribing voice' : 'Extracting tasks'} />
       <p key={index} className="animate-word-swap font-display text-lg font-bold text-on-surface">{message}</p>
-      <p className="-mt-2 max-w-[18rem] font-body text-xs leading-5 text-on-surface-variant">You can close this sheet — new tasks will wait for you in Review.</p>
+      <p className="-mt-2 max-w-[18rem] font-body text-xs leading-5 text-on-surface-variant">You can close this sheet. New tasks will wait for you in Review.</p>
       <div className="mt-2 w-full space-y-3" aria-hidden="true">
         {[0, 1].map((row) => (
           <div key={row} className="rounded-[1.35rem] bg-surface-container-high p-4 ring-1 ring-inset ring-outline/40">

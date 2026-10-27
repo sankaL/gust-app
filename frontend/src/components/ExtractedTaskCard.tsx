@@ -126,7 +126,7 @@ function TaskActions(props: ViewProps & { desktop?: boolean }) {
         disabled={disabled}
         aria-label="Discard"
         title="Discard"
-        className="flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant outline-none transition-all duration-200 hover:bg-chip-rose hover:text-chip-rose-ink focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-90 disabled:opacity-45"
+        className="flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant outline-none ring-2 ring-inset ring-on-surface-variant/20 transition-all duration-200 hover:bg-chip-rose hover:text-chip-rose-ink hover:ring-transparent focus-visible:ring-primary/60 active:scale-90 disabled:opacity-45"
       >
         {props.isDiscarding ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" /> : <X className="h-[1.1rem] w-[1.1rem]" strokeWidth={2.4} />}
       </button>

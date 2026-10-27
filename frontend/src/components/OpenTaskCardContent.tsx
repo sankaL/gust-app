@@ -27,7 +27,7 @@ function timeColumn(task: TaskSummary, todayIso: string) {
       label: `Due ${formatShortDate(task.due_date)}`,
     }
   }
-  return { top: '—', bottom: 'Any', label: 'No due date' }
+  return { top: 'Any', bottom: 'Time', label: 'No due date' }
 }
 
 function TimeColumn({ task, todayIso }: { task: TaskSummary; todayIso: string }) {
@@ -70,29 +70,30 @@ export function OpenTaskCardContent({ task, todayIso, isBusy, isCompleting, show
           >
             {task.title}
           </h3>
-          {onDelete ? (
-            <button
-              type="button"
-              onClick={(event) => { event.stopPropagation(); onDelete() }}
-              onPointerDown={(event) => event.stopPropagation()}
-              disabled={isBusy}
-              aria-label={`Delete ${task.title}`}
-              title="Delete"
-              className="-my-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-on-surface-variant opacity-0 outline-none transition-all duration-200 hover:bg-chip-rose hover:text-chip-rose-ink focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-0 [@media(hover:none)]:hidden"
-            >
-              <Trash2 className="h-4 w-4" strokeWidth={2.2} />
-            </button>
-          ) : null}
-          <span onPointerDown={(event) => event.stopPropagation()} className="-my-0.5">
-            <CheckCircle
-              mode="action"
-              label={`Complete ${task.title}`}
-              checked={isCompleting}
-              pending={isBusy && !isCompleting}
-              disabled={isBusy || isCompleting}
-              onClick={(event) => { event.stopPropagation(); onComplete() }}
-            />
-          </span>
+          <div className="-my-1 flex shrink-0 items-center gap-1.5" onPointerDown={(event) => event.stopPropagation()}>
+            {onDelete ? (
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); onDelete() }}
+                disabled={isBusy}
+                aria-label={`Delete ${task.title}`}
+                title="Delete"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-on-surface-variant opacity-0 outline-none ring-2 ring-inset ring-on-surface-variant/20 transition-all duration-200 hover:bg-chip-rose hover:ring-transparent hover:text-chip-rose-ink focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-0 [@media(hover:none)]:hidden"
+              >
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={2.2} />
+              </button>
+            ) : null}
+            <span className="flex h-9 w-9 items-center justify-center">
+              <CheckCircle
+                mode="action"
+                label={`Complete ${task.title}`}
+                checked={isCompleting}
+                pending={isBusy && !isCompleting}
+                disabled={isBusy || isCompleting}
+                onClick={(event) => { event.stopPropagation(); onComplete() }}
+              />
+            </span>
+          </div>
         </div>
         {task.description ? <p className="mt-1 line-clamp-2 font-body text-[0.84rem] leading-5 text-on-surface-variant">{task.description}</p> : null}
         <TaskChips task={task} todayIso={todayIso} showGroup={showGroup} />

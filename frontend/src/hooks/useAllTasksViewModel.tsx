@@ -82,9 +82,12 @@ function useTaskVirtualizer(items: VirtualTaskItem[], listRef: React.RefObject<H
     estimateSize,
     overscan: 5,
     scrollMargin: listRef.current?.offsetTop ?? 0,
-    measureElement: (element) => element.getBoundingClientRect().height,
+    // Layout height, not the transformed box, so a card mid-animation never skews offsets.
+    measureElement: (element) => (element as HTMLElement).offsetHeight || element.getBoundingClientRect().height,
   })
-  useEffect(() => { void virtualizer.measure() }, [items.length, virtualizer])
+  // No measure() reset when items change: sizes are cached per stable task/section key and
+  // offsets are recomputed from them. A reset would drop measured heights back to estimates,
+  // and rows already on screen never re-report their size, so taller cards would overlap.
   return virtualizer
 }
 

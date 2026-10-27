@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import { chipClass, type ChipTone } from './chipStyles'
 
 /* ----------------------------------------------------------------------------
- * CheckCircle — the single completion / approval control used everywhere.
+ * CheckCircle: the single completion / approval control used everywhere.
  * ------------------------------------------------------------------------- */
 
 type CheckSize = 'sm' | 'md' | 'lg'
@@ -62,7 +62,7 @@ export function CheckCircle({ checked, pending = false, size = 'md', label, mode
 }
 
 /* ----------------------------------------------------------------------------
- * Chip — compact metadata pill (group, recurrence, review state, ...).
+ * Chip: compact metadata pill (group, recurrence, review state, ...).
  * ------------------------------------------------------------------------- */
 
 export function Chip({ tone = 'neutral', icon: Icon, children, className = '', title }: { tone?: ChipTone; icon?: LucideIcon; children: ReactNode; className?: string; title?: string }) {
@@ -95,7 +95,7 @@ export function Switch({ label, checked, disabled, onChange, description }: { la
 }
 
 /* ----------------------------------------------------------------------------
- * SegmentedControl — sliding thumb selector (theme, speak/type, ...).
+ * SegmentedControl: sliding thumb selector (theme, speak/type, ...).
  * ------------------------------------------------------------------------- */
 
 export function SegmentedControl<T extends string>({ label, options, value, onChange, className = '' }: {
@@ -135,7 +135,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
 }
 
 /* ----------------------------------------------------------------------------
- * SectionLabel — "☀ Morning" style list section heading.
+ * SectionLabel: "☀ Morning" style list section heading.
  * ------------------------------------------------------------------------- */
 
 export function SectionLabel({ icon: Icon, children, count, tone = 'default', as: Heading = 'h3' }: { icon?: LucideIcon; children: ReactNode; count?: number; tone?: 'default' | 'alert'; as?: 'h2' | 'h3' }) {
@@ -151,7 +151,7 @@ export function SectionLabel({ icon: Icon, children, count, tone = 'default', as
 }
 
 /* ----------------------------------------------------------------------------
- * Panel — inline status surface (errors, notices, empty states).
+ * Panel: inline status surface (errors, notices, empty states).
  * ------------------------------------------------------------------------- */
 
 export function InlineNotice({ tone = 'neutral', title, children, action, role }: { tone?: 'neutral' | 'error' | 'warning' | 'success'; title?: ReactNode; children?: ReactNode; action?: ReactNode; role?: 'alert' | 'status' }) {

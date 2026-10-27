@@ -86,7 +86,6 @@ export function CompletedTasksRouteView({
   return (
     <SessionGuard session={session} isLoading={isSessionLoading} isError={isSessionError} title="Completed Tasks" eyebrow="Completed history" description={completedDescription(isAllGroupsView)}>
       <ScreenHeader eyebrow="History" title="Completed" />
-      <p className="pb-2 font-body text-sm leading-6 text-on-surface-variant">{completedDescription(isAllGroupsView)}</p>
       <PullToRefresh isRefreshing={isRefreshing} onRefresh={refresh}><CompletedTaskList tasks={tasks} isLoading={isTasksLoading} hasResult={hasTaskResult} pendingTaskIds={pendingTaskIds} onOpen={onOpen} onRestore={onRequestRestore} /></PullToRefresh>
       <CompletedTaskOverlays session={session} groups={groups} selectedTaskId={selectedTaskId} pendingTaskIds={pendingTaskIds} restoreCandidate={restoreCandidate} isRestoring={isRestoring} onClosePreview={onClosePreview} onRequestRestore={onRequestRestore} onConfirmRestore={onConfirmRestore} onCancelRestore={onCancelRestore} />
     </SessionGuard>

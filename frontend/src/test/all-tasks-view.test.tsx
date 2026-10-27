@@ -17,8 +17,6 @@ vi.mock('@tanstack/react-virtual', async () => {
     getItemKey?: (index: number) => string
     scrollMargin?: number
   }) => {
-    const cacheRef = React.useRef(new Map<string, number>())
-    const [revision, setRevision] = React.useState(0)
     const measureElement = React.useMemo(() => vi.fn(), [])
     const keys = React.useMemo(
       () => Array.from({ length: count }, (_, index) => String(getItemKey?.(index) ?? index)),
@@ -32,46 +30,19 @@ vi.mock('@tanstack/react-virtual', async () => {
       () => sizes.reduce((sum, size) => sum + size, 0),
       [sizes]
     )
-
-    React.useEffect(() => {
-      if (cacheRef.current.size > 0 || keys.length === 0) {
-        return
-      }
-
-      let offset = 0
-      const nextCache = new Map<string, number>()
-      keys.forEach((key, index) => {
-        nextCache.set(key, offset)
-        offset += sizes[index]
-      })
-      cacheRef.current = nextCache
-    }, [keys, sizes])
-
     const measure = React.useCallback(() => {
       mockVirtualizerMeasureCallCount += 1
-      let offset = 0
-      const nextCache = new Map<string, number>()
-      keys.forEach((key, index) => {
-        nextCache.set(key, offset)
-        offset += sizes[index]
-      })
-      cacheRef.current = nextCache
-      setRevision((current) => current + 1)
-    }, [keys, sizes])
+    }, [])
 
+    // Like @tanstack/react-virtual, offsets are recomputed from item sizes whenever the items change.
     const virtualItems = React.useMemo(() => {
-      void revision
-      let fallbackOffset = 0
+      let offset = 0
       return keys.map((key, index) => {
-        const start = cacheRef.current.get(key) ?? fallbackOffset
-        fallbackOffset += sizes[index]
-        return {
-          index,
-          key,
-          start,
-        }
+        const start = offset
+        offset += sizes[index]
+        return { index, key, start }
       })
-    }, [keys, sizes, revision])
+    }, [keys, sizes])
 
     const instanceRef = React.useRef({
       getTotalSize: () => totalSize,
@@ -448,6 +419,7 @@ describe('AllTasksView', () => {
       expect(othersHeaderAfterDelete).toHaveStyle({ transform: 'translateY(0px)' })
     })
 
-    expect(mockVirtualizerMeasureCallCount).toBeGreaterThanOrEqual(2)
+    // Measured heights must survive list changes; a measure() reset would drop them back to estimates.
+    expect(mockVirtualizerMeasureCallCount).toBe(0)
   })
 })

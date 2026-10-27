@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { Folder, Inbox, ListTodo, Lock, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Folder, Inbox, ListTodo, Lock, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import { ScreenHeader } from '../components/AppShellView'
 import { Button } from '../components/Button'
@@ -64,18 +65,27 @@ const TONE_TILE: Record<ChipTone, string> = {
 function GroupCardHeader({ group, isEditing, onToggle }: { group: GroupSummary; isEditing: boolean; onToggle: () => void }) {
   const Icon = group.is_system ? Inbox : Folder
   return (
-    <div className="flex items-start gap-3.5">
-      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${TONE_TILE[groupTone(group.name)]}`}>
-        <Icon className="h-5 w-5" strokeWidth={2.1} aria-hidden="true" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <h3 className="truncate font-display text-[1.05rem] font-bold leading-tight text-on-surface">{group.name}</h3>
-        {group.description ? <p className="mt-1 line-clamp-2 font-body text-[0.82rem] leading-5 text-on-surface-variant">{group.description}</p> : null}
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          <Chip icon={ListTodo}>{`${group.open_task_count} ${group.open_task_count === 1 ? 'task' : 'tasks'}`}</Chip>
-          {group.is_system ? <Chip tone="violet" icon={Lock}>Locked</Chip> : null}
-        </div>
-      </div>
+    <div className="flex items-start gap-3">
+      <Link
+        to={`/tasks?group=${encodeURIComponent(group.id)}`}
+        aria-label={`Show ${group.name} tasks`}
+        className="group/link -m-2 flex min-w-0 flex-1 items-start gap-3.5 rounded-2xl p-2 outline-none transition-colors duration-200 hover:bg-on-surface/[0.03] focus-visible:ring-2 focus-visible:ring-primary/60 active:bg-on-surface/[0.05]"
+      >
+        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-transform duration-300 ease-spring group-active/link:scale-90 ${TONE_TILE[groupTone(group.name)]}`}>
+          <Icon className="h-5 w-5" strokeWidth={2.1} aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1">
+            <h3 className="truncate font-display text-[1.05rem] font-bold leading-tight text-on-surface">{group.name}</h3>
+            <ChevronRight className="h-4 w-4 shrink-0 text-on-surface-variant/60 transition-transform duration-200 group-hover/link:translate-x-0.5" strokeWidth={2.2} aria-hidden="true" />
+          </span>
+          {group.description ? <span className="mt-1 line-clamp-2 block font-body text-[0.82rem] leading-5 text-on-surface-variant">{group.description}</span> : null}
+          <span className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <Chip icon={ListTodo}>{`${group.open_task_count} ${group.open_task_count === 1 ? 'task' : 'tasks'}`}</Chip>
+            {group.is_system ? <Chip tone="violet" icon={Lock}>Locked</Chip> : null}
+          </span>
+        </span>
+      </Link>
       {!group.is_system ? (
         <Button variant={isEditing ? 'ghost' : 'secondary'} size="sm" onClick={onToggle} aria-label={isEditing ? 'Cancel editing' : 'Edit group'}>
           {isEditing ? 'Cancel' : <><Pencil className="h-3.5 w-3.5" strokeWidth={2.4} />Edit</>}
@@ -260,7 +270,7 @@ export function ManageGroupsRoute() {
           </span>
           <span>
             <span className="block font-display text-[1.02rem] font-bold text-on-surface">Add Group</span>
-            <span className="block font-body text-xs text-on-surface-variant">Projects, areas, people — anything you sort by</span>
+            <span className="block font-body text-xs text-on-surface-variant">Projects, areas, people, or anything you sort by</span>
           </span>
         </button>
 
