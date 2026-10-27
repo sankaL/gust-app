@@ -669,3 +669,28 @@ html {
     scroll-behavior: auto !important;
   }
 }
+
+/* Glossy highlights on accent-filled controls (voice orb, switch knob). They sit on the accent
+   color in every palette, so the values are shared rather than per-theme. */
+:root {
+  --gloss-hi: rgb(255 255 255 / 0.35);
+  --gloss-sheen: rgb(255 255 255 / 0.45);
+  --gloss-lo: rgb(0 0 0 / 0.18);
+  --knob-fill: rgb(255 255 255);
+  --knob-shadow: rgb(0 0 0 / 0.25);
+}
+
+@layer components {
+  .orb-core-shadow {
+    box-shadow: 0 24px 50px -18px rgb(var(--color-primary-dim)), inset 0 2px 3px var(--gloss-hi), inset 0 -6px 14px var(--gloss-lo);
+  }
+
+  .orb-sheen {
+    background: radial-gradient(circle at 35% 25%, var(--gloss-sheen), transparent 55%);
+  }
+
+  .switch-knob {
+    background-color: var(--knob-fill);
+    box-shadow: 0 1px 3px var(--knob-shadow);
+  }
+}

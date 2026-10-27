@@ -341,6 +341,24 @@ describe('tasks flow', () => {
     )
   })
 
+  it('falls back to today when the ?day= filter is not a real date', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/auth/session')) return Promise.resolve(jsonResponse(buildSessionResponse()))
+      if (url.includes('/groups')) return Promise.resolve(jsonResponse(buildGroupsResponse()))
+      if (url.includes('/tasks?group_id=personal-1')) {
+        return Promise.resolve(jsonResponse([{ id: 'task-1', title: 'Organize garage shelving', status: 'open', needs_review: false, due_date: null, reminder_at: null, due_bucket: 'no_date', group: { id: 'personal-1', name: 'Personal', is_system: false }, completed_at: null, deleted_at: null }]))
+      }
+      return Promise.resolve(jsonResponse([]))
+    }))
+
+    // A hand-edited or stale link used to throw a RangeError while formatting the header date.
+    renderTaskRoute(['/tasks?group=personal-1&day=2026-02-30'])
+
+    expect(await screen.findByText('Organize garage shelving')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /^Today/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('loads /tasks as all tasks without fetching Inbox first', async () => {
     const fetchedGroupTaskUrls: string[] = []
     const fetchMock = vi.fn((input: RequestInfo | URL) => {

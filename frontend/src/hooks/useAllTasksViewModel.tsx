@@ -73,7 +73,7 @@ function useAllTasksRefreshButton(shellActions: ReturnType<typeof useAppShellAct
   }, [isRefreshing, refresh, shellActions])
 }
 
-function useTaskVirtualizer(items: VirtualTaskItem[], listRef: React.RefObject<HTMLDivElement | null>) {
+export function useTaskVirtualizer(items: VirtualTaskItem[], listRef: React.RefObject<HTMLDivElement | null>) {
   const getItemKey = useCallback((index: number) => virtualItemKey(items, index), [items])
   const estimateSize = useCallback((index: number) => virtualItemSize(items, index), [items])
   const virtualizer = useWindowVirtualizer({

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 export type ShellSheet = 'capture' | 'review' | 'account'
@@ -25,27 +25,42 @@ export function useShellSheets() {
   const rawMode = searchParams.get('mode')
   const captureMode: CaptureLaunchMode | null = rawMode === 'record' || rawMode === 'type' ? rawMode : null
 
+  // Sheet content keeps rendering (with its old callbacks) while it animates out, so close
+  // requests read the live location instead of the render-time closure.
+  const locationRef = useRef(location)
+  locationRef.current = location
+  const closingKeyRef = useRef<string | null>(null)
+  if (closingKeyRef.current !== location.key) closingKeyRef.current = null
+
   const openSheet = useCallback((sheet: ShellSheet, mode?: CaptureLaunchMode) => {
-    const next = new URLSearchParams(location.search)
+    const current = locationRef.current
+    const next = new URLSearchParams(current.search)
     next.set('sheet', sheet)
     if (mode) next.set('mode', mode)
     else next.delete('mode')
-    const replace = isShellSheet(next.get('sheet')) && isShellSheet(new URLSearchParams(location.search).get('sheet'))
-    void navigate({ pathname: location.pathname, search: `?${next.toString()}` }, { replace, state: { gustSheet: sheet } satisfies SheetHistoryState })
-  }, [location.pathname, location.search, navigate])
+    const replace = isShellSheet(new URLSearchParams(current.search).get('sheet'))
+    // Swapping sheets reuses the current entry, so keep its state: only an entry the app pushed may be popped on close.
+    const state: SheetHistoryState = replace ? (current.state as SheetHistoryState) : { gustSheet: sheet }
+    void navigate({ pathname: current.pathname, search: `?${next.toString()}` }, { replace, state })
+  }, [navigate])
 
   const closeSheet = useCallback(() => {
-    const state = location.state as SheetHistoryState
+    const current = locationRef.current
+    if (!isShellSheet(new URLSearchParams(current.search).get('sheet'))) return
+    // A second close before the first navigation lands would pop an extra history entry.
+    if (closingKeyRef.current === current.key) return
+    closingKeyRef.current = current.key
+    const state = current.state as SheetHistoryState
     if (state?.gustSheet && window.history.length > 1) {
       void navigate(-1)
       return
     }
-    const next = new URLSearchParams(location.search)
+    const next = new URLSearchParams(current.search)
     next.delete('sheet')
     next.delete('mode')
     const search = next.toString()
-    void navigate({ pathname: location.pathname, search: search ? `?${search}` : '' }, { replace: true })
-  }, [location.pathname, location.search, location.state, navigate])
+    void navigate({ pathname: current.pathname, search: search ? `?${search}` : '' }, { replace: true })
+  }, [navigate])
 
   /** Drops the one-shot launch mode without closing the sheet or adding history. */
   const consumeCaptureMode = useCallback(() => {

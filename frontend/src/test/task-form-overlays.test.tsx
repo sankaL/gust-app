@@ -123,6 +123,23 @@ describe('task form overlays', () => {
     expect(screen.getByRole('button', { name: '28' })).toBeInTheDocument()
   })
 
+  it('sizes the calendar for full month and year names and labels its selects', async () => {
+    const user = userEvent.setup()
+
+    render(<DatePicker value="2026-01-31" onChange={() => {}} mode="date" />)
+    await user.click(screen.getByRole('button', { name: 'Jan 31, 2026' }))
+
+    const month = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Month' })
+    const year = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Year' })
+    expect(month.selectedOptions[0]?.textContent).toBe('January')
+    expect(year.value).toBe('2026')
+    // The trigger is 280px wide; the calendar still gets the 320px it needs for "September 2026".
+    expect(month.closest<HTMLElement>('.fixed')?.style.width).toBe('320px')
+
+    await user.click(screen.getByRole('button', { name: 'next month' }))
+    expect(month.selectedOptions[0]?.textContent).toBe('February')
+  })
+
   it('keeps the menu open while the menu itself scrolls', async () => {
     const user = userEvent.setup()
     const options = Array.from({ length: 12 }, (_, index) => ({

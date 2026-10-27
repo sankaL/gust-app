@@ -109,9 +109,9 @@ export function VoiceOrb({ state, stream, disabled, onClick, label }: {
         onClick={onClick}
         disabled={disabled}
         aria-label={label}
-        className={`group relative z-10 flex h-[9.5rem] w-[9.5rem] items-center justify-center rounded-full bg-gradient-to-br shadow-[0_24px_50px_-18px_rgb(var(--color-primary-dim)),inset_0_2px_3px_rgba(255,255,255,0.35),inset_0_-6px_14px_rgba(0,0,0,0.18)] outline-none transition-all duration-500 ease-out-expo focus-visible:ring-4 focus-visible:ring-primary/40 enabled:hover:scale-[1.03] enabled:active:scale-95 disabled:cursor-default ${coreTone} ${state === 'idle' ? 'animate-orb-breathe' : ''}`}
+        className={`group relative z-10 flex h-[9.5rem] w-[9.5rem] items-center justify-center rounded-full bg-gradient-to-br orb-core-shadow outline-none transition-all duration-500 ease-out-expo focus-visible:ring-4 focus-visible:ring-primary/40 enabled:hover:scale-[1.03] enabled:active:scale-95 disabled:cursor-default ${coreTone} ${state === 'idle' ? 'animate-orb-breathe' : ''}`}
       >
-        <span aria-hidden="true" className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_35%_25%,rgba(255,255,255,0.45),transparent_55%)]" />
+        <span aria-hidden="true" className="orb-sheen absolute inset-0 rounded-full" />
         <span className="relative transition-transform duration-300 ease-spring">
           {recording ? <StopGlyph /> : processing ? <Sparkles aria-hidden="true" className="h-11 w-11 animate-pulse" strokeWidth={1.8} /> : <Mic aria-hidden="true" className={`h-12 w-12 ${state === 'starting' ? 'animate-pulse' : ''}`} strokeWidth={1.9} />}
         </span>

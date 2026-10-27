@@ -103,6 +103,14 @@ function useSheetStack(active: boolean) {
   return { depth, isTop, isCovered }
 }
 
+/** True when the touch starts in a nested scroller (e.g. a long textarea) that is not at its top. */
+function isInsideScrolledChild(target: EventTarget | null, container: HTMLElement) {
+  for (let node = target instanceof Element ? target : null; node && node !== container; node = node.parentElement) {
+    if (node.scrollTop > 0) return true
+  }
+  return false
+}
+
 type DragTracking = { startY: number; lastY: number; lastTime: number; velocity: number; active: boolean }
 
 function useSheetDrag({ enabled, panelRef, scrollRef, onDismiss }: {
@@ -146,10 +154,9 @@ function useSheetDrag({ enabled, panelRef, scrollRef, onDismiss }: {
     setIsDragging(false)
     const distance = state.lastY - state.startY
     const height = panelRef.current?.offsetHeight ?? 600
-    if (distance > Math.min(160, height * 0.28) || state.velocity > DISMISS_VELOCITY) {
-      onDismissRef.current()
-      return
-    }
+    if (distance > Math.min(160, height * 0.28) || state.velocity > DISMISS_VELOCITY) onDismissRef.current()
+    // If the owner declines to close (unsaved changes, pending save) the sheet springs back;
+    // if it does close, the exit transform takes over from here.
     setOffset(0)
   }, [panelRef])
 
@@ -158,7 +165,7 @@ function useSheetDrag({ enabled, panelRef, scrollRef, onDismiss }: {
     const scrollElement = scrollRef.current
     if (!enabled || !scrollElement) return undefined
     const onTouchStart = (event: TouchEvent) => {
-      if (scrollElement.scrollTop > 0) return
+      if (scrollElement.scrollTop > 0 || isInsideScrolledChild(event.target, scrollElement)) return
       begin(event.touches[0]?.clientY ?? 0)
     }
     const onTouchMove = (event: TouchEvent) => {
@@ -239,7 +246,10 @@ export function BottomSheet(props: BottomSheetProps) {
   const localScrollRef = useRef<HTMLDivElement>(null)
   const scrollRef = props.bodyRef ?? localScrollRef
   const dismissible = view.dismissible ?? true
-  const requestClose = useCallback(() => { if (dismissible) latest.current.onClose() }, [dismissible])
+  const openRef = useRef(props.open)
+  openRef.current = props.open
+  // Backdrop, Escape and drag stay mounted during the exit animation; a close request then is a duplicate.
+  const requestClose = useCallback(() => { if (dismissible && openRef.current) latest.current.onClose() }, [dismissible])
   const drag = useSheetDrag({ enabled: shouldRender && dismissible, panelRef, scrollRef, onDismiss: requestClose })
   const { setOffset } = drag
 
@@ -262,7 +272,8 @@ export function BottomSheet(props: BottomSheetProps) {
   const sizeClass = (view.size ?? 'default') === 'auto' ? 'sheet-h-auto' : 'sheet-h-default'
 
   return createPortal(
-    <div className="fixed inset-0" style={{ zIndex }}>
+    // inert while exiting so stale header and footer buttons cannot fire their handlers a second time.
+    <div className="fixed inset-0" style={{ zIndex }} inert={!props.open}>
       <div
         aria-hidden="true"
         data-testid="sheet-backdrop"

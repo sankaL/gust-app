@@ -25,7 +25,7 @@ function edgeNormal(px: number, py: number, qx: number, qy: number): [number, nu
 }
 
 /** Red/blue channel values for a pixel at `px`, `py` from the center of a `halfWidth` x `halfHeight` rounded rectangle. */
-function glassPixel(px: number, py: number, halfWidth: number, halfHeight: number, radius: number, bezel: number): [number, number] {
+export function glassPixel(px: number, py: number, halfWidth: number, halfHeight: number, radius: number, bezel: number): [number, number] {
   const qx = Math.abs(px) - (halfWidth - radius)
   const qy = Math.abs(py) - (halfHeight - radius)
   const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius
@@ -34,6 +34,38 @@ function glassPixel(px: number, py: number, halfWidth: number, halfHeight: numbe
   const [nx, ny] = edgeNormal(px, py, qx, qy)
   const strength = Math.pow(1 - depth / bezel, 1.6) * 127
   return [128 + nx * strength, 128 + ny * strength]
+}
+
+function writePixel(data: Uint8ClampedArray, x: number, y: number, width: number, halfWidth: number, halfHeight: number, radius: number, bezel: number) {
+  const [red, blue] = glassPixel(x + 0.5 - halfWidth, y + 0.5 - halfHeight, halfWidth, halfHeight, radius, bezel)
+  const offset = (y * width + x) * 4
+  data[offset] = red
+  data[offset + 2] = blue
+}
+
+/**
+ * Fills RGBA `data` with the displacement for a rounded rectangle. Everything deeper than `bezel`
+ * from the edge is neutral, so only the edge bands are computed: a full-sheet map is ~280k pixels,
+ * but only a few percent of them carry any offset.
+ */
+export function fillGlassDisplacement(data: Uint8ClampedArray, width: number, height: number, radius: number, bezel: number) {
+  data.fill(128)
+  for (let offset = 3; offset < data.length; offset += 4) data[offset] = 255
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+  const cornerRadius = Math.min(radius, halfWidth, halfHeight)
+  // Rows this close to the top or bottom can be in a corner, so every column is computed there;
+  // other rows only have non-neutral pixels within `bezel` of the left and right edges.
+  const band = Math.ceil(cornerRadius + bezel) + 1
+  const sideBand = Math.ceil(bezel) + 1
+  for (let y = 0; y < height; y += 1) {
+    if (y < band || y >= height - band || sideBand * 2 >= width) {
+      for (let x = 0; x < width; x += 1) writePixel(data, x, y, width, halfWidth, halfHeight, cornerRadius, bezel)
+      continue
+    }
+    for (let x = 0; x < sideBand; x += 1) writePixel(data, x, y, width, halfWidth, halfHeight, cornerRadius, bezel)
+    for (let x = width - sideBand; x < width; x += 1) writePixel(data, x, y, width, halfWidth, halfHeight, cornerRadius, bezel)
+  }
 }
 
 /**
@@ -53,15 +85,7 @@ export function createGlassDisplacementMap(width: number, height: number, radius
   if (!context) return null
 
   const image = context.createImageData(width, height)
-  const halfWidth = width / 2
-  const halfHeight = height / 2
-  const cornerRadius = Math.min(radius, halfWidth, halfHeight)
-  for (let index = 0; index < width * height; index += 1) {
-    const px = (index % width) + 0.5 - halfWidth
-    const py = Math.floor(index / width) + 0.5 - halfHeight
-    const [red, blue] = glassPixel(px, py, halfWidth, halfHeight, cornerRadius, bezel)
-    image.data.set([red, 128, blue, 255], index * 4)
-  }
+  fillGlassDisplacement(image.data, width, height, radius, bezel)
   context.putImageData(image, 0, 0)
   const url = canvas.toDataURL()
   if (mapCache.size >= MAP_CACHE_LIMIT) mapCache.delete(mapCache.keys().next().value as string)

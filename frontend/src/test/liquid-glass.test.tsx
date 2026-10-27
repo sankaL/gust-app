@@ -2,7 +2,7 @@ import { render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useGlassRefraction } from '../components/ui/LiquidGlass'
-import { createGlassDisplacementMap, supportsBackdropRefraction } from '../lib/liquidGlass'
+import { createGlassDisplacementMap, fillGlassDisplacement, glassPixel, supportsBackdropRefraction } from '../lib/liquidGlass'
 
 const withBrands = (brands: string[]) => ({ userAgentData: { brands: brands.map((brand) => ({ brand, version: '1' })) } }) as unknown as Navigator
 
@@ -34,6 +34,20 @@ describe('liquid glass refraction', () => {
   it('returns no displacement map when a 2D canvas is unavailable', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     expect(createGlassDisplacementMap(31, 31, 15, 9)).toBeNull()
+  })
+
+  it('matches a full per-pixel map while only computing the edge bands', () => {
+    for (const [width, height, radius, bezel] of [[120, 90, 20, 12], [64, 200, 36, 22], [30, 30, 15, 9], [400, 40, 36, 22]]) {
+      const fast = new Uint8ClampedArray(width * height * 4)
+      fillGlassDisplacement(fast, width, height, radius, bezel)
+      const full = new Uint8ClampedArray(width * height * 4)
+      const cornerRadius = Math.min(radius, width / 2, height / 2)
+      for (let index = 0; index < width * height; index += 1) {
+        const [red, blue] = glassPixel((index % width) + 0.5 - width / 2, Math.floor(index / width) + 0.5 - height / 2, width / 2, height / 2, cornerRadius, bezel)
+        full.set([red, 128, blue, 255], index * 4)
+      }
+      expect(Array.from(fast)).toEqual(Array.from(full))
+    }
   })
 
   it('renders no refraction filter outside Chromium', () => {

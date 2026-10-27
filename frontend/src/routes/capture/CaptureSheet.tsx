@@ -225,22 +225,37 @@ function useLaunchMode({ open, launchMode, controller, onConsumeLaunchMode }: { 
     const current = controllerRef.current
     if (launchMode === 'type') { current.state.setTextExpanded(true); return }
     if (current.recorder.isRecording || current.mutations.voice.isPending || current.mutations.text.isPending) return
+    // A failed capture is still on screen: show it (with Retry) instead of starting over and dropping the retry audio.
+    if (current.state.transcriptionError || (current.mutations.text.isError && current.state.textCaptureError)) return
     current.state.setTextExpanded(false)
     void current.startRecording()
   }, [launchMode, onConsumeLaunchMode, open])
 }
 
-/** When extraction finishes after the sheet was swiped away, offer a one-tap path back. */
-function useBackgroundCompletionNotice(open: boolean, phase: CapturePhase, count: number, onReopen: () => void) {
+/** When extraction finishes or fails after the sheet was swiped away, offer a one-tap path back. */
+function useBackgroundCompletionNotice(open: boolean, phase: CapturePhase, count: number, failed: boolean, onReopen: () => void) {
   const { showNotification } = useNotifications()
   const previousPhase = useRef(phase)
   useEffect(() => {
     const wasProcessing = previousPhase.current === 'processing'
     previousPhase.current = phase
-    if (!open && wasProcessing && phase === 'review') {
+    if (open || !wasProcessing) return
+    if (phase === 'review') {
       showNotification({ type: 'success', message: count > 0 ? `${count} ${count === 1 ? 'task is' : 'tasks are'} ready to review.` : 'Capture finished.', actionLabel: 'Review', onAction: onReopen })
+    } else if (phase === 'compose' && failed) {
+      showNotification({ type: 'error', message: 'Your capture could not be processed.', actionLabel: 'Open', onAction: onReopen })
     }
-  }, [count, onReopen, open, phase, showNotification])
+  }, [count, failed, onReopen, open, phase, showNotification])
+}
+
+/** The sheet blocks swipe and close while recording, but the back gesture can still hide it; never leave the mic on unseen. */
+function useStopRecordingWhenHidden(open: boolean, controller: CaptureController) {
+  const recorderRef = useRef(controller.recorder)
+  recorderRef.current = controller.recorder
+  useEffect(() => {
+    // Submits rather than discards, so a long note is not lost; the background notice above reports the result.
+    if (!open && recorderRef.current.isRecording) recorderRef.current.stop()
+  }, [open])
 }
 
 export function CaptureSheet({ controller, open, launchMode, onConsumeLaunchMode, onClose, onReopen, onOpenReview }: {
@@ -257,7 +272,9 @@ export function CaptureSheet({ controller, open, launchMode, onConsumeLaunchMode
   const reviewTasks = queries.extractedTasks.filter((task) => task.status === 'pending')
   const bulk = useBulkAction()
   useLaunchMode({ open, launchMode, controller, onConsumeLaunchMode })
-  useBackgroundCompletionNotice(open, phase, reviewTasks.length, onReopen)
+  const captureFailed = Boolean(controller.state.transcriptionError || (controller.mutations.text.isError && controller.state.textCaptureError))
+  useBackgroundCompletionNotice(open, phase, reviewTasks.length, captureFailed, onReopen)
+  useStopRecordingWhenHidden(open, controller)
 
   const header = HEADERS[phase]
   const reviewTitle = reviewTasks.length > 0 ? `${reviewTasks.length} new ${reviewTasks.length === 1 ? 'task' : 'tasks'}` : header.title

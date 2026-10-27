@@ -9,7 +9,7 @@ import { useOpenTaskRouteQueries } from '../hooks/useTaskRouteQueries'
 import { useTaskListRouteState } from '../hooks/useTaskListRouteState'
 import { countTasksByDueDate, useAllOpenTasksQuery } from '../hooks/useAllTasksViewModel'
 import { type TaskSummary } from '../lib/api'
-import { getTodayIsoDate } from '../lib/desktopData'
+import { getTodayIsoDate, isValidIsoDate } from '../lib/desktopData'
 import { refreshTaskScreenQueries } from '../lib/taskScreenCache'
 
 function normalizeTaskItems(data: unknown): TaskSummary[] {
@@ -73,7 +73,9 @@ export function TasksRoute() {
   const allOpen = useAllOpenTasksQuery(routeState.debouncedSearchQuery, isAllView && sessionQuery.data?.signed_in === true)
   const dueCounts = useMemo(() => countTasksByDueDate(isAllView ? allOpen.tasks : tasks), [allOpen.tasks, isAllView, tasks])
   const todayIso = getTodayIsoDate(sessionQuery.data?.timezone ?? null)
-  const dayFilter = routeState.searchParams.get('day')
+  // ?day= is user-editable; an invalid date would make date formatting throw, so treat it as today.
+  const rawDayFilter = routeState.searchParams.get('day')
+  const dayFilter = rawDayFilter && isValidIsoDate(rawDayFilter) ? rawDayFilter : null
   function selectDay(isoDate: string) {
     const next = new URLSearchParams(routeState.searchParams)
     if (isoDate === todayIso) next.delete('day')

@@ -40,7 +40,7 @@ function TaskTitleCell({ task, onOpen }: { task: TaskSummary; onOpen?: (taskId: 
 
 function TaskDueCell({ task, todayIso, onMove }: { task: TaskSummary; todayIso?: string; onMove?: Actions['onMoveDueDate'] }) {
   const isOverdue = Boolean(task.status === 'open' && task.due_date && todayIso && task.due_date < todayIso)
-  if (task.status === 'open' && onMove) return <td className="px-4 py-3"><input type="date" value={task.due_date ?? ''} onChange={(event) => onMove(task, event.target.value || null)} className={['w-36 rounded-card px-2 py-1.5 text-sm transition-[background-color,color,box-shadow] focus:outline-none', isOverdue ? 'bg-error/15 text-error shadow-[inset_0_0_0_1px_rgba(239,83,80,0.5)] focus:shadow-[inset_0_0_0_1px_rgba(239,83,80,0.9),0_0_18px_rgba(239,83,80,0.18)]' : 'bg-surface-dim focus:shadow-[inset_0_0_0_1px_var(--color-primary)]'].join(' ')} aria-label={`Move ${task.title} due date${isOverdue ? ', overdue' : ''}`} /></td>
+  if (task.status === 'open' && onMove) return <td className="px-4 py-3"><input type="date" value={task.due_date ?? ''} onChange={(event) => onMove(task, event.target.value || null)} className={['w-36 rounded-card px-2 py-1.5 text-sm transition-[background-color,color,box-shadow] focus:outline-none', isOverdue ? 'bg-error/15 text-error shadow-[inset_0_0_0_1px_rgba(239,83,80,0.5)] focus:shadow-[inset_0_0_0_1px_rgba(239,83,80,0.9),0_0_18px_rgba(239,83,80,0.18)]' : 'bg-surface-dim focus:shadow-[inset_0_0_0_1px_rgb(var(--color-primary))]'].join(' ')} aria-label={`Move ${task.title} due date${isOverdue ? ', overdue' : ''}`} /></td>
   return <td className="px-4 py-3"><span className="text-sm text-on-surface-variant">{task.due_date ? formatIsoDateLabel(task.due_date) : 'No date'}</span></td>
 }
 

@@ -88,7 +88,7 @@ export function Switch({ label, checked, disabled, onChange, description }: { la
       <span className="relative inline-flex h-7 w-12 shrink-0">
         <input aria-label={label} role="switch" type="checkbox" className="peer sr-only" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
         <span aria-hidden="true" className="absolute inset-0 rounded-full bg-on-surface-variant/25 transition-colors duration-200 peer-checked:bg-primary" />
-        <span aria-hidden="true" className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] transition-transform duration-300 ease-spring peer-checked:translate-x-5" />
+        <span aria-hidden="true" className="absolute left-1 top-1 h-5 w-5 rounded-full switch-knob transition-transform duration-300 ease-spring peer-checked:translate-x-5" />
       </span>
     </label>
   )
