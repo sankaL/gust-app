@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from pydantic import ValidationError
 
 from app.core.action_locks import ActionLockBusyError, user_action_lock
+from app.core.concurrency import blocking
 from app.core.errors import (
     AIServiceQuotaExceededError,
     CaptureNotFoundError,
@@ -206,7 +207,7 @@ class CaptureService:
             raise InvalidCaptureError(str(exc)) from exc
 
         try:
-            with self._capture_lock(user_id=user_id, action="capture_voice"):
+            async with self._capture_lock(user_id=user_id, action="capture_voice"):
                 logger.info(
                     "voice_transcription_started",
                     extra={
@@ -255,7 +256,7 @@ class CaptureService:
                         failure_reason=failure_reason,
                         error=exc,
                     )
-                    self._mark_capture_failure(
+                    await self._mark_capture_failure(
                         capture_id=capture_result.id,
                         user_id=user_id,
                         status="transcription_failed",
@@ -328,7 +329,7 @@ class CaptureService:
             raise InvalidCaptureError("Text capture cannot be empty.")
 
         try:
-            with self._capture_lock(user_id=user_id, action="capture_text"):
+            async with self._capture_lock(user_id=user_id, action="capture_text"):
                 capture, context = await self._with_extraction_context(
                     asyncio.to_thread(
                         self._create_capture,
@@ -374,7 +375,7 @@ class CaptureService:
         if not normalized_transcript:
             raise InvalidCaptureError("Transcript cannot be empty.")
 
-        user, inbox_group, groups = self._load_submission_context(
+        user, inbox_group, groups = await self._load_submission_context(
             user_id=user_id, capture_id=capture_id
         )
 
@@ -398,7 +399,7 @@ class CaptureService:
             groups=groups,
             user_timezone=user.timezone,
         )
-        final_capture, created_count, flagged_count = self._store_submission(
+        final_capture, created_count, flagged_count = await self._store_submission(
             user_id=user_id,
             capture_id=capture_id,
             transcript=normalized_transcript,
@@ -419,6 +420,7 @@ class CaptureService:
             skipped_items=skipped_items,
         )
 
+    @blocking
     def _load_submission_context(self, *, user_id: str, capture_id: str):
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             capture = get_capture(connection, user_id=user_id, capture_id=capture_id)
@@ -443,7 +445,7 @@ class CaptureService:
         inbox_group: GroupRecord,
     ) -> tuple[ExtractorPayload, int]:
         try:
-            with self._capture_lock(user_id=user_id, action="capture_submit"):
+            async with self._capture_lock(user_id=user_id, action="capture_submit"):
                 return await self._extract_submission_with_failure_mapping(
                     user_id=user_id,
                     capture_id=capture_id,
@@ -474,28 +476,28 @@ class CaptureService:
                 )
         except ExtractionProviderAccountError as exc:
             error_code, public_error = self._resolve_admin_action_extraction_failure(exc)
-            self._record_submission_failure(user_id, capture_id, transcript, error_code)
+            await self._record_submission_failure(user_id, capture_id, transcript, error_code)
             raise public_error from exc
         except (ExtractorMalformedResponseError, ValidationError) as exc:
-            self._record_submission_failure(
+            await self._record_submission_failure(
                 user_id, capture_id, transcript, "extractor_payload_invalid"
             )
             raise ExtractionFailedError() from exc
         except ExtractionServiceError as exc:
-            self._record_submission_failure(
+            await self._record_submission_failure(
                 user_id, capture_id, transcript, "extraction_provider_error"
             )
             raise ExtractionFailedError() from exc
         except Exception as exc:
-            self._record_submission_failure(
+            await self._record_submission_failure(
                 user_id, capture_id, transcript, self._error_code_for_exception(exc)
             )
             raise self._map_extraction_error(exc) from exc
 
-    def _record_submission_failure(
+    async def _record_submission_failure(
         self, user_id: str, capture_id: str, transcript: str, error_code: str
     ) -> None:
-        self._mark_capture_failure(
+        await self._mark_capture_failure(
             capture_id=capture_id,
             user_id=user_id,
             status="extraction_failed",
@@ -533,6 +535,7 @@ class CaptureService:
                 )
         return prepared_tasks, skipped_items
 
+    @blocking
     def _store_submission(
         self,
         *,
@@ -650,6 +653,7 @@ class CaptureService:
                 expires_at=expires_at,
             )
 
+    @blocking
     def _mark_capture_failure(
         self,
         *,
@@ -924,7 +928,7 @@ class CaptureService:
             )
         return self._error_code_for_exception(exc), exc
 
-    def _fail_auto_extraction(
+    async def _fail_auto_extraction(
         self,
         *,
         user_id: str,
@@ -942,7 +946,7 @@ class CaptureService:
                 "error_type": type(error).__name__,
             },
         )
-        self._mark_capture_failure(
+        await self._mark_capture_failure(
             capture_id=capture_id,
             user_id=user_id,
             status="extraction_failed",
@@ -1246,7 +1250,7 @@ class CaptureService:
     ) -> list[ExtractedTaskRecord]:
         """Stage extracted tasks, surfacing only administrator-actionable failures."""
         if isinstance(extracted, _ADMIN_ACTION_EXTRACTION_ERRORS):
-            raise self._fail_auto_extraction(
+            raise await self._fail_auto_extraction(
                 user_id=user_id, capture_id=capture_id, error=extracted
             ) from extracted
         if isinstance(extracted, BaseException):
@@ -1336,7 +1340,7 @@ class CaptureService:
             raise InvalidCaptureError("Transcript cannot be empty.")
 
         try:
-            with self._capture_lock(user_id=user_id, action="capture_reextract"):
+            async with self._capture_lock(user_id=user_id, action="capture_reextract"):
                 updated, context = await self._with_extraction_context(
                     asyncio.to_thread(
                         self._reset_capture_for_reextract,
@@ -1353,7 +1357,7 @@ class CaptureService:
                     context=context,
                 )
                 if isinstance(extracted, _ADMIN_ACTION_EXTRACTION_ERRORS):
-                    raise self._fail_auto_extraction(
+                    raise await self._fail_auto_extraction(
                         user_id=user_id, capture_id=capture_id, error=extracted
                     ) from extracted
                 if isinstance(extracted, Exception):
@@ -1429,7 +1433,8 @@ class CaptureService:
         extension = lowered.rsplit(".", maxsplit=1)[-1]
         return extension[:16] if extension else None
 
-    async def complete_capture(
+    @blocking
+    def complete_capture(
         self,
         *,
         user_id: str,

@@ -7,13 +7,24 @@ from dataclasses import dataclass
 from threading import Lock
 
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Connection, Engine, make_url
 
 from app.core.settings import get_settings
 
 DATABASE_USER_ID_SETTING = "app.current_user_id"
 DATABASE_INTERNAL_JOB_SETTING = "app.internal_job"
 INTERNAL_JOB_SENTINEL_USER_ID = "00000000-0000-0000-0000-000000000000"
+# Opening a connection to the database pooler takes several cross-region round trips, so keep
+# connections for 30 minutes rather than 5; pool_pre_ping still replaces any that died meanwhile.
+POOL_RECYCLE_SECONDS = 30 * 60
+# TCP keepalives stop idle pooled connections from being silently dropped by the network in
+# between, and let a dead peer be noticed within about a minute and a half.
+POSTGRES_KEEPALIVE_CONNECT_ARGS = {
+    "keepalives": 1,
+    "keepalives_idle": 60,
+    "keepalives_interval": 10,
+    "keepalives_count": 3,
+}
 _engine_registry: dict[str, Engine] = {}
 _engine_registry_lock = Lock()
 
@@ -29,11 +40,18 @@ def build_engine(database_url: str | None = None) -> Engine:
     with _engine_registry_lock:
         engine = _engine_registry.get(url)
         if engine is None:
-            engine = create_engine(url, pool_pre_ping=True, pool_recycle=300)
+            engine = create_engine(url, **engine_options(url))
             if engine.dialect.name == "sqlite":
                 event.listen(engine, "connect", _enable_sqlite_foreign_keys)
             _engine_registry[url] = engine
         return engine
+
+
+def engine_options(database_url: str) -> dict[str, object]:
+    options: dict[str, object] = {"pool_pre_ping": True, "pool_recycle": POOL_RECYCLE_SECONDS}
+    if make_url(database_url).get_backend_name() == "postgresql":
+        options["connect_args"] = dict(POSTGRES_KEEPALIVE_CONNECT_ARGS)
+    return options
 
 
 def dispose_engine(database_url: str | None = None) -> None:

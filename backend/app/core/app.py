@@ -21,6 +21,7 @@ from app.core.settings import get_settings
 from app.db.engine import dispose_all_engines
 from app.db.migrations import MigrationVersionError, check_required_revision
 from app.services.ai_clients import open_ai_clients
+from app.services.auth import build_auth_service, shared_auth_http_client
 
 
 @asynccontextmanager
@@ -28,7 +29,10 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     if settings.run_startup_checks:
         check_required_revision(settings.database_url, settings.required_alembic_revision)
-    async with open_ai_clients(settings) as ai_clients:
+    async with (
+        open_ai_clients(settings) as ai_clients,
+        shared_auth_http_client(getattr(app.state, "auth_service", None)),
+    ):
         app.state.ai_clients = ai_clients
         yield
     dispose_all_engines()
@@ -47,6 +51,9 @@ def create_app() -> FastAPI:
     )
 
     app.state.settings = settings
+    # One auth service per process, shared by the middleware and the session dependency, keeps
+    # Supabase's signing keys and HTTP connections warm between requests.
+    app.state.auth_service = build_auth_service(settings)
     allowed_origins = [settings.frontend_app_url] if settings.frontend_app_url else []
     if settings.extra_allowed_origins:
         allowed_origins.extend(settings.extra_allowed_origins)
@@ -59,7 +66,11 @@ def create_app() -> FastAPI:
             allow_headers=["Content-Type", "X-CSRF-Token"],
         )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts(settings))
-    app.add_middleware(RequestContextMiddleware, settings=settings)
+    app.add_middleware(
+        RequestContextMiddleware,
+        settings=settings,
+        auth_service=app.state.auth_service,
+    )
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)

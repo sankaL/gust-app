@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import pytest
+from psycopg.conninfo import make_conninfo
 
 from app.db.engine import (
     DATABASE_INTERNAL_JOB_SETTING,
     DATABASE_USER_ID_SETTING,
     INTERNAL_JOB_SENTINEL_USER_ID,
+    POSTGRES_KEEPALIVE_CONNECT_ARGS,
     DatabaseActor,
     _apply_database_actor,
+    engine_options,
 )
 
 
@@ -81,3 +84,24 @@ def test_apply_database_actor_rejects_invalid_user_id() -> None:
 
     with pytest.raises(ValueError, match="valid UUID"):
         _apply_database_actor(connection, DatabaseActor(user_id="not-a-uuid"))
+
+
+def test_postgres_engines_keep_pooled_connections_warm() -> None:
+    options = engine_options("postgresql+psycopg://gust:secret@db.example.test:5432/postgres")
+
+    assert options["pool_pre_ping"] is True
+    assert options["pool_recycle"] == 30 * 60
+    assert options["connect_args"] == POSTGRES_KEEPALIVE_CONNECT_ARGS
+
+
+def test_postgres_keepalive_settings_are_valid_libpq_parameters() -> None:
+    conninfo = make_conninfo("host=db.example.test", **POSTGRES_KEEPALIVE_CONNECT_ARGS)
+
+    assert "keepalives_idle=60" in conninfo
+
+
+def test_sqlite_engines_do_not_receive_postgres_keepalives() -> None:
+    options = engine_options("sqlite+pysqlite:///:memory:")
+
+    assert "connect_args" not in options
+    assert options["pool_recycle"] == 30 * 60

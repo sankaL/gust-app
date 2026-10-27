@@ -40,6 +40,7 @@ Keep this file focused on **durable backend engineering rules** for Gust. Do not
 - Recurrence logic for v1 is limited to daily, weekly, and monthly behavior described in `docs/PRD-Gust.md`.
 - Timezone-aware date resolution and reminder processing must use the persisted user timezone.
 - External calls and background jobs must have timeouts, bounded retries, and explicit cancellation/cleanup behavior.
+- Never call blocking code (database queries, synchronous HTTP) directly from `async def` routes, dependencies, middleware, or services. The API serves every request on one event loop, so one blocking call stalls them all. Offload through the shared worker-threadpool helper, or make the route a plain `def`.
 
 ## Schema & Migration Discipline
 - Any schema-impacting change must update `docs/database_schema.md`.
