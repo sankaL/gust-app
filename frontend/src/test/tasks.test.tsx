@@ -1284,8 +1284,16 @@ describe('tasks flow', () => {
     // Check Personal group is also shown
     expect(screen.getByText('Personal')).toBeInTheDocument()
 
+    // A closed card is one tap target: the link stretches over the whole card and Edit sits above it.
+    const personalLink = screen.getByRole('link', { name: 'Show Personal tasks' })
+    expect(personalLink).toHaveClass('after:absolute', 'after:inset-0')
+    expect(personalLink.closest('section')).toHaveClass('relative')
+    expect(screen.getByRole('button', { name: 'Edit group' })).toHaveClass('relative', 'z-10', 'before:absolute')
+
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Edit group' }))
+    // While editing, only the header links out so the edit fields stay usable.
+    expect(screen.getByRole('link', { name: 'Show Personal tasks' })).not.toHaveClass('after:absolute')
     const saveGroupButton = await screen.findByRole('button', { name: 'Save Group' })
     expect(saveGroupButton).toHaveClass('bg-primary')
     expect(screen.getByRole('button', { name: 'Delete Group & Reassign Tasks' })).toBeInTheDocument()

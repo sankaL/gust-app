@@ -532,16 +532,6 @@ html {
   }
 }
 
-@keyframes bell-ring {
-  0%, 100% { transform: rotate(0deg); }
-  10% { transform: rotate(14deg); }
-  20% { transform: rotate(-12deg); }
-  30% { transform: rotate(9deg); }
-  40% { transform: rotate(-6deg); }
-  50% { transform: rotate(3deg); }
-  60% { transform: rotate(0deg); }
-}
-
 @keyframes check-draw {
   from {
     stroke-dashoffset: 24;
@@ -637,6 +627,75 @@ html {
 
 .animate-orb-breathe {
   animation: orb-breathe 3.6s ease-in-out infinite;
+}
+
+/* ChipBot: Tonal palette, all tints of the theme primary. Alpha tints over the orb or glass read as
+ * blends with whatever sits behind, which keeps the bot low contrast in every theme. */
+.chip-bot--on-primary {
+  /* The orb is always a saturated primary, so white tints work in every theme. */
+  --chip-body: rgb(255 255 255 / 0.8);
+  --chip-edge: transparent;
+  --chip-screen: rgb(var(--color-primary-dim) / 0.85);
+  --chip-eye: rgb(255 255 255 / 0.88);
+  --chip-pin: rgb(255 255 255 / 0.45);
+  --chip-pin-hot: rgb(255 255 255);
+}
+
+.chip-bot--on-surface {
+  --chip-body: rgb(var(--color-primary) / 0.16);
+  --chip-edge: rgb(var(--color-primary) / 0.32);
+  --chip-screen: rgb(var(--color-primary) / 0.72);
+  --chip-eye: rgb(var(--color-surface-container-high));
+  --chip-pin: rgb(var(--color-primary) / 0.38);
+  --chip-pin-hot: rgb(var(--color-primary));
+}
+
+.chip-bot__pin { stroke: var(--chip-pin); }
+.chip-bot__body { fill: var(--chip-body); stroke: var(--chip-edge); }
+.chip-bot__screen { fill: var(--chip-screen); }
+.chip-bot__eye { fill: var(--chip-eye); }
+.chip-bot__smile { stroke: var(--chip-eye); }
+
+/* Idle blinks; working runs light around the pins, looks around and bounces the thinking dots. */
+.chip-bot__blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chip-blink 4.2s ease-in-out infinite;
+}
+
+.chip-bot--working .chip-bot__pin {
+  animation: chip-pin 1.6s linear infinite;
+  animation-delay: calc(var(--i, 0) * 0.1s);
+}
+
+.chip-bot--working .chip-bot__eyes {
+  animation: chip-look 2.4s ease-in-out infinite;
+}
+
+.chip-bot--working .chip-bot__dots circle {
+  animation: chip-dot 0.9s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 0.15s);
+}
+
+@keyframes chip-blink {
+  0%, 93%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.12); }
+}
+
+@keyframes chip-pin {
+  0%, 16%, 100% { stroke: var(--chip-pin); }
+  4%, 10% { stroke: var(--chip-pin-hot); }
+}
+
+@keyframes chip-look {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2.5px); }
+  70% { transform: translateX(2.5px); }
+}
+
+@keyframes chip-dot {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-2.5px); }
 }
 
 .animate-spin-slow {

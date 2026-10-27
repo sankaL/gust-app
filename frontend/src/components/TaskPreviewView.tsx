@@ -1,10 +1,9 @@
-import { Bell, CalendarDays, CheckCircle2, Folder, ListTodo, PencilLine, Repeat2, RotateCcw, Save, TextQuote, Trash2, X } from 'lucide-react'
+import { Bell, CalendarDays, CheckCircle2, Folder, PencilLine, Repeat2, RotateCcw, Save, Trash2, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { GroupSummary, TaskDetail } from '../lib/api'
 import type { TaskDetailDraft } from '../lib/taskFormModel'
 import { formatDate, formatDateTime, formatRecurrence } from '../lib/taskFormatters'
-import { shiftReminderDateTimeLocal, shouldShiftReminderForDueDate } from '../lib/dateTime'
-import { TaskFormFields } from './TaskFormFields'
+import { TaskPreviewEditFields } from './TaskPreviewEditFields'
 import { SaveConfirmationToast } from './SaveConfirmationToast'
 import { Button } from './Button'
 import { BottomSheet } from './ui/BottomSheet'
@@ -38,43 +37,43 @@ type Props = {
   friendlyError: (error: unknown, fallback: string) => string
 }
 
-const PREVIEW_TILE_CLASS =
-  'group cursor-pointer rounded-[1.1rem] bg-surface-dim/70 p-3.5 text-left ring-1 ring-inset ring-outline/30 outline-none transition-[background-color,transform] duration-200 hover:bg-surface-dim focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-[0.99]'
+const PREVIEW_PRESSABLE_CLASS =
+  'cursor-pointer text-left outline-none transition-[background-color,transform] duration-200 hover:bg-on-surface/[0.03] focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-[0.99]'
 
-function MetadataTile({
+type EditGestures = {
+  onStartEdit: () => void
+  onTouchStart: (e: React.TouchEvent) => void
+  onTouchEnd: (e: React.TouchEvent) => void
+}
+
+function PropertyRow({
   label,
   icon: Icon,
   value,
-  onClick,
-  onDoubleClick,
-  onTouchStart,
-  onTouchEnd,
+  isEmpty,
+  gestures,
 }: {
   label: string
   icon: typeof CalendarDays
   value: string
-  onClick?: () => void
-  onDoubleClick?: () => void
-  onTouchStart?: (e: React.TouchEvent) => void
-  onTouchEnd?: (e: React.TouchEvent) => void
+  isEmpty: boolean
+  gestures: EditGestures
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-      className={`${PREVIEW_TILE_CLASS} min-w-0`}
+      onClick={gestures.onStartEdit}
+      onDoubleClick={gestures.onStartEdit}
+      onTouchStart={gestures.onTouchStart}
+      onTouchEnd={gestures.onTouchEnd}
+      className={`${PREVIEW_PRESSABLE_CLASS} flex min-h-[3.25rem] w-full items-center gap-3`}
       title="Tap or double-click to edit"
     >
-      <div className="flex items-center gap-2">
-        <Icon className="h-3.5 w-3.5 text-primary/75" strokeWidth={1.8} />
-        <p className="text-[0.62rem] font-semibold uppercase tracking-[0.15em] text-on-surface-variant">
-          {label}
-        </p>
-      </div>
-      <p className="mt-2.5 truncate text-sm font-medium text-on-surface">{value}</p>
+      <Icon className="h-[1.1rem] w-[1.1rem] shrink-0 text-primary/75" strokeWidth={1.8} aria-hidden="true" />
+      <span className="text-sm text-on-surface-variant">{label}</span>
+      <span className={`ml-auto min-w-0 truncate text-right text-sm font-medium ${isEmpty ? 'text-on-surface-variant/60' : 'text-on-surface'}`}>
+        {value}
+      </span>
     </button>
   )
 }
@@ -84,6 +83,7 @@ function PreviewHeader({
   draft,
   isEditable,
   isTitleEditing,
+  isEditing,
   isBusy,
   onStartTitleEdit,
   onTitleChange,
@@ -93,20 +93,21 @@ function PreviewHeader({
   draft: TaskDetailDraft | null
   isEditable: boolean
   isTitleEditing: boolean
+  isEditing: boolean
   isBusy: boolean
   onStartTitleEdit: () => void
   onTitleChange: (title: string) => void
   onClose: () => void
 }) {
+  const [isTitleExpanded, setIsTitleExpanded] = useState(false)
   return (
     <div className="px-5 pb-3 pt-1">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 pt-1.5">
-          <Chip tone="neutral">Task preview</Chip>
           {task ? (
             <>
-              <Chip tone={task.status === 'completed' ? 'green' : 'neutral'}>{task.status === 'completed' ? 'Completed' : 'Open'}</Chip>
               <Chip tone={groupTone(task.group.name)} icon={Folder}>{task.group.name}</Chip>
+              {task.status === 'completed' ? <Chip tone="green">Completed</Chip> : null}
               {task.needs_review ? <Chip tone="amber">Needs review</Chip> : null}
             </>
           ) : null}
@@ -121,71 +122,48 @@ function PreviewHeader({
           <X className="h-[1.1rem] w-[1.1rem]" strokeWidth={2.2} />
         </button>
       </div>
-      {isEditable && isTitleEditing ? (
+      {isEditable && (isTitleEditing || isEditing) ? (
         <>
           <h2 id="task-preview-title" className="sr-only">{draft?.title || task?.title || 'Untitled task'}</h2>
           <input
-            autoFocus
+            autoFocus={isTitleEditing}
             value={draft?.title ?? task?.title ?? ''}
             onChange={(event) => onTitleChange(event.target.value)}
             onPointerDown={(event) => event.stopPropagation()}
-            className="mt-3 w-full rounded-card bg-surface-dim px-4 py-3 font-display text-[1.35rem] font-bold leading-tight text-on-surface outline-none ring-1 ring-inset ring-outline/40 placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/60"
-            style={{ fontSize: '16px' }}
+            className="mt-2.5 w-full border-b-2 border-outline/50 bg-transparent pb-1 font-display text-[1.5rem] font-bold leading-tight tracking-[-0.015em] text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary"
             aria-label="Task title"
             placeholder="Task title"
             disabled={isBusy}
           />
         </>
       ) : (
-        <h2 id="task-preview-title" className="mt-2.5 font-display text-[1.5rem] font-bold leading-tight tracking-[-0.015em] text-on-surface">
+        <div className="mt-2.5 flex items-start gap-2">
+          {/* One line by default; tapping the title reveals the rest. */}
+          <h2 id="task-preview-title" className="min-w-0 flex-1 font-display text-[1.5rem] font-bold leading-tight tracking-[-0.015em] text-on-surface">
+            <button
+              type="button"
+              onClick={() => setIsTitleExpanded((expanded) => !expanded)}
+              onPointerDown={(event) => event.stopPropagation()}
+              aria-expanded={isTitleExpanded}
+              className={`block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${isTitleExpanded ? 'text-balance break-words' : 'truncate'}`}
+            >
+              {draft?.title || task?.title || 'Loading task'}
+            </button>
+          </h2>
           {isEditable ? (
             <button
               type="button"
               onClick={onStartTitleEdit}
-              onDoubleClick={onStartTitleEdit}
               onPointerDown={(event) => event.stopPropagation()}
-              className="group flex w-full items-start gap-2 text-left outline-none"
-              title="Tap or double-click to edit title"
+              aria-label="Edit title"
+              className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-primary/70 transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/60 outline-none"
             >
-              <span className="text-balance">{draft?.title || task?.title || 'Loading task'}</span>
-              <PencilLine className="mt-1.5 h-4 w-4 shrink-0 text-primary/70 opacity-60 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" strokeWidth={2} />
+              <PencilLine className="h-4 w-4" strokeWidth={2} />
             </button>
-          ) : (draft?.title || task?.title || 'Loading task')}
-        </h2>
+          ) : null}
+        </div>
       )}
     </div>
-  )
-}
-
-function EditableTask({
-  task,
-  draft,
-  groups,
-  disabled,
-  onChange,
-}: {
-  task: TaskDetail
-  draft: TaskDetailDraft
-  groups: GroupSummary[]
-  disabled: boolean
-  onChange: Props['onDraftChange']
-}) {
-  const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false)
-  return (
-    <TaskFormFields
-      {...draft}
-      groups={groups}
-      isGroupDropdownOpen={isGroupDropdownOpen}
-      disabled={disabled}
-      onTitleChange={(title) => onChange((current) => ({ ...current, title }))}
-      onDescriptionChange={(description) => onChange((current) => ({ ...current, description }))}
-      onGroupIdChange={(groupId) => onChange((current) => ({ ...current, groupId }))}
-      onDueDateChange={(dueDate) => onChange((current) => (dueDate ? shouldShiftReminderForDueDate(task.due_date, dueDate) ? { ...current, dueDate, reminderAt: current.reminderAt ? shiftReminderDateTimeLocal(current.reminderAt, dueDate) : '', reminderDate: current.reminderDate ? dueDate : '' } : { ...current, dueDate } : { ...current, dueDate: '', reminderAt: '', reminderDate: '', recurrence: null }))}
-      onReminderAtChange={(reminderAt) => onChange((current) => ({ ...current, reminderAt }))}
-      onReminderDateChange={(reminderDate) => onChange((current) => ({ ...current, reminderDate }))}
-      onRecurrenceChange={(recurrence) => onChange((current) => ({ ...current, recurrence }))}
-      onGroupDropdownOpenChange={setIsGroupDropdownOpen}
-    />
   )
 }
 
@@ -202,9 +180,12 @@ function ReadOnlyTask({
   onTouchStart: (e: React.TouchEvent) => void
   onTouchEnd: (e: React.TouchEvent) => void
 }) {
-  const recurrence = formatRecurrence(draft?.recurrence ?? task.recurrence)
-  const dueDate = formatDate(draft?.dueDate ?? task.due_date)
-  const reminder = formatDateTime(draft?.reminderAt ?? task.reminder_at)
+  const gestures: EditGestures = { onStartEdit, onTouchStart, onTouchEnd }
+  const rawRecurrence = draft ? draft.recurrence : task.recurrence
+  const rawDueDate = draft ? draft.dueDate : task.due_date
+  const rawReminder = draft ? draft.reminderAt : task.reminder_at
+  const rawReminderDate = draft ? draft.reminderDate : task.reminder_date
+  const reminder = rawReminder ? formatDateTime(rawReminder) : rawReminderDate ? formatDate(rawReminderDate) : formatDateTime(null)
   const description = draft ? draft.description : task.description
 
   return (
@@ -215,65 +196,19 @@ function ReadOnlyTask({
         onDoubleClick={onStartEdit}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        className={`${PREVIEW_TILE_CLASS} w-full`}
+        className={`${PREVIEW_PRESSABLE_CLASS} block w-full rounded-lg`}
         title="Tap or double-click to edit"
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <TextQuote
-              className="h-3.5 w-3.5 text-primary/80 transition-colors group-hover:text-primary"
-              strokeWidth={1.8}
-            />
-            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-              Context
-            </p>
-          </div>
-          <span className="text-[0.62rem] text-primary opacity-0 transition-opacity group-hover:opacity-100">
-            Tap or double-click to edit
-          </span>
-        </div>
-        <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-          {description || 'No description yet.'}
+        <p className="text-xs font-medium text-on-surface-variant">Notes</p>
+        <p className={`mt-1.5 whitespace-pre-line border-l-2 border-outline/60 pl-3 text-base leading-6 ${description ? 'text-on-surface' : 'text-on-surface-variant/60'}`}>
+          {description || 'No notes yet.'}
         </p>
       </button>
 
-      <div className="grid grid-cols-2 gap-3">
-        <MetadataTile
-          label="Due date"
-          icon={CalendarDays}
-          value={dueDate}
-          onClick={onStartEdit}
-          onDoubleClick={onStartEdit}
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
-        />
-        <MetadataTile
-          label="Reminder"
-          icon={Bell}
-          value={reminder}
-          onClick={onStartEdit}
-          onDoubleClick={onStartEdit}
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
-        />
-        <MetadataTile
-          label="Recurrence"
-          icon={Repeat2}
-          value={recurrence}
-          onClick={onStartEdit}
-          onDoubleClick={onStartEdit}
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
-        />
-        <MetadataTile
-          label="Subtasks"
-          icon={ListTodo}
-          value={`${task.subtasks.length} subtasks`}
-          onClick={onStartEdit}
-          onDoubleClick={onStartEdit}
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
-        />
+      <div className="divide-y divide-outline/30">
+        <PropertyRow label="Due date" icon={CalendarDays} value={formatDate(rawDueDate)} isEmpty={!rawDueDate} gestures={gestures} />
+        <PropertyRow label="Reminder" icon={Bell} value={reminder} isEmpty={!rawReminder && !rawReminderDate} gestures={gestures} />
+        <PropertyRow label="Repeats" icon={Repeat2} value={formatRecurrence(rawRecurrence)} isEmpty={!rawRecurrence} gestures={gestures} />
       </div>
     </>
   )
@@ -388,7 +323,7 @@ type PreviewBodyProps = {
 
 function PreviewBody(props: PreviewBodyProps) {
   if (props.isLoading)
-    return <div className="space-y-3" aria-busy="true"><div className="skeleton-shimmer h-24 rounded-[1.1rem]" /><div className="grid grid-cols-2 gap-3"><div className="skeleton-shimmer h-20 rounded-[1.1rem]" /><div className="skeleton-shimmer h-20 rounded-[1.1rem]" /></div></div>
+    return <div className="space-y-3" aria-busy="true"><div className="skeleton-shimmer h-16 rounded-[1.1rem]" /><div className="skeleton-shimmer h-10 rounded-xl" /><div className="skeleton-shimmer h-10 rounded-xl" /><div className="skeleton-shimmer h-10 rounded-xl" /></div>
   if (props.error)
     return (
       <div role="alert" className="rounded-card bg-chip-rose p-4 text-sm text-chip-rose-ink">
@@ -398,9 +333,9 @@ function PreviewBody(props: PreviewBodyProps) {
   if (!props.task) return null
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {props.isEditing && props.isEditable && props.draft ? (
-        <EditableTask
+        <TaskPreviewEditFields
           task={props.task}
           draft={props.draft}
           groups={props.groups}
@@ -510,6 +445,19 @@ export function TaskPreviewView(props: Props) {
   const lastTapRef = useRef<number>(0)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
+  // Every opening starts read-only: closing the sheet, switching task, or a successful save ends edit mode.
+  const editScope = props.open ? props.task?.id ?? 'loading' : 'closed'
+  const [editScopeSeen, setEditScopeSeen] = useState(editScope)
+  const [saveNoticeSeen, setSaveNoticeSeen] = useState(props.saveNotice)
+  if (editScope !== editScopeSeen || props.saveNotice !== saveNoticeSeen) {
+    setEditScopeSeen(editScope)
+    setSaveNoticeSeen(props.saveNotice)
+    if (editScope !== editScopeSeen || props.saveNotice) {
+      setIsEditing(false)
+      setIsTitleEditing(false)
+    }
+  }
+
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0]
     if (touch) {
@@ -542,10 +490,12 @@ export function TaskPreviewView(props: Props) {
         labelledBy="task-preview-title"
         header={
           <PreviewHeader
+            key={props.task?.id}
             task={props.task}
             draft={props.draft}
             isEditable={props.isEditable}
             isTitleEditing={isTitleEditing}
+            isEditing={isEditing}
             isBusy={props.isBusy}
             onStartTitleEdit={() => setIsTitleEditing(true)}
             onTitleChange={(title) => props.onDraftChange((current) => ({ ...current, title }))}

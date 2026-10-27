@@ -4,6 +4,7 @@ import { Bell, CheckCircle2, Folder, House, Plus, UserRound, type LucideIcon } f
 
 import { useMobileShell } from './AppShellActions'
 import { Button } from './Button'
+import { ChipBot } from './ui/ChipBot'
 import { InlineNotice } from './ui/controls'
 import { useGlassRefraction } from './ui/LiquidGlass'
 
@@ -36,7 +37,10 @@ function ReviewBell() {
         className="liquid-lens relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full text-on-surface outline-none transition-transform duration-200 ease-out-expo focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-95"
       >
         <span aria-hidden="true" className="liquid-warp" style={lens.warpStyle} />
-        <Bell className={`relative z-[2] h-[1.2rem] w-[1.2rem] ${count > 0 ? 'origin-top animate-[bell-ring_1.6s_ease-in-out_1]' : ''}`} strokeWidth={2.2} fill={count > 0 ? 'currentColor' : 'none'} fillOpacity={count > 0 ? 0.12 : 0} />
+        {/* The bot replaces the bell while tasks wait for review. */}
+        {count > 0
+          ? <ChipBot className="relative z-[2] h-8 w-8 animate-pop-in" />
+          : <Bell className="relative z-[2] h-[1.2rem] w-[1.2rem]" strokeWidth={2.2} />}
       </button>
       {count > 0 ? (
         <span key={count} aria-hidden="true" className="lens-bead animate-pop-in pointer-events-none absolute -right-1 -top-1 z-[3] flex h-5 min-w-5 items-center justify-center rounded-full px-1 font-body text-[0.65rem] font-bold leading-none">

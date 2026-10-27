@@ -62,6 +62,12 @@ const TONE_TILE: Record<ChipTone, string> = {
   rose: 'bg-chip-rose text-chip-rose-ink',
 }
 
+// While the card is closed the link's ::after stretches over the whole card (padding included), so any tap opens the
+// group; it fills the card's own rounded rect, which is why the press tint and focus ring live on it.
+const STRETCHED_LINK = "after:absolute after:inset-0 after:rounded-[1.4rem] after:transition-colors after:duration-200 after:content-[''] hover:after:bg-on-surface/[0.03] focus-visible:after:ring-2 focus-visible:after:ring-primary/60 active:after:bg-on-surface/[0.05]"
+// While editing, only the header row links out so the edit fields stay usable.
+const HEADER_LINK = 'rounded-2xl transition-colors duration-200 hover:bg-on-surface/[0.03] focus-visible:ring-2 focus-visible:ring-primary/60 active:bg-on-surface/[0.05]'
+
 function GroupCardHeader({ group, isEditing, onToggle }: { group: GroupSummary; isEditing: boolean; onToggle: () => void }) {
   const Icon = group.is_system ? Inbox : Folder
   return (
@@ -69,7 +75,7 @@ function GroupCardHeader({ group, isEditing, onToggle }: { group: GroupSummary; 
       <Link
         to={`/tasks?group=${encodeURIComponent(group.id)}`}
         aria-label={`Show ${group.name} tasks`}
-        className="group/link -m-2 flex min-w-0 flex-1 items-start gap-3.5 rounded-2xl p-2 outline-none transition-colors duration-200 hover:bg-on-surface/[0.03] focus-visible:ring-2 focus-visible:ring-primary/60 active:bg-on-surface/[0.05]"
+        className={`group/link -m-2 flex min-w-0 flex-1 items-start gap-3.5 p-2 outline-none ${isEditing ? HEADER_LINK : STRETCHED_LINK}`}
       >
         <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-transform duration-300 ease-spring group-active/link:scale-90 ${TONE_TILE[groupTone(group.name)]}`}>
           <Icon className="h-5 w-5" strokeWidth={2.1} aria-hidden="true" />
@@ -87,7 +93,8 @@ function GroupCardHeader({ group, isEditing, onToggle }: { group: GroupSummary; 
         </span>
       </Link>
       {!group.is_system ? (
-        <Button variant={isEditing ? 'ghost' : 'secondary'} size="sm" onClick={onToggle} aria-label={isEditing ? 'Cancel editing' : 'Edit group'}>
+        // Sits above the stretched link; the ::before widens the tap target without changing the pill's size.
+        <Button variant={isEditing ? 'ghost' : 'secondary'} size="sm" onClick={onToggle} aria-label={isEditing ? 'Cancel editing' : 'Edit group'} className="relative z-10 before:absolute before:-inset-x-3 before:-inset-y-2.5 before:content-['']">
           {isEditing ? 'Cancel' : <><Pencil className="h-3.5 w-3.5" strokeWidth={2.4} />Edit</>}
         </Button>
       ) : null}
@@ -125,7 +132,7 @@ function GroupEditPanel({ group, groups, draft, deleteTarget, onDraftChange, onD
 function ManageGroupCard(props: ManageGroupCardProps) {
   const { group, draft } = props
   return (
-    <section className={`flex flex-col gap-4 rounded-[1.4rem] p-4 shadow-card ring-1 ring-inset transition-colors duration-300 ${draft ? 'bg-card-active ring-card-active-line/30' : 'bg-surface-container-high ring-outline/40'}`}>
+    <section className={`relative flex flex-col gap-4 rounded-[1.4rem] p-4 shadow-card ring-1 ring-inset transition-colors duration-300 ${draft ? 'bg-card-active ring-card-active-line/30' : 'bg-surface-container-high ring-outline/40'}`}>
       <GroupCardHeader group={group} isEditing={Boolean(draft)} onToggle={() => draft ? props.onCancel(group.id) : props.onEdit(group)} />
       {draft ? <GroupEditPanel {...props} draft={draft} /> : null}
     </section>

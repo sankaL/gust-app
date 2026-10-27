@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useFloatingDismiss } from '../hooks/useFloatingDismiss'
+import { INLINE_TRIGGER_CLASS } from './ui/inlineTrigger'
 
 interface DatePickerProps {
   value: string | null
@@ -10,6 +11,8 @@ interface DatePickerProps {
   placeholder?: string
   min?: string
   max?: string
+  /** `inline` drops the field box so the trigger can sit at the end of a list row. */
+  appearance?: 'field' | 'inline'
 }
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
@@ -267,6 +270,7 @@ function useDatePickerViewProps({
   placeholder = mode === 'datetime' ? 'Select date & time' : 'Select date',
   min,
   max,
+  appearance = 'field',
 }: DatePickerProps): DatePickerViewProps {
   const { isOpen, setIsOpen, viewDate, setViewDate, selectedDate, setSelectedDate, selectedTime, setSelectedTime, position, setPosition, triggerRef, calendarRef } = useDatePickerState(value)
   const closeCalendar = useCallback(() => setIsOpen(false), [setIsOpen])
@@ -337,14 +341,15 @@ function useDatePickerViewProps({
 
   const calendarDropdown = isOpen ? <DatePickerCalendar calendarRef={calendarRef} position={position} viewDate={viewDate} selectedDate={selectedDate} selectedTime={selectedTime} mode={mode} days={days} startDay={startDay} yearOptions={yearOptions} min={min} max={max} onPrevious={handlePrevMonth} onNext={handleNextMonth} onMonth={handleMonthChange} onYear={handleYearChange} onDate={handleDateSelect} onTime={handleTimeChange} onToday={() => { const today = new Date(); handleDateSelect(today); setViewDate(today) }} onClear={() => { setSelectedDate(null); onChange(''); setIsOpen(false) }} onDone={() => setIsOpen(false)} /> : null
 
-  return { triggerRef, disabled, selected: Boolean(selectedDate), displayValue, isOpen, calendarDropdown, onToggle: () => { if (!disabled) { updatePosition(); setIsOpen((current) => !current) } } }
+  return { triggerRef, disabled, selected: Boolean(selectedDate), displayValue, isOpen, calendarDropdown, appearance, onToggle: () => { if (!disabled) { updatePosition(); setIsOpen((current) => !current) } } }
 }
 
-type DatePickerViewProps = { triggerRef: React.RefObject<HTMLButtonElement | null>; disabled: boolean; selected: boolean; displayValue: string; isOpen: boolean; calendarDropdown: React.ReactNode; onToggle: () => void }
+type DatePickerViewProps = { triggerRef: React.RefObject<HTMLButtonElement | null>; disabled: boolean; selected: boolean; displayValue: string; isOpen: boolean; calendarDropdown: React.ReactNode; appearance: 'field' | 'inline'; onToggle: () => void }
 
-function DatePickerView({ triggerRef, disabled, selected, displayValue, isOpen, calendarDropdown, onToggle }: DatePickerViewProps) {
+function DatePickerView({ triggerRef, disabled, selected, displayValue, isOpen, calendarDropdown, appearance, onToggle }: DatePickerViewProps) {
   const stateClass = disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-surface-container-highest focus-visible:ring-2 focus-visible:ring-primary/60'
-  return <div className="relative"><button ref={triggerRef} type="button" onClick={onToggle} disabled={disabled} className={`flex w-full items-center justify-between rounded-card bg-surface-container-high px-3 py-3 ring-1 ring-inset ring-outline/50 text-left text-sm font-medium outline-none transition-all ${stateClass}`}><span className={selected ? 'text-on-surface' : 'text-on-surface-variant/60'}>{displayValue}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-on-surface-variant transition-transform ${isOpen ? 'rotate-180' : ''}`}><path d="M8 9l4 4 4-4" /></svg></button>{calendarDropdown && typeof document !== 'undefined' ? createPortal(calendarDropdown, document.body) : null}</div>
+  const boxClass = appearance === 'inline' ? `${INLINE_TRIGGER_CLASS} gap-1.5` : 'w-full justify-between rounded-card bg-surface-container-high px-3 py-3 ring-1 ring-inset ring-outline/50'
+  return <div className="relative"><button ref={triggerRef} type="button" onClick={onToggle} disabled={disabled} className={`flex items-center text-left text-sm font-medium outline-none transition-all ${boxClass} ${stateClass}`}><span className={selected ? 'text-on-surface' : 'text-on-surface-variant/60'}>{displayValue}</span>{appearance === 'inline' ? <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-on-surface-variant transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg> : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-on-surface-variant transition-transform ${isOpen ? 'rotate-180' : ''}`}><path d="M8 9l4 4 4-4" /></svg>}</button>{calendarDropdown && typeof document !== 'undefined' ? createPortal(calendarDropdown, document.body) : null}</div>
 }
 
 type CalendarProps = { calendarRef: React.RefObject<HTMLDivElement | null>; position: { top: number; left: number; width: number }; viewDate: Date; selectedDate: Date | null; selectedTime: string; mode: 'date' | 'datetime'; days: Date[]; startDay: number; yearOptions: number[]; min?: string; max?: string; onPrevious: () => void; onNext: () => void; onMonth: (month: number) => void; onYear: (year: number) => void; onDate: (date: Date) => void; onTime: (time: string) => void; onToday: () => void; onClear: () => void; onDone: () => void }

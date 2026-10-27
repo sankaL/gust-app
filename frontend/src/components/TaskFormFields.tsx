@@ -1,14 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-
 import type { TaskRecurrence } from '../lib/api'
 import { recurrenceForDueDate } from '../lib/taskFormModel'
+import { REMINDER_MODE_OPTIONS, useReminderMode } from '../hooks/useReminderMode'
 import { DatePicker } from './DatePicker'
 import { SelectDropdown } from './SelectDropdown'
 import { TaskRecurrenceFields } from './TaskRecurrenceFields'
 
 type Group = { id: string; name: string }
-
-const REMINDER_MODE_OPTIONS = [{ value: 'none', label: 'No reminder' }, { value: 'date', label: 'Date only' }, { value: 'datetime', label: 'Date and time' }]
 
 type Props = {
   title: string
@@ -61,26 +58,7 @@ function TaskIdentityFields({ title, description, disabled, onTitleChange, onDes
 }
 
 function TaskScheduleFields(props: Props & { disabled: boolean }) {
-  const inferredReminderMode = props.reminderAt ? 'datetime' : props.reminderDate ? 'date' : 'none'
-  const [reminderMode, setReminderModeState] = useState(inferredReminderMode)
-  const isSelectingReminderMode = useRef(false)
-
-  useEffect(() => {
-    if (inferredReminderMode !== 'none') {
-      isSelectingReminderMode.current = false
-      setReminderModeState(inferredReminderMode)
-    } else if (!isSelectingReminderMode.current) {
-      setReminderModeState('none')
-    }
-  }, [inferredReminderMode])
-
-  const setReminderMode = (mode: string) => {
-    isSelectingReminderMode.current = mode !== 'none'
-    setReminderModeState(mode)
-    if (mode === 'none') { props.onReminderAtChange(''); props.onReminderDateChange?.('') }
-    if (mode === 'date') props.onReminderAtChange('')
-    if (mode === 'datetime') props.onReminderDateChange?.('')
-  }
+  const { reminderMode, setReminderMode } = useReminderMode(props)
   return (
     <div className="grid min-w-0 gap-3 sm:grid-cols-2">
       <ScheduleField label="Due date"><DatePicker value={props.dueDate || null} onChange={props.onDueDateChange} mode="date" disabled={props.disabled} placeholder="Select a date" /></ScheduleField>

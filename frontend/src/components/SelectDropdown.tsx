@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useFloatingDismiss } from '../hooks/useFloatingDismiss'
+import { INLINE_TRIGGER_CLASS } from './ui/inlineTrigger'
 
 interface SelectOption {
   value: string | number
@@ -18,6 +19,8 @@ interface SelectDropdownProps {
   className?: string
   triggerClassName?: string
   labelClassName?: string
+  /** `inline` drops the field box so the trigger can sit at the end of a list row. */
+  appearance?: 'field' | 'inline'
 }
 
 function useHighlightedOption(listRef: React.RefObject<HTMLUListElement | null>, highlightedIndex: number) {
@@ -49,7 +52,7 @@ function useDropdownViewport(isOpen: boolean, listRef: React.RefObject<HTMLUList
 
 function dropdownPosition(rect: DOMRect, measuredWidth: number, optionCount: number) {
   const padding = 16
-  const width = Math.min(measuredWidth || 240, window.innerWidth - padding * 2)
+  const width = Math.min(Math.max(measuredWidth, 200), window.innerWidth - padding * 2)
   const height = Math.min(Math.max(optionCount * 44 + 8, 120), 240)
   const left = Math.max(padding, Math.min(rect.left, window.innerWidth - width - padding))
   const below = Math.max(0, window.innerHeight - rect.bottom - padding)
@@ -97,6 +100,7 @@ function useSelectDropdownViewProps({
   className = 'space-y-1.5',
   triggerClassName = 'px-3 py-3',
   labelClassName = 'text-sm font-medium text-on-surface-variant',
+  appearance = 'field',
 }: SelectDropdownProps): Parameters<typeof SelectDropdownView>[0] {
   const hasLabel = label.trim().length > 0
   const { isOpen, setIsOpen, highlightedIndex, setHighlightedIndex, position, setPosition, containerRef, triggerRef, listRef } = useSelectState()
@@ -113,20 +117,21 @@ function useSelectDropdownViewProps({
 
   const listbox = isOpen ? <DropdownList listRef={listRef} label={hasLabel ? label : placeholder} options={options} value={value} highlightedIndex={highlightedIndex} position={position} onHighlight={setHighlightedIndex} onSelect={controls.selectOption} /> : null
 
-  return { label, hasLabel, placeholder, selectedLabel: selectedOption?.label, disabled, isOpen, className, triggerClassName, labelClassName, containerRef, triggerRef, listbox, onKeyDown: controls.keyDown, onToggle: controls.toggle }
+  return { label, hasLabel, placeholder, selectedLabel: selectedOption?.label, disabled, isOpen, className, triggerClassName, labelClassName, appearance, containerRef, triggerRef, listbox, onKeyDown: controls.keyDown, onToggle: controls.toggle }
 }
 
-function SelectDropdownView({ label, hasLabel, placeholder, selectedLabel, disabled, isOpen, className, triggerClassName, labelClassName, containerRef, triggerRef, listbox, onKeyDown, onToggle }: { label: string; hasLabel: boolean; placeholder: string; selectedLabel?: string; disabled: boolean; isOpen: boolean; className: string; triggerClassName: string; labelClassName: string; containerRef: React.RefObject<HTMLDivElement | null>; triggerRef: React.RefObject<HTMLButtonElement | null>; listbox: React.ReactNode; onKeyDown: (event: React.KeyboardEvent) => void; onToggle: () => void }) {
-  return <div className={className}><DropdownLabel visible={hasLabel} className={labelClassName}>{label}</DropdownLabel><DropdownTrigger containerRef={containerRef} triggerRef={triggerRef} selectedLabel={selectedLabel} placeholder={placeholder} disabled={disabled} isOpen={isOpen} triggerClassName={triggerClassName} onKeyDown={onKeyDown} onToggle={onToggle} /><DropdownPortal>{listbox}</DropdownPortal></div>
+function SelectDropdownView({ label, hasLabel, placeholder, selectedLabel, disabled, isOpen, className, triggerClassName, labelClassName, appearance, containerRef, triggerRef, listbox, onKeyDown, onToggle }: { label: string; hasLabel: boolean; placeholder: string; selectedLabel?: string; disabled: boolean; isOpen: boolean; className: string; triggerClassName: string; labelClassName: string; appearance: 'field' | 'inline'; containerRef: React.RefObject<HTMLDivElement | null>; triggerRef: React.RefObject<HTMLButtonElement | null>; listbox: React.ReactNode; onKeyDown: (event: React.KeyboardEvent) => void; onToggle: () => void }) {
+  return <div className={className}><DropdownLabel visible={hasLabel} className={labelClassName}>{label}</DropdownLabel><DropdownTrigger containerRef={containerRef} triggerRef={triggerRef} selectedLabel={selectedLabel} placeholder={placeholder} disabled={disabled} isOpen={isOpen} triggerClassName={triggerClassName} appearance={appearance} onKeyDown={onKeyDown} onToggle={onToggle} /><DropdownPortal>{listbox}</DropdownPortal></div>
 }
 
 function DropdownLabel({ visible, className, children }: { visible: boolean; className: string; children: string }) {
   return visible ? <label className={className}>{children}</label> : null
 }
 
-function DropdownTrigger({ containerRef, triggerRef, selectedLabel, placeholder, disabled, isOpen, triggerClassName, onKeyDown, onToggle }: Omit<Parameters<typeof SelectDropdownView>[0], 'label' | 'hasLabel' | 'className' | 'labelClassName' | 'listbox'>) {
+function DropdownTrigger({ containerRef, triggerRef, selectedLabel, placeholder, disabled, isOpen, triggerClassName, appearance, onKeyDown, onToggle }: Omit<Parameters<typeof SelectDropdownView>[0], 'label' | 'hasLabel' | 'className' | 'labelClassName' | 'listbox'>) {
   const stateClass = disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-surface-container-highest focus-visible:ring-2 focus-visible:ring-primary/60'
-  return <div ref={containerRef} className="relative"><button ref={triggerRef} type="button" onClick={onToggle} onKeyDown={onKeyDown} disabled={disabled} aria-haspopup="listbox" aria-expanded={isOpen} className={`flex w-full items-center justify-between rounded-card bg-surface-container-high text-left text-sm font-medium text-on-surface outline-none ring-1 ring-inset ring-outline/50 transition-all ${triggerClassName} ${stateClass}`}><DropdownTriggerLabel label={selectedLabel} placeholder={placeholder} /><svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-on-surface-variant transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button></div>
+  const boxClass = appearance === 'inline' ? `${INLINE_TRIGGER_CLASS} gap-1.5` : `w-full justify-between rounded-card bg-surface-container-high ring-1 ring-inset ring-outline/50 ${triggerClassName}`
+  return <div ref={containerRef} className="relative"><button ref={triggerRef} type="button" onClick={onToggle} onKeyDown={onKeyDown} disabled={disabled} aria-haspopup="listbox" aria-expanded={isOpen} className={`flex items-center text-left text-sm font-medium text-on-surface outline-none transition-all ${boxClass} ${stateClass}`}><DropdownTriggerLabel label={selectedLabel} placeholder={placeholder} /><svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-on-surface-variant transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button></div>
 }
 
 function DropdownTriggerLabel({ label, placeholder }: { label?: string; placeholder: string }) { return <span className={label ? 'text-on-surface' : 'text-on-surface-variant/60'}>{label || placeholder}</span> }

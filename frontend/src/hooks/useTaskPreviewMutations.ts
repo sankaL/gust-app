@@ -62,6 +62,8 @@ async function preparePreviewSave(args: SaveMutationArgs) {
   const ready = readySave(args.taskId, args.draft, args.task)
   if (!ready) return {}
   args.setError(null)
+  // Clear the last notice so every successful save is a fresh "Changes saved" that ends edit mode.
+  args.setSaveNotice(null)
   await cancelPreviewQueries(args.queryClient, ready.taskId, true)
   const snapshots = snapshotTaskQueries(args.queryClient, ready.taskId)
   const optimistic = buildOptimisticTask(ready.task, ready.draft, args.groups, args.session?.timezone)

@@ -296,7 +296,8 @@ export function CaptureSheet({ controller, open, launchMode, onConsumeLaunchMode
           eyebrow={header.eyebrow}
           title={phase === 'review' ? reviewTitle : header.title}
           titleId="capture-sheet-title"
-          centered
+          // Only the orb phases are a centered composition; the review card list reads left-aligned.
+          centered={phase !== 'review'}
           onClose={phase === 'recording' ? undefined : onClose}
           closeLabel="Close capture"
           actions={phase === 'review' ? <Button variant="soft" size="sm" onClick={() => void finishReview()}>Done</Button> : undefined}
