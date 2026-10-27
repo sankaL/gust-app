@@ -315,6 +315,7 @@ Current production deployment contract:
 - backend Railway service deploys from `backend/` using `backend/railway.json`
 - daily digest Railway cron deploys from `deploy/digest-daily-cron/`
 - weekly digest Railway cron deploys from `deploy/digest-weekly-cron/`
+- Supabase keep-alive Railway cron deploys from `deploy/db-keepalive/` (manual `railway up deploy/db-keepalive --path-as-root --service db-keepalive`; not in the default deploy list). It reads `DATABASE_URL` from the backend service and runs `select now()` every six hours so the Free Plan project is not paused for inactivity. Do not remove it while the project is on the Free Plan, and check it still logs `db-keepalive ok` after any database credential or pooler change.
 - public domains are:
   - `https://gustapp.ca`
   - `https://api.gustapp.ca`

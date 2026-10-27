@@ -48,6 +48,7 @@ Production topology:
   - `backend/railway.json`
   - `deploy/digest-daily-cron/railway.json`
   - `deploy/digest-weekly-cron/railway.json`
+  - `deploy/db-keepalive/railway.json`
 
 ## Principles
 
@@ -387,6 +388,7 @@ Committed cron split:
 - `digest-daily-cron` calls `POST /internal/reminders/run?mode=daily`
 - `digest-weekly-cron` calls `POST /internal/reminders/run?mode=weekly`
 - `task-reminder-cron` calls `POST /internal/reminders/run?mode=task` every five minutes. It is intentionally short-lived, uses the existing shared-secret boundary, and accepts a small delivery variance.
+- `db-keepalive` runs `select now()` with `psql` every six hours (`17 */6 * * *` UTC) so the Supabase Free Plan project is not auto-paused after 7 days of low activity. It connects straight to Postgres through `DATABASE_URL=${{backend.DATABASE_URL}}` (the non-bypass runtime role), so it keeps working even if the backend or the other crons are stopped. Its schedule, `NEVER` restart policy, and Dockerfile path are also set on the Railway service itself, because Railway did not apply this service's `railway.json` on its first deploys.
 - both jobs use the same shared-secret header as other internal jobs
 - no separate cron microservice codebase is required; this is deployment configuration only
 - each cron service is deployed from a dedicated Railway service directory with its own `cronSchedule`
