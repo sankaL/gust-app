@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
+import anyio
 import sqlalchemy as sa
 
+from app.core.concurrency import run_blocking
 from app.db.engine import connection_scope
 from app.db.schema import rate_limit_counters
 
@@ -19,14 +21,16 @@ _ACTION_LOCK_WINDOW_SECONDS = 0
 _ACTION_LOCK_LEASE_SECONDS = 15 * 60
 
 
-@contextmanager
-def user_action_lock(*, database_url: str, user_id: str, action: str) -> Iterator[None]:
+@asynccontextmanager
+async def user_action_lock(*, database_url: str, user_id: str, action: str) -> AsyncIterator[None]:
+    """Hold a per-user lock for one expensive action; its database writes run off the loop."""
     lock_scope = f"action_lock:{action}"
     subject_key = f"user:{user_id}"
     now = datetime.now(UTC)
     expires_at = now + timedelta(seconds=_ACTION_LOCK_LEASE_SECONDS)
 
-    if not _acquire_action_lock(
+    if not await run_blocking(
+        _acquire_action_lock,
         database_url=database_url,
         scope=lock_scope,
         subject_key=subject_key,
@@ -37,11 +41,15 @@ def user_action_lock(*, database_url: str, user_id: str, action: str) -> Iterato
     try:
         yield
     finally:
-        _release_action_lock(
-            database_url=database_url,
-            scope=lock_scope,
-            subject_key=subject_key,
-        )
+        # A cancelled request would raise at the first await here, before the release thread
+        # starts, and leave the lock held for the whole lease; shielding lets the release land.
+        with anyio.CancelScope(shield=True):
+            await run_blocking(
+                _release_action_lock,
+                database_url=database_url,
+                scope=lock_scope,
+                subject_key=subject_key,
+            )
 
 
 def _acquire_action_lock(

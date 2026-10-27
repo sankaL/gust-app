@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
+from app.core.concurrency import blocking
 from app.core.errors import (
     ExtractedTaskNotFoundError,
     ExtractedTaskStateConflictError,
@@ -81,7 +82,8 @@ class StagingService:
     def __init__(self, *, settings: Settings) -> None:
         self.settings = settings
 
-    async def store_extracted_tasks(
+    @blocking
+    def store_extracted_tasks(
         self,
         *,
         user_id: str,
@@ -225,7 +227,8 @@ class StagingService:
             and normalized.reminder_date < now.astimezone(ZoneInfo(user_timezone)).date()
         )
 
-    async def approve_task(
+    @blocking
+    def approve_task(
         self,
         *,
         user_id: str,
@@ -284,7 +287,8 @@ class StagingService:
 
         return ApproveResult(task=task, extracted_task_id=extracted_task_id)
 
-    async def discard_task(
+    @blocking
+    def discard_task(
         self,
         *,
         user_id: str,
@@ -333,7 +337,8 @@ class StagingService:
             },
         )
 
-    async def update_task_due_date(
+    @blocking
+    def update_task_due_date(
         self,
         *,
         user_id: str,
@@ -386,7 +391,8 @@ class StagingService:
 
         return updated_task
 
-    async def update_extracted_task(
+    @blocking
+    def update_extracted_task(
         self,
         *,
         user_id: str,
@@ -614,10 +620,9 @@ class StagingService:
             List of ApproveResult with created tasks.
         """
         with timed_stage("db.staging.approve_all"):
-            with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-                pending_tasks = list_extracted_tasks(
-                    connection, user_id=user_id, capture_id=capture_id, status="pending"
-                )
+            pending_tasks = await self.list_extracted_tasks(
+                user_id=user_id, capture_id=capture_id, status="pending"
+            )
 
             results: list[ApproveResult] = []
             for extracted_task in pending_tasks:
@@ -654,7 +659,8 @@ class StagingService:
 
         return results
 
-    async def discard_all(
+    @blocking
+    def discard_all(
         self,
         *,
         user_id: str,
@@ -697,7 +703,8 @@ class StagingService:
 
         return len(pending_tasks)
 
-    async def list_extracted_tasks(
+    @blocking
+    def list_extracted_tasks(
         self,
         *,
         user_id: str,
@@ -725,7 +732,8 @@ class StagingService:
                 status=status,
             )
 
-    async def get_extracted_task(
+    @blocking
+    def get_extracted_task(
         self,
         *,
         user_id: str,
@@ -829,8 +837,7 @@ class StagingService:
             StagingResult with new extracted tasks.
         """
         # Delete existing extracted tasks for this capture
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            delete_extracted_tasks_by_capture(connection, user_id=user_id, capture_id=capture_id)
+        await self._delete_extracted_tasks(user_id=user_id, capture_id=capture_id)
 
         # Run extraction
         from zoneinfo import ZoneInfo
@@ -856,6 +863,11 @@ class StagingService:
             inbox_group=inbox_group,
             user_timezone=user_timezone,
         )
+
+    @blocking
+    def _delete_extracted_tasks(self, *, user_id: str, capture_id: str) -> None:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+            delete_extracted_tasks_by_capture(connection, user_id=user_id, capture_id=capture_id)
 
     def _resolve_candidate_group(
         self,

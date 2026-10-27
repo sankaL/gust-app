@@ -6,8 +6,10 @@ from datetime import UTC, datetime, timedelta
 
 from starlette.requests import Request
 
+from app.core.concurrency import run_blocking
 from app.core.request_security import client_ip_for_request
 from app.core.settings import Settings
+from app.core.timing import timed_stage
 from app.db.engine import connection_scope
 from app.db.repositories import delete_expired_rate_limit_counters, increment_rate_limit_counter
 
@@ -68,7 +70,7 @@ class RequestRateLimiter:
         self.unauthenticated_write_ip = _parse_windows(settings.rate_limit_unauthenticated_write_ip)
         self.internal_job_ip = _parse_windows(settings.rate_limit_internal_job_ip)
 
-    def evaluate_ip_request(
+    async def evaluate_ip_request(
         self,
         *,
         request: Request,
@@ -79,14 +81,16 @@ class RequestRateLimiter:
         policy = self._resolve_ip_policy(request=request)
         if policy is None:
             return None
-        return self._evaluate_policy(
-            request=request,
-            policy=policy,
-            user_id=None,
-            cleanup_expired=True,
-        )
+        with timed_stage("ratelimit.ip"):
+            return await run_blocking(
+                self._evaluate_policy,
+                request=request,
+                policy=policy,
+                user_id=None,
+                cleanup_expired=True,
+            )
 
-    def evaluate_user_request(
+    async def evaluate_user_request(
         self,
         *,
         request: Request,
@@ -98,12 +102,14 @@ class RequestRateLimiter:
         policy = self._resolve_user_policy(request=request)
         if policy is None:
             return None
-        return self._evaluate_policy(
-            request=request,
-            policy=policy,
-            user_id=user_id,
-            cleanup_expired=False,
-        )
+        with timed_stage("ratelimit.user"):
+            return await run_blocking(
+                self._evaluate_policy,
+                request=request,
+                policy=policy,
+                user_id=user_id,
+                cleanup_expired=False,
+            )
 
     def _evaluate_policy(
         self,

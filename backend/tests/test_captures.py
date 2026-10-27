@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
+import anyio
 import pytest
 import sqlalchemy as sa
 from fastapi import FastAPI
@@ -433,8 +434,8 @@ def test_capture_lock_contention_returns_429(
 ) -> None:
     headers = _authenticated_headers(app, client)
 
-    @contextmanager
-    def busy_lock(self, *, user_id: str, action: str):
+    @asynccontextmanager
+    async def busy_lock(self, *, user_id: str, action: str):
         del self, user_id, action
         raise ActionLockBusyError()
         yield
@@ -449,28 +450,50 @@ def test_capture_lock_contention_returns_429(
 
 def test_user_action_lock_blocks_concurrent_attempts_and_releases(client: TestClient) -> None:
     database_url = client.app.state.settings.database_url
+    lock_args = {
+        "database_url": database_url,
+        "user_id": "11111111-1111-1111-1111-111111111111",
+        "action": "capture_voice",
+    }
 
-    with (
-        user_action_lock(
-            database_url=database_url,
-            user_id="11111111-1111-1111-1111-111111111111",
-            action="capture_voice",
-        ),
-        pytest.raises(ActionLockBusyError),
-        user_action_lock(
-            database_url=database_url,
-            user_id="11111111-1111-1111-1111-111111111111",
-            action="capture_voice",
-        ),
-    ):
-        pass
+    async def contend_then_reacquire() -> None:
+        async with user_action_lock(**lock_args):
+            with pytest.raises(ActionLockBusyError):
+                async with user_action_lock(**lock_args):
+                    pass
+        async with user_action_lock(**lock_args):
+            pass
 
-    with user_action_lock(
-        database_url=database_url,
-        user_id="11111111-1111-1111-1111-111111111111",
-        action="capture_voice",
-    ):
-        pass
+    asyncio.run(contend_then_reacquire())
+
+
+def test_user_action_lock_releases_when_holder_is_cancelled(client: TestClient) -> None:
+    # A client disconnect cancels the request's anyio scope while the lock is held; the
+    # release must still run, or the user stays locked out for the whole lease.
+    database_url = client.app.state.settings.database_url
+    lock_args = {
+        "database_url": database_url,
+        "user_id": "11111111-1111-1111-1111-111111111111",
+        "action": "capture_voice",
+    }
+
+    async def cancel_while_held_then_reacquire() -> None:
+        acquired = anyio.Event()
+
+        async def hold_lock() -> None:
+            async with user_action_lock(**lock_args):
+                acquired.set()
+                await anyio.sleep_forever()
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(hold_lock)
+            await acquired.wait()
+            task_group.cancel_scope.cancel()
+
+        async with user_action_lock(**lock_args):
+            pass
+
+    anyio.run(cancel_while_held_then_reacquire)
 
 
 def test_voice_capture_transcribes_audio_and_returns_review_state(

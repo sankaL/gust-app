@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -35,8 +37,10 @@ class AuthenticatedSession:
 
 
 class SupabaseAuthService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, http_client: httpx.AsyncClient | None = None) -> None:
         self.settings = settings
+        # Set by shared_auth_http_client for the app's lifetime; None opens a client per call.
+        self.http_client = http_client
         self._jwks_client: PyJWKClient | None = None
 
     def ensure_configured(self) -> None:
@@ -109,7 +113,7 @@ class SupabaseAuthService:
         params = {"scope": "global"}
         payload = {"refresh_token": refresh_token}
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with self._http() as client:
             response = await client.post(
                 self.logout_url,
                 params=params,
@@ -165,6 +169,14 @@ class SupabaseAuthService:
             self._jwks_client = PyJWKClient(self.jwks_url, timeout=10.0)
         return self._jwks_client
 
+    @asynccontextmanager
+    async def _http(self) -> AsyncIterator[httpx.AsyncClient]:
+        if self.http_client is not None:
+            yield self.http_client
+            return
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            yield client
+
     async def _post_token_request(
         self,
         query_params: dict[str, str],
@@ -186,7 +198,7 @@ class SupabaseAuthService:
     ) -> dict[str, Any]:
         self.ensure_configured()
         headers = {"apikey": self.settings.supabase_anon_key or ""}
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with self._http() as client:
             response = await client.post(
                 url,
                 params=query_params,
@@ -384,6 +396,28 @@ def build_auth_service(settings: Settings) -> AuthService:
     return SupabaseAuthService(settings)
 
 
+def build_auth_http_client() -> httpx.AsyncClient:
+    """Long-lived client so sign-in and refresh calls reuse one TLS setup and open connections."""
+    return httpx.AsyncClient(
+        timeout=10.0,
+        limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=300.0),
+    )
+
+
+@asynccontextmanager
+async def shared_auth_http_client(auth_service: AuthService | None) -> AsyncIterator[None]:
+    """Give the Supabase auth service one HTTP client for the app's lifetime."""
+    if not isinstance(auth_service, SupabaseAuthService):
+        yield
+        return
+    async with build_auth_http_client() as client:
+        auth_service.http_client = client
+        try:
+            yield
+        finally:
+            auth_service.http_client = None
+
+
 __all__ = [
     "AuthenticatedIdentity",
     "AuthenticatedSession",
@@ -392,5 +426,7 @@ __all__ = [
     "InvalidTokenError",
     "LocalDevAuthService",
     "SupabaseAuthService",
+    "build_auth_http_client",
     "build_auth_service",
+    "shared_auth_http_client",
 ]

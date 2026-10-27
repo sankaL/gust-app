@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends, Request, Response
 
+from app.core.concurrency import run_blocking
 from app.core.errors import (
     AuthEmailNotAllowedError,
     AuthRequiredError,
@@ -28,6 +29,7 @@ from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
 from app.db.repositories import SessionContext, get_session_context, is_email_allowed
 from app.services.auth import (
+    AuthenticatedIdentity,
     AuthService,
     ExpiredSignatureError,
     InvalidTokenError,
@@ -49,8 +51,11 @@ from app.services.transcription import OpenRouterTranscriptionService
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-def get_auth_service(settings: SettingsDep) -> AuthService:
-    return build_auth_service(settings)
+def get_auth_service(request: Request, settings: SettingsDep) -> AuthService:
+    # The app builds one auth service per process, so Supabase's signing keys stay cached
+    # between requests instead of being fetched again on every call.
+    shared = getattr(request.app.state, "auth_service", None)
+    return shared if shared is not None else build_auth_service(settings)
 
 
 def get_transcription_service(
@@ -148,7 +153,7 @@ async def get_optional_session_context(
         set_session_cookies(response, settings, prefetched_session.tokens)
     elif access_token:
         try:
-            identity = auth_service.validate_access_token(access_token)
+            identity = await run_blocking(auth_service.validate_access_token, access_token)
         except ExpiredSignatureError:
             if not refresh_token:
                 clear_session_cookies(response, settings)
@@ -179,13 +184,23 @@ async def get_optional_session_context(
     else:
         return None
 
+    try:
+        return await run_blocking(_load_session_context, settings.database_url, identity)
+    except AuthEmailNotAllowedError:
+        clear_session_cookies(response, settings)
+        clear_csrf_cookie(response, settings)
+        raise
+
+
+def _load_session_context(
+    database_url: str,
+    identity: AuthenticatedIdentity,
+) -> SessionContext | None:
     with (
         timed_stage("auth.session.resolve"),
-        user_connection_scope(settings.database_url, user_id=identity.user_id) as connection,
+        user_connection_scope(database_url, user_id=identity.user_id) as connection,
     ):
         if not is_email_allowed(connection, email=identity.email):
-            clear_session_cookies(response, settings)
-            clear_csrf_cookie(response, settings)
             raise AuthEmailNotAllowedError()
         return get_session_context(connection, identity.user_id)
 

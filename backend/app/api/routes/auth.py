@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.concurrency import run_blocking
 from app.core.dependencies import (
     get_auth_service,
     get_optional_session_context,
@@ -120,15 +121,15 @@ async def password_sign_in(
         password=payload.password,
     )
 
-    with user_connection_scope(
-        settings.database_url,
-        user_id=session.identity.user_id,
-    ) as connection:
-        if not is_email_allowed(connection, email=session.identity.email):
-            await _best_effort_revoke_refresh_token(auth_service, session.tokens.refresh_token)
-            raise AuthEmailNotAllowedError()
-        _bootstrap_user_session(connection, session)
-        session_context = get_session_context(connection, session.identity.user_id)
+    try:
+        session_context = await run_blocking(
+            _bootstrap_allowed_session,
+            settings.database_url,
+            session,
+        )
+    except AuthEmailNotAllowedError:
+        await _best_effort_revoke_refresh_token(auth_service, session.tokens.refresh_token)
+        raise
 
     if session_context is None:
         raise AuthRequiredError("Authenticated user could not be resolved locally.")
@@ -152,15 +153,15 @@ async def local_dev_login(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
     session = auth_service.create_dev_session()
 
-    with user_connection_scope(
-        settings.database_url,
-        user_id=session.identity.user_id,
-    ) as connection:
-        if not is_email_allowed(connection, email=session.identity.email):
-            await _best_effort_revoke_refresh_token(auth_service, session.tokens.refresh_token)
-            raise AuthEmailNotAllowedError()
-        _bootstrap_user_session(connection, session)
-        session_context = get_session_context(connection, session.identity.user_id)
+    try:
+        session_context = await run_blocking(
+            _bootstrap_allowed_session,
+            settings.database_url,
+            session,
+        )
+    except AuthEmailNotAllowedError:
+        await _best_effort_revoke_refresh_token(auth_service, session.tokens.refresh_token)
+        raise
 
     if session_context is None:
         raise AuthRequiredError("Authenticated user could not be resolved locally.")
@@ -199,27 +200,24 @@ async def update_timezone(
     settings: SettingsDep,
 ) -> SessionStatusResponse:
     _validate_timezone(payload.timezone)
-    with user_connection_scope(
+    updated_context = await run_blocking(
+        _update_user_timezone,
         settings.database_url,
-        user_id=session_context.user.id,
-    ) as connection:
-        user = update_user_timezone(
-            connection,
-            user_id=session_context.user.id,
-            timezone=payload.timezone,
-        )
-        if user is None:
-            raise AuthRequiredError("Authenticated user could not be updated locally.")
-        inbox = ensure_inbox_group(connection, user_id=session_context.user.id)
+        session_context.user.id,
+        payload.timezone,
+    )
 
     csrf_token = ensure_csrf_cookie(response, settings, request.cookies.get(CSRF_COOKIE))
-    return _build_session_status_response(
-        SessionContext(
-            user=user,
-            inbox_group_id=inbox.id,
-        ),
-        csrf_token,
-    )
+    return _build_session_status_response(updated_context, csrf_token)
+
+
+def _update_user_timezone(database_url: str, user_id: str, timezone: str) -> SessionContext:
+    with user_connection_scope(database_url, user_id=user_id) as connection:
+        user = update_user_timezone(connection, user_id=user_id, timezone=timezone)
+        if user is None:
+            raise AuthRequiredError("Authenticated user could not be updated locally.")
+        inbox = ensure_inbox_group(connection, user_id=user_id)
+    return SessionContext(user=user, inbox_group_id=inbox.id)
 
 
 def _build_session_status_response(
@@ -237,6 +235,17 @@ def _build_session_status_response(
         inbox_group_id=session_context.inbox_group_id,
         csrf_token=csrf_token,
     )
+
+
+def _bootstrap_allowed_session(
+    database_url: str,
+    session: AuthenticatedSession,
+) -> SessionContext | None:
+    with user_connection_scope(database_url, user_id=session.identity.user_id) as connection:
+        if not is_email_allowed(connection, email=session.identity.email):
+            raise AuthEmailNotAllowedError()
+        _bootstrap_user_session(connection, session)
+        return get_session_context(connection, session.identity.user_id)
 
 
 def _bootstrap_user_session(connection, session: AuthenticatedSession) -> None:

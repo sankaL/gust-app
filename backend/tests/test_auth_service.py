@@ -147,3 +147,45 @@ def test_refresh_rejection_is_not_reported_as_invalid_credentials(
 
     with pytest.raises(UpstreamAuthError):
         asyncio.run(service.refresh_session(refresh_token="stale-refresh-token"))
+
+
+def test_supabase_auth_calls_reuse_the_shared_http_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_paths.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={
+                "access_token": "access-token",
+                "refresh_token": "refresh-token",
+                "expires_in": 3600,
+                "user": {"id": "11111111-1111-1111-1111-111111111111", "email": "user@example.com"},
+            },
+        )
+
+    shared_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    def no_per_call_client(**kwargs: object) -> httpx.AsyncClient:
+        raise AssertionError("auth calls should use the shared client")
+
+    monkeypatch.setattr(httpx, "AsyncClient", no_per_call_client)
+    settings = Settings(
+        APP_ENV="development",
+        GUST_DEV_MODE=False,
+        DATABASE_URL="sqlite+pysqlite:///:memory:",
+        SUPABASE_URL="https://project.supabase.test",
+        SUPABASE_ANON_KEY="test-anon-key",
+    )
+    service = SupabaseAuthService(settings, http_client=shared_client)
+
+    async def refresh_twice_then_close() -> None:
+        await service.refresh_session(refresh_token="first-refresh-token")
+        await service.refresh_session(refresh_token="second-refresh-token")
+        await shared_client.aclose()
+
+    asyncio.run(refresh_twice_then_close())
+
+    assert seen_paths == ["/auth/v1/token", "/auth/v1/token"]

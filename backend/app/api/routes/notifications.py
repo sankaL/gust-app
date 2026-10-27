@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.concurrency import run_blocking
 from app.core.dependencies import (
     get_current_session_context,
     get_pushover_service,
@@ -247,19 +248,13 @@ async def complete_pushover_connect(
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT, exc.error_code, "Pushover user key is invalid."
         ) from exc
-    with user_connection_scope(
-        settings.database_url, user_id=session_context.user.id
-    ) as connection:
-        update_notification_preferences(
-            connection,
-            user_id=session_context.user.id,
-            values={
-                "pushover_user_key_encrypted": pushover_service.encrypt_user_key(returned_user_key),
-                "pushover_user_key_hint": user_key_hint(returned_user_key),
-                "pushover_verified_at": datetime.now(UTC),
-                "pushover_connection_error_code": None,
-            },
-        )
+    await run_blocking(
+        _save_verified_user_key,
+        settings.database_url,
+        session_context.user.id,
+        pushover_service,
+        returned_user_key,
+    )
     redirect = RedirectResponse(
         f"{(settings.frontend_app_url or '').rstrip('/')}{return_path}?pushover=connected"
     )
@@ -284,20 +279,33 @@ async def save_pushover_key(
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT, exc.error_code, "Pushover user key is invalid."
         ) from exc
-    with user_connection_scope(
-        settings.database_url, user_id=session_context.user.id
-    ) as connection:
-        preferences = update_notification_preferences(
+    preferences = await run_blocking(
+        _save_verified_user_key,
+        settings.database_url,
+        session_context.user.id,
+        pushover_service,
+        payload.user_key,
+    )
+    return _response(preferences, timezone=session_context.user.timezone, pushover_available=True)
+
+
+def _save_verified_user_key(
+    database_url: str,
+    user_id: str,
+    pushover_service: PushoverService,
+    user_key: str,
+) -> NotificationPreferencesRecord:
+    with user_connection_scope(database_url, user_id=user_id) as connection:
+        return update_notification_preferences(
             connection,
-            user_id=session_context.user.id,
+            user_id=user_id,
             values={
-                "pushover_user_key_encrypted": pushover_service.encrypt_user_key(payload.user_key),
-                "pushover_user_key_hint": user_key_hint(payload.user_key),
+                "pushover_user_key_encrypted": pushover_service.encrypt_user_key(user_key),
+                "pushover_user_key_hint": user_key_hint(user_key),
                 "pushover_verified_at": datetime.now(UTC),
                 "pushover_connection_error_code": None,
             },
         )
-    return _response(preferences, timezone=session_context.user.timezone, pushover_available=True)
 
 
 @router.post("/pushover/test", status_code=status.HTTP_204_NO_CONTENT)
@@ -306,19 +314,11 @@ async def send_pushover_test(
     pushover_service: PushoverServiceDep,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
-    now = datetime.now(UTC)
-    with user_connection_scope(
-        settings.database_url, user_id=session_context.user.id
-    ) as connection:
-        preferences = get_notification_preferences(connection, user_id=session_context.user.id)
-        count = increment_rate_limit_counter(
-            connection,
-            scope="pushover_test",
-            subject_key=session_context.user.id,
-            window_start=now.replace(minute=0, second=0, microsecond=0),
-            window_seconds=3600,
-            expires_at=now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
-        )
+    preferences, count = await run_blocking(
+        _load_preferences_and_count_test,
+        settings.database_url,
+        session_context.user.id,
+    )
     if count > 3:
         raise ApiError(
             status.HTTP_429_TOO_MANY_REQUESTS,
@@ -338,6 +338,25 @@ async def send_pushover_test(
         ttl_seconds=24 * 60 * 60,
         html_enabled=False,
     )
+
+
+def _load_preferences_and_count_test(
+    database_url: str,
+    user_id: str,
+) -> tuple[NotificationPreferencesRecord, int]:
+    now = datetime.now(UTC)
+    window_start = now.replace(minute=0, second=0, microsecond=0)
+    with user_connection_scope(database_url, user_id=user_id) as connection:
+        preferences = get_notification_preferences(connection, user_id=user_id)
+        count = increment_rate_limit_counter(
+            connection,
+            scope="pushover_test",
+            subject_key=user_id,
+            window_start=window_start,
+            window_seconds=3600,
+            expires_at=window_start + timedelta(hours=1),
+        )
+    return preferences, count
 
 
 @router.delete("/pushover", response_model=NotificationSettingsResponse)

@@ -219,6 +219,12 @@ On each authenticated request, the backend:
 
 The backend is the only trusted access layer for application data.
 
+Performance contract:
+
+- the app builds one auth service per process, shared by the request middleware and the session dependency, so Supabase's signing keys (JWKS) are cached for about 5 minutes instead of fetched on every request
+- token validation runs in the worker threadpool, because a key refresh is a blocking HTTPS call
+- Supabase sign-in, refresh and logout calls reuse one `httpx.AsyncClient` opened in the app lifespan and closed on shutdown
+
 ### Abuse Controls
 
 The backend owns request-abuse protection.
@@ -276,6 +282,12 @@ Correctness rules:
 - the runtime application role must not have `BYPASSRLS`
 
 This is deliberate because Supabase service access can bypass RLS, and relying on undocumented request-context magic would make the system brittle. The backend remains responsible for explicit user scoping, while Postgres policies deny access when the transaction actor context does not match.
+
+Latency rules:
+
+- The API runs one process with one event loop, so blocking work must never run directly in `async def` code. Database queries and synchronous HTTP calls made from async routes, dependencies, middleware or services go through the worker threadpool (`run_blocking` or the `@blocking` decorator in `app/core/concurrency.py`), or the route is a plain `def`.
+- The reminder worker mixes blocking database calls with awaited provider requests, so the internal reminder route runs it on its own event loop in a worker thread.
+- Pooled connections are kept for 30 minutes (`pool_recycle`), because opening one to the Supabase pooler costs several cross-region round trips. `pool_pre_ping` replaces any connection that died meanwhile, and Postgres connections enable TCP keepalives (60 s idle, 10 s interval, 3 probes) so idle connections are not silently dropped.
 
 ### ORM Strategy
 
@@ -482,6 +494,13 @@ If the schema cannot represent those contracts cleanly, the product spec is not 
 ## Observability
 
 Use structured logs with request IDs and task/capture IDs.
+
+Request timing:
+
+- Every response, including rate-limited `429`s, carries `X-Request-ID` and a `Server-Timing` header, and is logged as a `request_completed` event with `duration_ms` and the same stages.
+- The timer starts when the request reaches the middleware, so `request.total` includes the pre-route stages: `ratelimit.ip`, `auth.token` (access-token validation), `auth.refresh` (refresh-token exchange when the access cookie has expired) and `ratelimit.user`.
+- Route stages such as `auth.session.resolve`, `db.tasks.list` and the `capture.*` stages follow.
+- Railway's edge HTTP logs (`totalDuration`) remain the end-to-end scoreboard, because they also include time spent before the request reaches the app.
 
 Log:
 
