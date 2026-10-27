@@ -32,6 +32,6 @@ Rebuild the mobile UI to match two reference screens (dark navy + lavender, ligh
 
 ## Follow-ups
 
-- Confirm the `/tasks` landing (instead of opening on capture) and auto-recording on +.
+- Confirm auto-recording on + (the `/tasks` landing was confirmed by the owner).
 - Test sheets with the iOS keyboard open and the drag-to-dismiss gesture on Safari.
 - Consider splitting `BottomSheet`, `CaptureSheet`, and `TaskPreviewView` to bring complexity findings down.
