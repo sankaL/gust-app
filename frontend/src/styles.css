@@ -64,7 +64,7 @@
   --clay-lo: rgb(27 42 34 / 0.13);
   --clay-drop: rgb(27 42 34 / 0.26);
   --glass-rim: 0.95;
-  --glass-sheet-alpha: 0.55;
+  --glass-sheet-alpha: 0.8;
   --app-backdrop: radial-gradient(120% 60% at 50% -10%, rgba(255, 255, 255, 0.9), transparent 60%),
     linear-gradient(180deg, #eef3ef 0%, #e8eee9 100%);
 }
@@ -120,7 +120,7 @@
   --clay-lo: rgb(0 0 0 / 0.38);
   --clay-drop: rgb(0 0 0 / 0.6);
   --glass-rim: 0.5;
-  --glass-sheet-alpha: 0.6;
+  --glass-sheet-alpha: 0.84;
   --app-backdrop: radial-gradient(110% 55% at 50% -12%, rgba(124, 92, 230, 0.16), transparent 60%),
     linear-gradient(180deg, #131830 0%, #10142a 100%);
 }
@@ -175,7 +175,7 @@
   --clay-lo: rgb(0 0 0 / 0.42);
   --clay-drop: rgb(0 0 0 / 0.65);
   --glass-rim: 0.5;
-  --glass-sheet-alpha: 0.6;
+  --glass-sheet-alpha: 0.84;
   --app-backdrop: radial-gradient(circle at 50% 18%, rgba(139, 92, 246, 0.16), transparent 40%),
     radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.08), transparent 30%),
     linear-gradient(180deg, #090614 0%, #06040e 50%, #04030a 100%);
@@ -406,7 +406,7 @@ html {
 
   .liquid-sheet {
     --glass-tint: rgb(var(--color-surface-container-high) / var(--glass-sheet-alpha));
-    --glass-blur: 12px;
+    --glass-blur: 20px;
     --glass-saturate: 180%;
     box-shadow: 0 0 0 0.5px rgb(var(--color-on-surface) / 0.08), 0 -14px 48px -8px rgb(var(--color-backdrop) / 0.3);
   }
