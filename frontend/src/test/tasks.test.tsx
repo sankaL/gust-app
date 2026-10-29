@@ -765,7 +765,7 @@ describe('tasks flow', () => {
     // The card shows the reminder time column, description, and metadata chips at a glance.
     expect(screen.getByText('Compare the new capture layout against the old hierarchy.')).toBeInTheDocument()
     expect(screen.getByLabelText('Reminder at 1:00 PM')).toBeInTheDocument()
-    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByTitle('2 subtasks')).toHaveTextContent('2')
     expect(screen.getByText('Daily')).toBeInTheDocument()
     expect(screen.getByText(/Needs Review/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete Review extraction contract' })).toBeInTheDocument()
