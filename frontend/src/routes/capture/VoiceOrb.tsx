@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Mic } from 'lucide-react'
 
-import { ChipBot } from '../../components/ui/ChipBot'
+import { ProcessingWave } from '../../components/ui/CaptureIcons'
 
 type OrbState = 'idle' | 'starting' | 'recording' | 'processing'
 
@@ -115,7 +115,7 @@ export function VoiceOrb({ state, stream, disabled, onClick, label }: {
       >
         <span aria-hidden="true" className="orb-sheen absolute inset-0 rounded-full" />
         <span className="relative transition-transform duration-300 ease-spring">
-          {recording ? <StopGlyph /> : processing ? <ChipBot working tone="primary" className="h-[4.75rem] w-[4.75rem]" /> : <Mic aria-hidden="true" className={`h-12 w-12 ${state === 'starting' ? 'animate-pulse' : ''}`} strokeWidth={1.9} />}
+          {recording ? <StopGlyph /> : processing ? <ProcessingWave className="h-16 w-16" /> : <Mic aria-hidden="true" className={`h-12 w-12 ${state === 'starting' ? 'animate-pulse' : ''}`} strokeWidth={1.9} />}
         </span>
       </button>
     </div>

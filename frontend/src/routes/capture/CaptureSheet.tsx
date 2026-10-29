@@ -277,33 +277,37 @@ export function CaptureSheet({ controller, open, launchMode, onConsumeLaunchMode
   useStopRecordingWhenHidden(open, controller)
 
   const header = HEADERS[phase]
+  const isReview = phase === 'review'
   const reviewTitle = reviewTasks.length > 0 ? `${reviewTasks.length} new ${reviewTasks.length === 1 ? 'task' : 'tasks'}` : header.title
   const isReviewLoading = queries.extracted.isLoading || queries.extracted.isFetching
 
-  async function finishReview() {
-    await controller.completeReview()
+  // Close first so a swipe or Escape never waits on the network (or fires twice while waiting); completeReview reports its own errors.
+  function finishReview() {
     onClose()
+    void controller.completeReview()
   }
 
   return (
     <BottomSheet
       open={open}
-      onClose={onClose}
+      // With the Done pill gone, any close in review finishes it; tasks left pending still wait in Review.
+      onClose={isReview ? finishReview : onClose}
       dismissible={phase !== 'recording'}
-      labelledBy="capture-sheet-title"
-      header={(
+      // Review matches the standalone Review sheet: no visible header, the count stays in the accessible name.
+      labelledBy={isReview ? undefined : 'capture-sheet-title'}
+      ariaLabel={isReview ? reviewTitle : undefined}
+      closeLabel={isReview ? 'Close capture' : undefined}
+      header={isReview ? undefined : (
         <SheetHeader
           eyebrow={header.eyebrow}
-          title={phase === 'review' ? reviewTitle : header.title}
+          title={header.title}
           titleId="capture-sheet-title"
-          // Only the orb phases are a centered composition; the review card list reads left-aligned.
-          centered={phase !== 'review'}
+          centered
           onClose={phase === 'recording' ? undefined : onClose}
           closeLabel="Close capture"
-          actions={phase === 'review' ? <Button variant="soft" size="sm" onClick={() => void finishReview()}>Done</Button> : undefined}
         />
       )}
-      footer={phase === 'review' && reviewTasks.length > 0 ? (
+      footer={isReview && reviewTasks.length > 0 ? (
         <BulkReviewFooter
           count={reviewTasks.length}
           running={bulk.running}
@@ -311,12 +315,12 @@ export function CaptureSheet({ controller, open, launchMode, onConsumeLaunchMode
           onDiscardAll={() => void bulk.run('discard', review.discardAll)}
         />
       ) : undefined}
-      bodyClassName="overflow-y-auto px-5 pb-6 pt-1"
+      bodyClassName={`overflow-y-auto px-5 pb-6 ${isReview ? 'pt-2' : 'pt-1'}`}
     >
       {phase === 'compose' ? <ComposeView controller={controller} /> : null}
       {phase === 'recording' ? <RecordingView controller={controller} /> : null}
       {phase === 'processing' ? <ProcessingView isVoice={controller.mutations.voice.isPending} /> : null}
-      {phase === 'review' ? <ReviewView controller={controller} tasks={reviewTasks} handledCount={queries.extractedTasks.length - reviewTasks.length} isLoading={isReviewLoading} olderPendingCount={queries.visiblePending.length} onOpenReview={onOpenReview} onFinish={() => void finishReview()} /> : null}
+      {phase === 'review' ? <ReviewView controller={controller} tasks={reviewTasks} handledCount={queries.extractedTasks.length - reviewTasks.length} isLoading={isReviewLoading} olderPendingCount={queries.visiblePending.length} onOpenReview={onOpenReview} onFinish={finishReview} /> : null}
     </BottomSheet>
   )
 }

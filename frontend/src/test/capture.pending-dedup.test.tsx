@@ -315,6 +315,26 @@ describe('capture pending list dedupe', () => {
     expect(within(reviewSheet).getAllByText('Captured task 2')).toHaveLength(1)
   })
 
+  it('shows no visible header in the review step and finishes the review once on Escape', async () => {
+    const { fetchMock } = createFetchMock()
+    vi.stubGlobal('fetch', fetchMock)
+    renderCaptureRoute()
+    const user = userEvent.setup()
+
+    await submitTextCapture(user, 'Review active capture')
+    const captureSheet = await screen.findByRole('dialog', { name: '1 new task' })
+    expect(within(captureSheet).queryByRole('heading', { name: '1 new task' })).not.toBeInTheDocument()
+    expect(within(captureSheet).queryByRole('button', { name: 'Done' })).not.toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '1 new task' })).not.toBeInTheDocument()
+    })
+    const completeCalls = fetchMock.mock.calls.filter(([input, init]) => requestUrl(input as RequestInfo).endsWith('/captures/capture-1/complete') && (init)?.method === 'POST')
+    expect(completeCalls).toHaveLength(1)
+  })
+
   it('reviews only the active capture in the capture sheet and closes after Done', async () => {
     const { fetchMock } = createFetchMock()
     vi.stubGlobal('fetch', fetchMock)
@@ -328,7 +348,7 @@ describe('capture pending list dedupe', () => {
     expect(within(captureSheet).queryByText('Other capture task')).not.toBeInTheDocument()
     expect(within(captureSheet).getByRole('button', { name: /1 more task from earlier captures/ })).toBeInTheDocument()
 
-    await user.click(within(captureSheet).getByRole('button', { name: 'Done' }))
+    await user.click(within(captureSheet).getByRole('button', { name: 'Close capture' }))
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: '1 new task' })).not.toBeInTheDocument()
     })

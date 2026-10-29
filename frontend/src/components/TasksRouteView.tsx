@@ -12,7 +12,7 @@ import { SessionGuard } from './SessionGuard'
 import { TaskDeleteDialog } from './TaskDeleteDialog'
 import { TaskGroupTabs } from './TaskGroupTabs'
 import { TaskPreviewModal } from './TaskPreviewModal'
-import { ChipBot } from './ui/ChipBot'
+import { ReviewScan } from './ui/CaptureIcons'
 import { WeekStrip } from './tasks/WeekStrip'
 
 type TasksRouteViewProps = {
@@ -90,7 +90,7 @@ export function ReviewBanner() {
       className="animate-rise-in group mt-1 flex w-full items-center gap-3.5 rounded-[1.4rem] bg-card-active p-3.5 text-left shadow-card outline-none ring-1 ring-inset ring-card-active-line/30 transition-transform duration-200 focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-[0.99]"
     >
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-on-primary shadow-card">
-        <ChipBot beckon tone="primary" className="h-9 w-9" />
+        <ReviewScan className="h-6 w-6" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block font-display text-[0.98rem] font-bold text-on-surface">{count} {count === 1 ? 'task' : 'tasks'} waiting for review</span>
