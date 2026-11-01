@@ -144,6 +144,7 @@ function AddGroupSheet({ open, name, description, onNameChange, onDescriptionCha
     <BottomSheet
       open={open}
       onClose={onClose}
+      size="auto"
       labelledBy="add-group-title"
       header={<SheetHeader eyebrow="Organize" title="Add a new group" titleId="add-group-title" onClose={onClose} closeLabel="Close modal" />}
       footer={<div className="flex gap-2.5"><Button variant="secondary" size="lg" className="flex-1" onClick={onClose}>Cancel</Button><Button variant="primary" size="lg" className="flex-[1.4]" onClick={onCreate} disabled={!name.trim()}>Create Group</Button></div>}

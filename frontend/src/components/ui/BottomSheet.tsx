@@ -10,6 +10,8 @@ const DISMISS_VELOCITY = 0.55
 const DRAG_SLOP_PX = 6
 // Matches rounded-t-sheet (2.25rem).
 const SHEET_GLASS = { radius: 36, bezel: 22, scale: 40, aberration: 0.05 }
+// Smaller shrinks are browser chrome (URL bar collapse), not an on-screen keyboard.
+const KEYBOARD_MIN_PX = 120
 
 type SheetSize = 'default' | 'auto'
 
@@ -103,6 +105,43 @@ function useSheetStack(active: boolean) {
   }, [active, id])
   const isTop = useCallback(() => sheetStack[sheetStack.length - 1] === id, [id])
   return { depth, isTop, isCovered }
+}
+
+type KeyboardViewport = { height: number; offsetTop: number }
+
+/**
+ * iOS keeps the layout viewport full height when the keyboard opens and pans the page to the
+ * focused field instead, which pushes a bottom-anchored sheet's header off screen. This tracks
+ * the visible area so the sheet can sit on top of the keyboard. Null while no keyboard is up.
+ */
+function useKeyboardViewport(active: boolean) {
+  const [viewport, setViewport] = useState<KeyboardViewport | null>(null)
+  useEffect(() => {
+    const visual = window.visualViewport
+    if (!active || !visual) return undefined
+    let frame = 0
+    const measure = () => {
+      frame = 0
+      const layoutHeight = document.documentElement.clientHeight || window.innerHeight
+      const keyboardOpen = layoutHeight - visual.height > KEYBOARD_MIN_PX
+      setViewport((current) => {
+        if (!keyboardOpen) return null
+        if (current && current.height === visual.height && current.offsetTop === visual.offsetTop) return current
+        return { height: visual.height, offsetTop: visual.offsetTop }
+      })
+    }
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure) }
+    measure()
+    visual.addEventListener('resize', schedule)
+    visual.addEventListener('scroll', schedule)
+    return () => {
+      if (frame) cancelAnimationFrame(frame)
+      visual.removeEventListener('resize', schedule)
+      visual.removeEventListener('scroll', schedule)
+      setViewport(null)
+    }
+  }, [active])
+  return viewport
 }
 
 /** True when the touch starts in a nested scroller (e.g. a long textarea) that is not at its top. */
@@ -257,6 +296,7 @@ export function BottomSheet(props: BottomSheetProps) {
 
   useEffect(() => { if (props.open) setOffset(0) }, [props.open, setOffset])
   useSheetFocus(visible, panelRef)
+  const keyboard = useKeyboardViewport(shouldRender)
 
   useEffect(() => {
     if (!shouldRender) return undefined
@@ -271,16 +311,22 @@ export function BottomSheet(props: BottomSheetProps) {
   const zIndex = 110 + depth * 10
   // A sheet with another sheet stacked on top recedes slightly, giving the stack visible depth.
   const translate = !visible ? 'translate3d(0, 104%, 0)' : isCovered ? 'translate3d(0, -14px, 0) scale(0.94)' : `translate3d(0, ${Math.max(drag.offset, -24)}px, 0)`
-  const sizeClass = (view.size ?? 'default') === 'auto' ? 'sheet-h-auto' : 'sheet-h-default'
+  const isAutoSize = (view.size ?? 'default') === 'auto'
+  const sizeClass = isAutoSize ? 'sheet-h-auto' : 'sheet-h-default'
+  // With the keyboard up, the sheet lives inside the visible area and never grows past it.
+  const keyboardLimit = keyboard ? `calc(${keyboard.height}px - var(--safe-area-top) - 0.75rem)` : undefined
+  const keyboardSize = keyboardLimit ? { maxHeight: keyboardLimit, height: isAutoSize ? undefined : `min(75dvh, ${keyboardLimit})` } : {}
+  const frameStyle = keyboard ? { zIndex, top: keyboard.offsetTop, bottom: 'auto', height: keyboard.height } : { zIndex }
 
   return createPortal(
     // inert while exiting so stale header and footer buttons cannot fire their handlers a second time.
-    <div className="fixed inset-0" style={{ zIndex }} inert={!props.open}>
+    <div className="fixed inset-0" style={frameStyle} data-keyboard-open={keyboard ? 'true' : undefined} inert={!props.open}>
       <div
         aria-hidden="true"
         data-testid="sheet-backdrop"
         onClick={requestClose}
-        className="absolute inset-0 bg-backdrop/20 transition-opacity duration-300 ease-out"
+        // fixed, not absolute: while the frame shrinks to the keyboard-free area the dimming still covers the page.
+        className="fixed inset-0 bg-backdrop/20 transition-opacity duration-300 ease-out"
         style={{ opacity: visible ? Math.max(0.15, 1 - drag.offset / 500) : 0 }}
       />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
@@ -299,6 +345,7 @@ export function BottomSheet(props: BottomSheetProps) {
             filter: isCovered ? 'brightness(0.92)' : undefined,
             transformOrigin: 'top center',
             willChange: 'transform',
+            ...keyboardSize,
           }}
         >
           <MeasuredGlassWarp targetRef={panelRef} active={shouldRender} {...SHEET_GLASS} />
@@ -318,10 +365,11 @@ export function BottomSheet(props: BottomSheetProps) {
             {view.children}
           </div>
           {view.footer ? (
-            <div className="shrink-0 border-t border-outline/30 bg-surface-container-high/35 px-5 pb-[max(1rem,calc(var(--safe-area-bottom)+0.75rem))] pt-3 backdrop-blur-xl">
+            // The keyboard covers the home indicator, so its safe-area padding would only add a gap.
+            <div className={`shrink-0 border-t border-outline/30 bg-surface-container-high/35 px-5 pt-3 backdrop-blur-xl ${keyboard ? 'pb-3' : 'pb-[max(1rem,calc(var(--safe-area-bottom)+0.75rem))]'}`}>
               {view.footer}
             </div>
-          ) : <div className="h-[var(--safe-area-bottom)] shrink-0" />}
+          ) : <div className={`${keyboard ? 'h-3' : 'h-[var(--safe-area-bottom)]'} shrink-0`} />}
         </div>
       </div>
     </div>,

@@ -139,3 +139,52 @@ describe('bottom sheet', () => {
     expect(sheetPanel().style.transform).toBe('translate3d(0, 0px, 0)')
   })
 })
+
+describe('bottom sheet with an on-screen keyboard', () => {
+  class FakeVisualViewport extends EventTarget {
+    height = 800
+    offsetTop = 0
+  }
+  let visual: FakeVisualViewport
+
+  beforeEach(() => {
+    visual = new FakeVisualViewport()
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: visual })
+    Object.defineProperty(document.documentElement, 'clientHeight', { configurable: true, get: () => 800 })
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'visualViewport')
+    Reflect.deleteProperty(document.documentElement, 'clientHeight')
+  })
+
+  const sheetFrame = () => sheetPanel().parentElement?.parentElement as HTMLElement
+
+  it('fits the sheet into the area above the keyboard and releases it when the keyboard closes', async () => {
+    render(<BottomSheet open onClose={() => undefined} ariaLabel="Add group" footer={<button type="button">Create</button>}><input aria-label="Name" /></BottomSheet>)
+    expect(sheetFrame().dataset.keyboardOpen).toBeUndefined()
+
+    // iOS shrinks only the visual viewport and pans it down to the focused field.
+    visual.height = 420
+    visual.offsetTop = 180
+    await act(async () => { visual.dispatchEvent(new Event('resize')); await new Promise(requestAnimationFrame) })
+
+    expect(sheetFrame().dataset.keyboardOpen).toBe('true')
+    expect(sheetFrame().style.top).toBe('180px')
+    expect(sheetFrame().style.height).toBe('420px')
+    expect(sheetPanel().style.maxHeight).toBe('calc(420px - var(--safe-area-top) - 0.75rem)')
+
+    visual.height = 800
+    visual.offsetTop = 0
+    await act(async () => { visual.dispatchEvent(new Event('resize')); await new Promise(requestAnimationFrame) })
+
+    expect(sheetFrame().dataset.keyboardOpen).toBeUndefined()
+    expect(sheetFrame().style.height).toBe('')
+    expect(sheetPanel().style.maxHeight).toBe('')
+  })
+
+  it('ignores small viewport shrinks from collapsing browser chrome', () => {
+    visual.height = 740
+    render(<BottomSheet open onClose={() => undefined} ariaLabel="Account"><p>Body</p></BottomSheet>)
+    expect(sheetFrame().dataset.keyboardOpen).toBeUndefined()
+  })
+})
