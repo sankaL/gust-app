@@ -509,8 +509,9 @@ describe('TaskPreviewModal', () => {
 
     await waitFor(() => expect(mockedUpdateTask).toHaveBeenCalled())
     const payload = mockedUpdateTask.mock.calls[0][1]
-    const now = new Date()
-    const nextDue = localDateToken(0, new Date(now.getFullYear(), now.getMonth() + 1, 15))
+    // The picker opens on the due date's month, which is last month during the first three days of a month.
+    const [dueYear, dueMonth] = pastDue.split('-').map(Number)
+    const nextDue = localDateToken(0, new Date(dueYear, dueMonth, 15))
     expect(payload.due_date).toBe(nextDue)
     expect(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(new Date(payload.reminder_at as string))).toBe(nextDue)
     expect(payload.recurrence).toMatchObject({ frequency: 'weekly', weekday: new Date(`${nextDue}T12:00:00`).getDay() })
