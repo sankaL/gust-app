@@ -1,7 +1,7 @@
 # Tech Stack: Gust
 
-**Version:** 2.4  
-**Last Updated:** 2026-06-03  
+**Version:** 2.5  
+**Last Updated:** 2026-11-07  
 **Domain:** gustapp.ca
 
 ## Purpose
@@ -37,11 +37,12 @@ The frontend talks only to the backend API. It does not call the database, trans
 | Extraction | Claude Haiku 5.5 via OpenRouter's Anthropic-compatible API (official `anthropic` SDK), JSON-schema structured outputs | One OpenRouter key for all AI calls; thinking off, schema-constrained output |
 | Email | Resend | Simple transactional email API with idempotency support |
 | Hosting | Railway | Simple deployment for the API, frontend, and scheduled jobs |
+| Agent access | MCP Python SDK `mcp` 2.3.x (`MCPServer`, Streamable HTTP, stateless, JSON responses), mounted inside the backend | Lets a user's own AI agent (Meta Muse first) read and change their data with a per-user bearer token |
 
 Production topology:
 
 - frontend served from `https://gustapp.ca`
-- backend served from `https://api.gustapp.ca`
+- backend served from `https://api.gustapp.ca`, including the MCP endpoint `https://api.gustapp.ca/mcp` when `MCP_SERVER_ENABLED=true`
 - Supabase Auth and project APIs served from `https://auth.gustapp.ca` after custom-domain activation
 - Railway deployment config lives alongside each deployable unit:
   - `frontend/railway.json`
@@ -225,6 +226,17 @@ Performance contract:
 - token validation runs in the worker threadpool, because a key refresh is a blocking HTTPS call
 - Supabase sign-in, refresh and logout calls reuse one `httpx.AsyncClient` opened in the app lifespan and closed on shutdown
 
+### Agent (MCP) Auth Handling
+
+`POST /mcp` is the only path that accepts a bearer token, and it never reads session cookies. Cookie routes never accept bearer tokens.
+
+- Tokens are per user, created and revoked only from Settings with a cookie session plus CSRF (`/settings/agent-access`). A token can never manage tokens.
+- Format `gust_mcp_` + 43 URL-safe characters. Only the SHA-256 hash is stored; the plaintext is returned once with `Cache-Control: no-store`.
+- Each request: the SDK's bearer middleware calls `GustTokenVerifier` (off the event loop via `run_blocking`), which checks the format, looks the hash up under the token-lookup database actor (`app.mcp_token_lookup = true`, read-only RLS policy), rejects revoked or expired tokens, then, as the token's user, rechecks `allowed_users` and `users.mcp_enabled`. Any failure returns 401 with `WWW-Authenticate` and RFC 9728 metadata at `/.well-known/oauth-protected-resource/mcp`.
+- Access levels map to scopes: `read` → `gust:read`; `read_write` → `gust:read gust:write`. Every write tool checks the level itself and returns a "read-only" tool error otherwise.
+- The SDK's transport security accepts only the `MCP_PUBLIC_URL` host (plus local hosts outside production) and rejects any request carrying a browser `Origin` with 403.
+- Only `/mcp` and the metadata path are routed to the MCP app, so every other path keeps FastAPI routing and Gust's error envelope.
+
 ### Abuse Controls
 
 The backend owns request-abuse protection.
@@ -234,6 +246,7 @@ Required behavior:
 - centralized fixed-window rate limiting backed by Postgres, with an IP gate before auth/provider work and a user gate after local access-token validation
 - stricter per-user and per-IP limits on expensive capture/transcription/extraction endpoints
 - dedicated IP limits for unauthenticated mutations and shared-secret internal jobs
+- MCP traffic has its own loose IP scope (`mcp`, default `300/60,3000/3600`) because agents call from shared cloud IPs; the real control is per token, applied inside each tool because every MCP call is a POST: `mcp_read` (default `120/60`) and `mcp_write` (default `30/60,500/86400`)
 - the cheap `/health` liveness route stays independent of database-backed throttling so deploy health checks do not fail during a database incident
 - one-at-a-time per-user locking for expensive capture processing so duplicate in-flight submissions do not fan out provider calls
 - low-friction bot resistance through auth allowlisting, CSRF, same-origin checks, and throttling rather than CAPTCHA by default
@@ -249,6 +262,16 @@ The backend is a REST API with narrowly scoped resources:
 - tasks
 - groups
 - internal digest jobs
+- settings (notifications, agent access)
+- MCP agent endpoint (`POST /mcp`, optional, behind `MCP_SERVER_ENABLED`)
+
+MCP tools (all scoped to the token's user, all through `TaskService` / `GroupService`):
+
+- read: `get_context`, `list_groups`, `list_tasks` (status, group by ID or exact name, text search, due-date range, no-due-date, completion range, cursor), `get_task`
+- write: `create_task` (with up to 20 subtasks, in one transaction), `create_tasks` (1-20, all or nothing), `update_task` (partial: omitted fields are kept, `clear` removes description, due date, reminder or recurrence), `complete_task`, `reopen_task`, `restore_task`, `add_subtask`, `update_subtask`, `create_group`, `update_group`
+- destructive (MCP `destructiveHint`): `delete_task` (soft delete, `restore_task` undoes it), `delete_subtask` (permanent), `delete_group` (permanent, destination group required)
+
+Agent writes do not set `needs_review`. Create tools accept an `idempotency_key`; the audit row is written in the same transaction as the create, so a retried call replays the original result. When `update_task` leaves a stored reminder untouched and that reminder has already passed, the tool retries once with the reminder cleared and says so in the result, because Gust rejects a past reminder on every save. Every write records an `mcp_audit_events` row (`ok`, `error` or `denied`), shown in Settings as recent agent activity.
 
 `GET /tasks` accepts an optional `q` parameter of at most 200 characters. The task repository trims the value and performs a parameterized, case-insensitive literal substring match against title and description before pagination. Existing user, group, status, completion-window, and soft-delete filters still apply. Empty search text does not add a search condition.
 
@@ -263,6 +286,7 @@ Keep backend code separated by responsibility:
 - task write logic
 - digest delivery
 - recurrence generation
+- agent access (tokens, bearer resolution, audit) and agent operations (the MCP tool logic)
 
 Avoid large “god modules” and keep source files under repository limits.
 
@@ -277,6 +301,7 @@ Correctness rules:
 - backend authorization must not rely on implicit RLS behavior
 - Postgres runtime connections for authenticated API work set `app.current_user_id` per transaction
 - Postgres runtime connections for digest/cleanup work set `app.internal_job = true` per transaction
+- MCP bearer-token resolution sets only `app.mcp_token_lookup = true`, which RLS limits to reading `mcp_access_tokens`; the rest of the request runs as the token's user
 - RLS is enabled on user-owned tables as defense in depth, not as the only guard
 - RLS checks referenced parent ownership as well as the row's `user_id`, preventing cross-user foreign-key relationships if an application scoping bug is introduced
 - the runtime application role must not have `BYPASSRLS`
@@ -454,6 +479,7 @@ Required behavior:
 
 - delete expired capture rows in bounded batches
 - preserve tasks by nulling `tasks.capture_id` when the source capture is removed
+- delete `mcp_audit_events` rows older than `MCP_AUDIT_RETENTION_DAYS` (default 90) in bounded batches, during daily and weekly digest runs
 
 ## Data Model Expectations
 
@@ -490,6 +516,8 @@ If the schema cannot represent those contracts cleanly, the product spec is not 
 - Keep capture retention bounded.
 - Keep digest email content minimal.
 - Do not log provider response bodies, raw extraction payloads, or raw uploaded filenames.
+- MCP logs carry tool name, token ID, outcome, error code and duration only. Never log MCP tokens, their hashes or prefixes, tool arguments, or returned task text.
+- Agent access is opt-in per user. Task data an agent reads passes through that agent's provider (for Muse, Meta's cloud); Settings says so, and read-only tokens, required expiry and instant revoke are the user's controls.
 
 ## Observability
 

@@ -11,7 +11,7 @@ from starlette.responses import Response
 
 from app.core.concurrency import run_blocking
 from app.core.errors import build_error_response
-from app.core.rate_limits import RequestRateLimiter
+from app.core.rate_limits import RequestRateLimiter, is_mcp_path
 from app.core.request_security import set_response_security_headers
 from app.core.security import ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE
 from app.core.settings import Settings
@@ -98,6 +98,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return response, response_rate_limit.headers if response_rate_limit is not None else {}
 
     async def _resolve_rate_limit_user_id(self, request: Request) -> str | None:
+        if is_mcp_path(request.url.path):
+            # MCP requests authenticate with a bearer token only. Browser cookies are never
+            # read or refreshed on these paths.
+            return None
         access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
         if access_token:
             with timed_stage("auth.token"):

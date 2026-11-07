@@ -1,7 +1,7 @@
 # Gust Database Schema
 
-**Version:** 1.10
-**Last Updated:** 2026-07-14
+**Version:** 1.11
+**Last Updated:** 2026-11-07
 
 This document is the source of truth for the Gust v1 application schema. It defines the database contract required by the product spec in [PRD-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/PRD-Gust.md) and the implementation architecture in [Tech-Stack-Gust.md](/Users/sankal/Documents/professional/gust-app/docs/Tech-Stack-Gust.md).
 
@@ -54,6 +54,8 @@ Hosted and local Postgres deployments must enable and force row-level security o
 - `extracted_tasks`
 - `digest_dispatches`
 - `notification_preferences`
+- `mcp_access_tokens`
+- `mcp_audit_events`
 
 Policy contract:
 
@@ -65,6 +67,8 @@ Policy contract:
 - subtask and reminder policies also require the referenced task to belong to the current actor
 - staged extracted-task policies also require the referenced capture and group to belong to the current actor
 - internal jobs may bypass per-user matching only through the explicit `app.internal_job = true` policy path
+- MCP bearer-token resolution runs before the owner is known, so it uses a third actor: the transaction sets only `app.mcp_token_lookup = true`, and a `FOR SELECT` policy (`mcp_access_tokens_token_lookup`) lets that actor read `mcp_access_tokens` rows and nothing else. It cannot write any table or read any other table. Everything after the lookup runs as the token's user under `app.current_user_id`.
+- `mcp_audit_events` policies also require the referenced token to belong to the same user
 
 Application correctness must still keep explicit `user_id` filters in backend queries. RLS is defense in depth, not the only authorization boundary.
 
@@ -124,6 +128,8 @@ Application user profile keyed by the Supabase auth user ID.
 | `email` | `text` | No | Latest resolved user email for operational use. |
 | `display_name` | `text` | Yes | Optional user-facing name. |
 | `timezone` | `text` | No | IANA timezone, for example `America/Toronto`. |
+| `mcp_enabled` | `boolean` | No | Default `false`. Per-user switch for agent access over MCP. Turning it off revokes every token. |
+| `mcp_enabled_at` | `timestamptz` | Yes | Last time agent access was turned on. |
 | `created_at` | `timestamptz` | No | Default `now()`. |
 | `updated_at` | `timestamptz` | No | Default `now()`. |
 
@@ -400,6 +406,57 @@ Constraints and invariants:
 - Hosted `anon` and `authenticated` roles have no privileges; `gust_app_runtime` receives only application read/write access.
 - The full Pushover user key is encrypted at rest and never leaves the backend API.
 
+### `mcp_access_tokens`
+
+Per-user bearer tokens that let the user's own AI agent (for example Meta Muse) call the MCP endpoint at `/mcp` as that user. Created and revoked only from a signed-in browser session in Settings.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `uuid` | No | Primary key. Also the MCP `client_id` and the audit `token_id`. |
+| `user_id` | `uuid` | No | Foreign key to `users.id`, cascade delete. The token acts only as this user. |
+| `name` | `varchar(60)` | No | User label, for example `Muse`. Plain-text validated, not blank. |
+| `token_prefix` | `varchar(16)` | No | Display only: `gust_mcp_` plus the first 4 secret characters. |
+| `token_hash` | `varchar(64)` | No | Hex SHA-256 of the full token. Unique. The plaintext is never stored. |
+| `access_level` | `varchar(16)` | No | `read` or `read_write` (check constraint). |
+| `created_at` | `timestamptz` | No | Default `now()`. |
+| `expires_at` | `timestamptz` | No | Required: 30, 90 or 365 days after creation. |
+| `last_used_at` | `timestamptz` | Yes | Updated at most once a minute per token. |
+| `revoked_at` | `timestamptz` | Yes | Set on revoke, or for every token when the user turns agent access off. |
+
+Constraints and invariants:
+
+- Token format is `gust_mcp_` followed by 43 URL-safe characters (32 random bytes). The plaintext is returned once, in the create response with `Cache-Control: no-store`.
+- At most 5 unrevoked, unexpired tokens per user (enforced in the service).
+- A token is accepted only when it is unrevoked, unexpired, its user's email is still in `allowed_users`, and `users.mcp_enabled` is true. Every MCP request rechecks all four.
+- Tokens are never deleted by the application; revocation is an update. User deletion cascades.
+- Grants: `gust_app_runtime` has `SELECT, INSERT, UPDATE` only. Hosted `anon` and `authenticated` roles have no privileges.
+- RLS: `mcp_access_tokens_actor_rls` (owner or internal job, all commands) plus `mcp_access_tokens_token_lookup` (`FOR SELECT` when `app.mcp_token_lookup = true`).
+
+### `mcp_audit_events`
+
+One row per MCP write tool call: what was changed, by which token, and the outcome. Holds IDs and sanitized codes only, never titles, descriptions or arguments.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `uuid` | No | Primary key. |
+| `user_id` | `uuid` | No | Foreign key to `users.id`, cascade delete. |
+| `token_id` | `uuid` | No | Foreign key to `mcp_access_tokens.id`, cascade delete. Must belong to `user_id`. |
+| `tool_name` | `varchar(64)` | No | For example `create_task`. |
+| `target_type` | `varchar(16)` | Yes | `task`, `subtask` or `group` (check constraint). |
+| `target_id` | `uuid` | Yes | The affected row, when there is one. |
+| `target_ids` | `json` | Yes | Batch creates only: JSON array of created task IDs. |
+| `outcome` | `varchar(16)` | No | `ok`, `error` or `denied` (check constraint). |
+| `error_code` | `varchar(64)` | Yes | Sanitized Gust error code, for example `read_only_token`. |
+| `idempotency_key` | `varchar(64)` | Yes | Set only on successful creates that supplied one. |
+| `created_at` | `timestamptz` | No | Default `now()`. |
+
+Constraints and invariants:
+
+- Partial unique index on `(token_id, idempotency_key)` where `idempotency_key is not null`. Create tools write their audit row in the same transaction as the create, so this index is what turns a retried call into a replay instead of a duplicate.
+- Reads are not audited.
+- Rows older than `MCP_AUDIT_RETENTION_DAYS` (default 90) are deleted in batches of 500 by the daily and weekly digest runs, under the internal-job actor.
+- Grants: `gust_app_runtime` has `SELECT, INSERT, DELETE` only (delete for retention). Hosted `anon` and `authenticated` roles have no privileges.
+
 ### `rate_limit_counters`
 
 Backend-owned shared counter table for fixed-window rate limiting and bounded abuse tracking.
@@ -441,7 +498,8 @@ Constraints and invariants:
 
 ## Cross-Table Rules
 
-- `tasks.user_id`, `groups.user_id`, `subtasks.user_id`, `captures.user_id`, `reminders.user_id`, and `digest_dispatches.user_id` must all match the owning `users.id`.
+- `tasks.user_id`, `groups.user_id`, `subtasks.user_id`, `captures.user_id`, `reminders.user_id`, `digest_dispatches.user_id`, `mcp_access_tokens.user_id`, and `mcp_audit_events.user_id` must all match the owning `users.id`.
+- `mcp_audit_events.token_id` must reference a token owned by the same user.
 - `tasks.group_id` must reference a group owned by the same user.
 - `subtasks.task_id` must reference a task owned by the same user.
 - `reminders.task_id` must reference a task owned by the same user.
@@ -474,6 +532,8 @@ The initial migration set should include indexes for:
 - `extracted_tasks (user_id)` for user queries
 - `extracted_tasks (capture_id)` for capture queries
 - `extracted_tasks (user_id, status)` for pending task queries
+- `mcp_access_tokens (token_hash)` unique, and `(user_id, created_at desc)`
+- `mcp_audit_events (user_id, created_at desc)`, `(created_at)` for retention, `(token_id)`, and `(token_id, idempotency_key)` unique where `idempotency_key is not null`
 - `rate_limit_counters (expires_at)` for bounded cleanup
 - `rate_limit_counters (scope, subject_key, window_start, window_seconds)` primary key for atomic fixed-window enforcement
 
@@ -485,6 +545,7 @@ The initial migration set should include indexes for:
 - Reminder rows may be retained for legacy audit history.
 - Digest dispatch rows are retained for idempotency and operational audit.
 - Expired `rate_limit_counters` rows may be deleted in bounded cleanup passes.
+- `mcp_audit_events` rows are deleted after `MCP_AUDIT_RETENTION_DAYS` (default 90) in bounded batches. `mcp_access_tokens` rows are kept, revoked or expired, as the record of what was granted.
 - Task, subtask, group, and user retention policy is outside Phase 0 and should not conflict with reminder or capture cleanup.
 
 ## Deferred Decisions

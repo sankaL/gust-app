@@ -52,6 +52,10 @@ from app.services.task_rules import (
     normalize_task_fields,
 )
 
+PAST_DATE_REMINDER_MESSAGE = "Date-only reminder cannot be in the past."
+PAST_TIMED_REMINDER_MESSAGE = "Date-and-time reminder must be in the future."
+PAST_REMINDER_MESSAGES = frozenset({PAST_DATE_REMINDER_MESSAGE, PAST_TIMED_REMINDER_MESSAGE})
+
 
 @dataclass
 class TaskListItem:
@@ -116,6 +120,9 @@ class TaskService:
         search_query: str | None = None,
         completed_start: date | None = None,
         completed_end: date | None = None,
+        due_start: date | None = None,
+        due_end: date | None = None,
+        no_due_date: bool = False,
     ) -> PaginatedTaskList:
         with (
             timed_stage("db.tasks.list"),
@@ -150,6 +157,9 @@ class TaskService:
                 search_query=search_query.strip() if search_query else None,
                 completed_start=completed_start_at,
                 completed_end=completed_end_at,
+                due_start=due_start,
+                due_end=due_end,
+                no_due_date=no_due_date,
             )
 
         items = [
@@ -189,51 +199,87 @@ class TaskService:
         payload: TaskCreateInput,
     ) -> TaskDetail:
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            destination_group = get_group(connection, user_id=user_id, group_id=payload.group_id)
-            if destination_group is None:
-                raise GroupNotFoundError("Destination group could not be found.")
-
-            normalized = self._normalize_fields(
-                title=payload.title,
-                due_date=payload.due_date,
-                reminder_at=payload.reminder_at,
-                reminder_date=payload.reminder_date,
-                recurrence=payload.recurrence,
-                user_timezone=user_timezone,
-                current_series_id=None,
-            )
-
-            created = create_task(
+            return self.create_task_in_transaction(
                 connection,
                 user_id=user_id,
-                group_id=payload.group_id,
-                capture_id=None,
-                title=normalized.title,
-                needs_review=False,
-                description=normalize_task_description(payload.description, title=normalized.title),
-                due_date=normalized.due_date,
-                reminder_at=normalized.reminder_at,
-                reminder_date=normalized.reminder_date,
-                reminder_offset_minutes=normalized.reminder_offset_minutes,
-                recurrence_frequency=normalized.recurrence_frequency,
-                recurrence_interval=normalized.recurrence_interval,
-                recurrence_weekday=normalized.recurrence_weekday,
-                recurrence_day_of_month=normalized.recurrence_day_of_month,
-                recurrence_month=normalized.recurrence_month,
-                series_id=normalized.series_id,
+                user_timezone=user_timezone,
+                payload=payload,
             )
-            self._sync_reminder(
+
+    def create_task_in_transaction(
+        self,
+        connection: sa.Connection,
+        *,
+        user_id: str,
+        user_timezone: str,
+        payload: TaskCreateInput,
+        subtask_titles: list[str] | None = None,
+    ) -> TaskDetail:
+        """Create a task, and optionally its subtasks, inside the caller's user-scoped
+        transaction, so the caller can commit it together with its own writes."""
+        destination_group = get_group(connection, user_id=user_id, group_id=payload.group_id)
+        if destination_group is None:
+            raise GroupNotFoundError("Destination group could not be found.")
+
+        normalized = self._normalize_fields(
+            title=payload.title,
+            due_date=payload.due_date,
+            reminder_at=payload.reminder_at,
+            reminder_date=payload.reminder_date,
+            recurrence=payload.recurrence,
+            user_timezone=user_timezone,
+            current_series_id=None,
+        )
+
+        created = create_task(
+            connection,
+            user_id=user_id,
+            group_id=payload.group_id,
+            capture_id=None,
+            title=normalized.title,
+            needs_review=False,
+            description=normalize_task_description(payload.description, title=normalized.title),
+            due_date=normalized.due_date,
+            reminder_at=normalized.reminder_at,
+            reminder_date=normalized.reminder_date,
+            reminder_offset_minutes=normalized.reminder_offset_minutes,
+            recurrence_frequency=normalized.recurrence_frequency,
+            recurrence_interval=normalized.recurrence_interval,
+            recurrence_weekday=normalized.recurrence_weekday,
+            recurrence_day_of_month=normalized.recurrence_day_of_month,
+            recurrence_month=normalized.recurrence_month,
+            series_id=normalized.series_id,
+        )
+        if subtask_titles:
+            create_subtasks(
                 connection,
                 user_id=user_id,
-                task=created,
-                user_timezone=user_timezone,
-                now=datetime.now(UTC),
+                task_id=created.id,
+                titles=[self._normalize_subtask_title(title) for title in subtask_titles],
             )
-            group = get_group(connection, user_id=user_id, group_id=created.group_id)
-            assert group is not None
-            task_subtasks = list_subtasks(connection, user_id=user_id, task_id=created.id)
+        self._sync_reminder(
+            connection,
+            user_id=user_id,
+            task=created,
+            user_timezone=user_timezone,
+            now=datetime.now(UTC),
+        )
+        group = get_group(connection, user_id=user_id, group_id=created.group_id)
+        assert group is not None
+        task_subtasks = list_subtasks(connection, user_id=user_id, task_id=created.id)
 
         return TaskDetail(task=created, group=group, subtasks=task_subtasks)
+
+    @staticmethod
+    def _normalize_subtask_title(title: str) -> str:
+        try:
+            return validate_plain_text(
+                title,
+                field_name="Subtask title",
+                max_length=MAX_TITLE_CHARS,
+            )
+        except ValueError as exc:
+            raise InvalidSubtaskError(str(exc)) from exc
 
     def update_task(
         self,
@@ -680,6 +726,27 @@ class TaskService:
 
         return list_groups_with_counts(connection, user_id=user_id)
 
+    def validate_task_fields(
+        self,
+        *,
+        title: str,
+        due_date: date | None,
+        reminder_at: datetime | None,
+        reminder_date: date | None,
+        recurrence: RecurrenceInput | None,
+        user_timezone: str,
+    ) -> None:
+        """Run the create-time field rules without writing anything. Raises InvalidTaskError."""
+        self._normalize_fields(
+            title=title,
+            due_date=due_date,
+            reminder_at=reminder_at,
+            reminder_date=reminder_date,
+            recurrence=recurrence,
+            user_timezone=user_timezone,
+            current_series_id=None,
+        )
+
     def _normalize_fields(
         self,
         *,
@@ -697,9 +764,9 @@ class TaskService:
                 reminder_date is not None
                 and reminder_date < now.astimezone(ZoneInfo(user_timezone)).date()
             ):
-                raise ValueError("Date-only reminder cannot be in the past.")
+                raise ValueError(PAST_DATE_REMINDER_MESSAGE)
             if reminder_at is not None and reminder_at <= now:
-                raise ValueError("Date-and-time reminder must be in the future.")
+                raise ValueError(PAST_TIMED_REMINDER_MESSAGE)
             return normalize_task_fields(
                 title=title,
                 due_date=due_date,

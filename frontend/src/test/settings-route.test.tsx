@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppProviders } from '../providers'
 import { SettingsRoute } from '../routes/SettingsRoute'
 import {
+  getAgentAccess,
   getNotificationSettings,
   getSessionStatus,
   type NotificationSettings,
@@ -16,6 +17,7 @@ vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
   return {
     ...actual,
+    getAgentAccess: vi.fn(),
     getNotificationSettings: vi.fn(),
     getSessionStatus: vi.fn(),
   }
@@ -23,6 +25,7 @@ vi.mock('../lib/api', async () => {
 
 const mockedGetNotificationSettings = vi.mocked(getNotificationSettings)
 const mockedGetSessionStatus = vi.mocked(getSessionStatus)
+const mockedGetAgentAccess = vi.mocked(getAgentAccess)
 
 const settings: NotificationSettings = {
   email_daily_enabled: true,
@@ -44,6 +47,14 @@ beforeEach(() => {
   mockedGetSessionStatus.mockReset()
   mockedGetNotificationSettings.mockResolvedValue(settings)
   mockedGetSessionStatus.mockResolvedValue(signedInSession())
+  mockedGetAgentAccess.mockResolvedValue({
+    available: false,
+    enabled: false,
+    endpoint_url: null,
+    max_active_tokens: 5,
+    expiry_day_choices: [30, 90, 365],
+    tokens: [],
+  })
 })
 
 afterEach(() => {

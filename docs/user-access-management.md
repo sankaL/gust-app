@@ -77,6 +77,15 @@ where email = 'olduser@example.com';
 
 If no row is returned, allowlist access is revoked. Gust re-checks the allowlist on every request, so any open session stops working on the user's next request.
 
+The same check covers agent access: any MCP token the user created stops working on its next request. To also cut agent tokens off for good (so restoring the email later does not revive them), revoke them:
+
+```sql
+update public.mcp_access_tokens
+set revoked_at = now()
+where revoked_at is null
+  and user_id = (select id from public.users where email = 'olduser@example.com');
+```
+
 ## Important Notes
 
 - Emails are normalized to lowercase + trimmed by database trigger logic, and the sign-in form normalizes the same way.

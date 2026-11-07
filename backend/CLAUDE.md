@@ -16,6 +16,8 @@ Keep this file focused on **durable backend engineering rules** for Gust. Do not
   - tasks
   - groups
   - internal reminder jobs
+  - settings (notifications, agent access)
+  - the optional MCP agent endpoint (`/mcp`), behind `MCP_SERVER_ENABLED`
 - Keep route handlers narrow and push orchestration/business logic into dedicated services as the codebase grows.
 - Local development and testing should support an env-driven dev mode that uses the Makefile-managed Docker stack and local database services instead of hosted production infrastructure.
 
@@ -23,6 +25,7 @@ Keep this file focused on **durable backend engineering rules** for Gust. Do not
 - Every data read/write must be explicitly scoped by authenticated `user_id`.
 - Backend correctness must **not** rely on implicit Supabase RLS behavior; treat RLS as defense in depth if present.
 - Use backend-managed secure cookie sessions. Unsafe HTTP methods require CSRF protection.
+- `/mcp` is the only bearer-token surface: it never reads cookies, cookie routes never accept bearer tokens, and agent tokens are created or revoked only through a cookie session with CSRF. MCP tools act only as the token's user and go through the same task and group services as the REST routes.
 - Missing or invalid auth/config/permissions must fail closed.
 - Use parameterized SQL only; never interpolate runtime identifiers unless they come from an explicit allowlist.
 - Sanitize errors and keep secrets, raw provider payloads, and unnecessary transcript content out of logs.

@@ -67,5 +67,7 @@ def configure_logging(level: str) -> None:
         "httpx",
         "httpx2",
         "httpcore",
+        # The MCP SDK logs session lifecycle at INFO. Host and Origin rejections stay visible.
+        "mcp",
     ):
         logging.getLogger(logger_name).setLevel(logging.WARNING)

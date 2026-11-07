@@ -129,6 +129,63 @@ Deployment implication:
 
 Phase 8 introduces `0008_digest_dispatches` as the required application revision.
 
+## Revision 0020 (MCP Agent Access)
+
+`0020_mcp_agent_access` lets each user connect their own AI agent (Meta Muse first) to Gust through the MCP endpoint `POST /mcp` on the existing backend service. It is additive:
+
+- `users.mcp_enabled` (default `false`) and `users.mcp_enabled_at`
+- `mcp_access_tokens` (hashed per-user bearer tokens) with forced RLS, the owner policy, and the `FOR SELECT` token-lookup policy keyed on `app.mcp_token_lookup`
+- `mcp_audit_events` (one row per write tool call, IDs and codes only) with forced RLS and a token-ownership check
+- grants for `gust_app_runtime`: `SELECT, INSERT, UPDATE` on `mcp_access_tokens`, `SELECT, INSERT, DELETE` on `mcp_audit_events`; nothing for `anon` / `authenticated`
+
+The backend's default `REQUIRED_ALEMBIC_REVISION` moves to `0020_mcp_agent_access`. An explicit older value in Railway still passes, because newer revisions are accepted.
+
+### Railway rollout (flag first)
+
+Railway's GitHub auto-deploy ships backend and frontend together when `main` changes, so the runbook's backend-before-frontend order is enforced by the server flag, not by deploy order:
+
+1. Before merging: confirm `MIGRATION_DATABASE_URL` is set on the backend service, a recoverable Supabase backup exists, and `python scripts/prod/check-postgres-rls.py --database-url "$DATABASE_URL"` passes.
+2. Add backend variables in Railway: `MCP_SERVER_ENABLED=false`, `MCP_PUBLIC_URL=https://api.gustapp.ca/mcp`. Optional overrides: `RATE_LIMIT_MCP_IP` (default `300/60,3000/3600`), `RATE_LIMIT_MCP_READ_TOKEN` (default `120/60`), `RATE_LIMIT_MCP_WRITE_TOKEN` (default `30/60,500/86400`), `MCP_AUDIT_RETENTION_DAYS` (default `90`). Settings validation refuses to start in production if the flag is on and `MCP_PUBLIC_URL` is missing, not `https`, or not the `/mcp` path.
+3. Merge. preDeploy runs `alembic upgrade head` (applies `0020`). With the flag off, `/mcp` returns 404 and `GET /settings/agent-access` returns `available=false`, so the frontend section stays hidden even though it ships in the same deploy.
+4. Verify the migration (queries below), then set `MCP_SERVER_ENABLED=true`. The variable change redeploys the backend.
+5. Smoke checks from a terminal:
+   - `POST /mcp` with no token → `401`, `WWW-Authenticate: Bearer …` with an **https** `resource_metadata` URL
+   - `GET /.well-known/oauth-protected-resource/mcp` → `resource` is `https://api.gustapp.ca/mcp`
+   - `POST /mcp` with `Origin: https://example.com` → `403`
+   - no `421` responses on `api.gustapp.ca` (a 421 means the MCP host allowlist does not match `MCP_PUBLIC_URL`)
+   - optionally rerun the deploy script with `MCP_VERIFY=true`, which fails unless unauthenticated `POST /mcp` answers `401`
+6. In Gust Settings → Agent access: turn it on, generate a **Read only** 30-day token, and check it with the MCP Inspector (`npx @modelcontextprotocol/inspector`, Streamable HTTP, bearer header): `tools/list`, `get_context`, `list_tasks`. Revoke it and confirm the next call returns `401`.
+7. Generate the token Muse will use, paste the setup message from Settings into Muse, and give it the token through Muse's secure credential prompt. Ask Muse "what's due this week in Gust?". Test write tools with a Read & write token on a throwaway group first.
+
+Verification queries (runtime or admin connection):
+
+```sql
+SELECT version_num FROM alembic_version;                 -- 0020_mcp_agent_access
+SELECT relname, relrowsecurity, relforcerowsecurity
+  FROM pg_class WHERE relname IN ('mcp_access_tokens', 'mcp_audit_events');   -- both t, t
+SELECT policyname, cmd FROM pg_policies
+ WHERE tablename IN ('mcp_access_tokens', 'mcp_audit_events');
+-- mcp_access_tokens_actor_rls ALL, mcp_access_tokens_token_lookup SELECT, mcp_audit_events_actor_rls ALL
+SELECT grantee, table_name, string_agg(privilege_type, ',' ORDER BY privilege_type)
+  FROM information_schema.role_table_grants
+ WHERE table_name IN ('mcp_access_tokens', 'mcp_audit_events')
+ GROUP BY 1, 2;
+-- gust_app_runtime: INSERT,SELECT,UPDATE on tokens; DELETE,INSERT,SELECT on audit; no anon/authenticated rows
+SELECT count(*) FROM users WHERE mcp_enabled;            -- 0 right after the migration
+```
+
+`scripts/prod/check-postgres-rls.py` now includes both tables and fails unless the token-lookup policy exists as `SELECT` only.
+
+### Kill switches (fastest first)
+
+1. One token leaked: revoke it in Settings. It fails on its next request.
+2. One user: turn agent access off in Settings, which revokes all of that user's tokens.
+3. Everyone, emergency SQL: `UPDATE mcp_access_tokens SET revoked_at = now() WHERE revoked_at IS NULL;`
+4. Server-wide: set `MCP_SERVER_ENABLED=false` in Railway. The backend redeploys and `/mcp` returns 404.
+5. Code rollback: redeploy the previous backend deployment. `0020` is additive, so older code runs against it. Do not downgrade the migration in production; its `downgrade()` is a deliberate no-op that keeps token and audit rows.
+
+Monitoring: Railway logs carry `mcp_tool_called` (tool, token ID, outcome, error code, duration), `mcp_auth_failed` (reason: `malformed`, `unknown`, `revoked`, `expired`, `not_allowlisted`, `disabled`), `mcp_tool_failed`, and `mcp_audit_failed`. None of them contain tokens, titles, descriptions or arguments. `request_completed` covers `/mcp` latency.
+
 ## Revision 0019 (Notification Preferences and Pushover Reminders)
 
 Deploy `0019_pushover_reminders` before enabling Pushover delivery. It creates default notification-preference rows for every user, adds `reminder_date`, retry scheduling, and digest channel idempotency without converting legacy exact-time values. Configure provider and Fernet secrets on the backend first, keep `PUSHOVER_NOTIFICATIONS_ENABLED=false` through callback/test validation, then deploy the five-minute task cron. Disable the feature flag and task cron to roll back delivery safely; email digests remain independent.
@@ -320,6 +377,7 @@ Current production deployment contract:
   - `https://gustapp.ca`
   - `https://api.gustapp.ca`
   - `https://auth.gustapp.ca`
+- the MCP endpoint `https://api.gustapp.ca/mcp` (and `/.well-known/oauth-protected-resource/mcp`) is served by the backend service itself, behind `MCP_SERVER_ENABLED`; there is no separate MCP service, domain or cron. Audit retention runs inside the existing daily and weekly digest jobs.
 
 Production database ownership rules:
 
@@ -331,6 +389,7 @@ Production database ownership rules:
 - the backend runtime role must retain only `SELECT` on `public.allowed_users`, because sign-in and session-refresh auth checks read that table directly
 - the backend runtime role may retain only `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `public.rate_limit_counters`
 - the backend runtime role must retain only `SELECT` on `public.alembic_version` for startup revision verification
+- the backend runtime role may retain only `SELECT`, `INSERT`, `UPDATE` on `public.mcp_access_tokens` and `SELECT`, `INSERT`, `DELETE` on `public.mcp_audit_events`
 - do not use `supabase db push` for the application schema
 - backend deploys are expected to run `alembic upgrade head` before startup and then pass the startup revision check
 - backend predeploy/start commands must invoke `/app/.venv/bin/alembic` and `/app/.venv/bin/uvicorn` explicitly (or otherwise preserve the image virtual-environment path); do not use a login shell that resets the Docker image `PATH`
@@ -365,7 +424,7 @@ Minimum verification after applying schema-affecting changes:
 - Backend startup revision check passes.
 - `scripts/prod/check-postgres-rls.py` passes against the runtime `DATABASE_URL`.
 - The current Postgres runtime role reports `rolbypassrls = false`.
-- `users`, `groups`, `captures`, `tasks`, `subtasks`, `reminders`, `extracted_tasks`, and `digest_dispatches` all report both `row_security = true` and `force_row_security = true`.
+- `users`, `groups`, `captures`, `tasks`, `subtasks`, `reminders`, `extracted_tasks`, `digest_dispatches`, `mcp_access_tokens`, and `mcp_audit_events` all report both `row_security = true` and `force_row_security = true`.
 - `users.timezone` exists and accepts valid IANA timezone data.
 - Each sampled user has exactly one Inbox group with `system_key = 'inbox'`.
 - No task row has a null `group_id`.
@@ -408,9 +467,17 @@ For digest-related releases, also verify:
 - the internal digest route rejects missing or invalid shared-secret auth
 - `POST /internal/reminders/run?mode=daily` succeeds with shared-secret auth
 - `POST /internal/reminders/run?mode=weekly` succeeds with shared-secret auth
-- digest summary response returns mode-specific counters (`users_processed`, `sent`, `skipped_empty`, `failed`, `captures_deleted`)
+- digest summary response returns mode-specific counters (`users_processed`, `sent`, `skipped_empty`, `failed`, `captures_deleted`, `mcp_audit_events_deleted`)
 - digest dispatch rows store provider message IDs for `sent` rows and `skipped_empty` status for empty periods
 - expired captures are deleted in bounded batches and task rows survive with `capture_id = null`
+
+For MCP agent-access releases, also verify:
+
+- with `MCP_SERVER_ENABLED=false`, `POST /mcp` returns 404 and `GET /settings/agent-access` returns `available=false`
+- with it on, unauthenticated `POST /mcp` returns 401 with an https `resource_metadata` URL, a browser `Origin` gets 403, and `api.gustapp.ca` never gets 421
+- a read-only token gets a "read-only" tool error from any write tool, and an audit row with `outcome = 'denied'`
+- revoking a token, turning access off, or removing the email from `allowed_users` makes the next call return 401
+- one user's token gets "not found" for another user's task and group IDs
 
 For RLS-related releases, also verify:
 

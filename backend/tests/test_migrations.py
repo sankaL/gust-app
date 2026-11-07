@@ -489,3 +489,48 @@ def test_phase10_migration_noops_for_sqlite() -> None:
     module.upgrade()
 
     assert executed_sql == []
+
+
+def test_phase20_migration_adds_mcp_tables_with_forced_rls_and_lookup_policy() -> None:
+    import contextlib
+    from unittest.mock import MagicMock
+
+    migration_path = (
+        Path(__file__).resolve().parents[1] / "alembic" / "versions" / "0020_mcp_agent_access.py"
+    )
+    spec = importlib.util.spec_from_file_location("mcp_agent_access", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    class _Dialect:
+        name = "postgresql"
+
+    class _Bind:
+        dialect = _Dialect()
+
+    executed_sql: list[str] = []
+    created_tables: list[str] = []
+    module.op.get_bind = lambda: _Bind()
+    module.op.execute = lambda statement: executed_sql.append(statement)
+    module.op.create_table = lambda name, *args, **kwargs: created_tables.append(name)
+    module.op.create_index = lambda *args, **kwargs: None
+    module.op.batch_alter_table = lambda *args, **kwargs: contextlib.nullcontext(MagicMock())
+
+    module.upgrade()
+
+    assert module.revision == "0020_mcp_agent_access"
+    assert len(module.revision) <= 32
+    assert module.down_revision == "0019_pushover_reminders"
+    assert created_tables == ["mcp_access_tokens", "mcp_audit_events"]
+    for table_name in created_tables:
+        assert f"ALTER TABLE public.{table_name} FORCE ROW LEVEL SECURITY" in executed_sql
+    lookup_policy = next(sql for sql in executed_sql if "mcp_access_tokens_token_lookup" in sql)
+    assert "FOR SELECT" in lookup_policy
+    assert "app.mcp_token_lookup" in lookup_policy
+    audit_policy = next(sql for sql in executed_sql if "mcp_audit_events_actor_rls" in sql)
+    assert "owner_token.user_id = mcp_audit_events.user_id" in audit_policy
+    grants = next(sql for sql in executed_sql if "gust_app_runtime" in sql)
+    assert "GRANT SELECT, INSERT, UPDATE ON TABLE public.mcp_access_tokens" in grants
+    assert "GRANT SELECT, INSERT, DELETE ON TABLE public.mcp_audit_events" in grants

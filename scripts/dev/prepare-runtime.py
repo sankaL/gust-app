@@ -26,7 +26,7 @@ COMPOSE_SERVICE_PORTS = {
 LOCAL_ENV_DEFAULTS = {
     "APP_ENV": "development",
     "GUST_DEV_MODE": "true",
-    "REQUIRED_ALEMBIC_REVISION": "0019_pushover_reminders",
+    "REQUIRED_ALEMBIC_REVISION": "0020_mcp_agent_access",
     "RUN_STARTUP_CHECKS": "true",
     "LOG_LEVEL": "INFO",
     "SESSION_COOKIE_SECURE": "false",
@@ -45,6 +45,9 @@ LOCAL_ENV_DEFAULTS = {
     "REMINDER_BATCH_SIZE": "50",
     "REMINDER_CLAIM_TIMEOUT_SECONDS": "600",
     "REMINDER_REQUEST_TIMEOUT_SECONDS": "10",
+    # Agent access over MCP is on locally so the MCP Inspector can connect to /mcp.
+    "MCP_SERVER_ENABLED": "true",
+    "MCP_PUBLIC_URL": "",
     "VITE_GUST_DEV_MODE": "true",
     "VITE_ADMIN_EMAIL": "sanka.lokuliyana@gmail.com",
 }
@@ -77,6 +80,8 @@ RUNTIME_KEYS = (
     "REMINDER_BATCH_SIZE",
     "REMINDER_CLAIM_TIMEOUT_SECONDS",
     "REMINDER_REQUEST_TIMEOUT_SECONDS",
+    "MCP_SERVER_ENABLED",
+    "MCP_PUBLIC_URL",
     "VITE_GUST_DEV_MODE",
     "VITE_API_BASE_URL",
     "VITE_ADMIN_EMAIL",

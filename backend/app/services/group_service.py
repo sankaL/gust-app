@@ -49,6 +49,24 @@ class GroupService:
         name: str,
         description: str | None,
     ) -> GroupRecord:
+        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
+            return self.create_group_in_transaction(
+                connection,
+                user_id=user_id,
+                name=name,
+                description=description,
+            )
+
+    def create_group_in_transaction(
+        self,
+        connection: sa.Connection,
+        *,
+        user_id: str,
+        name: str,
+        description: str | None,
+    ) -> GroupRecord:
+        """Create a group inside the caller's user-scoped transaction. A name conflict raises
+        ConflictError and leaves the transaction to be rolled back by the caller."""
         try:
             normalized_name = validate_plain_text(
                 name,
@@ -63,16 +81,15 @@ class GroupService:
         except ValueError as exc:
             raise InvalidGroupError(str(exc)) from exc
 
-        with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            try:
-                return create_group(
-                    connection,
-                    user_id=user_id,
-                    name=normalized_name,
-                    description=normalized_description,
-                )
-            except sa.exc.IntegrityError as exc:
-                raise self._map_group_conflict(exc) from exc
+        try:
+            return create_group(
+                connection,
+                user_id=user_id,
+                name=normalized_name,
+                description=normalized_description,
+            )
+        except sa.exc.IntegrityError as exc:
+            raise self._map_group_conflict(exc) from exc
 
     def update_group(
         self,

@@ -28,6 +28,7 @@ from app.core.settings import Settings, get_settings
 from app.core.timing import timed_stage
 from app.db.engine import user_connection_scope
 from app.db.repositories import SessionContext, get_session_context, is_email_allowed
+from app.services.agent_access import AgentAccessService
 from app.services.auth import (
     AuthenticatedIdentity,
     AuthService,
@@ -106,6 +107,10 @@ def get_staging_service(settings: SettingsDep) -> StagingService:
 
 def get_task_service(settings: SettingsDep) -> TaskService:
     return TaskService(settings=settings)
+
+
+def get_agent_access_service(settings: SettingsDep) -> AgentAccessService:
+    return AgentAccessService(settings=settings)
 
 
 def get_resend_reminder_service(settings: SettingsDep) -> ResendReminderService:

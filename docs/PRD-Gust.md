@@ -1,7 +1,7 @@
 # PRD: Gust
 
-**Version:** 2.1  
-**Last Updated:** 2026-06-03  
+**Version:** 2.2  
+**Last Updated:** 2026-11-07  
 **Domain:** gustapp.ca
 
 ## Product Summary
@@ -32,7 +32,7 @@ The product is optimized for low-friction capture, not for deep project manageme
 - Push notifications
 - Full offline task creation and sync
 - Rich note-taking or document storage
-- Natural-language back-and-forth chat with the assistant
+- Natural-language back-and-forth chat with the assistant inside Gust (a user's own external agent may connect through Agent Access instead)
 
 ## Target User
 
@@ -129,6 +129,18 @@ Users can independently disable either email digest in Settings. No other remind
 - A task reminder summarizes the task using the same hierarchy as task preview: status, group, title, context, due date, reminder, recurrence, and checklist progress. Provider-supported emphasis may enhance the opened message, but the content must remain readable when the operating system strips that emphasis.
 - The reminder's `Open in Gust` action opens the URL-backed task preview with the selected task preserved across authentication and mobile/desktop mode resolution. An open task can be completed through the preview's existing completion flow.
 - Explicit reminder language and clearly scheduled events can create reminder metadata. Ordinary timed errands must not create a reminder automatically. Ambiguous or past extracted reminders are flagged for review.
+
+### 5b. Agent Access (MCP)
+
+- Optional and per user. In Settings → Agent access (MCP), a user turns access on and generates tokens that let an AI agent they use, starting with Meta Muse, read and change their own Gust data through the MCP endpoint. A token works only for that user's account; there is no admin or cross-account token.
+- Token choices: a name (default "Muse"), **Read only** or **Read & write**, and a required expiry of 30 days, 90 days (default) or 1 year. At most 5 active tokens. The token is shown once, with a copy button, the endpoint URL and a ready-made setup message for Muse, and a warning not to paste it into a chat.
+- Turning agent access off revokes every token, so turning it back on never revives an old one. Revoking a token, or removing the user's email from the allowlist, stops it on its next request.
+- Scope: tasks, subtasks and groups, with read, create, update and delete. A read-only token can only read.
+- Agent writes go straight in. They do not land in the review queue, and created tasks are not flagged for review. Agent-created tasks with no group go to the Inbox; agents name a group by ID or exact name and never create a group as a side effect.
+- The same task rules apply as in the app: reminders must be in the future, recurrence other than daily needs a due date, the Inbox cannot be renamed or deleted, and deleting a group needs a destination for its tasks.
+- Deleting a task is a soft delete the agent can undo. Deleting a subtask or a group is permanent; those tools are marked destructive so the agent asks the user each time.
+- Settings lists active tokens (name, access, last used, expiry) and recent agent activity (what was changed, blocked or failed).
+- Task details an agent reads pass through that agent's provider (for Muse, Meta's cloud). Settings says so before a token is created.
 
 ### 6. Installable PWA
 
@@ -494,6 +506,7 @@ V1 behavior:
 - The initial retention target is 7 days for capture records.
 - Logs must not contain auth tokens, raw provider payloads, or full transcript text.
 - Digest emails contain only the minimum task information needed to be useful.
+- Agent access tokens are stored only as hashes. Agent activity records IDs and outcomes, never task text, and is kept for 90 days.
 
 ## Security Requirements
 
@@ -503,7 +516,8 @@ V1 behavior:
 - Missing or invalid auth must fail closed.
 - Public, authenticated, capture, and internal-job endpoints must have bounded abuse controls before expensive auth/provider work.
 - AI provider keys remain server-side only.
-- Destructive actions require either explicit confirmation or a visible undo path.
+- Destructive actions require either explicit confirmation or a visible undo path. For agents, task deletes are undoable and permanent deletes are marked destructive so the agent asks every time.
+- Agent tokens are created and revoked only from a signed-in browser session, never by another token.
 
 ## Success Metrics
 

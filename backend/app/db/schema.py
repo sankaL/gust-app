@@ -56,6 +56,8 @@ users = sa.Table(
     sa.Column("email", sa.Text(), nullable=False, unique=True),
     sa.Column("display_name", sa.Text(), nullable=True),
     sa.Column("timezone", sa.Text(), nullable=False),
+    sa.Column("mcp_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
+    sa.Column("mcp_enabled_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column(
         "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
     ),
@@ -350,6 +352,71 @@ rate_limit_counters = sa.Table(
     ),
 )
 
+mcp_access_tokens = sa.Table(
+    "mcp_access_tokens",
+    metadata,
+    sa.Column("id", sa.Uuid(as_uuid=False), primary_key=True),
+    sa.Column(
+        "user_id",
+        sa.Uuid(as_uuid=False),
+        sa.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("name", sa.String(length=60), nullable=False),
+    sa.Column("token_prefix", sa.String(length=16), nullable=False),
+    sa.Column("token_hash", sa.String(length=64), nullable=False, unique=True),
+    sa.Column("access_level", sa.String(length=16), nullable=False),
+    sa.Column(
+        "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+    sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
+    sa.CheckConstraint(
+        "access_level IN ('read', 'read_write')",
+        name="ck_mcp_access_tokens_access_level",
+    ),
+    sa.CheckConstraint("length(trim(name)) > 0", name="ck_mcp_access_tokens_name_not_blank"),
+    sa.CheckConstraint("length(token_hash) = 64", name="ck_mcp_access_tokens_hash_length"),
+)
+
+mcp_audit_events = sa.Table(
+    "mcp_audit_events",
+    metadata,
+    sa.Column("id", sa.Uuid(as_uuid=False), primary_key=True),
+    sa.Column(
+        "user_id",
+        sa.Uuid(as_uuid=False),
+        sa.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column(
+        "token_id",
+        sa.Uuid(as_uuid=False),
+        sa.ForeignKey("mcp_access_tokens.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("tool_name", sa.String(length=64), nullable=False),
+    sa.Column("target_type", sa.String(length=16), nullable=True),
+    sa.Column("target_id", sa.Uuid(as_uuid=False), nullable=True),
+    # Batch creates record every created task ID here, as a JSON array of strings.
+    sa.Column("target_ids", sa.JSON(), nullable=True),
+    sa.Column("outcome", sa.String(length=16), nullable=False),
+    sa.Column("error_code", sa.String(length=64), nullable=True),
+    sa.Column("idempotency_key", sa.String(length=64), nullable=True),
+    sa.Column(
+        "created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp_default
+    ),
+    sa.CheckConstraint(
+        "outcome IN ('ok', 'error', 'denied')",
+        name="ck_mcp_audit_events_outcome",
+    ),
+    sa.CheckConstraint(
+        "target_type IS NULL OR target_type IN ('task', 'subtask', 'group')",
+        name="ck_mcp_audit_events_target_type",
+    ),
+)
+
 sa.Index(
     "uq_groups_user_lower_name",
     groups.c.user_id,
@@ -401,3 +468,23 @@ sa.Index("ix_extracted_tasks_user_id", extracted_tasks.c.user_id)
 sa.Index("ix_extracted_tasks_capture_id", extracted_tasks.c.capture_id)
 sa.Index("ix_extracted_tasks_user_status", extracted_tasks.c.user_id, extracted_tasks.c.status)
 sa.Index("ix_rate_limit_counters_expires_at", rate_limit_counters.c.expires_at)
+sa.Index(
+    "ix_mcp_access_tokens_user_created_at",
+    mcp_access_tokens.c.user_id,
+    mcp_access_tokens.c.created_at.desc(),
+)
+sa.Index(
+    "ix_mcp_audit_events_user_created_at",
+    mcp_audit_events.c.user_id,
+    mcp_audit_events.c.created_at.desc(),
+)
+sa.Index("ix_mcp_audit_events_created_at", mcp_audit_events.c.created_at)
+sa.Index("ix_mcp_audit_events_token_id", mcp_audit_events.c.token_id)
+sa.Index(
+    "uq_mcp_audit_events_token_idempotency_key",
+    mcp_audit_events.c.token_id,
+    mcp_audit_events.c.idempotency_key,
+    unique=True,
+    postgresql_where=mcp_audit_events.c.idempotency_key.is_not(None),
+    sqlite_where=mcp_audit_events.c.idempotency_key.is_not(None),
+)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Annotated
+from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
     )
     required_alembic_revision: str = Field(
-        default="0019_pushover_reminders",
+        default="0020_mcp_agent_access",
         validation_alias=AliasChoices("REQUIRED_ALEMBIC_REVISION"),
     )
     run_startup_checks: bool = Field(
@@ -174,6 +175,35 @@ class Settings(BaseSettings):
         default="15/600,120/86400",
         validation_alias=AliasChoices("RATE_LIMIT_CAPTURE_SUBMIT_IP"),
     )
+    rate_limit_mcp_ip: str = Field(
+        default="300/60,3000/3600",
+        validation_alias=AliasChoices("RATE_LIMIT_MCP_IP"),
+    )
+    rate_limit_mcp_read_token: str = Field(
+        default="120/60",
+        validation_alias=AliasChoices("RATE_LIMIT_MCP_READ_TOKEN"),
+    )
+    rate_limit_mcp_write_token: str = Field(
+        default="30/60,500/86400",
+        validation_alias=AliasChoices("RATE_LIMIT_MCP_WRITE_TOKEN"),
+    )
+    # Agent access over MCP. Off by default: when false, /mcp is not mounted and Settings
+    # reports agent access as unavailable.
+    mcp_server_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("MCP_SERVER_ENABLED"),
+    )
+    # Public URL of the MCP endpoint, for example https://api.gustapp.ca/mcp. It is shown in
+    # Settings and named in the 401 challenge and protected-resource metadata.
+    mcp_public_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("MCP_PUBLIC_URL"),
+    )
+    mcp_audit_retention_days: int = Field(
+        default=90,
+        gt=0,
+        validation_alias=AliasChoices("MCP_AUDIT_RETENTION_DAYS"),
+    )
     capture_retention_days: int = Field(
         default=7,
         validation_alias=AliasChoices("CAPTURE_RETENTION_DAYS"),
@@ -282,6 +312,31 @@ class Settings(BaseSettings):
         if self.app_env.strip().lower() == "production" and self.gust_dev_mode:
             raise ValueError("GUST_DEV_MODE must be disabled in production.")
         return self
+
+    @model_validator(mode="after")
+    def _require_mcp_public_url(self) -> Settings:
+        if not self.mcp_server_enabled:
+            return self
+        url = self.resolved_mcp_public_url
+        if not url:
+            raise ValueError("MCP_PUBLIC_URL is required when MCP_SERVER_ENABLED is true.")
+        parsed = urlsplit(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("MCP_PUBLIC_URL must be an absolute http(s) URL.")
+        if parsed.path.rstrip("/") != "/mcp" or parsed.query or parsed.fragment:
+            raise ValueError("MCP_PUBLIC_URL must point at the /mcp endpoint.")
+        if self.app_env.strip().lower() == "production" and parsed.scheme != "https":
+            raise ValueError("MCP_PUBLIC_URL must use https in production.")
+        return self
+
+    @property
+    def resolved_mcp_public_url(self) -> str | None:
+        """The MCP endpoint URL. Production must set MCP_PUBLIC_URL explicitly."""
+        if self.mcp_public_url:
+            return self.mcp_public_url.strip().rstrip("/")
+        if self.app_env.strip().lower() == "production" or not self.backend_public_url:
+            return None
+        return f"{self.backend_public_url.strip().rstrip('/')}/mcp"
 
     @property
     def alembic_database_url(self) -> str:

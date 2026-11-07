@@ -17,7 +17,11 @@ TABLE_NAMES = (
     "reminders",
     "extracted_tasks",
     "digest_dispatches",
+    "mcp_access_tokens",
+    "mcp_audit_events",
 )
+# The MCP token-lookup actor may read token rows before the owner is known, and nothing else.
+MCP_TOKEN_LOOKUP_POLICY = ("mcp_access_tokens", "mcp_access_tokens_token_lookup")
 POLICY_REQUIRED_FRAGMENTS = {
     "tasks": ("owner_group.id = tasks.group_id", "owner_capture.id = tasks.capture_id"),
     "subtasks": ("owner_task.id = subtasks.task_id",),
@@ -26,6 +30,7 @@ POLICY_REQUIRED_FRAGMENTS = {
         "owner_capture.id = extracted_tasks.capture_id",
         "owner_group.id = extracted_tasks.group_id",
     ),
+    "mcp_audit_events": ("owner_token.user_id = mcp_audit_events.user_id",),
 }
 
 
@@ -183,6 +188,23 @@ def main() -> int:  # noqa: C901
                     file=sys.stderr,
                 )
                 return 1
+
+            lookup_table, lookup_policy_name = MCP_TOKEN_LOOKUP_POLICY
+            lookup_policy = next(
+                (
+                    row
+                    for row in policies_by_table.get(lookup_table, [])
+                    if row[0] == lookup_policy_name
+                ),
+                None,
+            )
+            if lookup_policy is None or lookup_policy[3] != "SELECT":
+                print(
+                    f"FAIL: {lookup_policy_name} must exist and allow SELECT only.",
+                    file=sys.stderr,
+                )
+                return 1
+            print(f"{lookup_policy_name}: cmd={lookup_policy[3]}")
 
             cursor.execute(
                 """

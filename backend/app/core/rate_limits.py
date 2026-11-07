@@ -14,6 +14,12 @@ from app.db.engine import connection_scope
 from app.db.repositories import delete_expired_rate_limit_counters, increment_rate_limit_counter
 
 _CAPTURE_SUBMIT_PATH = re.compile(r"^/captures/[^/]+/submit$")
+MCP_ENDPOINT_PATH = "/mcp"
+MCP_METADATA_PATH = "/.well-known/oauth-protected-resource/mcp"
+
+
+def is_mcp_path(path: str) -> bool:
+    return path in {MCP_ENDPOINT_PATH, MCP_METADATA_PATH}
 
 
 @dataclass(frozen=True)
@@ -69,6 +75,9 @@ class RequestRateLimiter:
         self.public_get_ip = _parse_windows(settings.rate_limit_public_get_ip)
         self.unauthenticated_write_ip = _parse_windows(settings.rate_limit_unauthenticated_write_ip)
         self.internal_job_ip = _parse_windows(settings.rate_limit_internal_job_ip)
+        self.mcp_ip = _parse_windows(settings.rate_limit_mcp_ip)
+        self.mcp_read_token = _parse_windows(settings.rate_limit_mcp_read_token)
+        self.mcp_write_token = _parse_windows(settings.rate_limit_mcp_write_token)
 
     async def evaluate_ip_request(
         self,
@@ -110,6 +119,31 @@ class RequestRateLimiter:
                 user_id=user_id,
                 cleanup_expired=False,
             )
+
+    def evaluate_mcp_token_call(self, *, token_id: str, write: bool) -> RateLimitEvaluation:
+        """Count one MCP tool call against its token. Every MCP call is a POST, so reads and
+        writes are told apart here, by tool, instead of by HTTP method. Blocking: call it from
+        a worker thread."""
+        scope = "mcp_write" if write else "mcp_read"
+        windows = self.mcp_write_token if write else self.mcp_read_token
+        now = datetime.now(UTC)
+        with connection_scope(self.settings.database_url) as connection:
+            primary_state, exceeded_state = self._evaluate_subject(
+                connection=connection,
+                scope=scope,
+                subject_key=f"token:{token_id}",
+                windows=windows,
+                now=now,
+            )
+        if exceeded_state is not None:
+            return RateLimitEvaluation(
+                exceeded=True,
+                headers=exceeded_state.as_headers(include_retry_after=True),
+            )
+        return RateLimitEvaluation(
+            exceeded=False,
+            headers=primary_state.as_headers(include_retry_after=False),
+        )
 
     def _evaluate_policy(
         self,
@@ -206,6 +240,15 @@ class RequestRateLimiter:
             return RateLimitPolicy(
                 scope="capture_submit",
                 ip_windows=self.capture_submit_ip,
+                primary_subject="ip",
+            )
+
+        if is_mcp_path(path):
+            # Agents call from shared cloud IPs, so this is a loose flood gate. The per-token
+            # limits inside each tool are the real control.
+            return RateLimitPolicy(
+                scope="mcp",
+                ip_windows=self.mcp_ip,
                 primary_subject="ip",
             )
 

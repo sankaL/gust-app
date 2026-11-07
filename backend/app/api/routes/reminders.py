@@ -21,6 +21,7 @@ class RunRemindersResponse(BaseModel):
     skipped_empty: int
     failed: int
     captures_deleted: int
+    mcp_audit_events_deleted: int = 0
     attempted: int = 0
     retried: int = 0
     skipped: int = 0

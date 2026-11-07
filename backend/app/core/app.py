@@ -1,11 +1,20 @@
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api.routes import auth, captures, groups, health, notifications, reminders, tasks
+from app.api.routes import (
+    agent_access,
+    auth,
+    captures,
+    groups,
+    health,
+    notifications,
+    reminders,
+    tasks,
+)
 from app.core.errors import (
     ApiError,
     api_error_handler,
@@ -20,6 +29,7 @@ from app.core.request_security import trusted_hosts
 from app.core.settings import get_settings
 from app.db.engine import dispose_all_engines
 from app.db.migrations import MigrationVersionError, check_required_revision
+from app.mcp.server import install_mcp
 from app.services.ai_clients import open_ai_clients
 from app.services.auth import build_auth_service, shared_auth_http_client
 
@@ -29,11 +39,15 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     if settings.run_startup_checks:
         check_required_revision(settings.database_url, settings.required_alembic_revision)
-    async with (
-        open_ai_clients(settings) as ai_clients,
-        shared_auth_http_client(getattr(app.state, "auth_service", None)),
-    ):
-        app.state.ai_clients = ai_clients
+    async with AsyncExitStack() as stack:
+        app.state.ai_clients = await stack.enter_async_context(open_ai_clients(settings))
+        await stack.enter_async_context(
+            shared_auth_http_client(getattr(app.state, "auth_service", None))
+        )
+        mcp_runtime = getattr(app.state, "mcp_runtime", None)
+        if mcp_runtime is not None:
+            # Mounting the MCP app skips its own lifespan, so its session manager runs here.
+            await stack.enter_async_context(mcp_runtime.run())
         yield
     dispose_all_engines()
 
@@ -88,9 +102,16 @@ def create_app() -> FastAPI:
         tags=["notification-settings"],
     )
     app.include_router(
+        agent_access.router,
+        prefix="/settings/agent-access",
+        tags=["agent-access-settings"],
+    )
+    app.include_router(
         reminders.router,
         prefix="/internal/reminders",
         tags=["internal-reminders"],
     )
+    # Last, so the MCP routes never shadow an API route.
+    app.state.mcp_runtime = install_mcp(app, settings)
 
     return app

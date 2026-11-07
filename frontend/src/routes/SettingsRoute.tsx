@@ -7,6 +7,8 @@ import { ScreenHeader } from '../components/AppShellView'
 import { Button } from '../components/Button'
 import { useNotifications } from '../components/Notifications'
 import { ThemeSelector } from '../components/shell/AccountSheet'
+import { AgentAccessSection } from '../components/settings/AgentAccessSection'
+import { SettingsCard } from '../components/settings/SettingsCard'
 import { InlineNotice, Switch } from '../components/ui/controls'
 import {
   connectPushover,
@@ -21,18 +23,6 @@ import {
 
 function Toggle({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void }) {
   return <Switch label={label} checked={checked} disabled={disabled} onChange={onChange} />
-}
-
-function SettingsCard({ icon: Icon, title, children }: { icon: typeof Bell; title: string; children: React.ReactNode }) {
-  return (
-    <section className="animate-rise-in space-y-3 rounded-[1.4rem] bg-surface-container p-4 shadow-card ring-1 ring-inset ring-outline/40">
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/[0.12] text-primary"><Icon className="h-[1.1rem] w-[1.1rem]" strokeWidth={2.1} /></span>
-        <h2 className="font-display text-lg font-bold text-on-surface">{title}</h2>
-      </div>
-      {children}
-    </section>
-  )
 }
 
 export function SettingsRoute() {
@@ -149,6 +139,7 @@ export function SettingsRoute() {
           </div>
         </>}
       </SettingsCard>
+      <AgentAccessSection />
       <p className="flex items-center justify-center gap-2 text-center font-body text-xs text-on-surface-variant"><Check className="h-3.5 w-3.5 text-primary" />Changes save automatically.</p>
     </section>
   )

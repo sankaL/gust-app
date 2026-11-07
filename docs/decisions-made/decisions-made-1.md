@@ -1,5 +1,19 @@
 # Decisions Made
 
+## 2026-11-07 07:51:49 EST
+
+- Built agent access over MCP so the owner's Meta Muse agent can read and change Gust tasks, subtasks and groups without opening the app. The owner chose per-user tokens from Settings, writes that go straight in (no review queue), and full CRUD on all three. Plan: `docs/plans/muse-mcp-agent-access-plan.md`.
+- Hosted MCP inside the existing backend service at `https://api.gustapp.ca/mcp` instead of a separate Railway service. Muse runs in Meta's cloud and needs a public Streamable HTTP endpoint, and running in the backend reuses `TaskService` and `GroupService`, so validation, timezone, recurrence and reminder rules match the app. No new service, domain, Dockerfile or cron. The server flag `MCP_SERVER_ENABLED` (default false) is the rollout gate, because Railway's GitHub auto-deploy ships backend and frontend together.
+- Routed only `/mcp` and `/.well-known/oauth-protected-resource/mcp` to the SDK app instead of the SDK's documented root mount. A root mount would have replaced every unknown path's 404 with the SDK's plain-text one.
+- Tokens are opaque `gust_mcp_` + 43 URL-safe characters, stored only as SHA-256 hashes, shown once, with a required 30/90/365-day expiry and at most 5 active per user. Read only or Read & write. Turning access off revokes every token. Every request rechecks revocation, expiry, the email allowlist and the user's switch. OAuth was not built: Muse custom connectors take a stored credential, and static bearer auth is the smallest surface. Whether Muse sends the bearer header is unverified (about 70% confident); connecting Muse with a read-only token is the first production check.
+- Added a third RLS actor (`app.mcp_token_lookup`) whose only power is reading `mcp_access_tokens`, because a token must be resolved before its owner is known. Everything after the lookup runs as the token's user.
+- Agent writes never set `needs_review`. Task deletes stay soft (restorable); subtask and group deletes are permanent and marked destructive so Muse asks every time. Hard task delete is not exposed.
+- Partial updates merge into the existing full-replace service call, with an explicit `clear` list, because MCP arguments cannot reliably tell "omitted" from "null". If an untouched stored reminder has already passed, `update_task` retries once with it cleared and says so, since Gust rejects past reminders on every save and would otherwise block a plain rename.
+- Create tools take an optional `idempotency_key`; the audit row is written in the same transaction as the create, so the unique `(token_id, idempotency_key)` index turns a retry into a replay. `create_tasks` is all or nothing and reports every bad item.
+- Rate limits are per token inside each tool (reads 120/min; writes 30/min and 500/day), because every MCP call is a POST. The `mcp` IP scope (300/min) is only a flood gate, since agents share cloud IPs.
+- Kept the MCP Host allowlist to the `MCP_PUBLIC_URL` host (plus local hosts outside production) and rejected any browser `Origin`.
+- Audit rows hold IDs and codes only and are deleted after 90 days by the daily and weekly digest runs, shown in Settings as recent agent activity.
+
 ## 2026-10-27 00:37:06 EDT
 
 - Changed bottom sheets from clay to the clear liquid-glass material, at the owner's request after seeing the opaque clay drawer. The nav and the + stay clay; the review bell stays a liquid-glass lens. This supersedes the sheet part of the 2026-10-27 00:22 entry below.

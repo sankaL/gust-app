@@ -33,34 +33,50 @@ def clear_settings_cache() -> Generator[None, None, None]:
 
 
 @pytest.fixture()
-def app(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Generator:
-    database_path = tmp_path / "gust-test.db"
-    monkeypatch.setenv("APP_ENV", "test")
-    monkeypatch.setenv("GUST_DEV_MODE", "false")
-    monkeypatch.setenv("DATABASE_URL", f"sqlite+pysqlite:///{database_path}")
-    monkeypatch.setenv("RUN_STARTUP_CHECKS", "false")
-    monkeypatch.setenv("FRONTEND_APP_URL", "http://frontend.test")
-    monkeypatch.setenv("BACKEND_PUBLIC_URL", "http://testserver")
-    monkeypatch.setenv("SUPABASE_URL", "http://supabase.test")
-    monkeypatch.setenv("SUPABASE_ANON_KEY", "test-anon-key")
-    monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+def app_factory(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Generator:
+    """Build a test app; extra env vars apply before the app reads its settings."""
+    built: list = []
 
-    engine = build_engine(f"sqlite+pysqlite:///{database_path}")
-    metadata.create_all(engine)
-    with engine.begin() as connection:
-        connection.execute(
-            allowed_users.insert(),
-            [
-                {"email": "user@example.com"},
-                {"email": "other@example.com"},
-                {"email": "local-dev@gust.local"},
-            ],
-        )
-    engine.dispose()
+    def build(extra_env: dict[str, str] | None = None):
+        database_path = tmp_path / "gust-test.db"
+        monkeypatch.setenv("APP_ENV", "test")
+        monkeypatch.setenv("GUST_DEV_MODE", "false")
+        monkeypatch.setenv("DATABASE_URL", f"sqlite+pysqlite:///{database_path}")
+        monkeypatch.setenv("RUN_STARTUP_CHECKS", "false")
+        monkeypatch.setenv("FRONTEND_APP_URL", "http://frontend.test")
+        monkeypatch.setenv("BACKEND_PUBLIC_URL", "http://testserver")
+        monkeypatch.setenv("SUPABASE_URL", "http://supabase.test")
+        monkeypatch.setenv("SUPABASE_ANON_KEY", "test-anon-key")
+        monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+        for key, value in (extra_env or {}).items():
+            monkeypatch.setenv(key, value)
+        get_settings.cache_clear()
 
-    test_app = create_app()
-    yield test_app
-    test_app.dependency_overrides.clear()
+        engine = build_engine(f"sqlite+pysqlite:///{database_path}")
+        metadata.create_all(engine)
+        with engine.begin() as connection:
+            connection.execute(
+                allowed_users.insert().prefix_with("OR IGNORE"),
+                [
+                    {"email": "user@example.com"},
+                    {"email": "other@example.com"},
+                    {"email": "local-dev@gust.local"},
+                ],
+            )
+        engine.dispose()
+
+        test_app = create_app()
+        built.append(test_app)
+        return test_app
+
+    yield build
+    for test_app in built:
+        test_app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def app(app_factory) -> Generator:
+    yield app_factory()
 
 
 @pytest.fixture()

@@ -325,6 +325,51 @@ class ConflictError(ApiError):
         )
 
 
+class AgentAccessUnavailableError(ApiError):
+    def __init__(self, message: str = "Agent access is not available on this server.") -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            code="agent_access_unavailable",
+            message=message,
+        )
+
+
+class AgentAccessDisabledError(ApiError):
+    def __init__(self, message: str = "Turn on agent access before creating a token.") -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            code="agent_access_disabled",
+            message=message,
+        )
+
+
+class AgentTokenLimitError(ApiError):
+    def __init__(self, limit: int) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            code="agent_token_limit",
+            message=f"You can have at most {limit} active agent tokens. Revoke one first.",
+        )
+
+
+class AgentTokenNotFoundError(ApiError):
+    def __init__(self, message: str = "Agent token could not be found.") -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="agent_token_not_found",
+            message=message,
+        )
+
+
+class InvalidAgentTokenRequestError(ApiError):
+    def __init__(self, message: str = "Agent token request is invalid.") -> None:
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            code="invalid_agent_token_request",
+            message=message,
+        )
+
+
 class RateLimitExceededError(ApiError):
     def __init__(
         self,

@@ -13,6 +13,7 @@ from app.core.settings import get_settings
 
 DATABASE_USER_ID_SETTING = "app.current_user_id"
 DATABASE_INTERNAL_JOB_SETTING = "app.internal_job"
+DATABASE_MCP_TOKEN_LOOKUP_SETTING = "app.mcp_token_lookup"
 INTERNAL_JOB_SENTINEL_USER_ID = "00000000-0000-0000-0000-000000000000"
 # Opening a connection to the database pooler takes several cross-region round trips, so keep
 # connections for 30 minutes rather than 5; pool_pre_ping still replaces any that died meanwhile.
@@ -33,6 +34,13 @@ _engine_registry_lock = Lock()
 class DatabaseActor:
     user_id: str | None = None
     is_internal_job: bool = False
+    # Resolves an MCP bearer token before its owner is known. RLS lets this actor read
+    # mcp_access_tokens rows and nothing else.
+    is_mcp_token_lookup: bool = False
+
+    def __post_init__(self) -> None:
+        if self.is_mcp_token_lookup and (self.user_id is not None or self.is_internal_job):
+            raise ValueError("The MCP token-lookup actor cannot act as a user or internal job.")
 
 
 def build_engine(database_url: str | None = None) -> Engine:
@@ -91,6 +99,10 @@ def internal_job_connection_scope(database_url: str | None = None):
     return connection_scope(database_url, actor=DatabaseActor(is_internal_job=True))
 
 
+def mcp_token_lookup_connection_scope(database_url: str | None = None):
+    return connection_scope(database_url, actor=DatabaseActor(is_mcp_token_lookup=True))
+
+
 def _apply_database_actor(connection: Connection, actor: DatabaseActor | None) -> None:
     if actor is None or connection.dialect.name != "postgresql":
         return
@@ -124,6 +136,12 @@ def _apply_database_actor(connection: Connection, actor: DatabaseActor | None) -
             "setting_value": "true" if actor.is_internal_job else "false",
         },
     )
+    if actor.is_mcp_token_lookup:
+        # Transaction-local like the settings above, so it never leaks to the next checkout.
+        connection.execute(
+            text("SELECT set_config(:setting_name, :setting_value, true)"),
+            {"setting_name": DATABASE_MCP_TOKEN_LOOKUP_SETTING, "setting_value": "true"},
+        )
 
 
 def _enable_sqlite_foreign_keys(dbapi_connection, connection_record) -> None:  # type: ignore[no-untyped-def]

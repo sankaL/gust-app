@@ -38,6 +38,7 @@ from app.db.repositories import (
     update_notification_preferences,
     upsert_digest_dispatch,
 )
+from app.services.agent_access import AgentAccessService
 from app.services.pushover import PushoverDeliveryError, PushoverService
 from app.services.pushover_formatting import (
     build_daily_digest_message,
@@ -83,6 +84,7 @@ class ReminderRunSummary:
     skipped_empty: int = 0
     failed: int = 0
     captures_deleted: int = 0
+    mcp_audit_events_deleted: int = 0
     attempted: int = 0
     retried: int = 0
     skipped: int = 0
@@ -204,6 +206,9 @@ class ReminderWorkerService:
                 limit=self.settings.reminder_batch_size,
             )
             users = list_users(connection)
+        summary.mcp_audit_events_deleted = AgentAccessService(
+            settings=self.settings
+        ).purge_expired_audit_events(now=now_utc)
 
         self.reminder_delivery_service.ensure_configured()
 

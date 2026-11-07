@@ -636,3 +636,66 @@ export function testPushover(csrfToken: string): Promise<void> {
 export function disconnectPushover(csrfToken: string): Promise<NotificationSettings> {
   return apiRequest<NotificationSettings>('/settings/notifications/pushover', { method: 'DELETE' }, csrfToken)
 }
+
+export type AgentAccessLevel = 'read' | 'read_write'
+
+export type AgentToken = {
+  id: string
+  name: string
+  token_prefix: string
+  access_level: AgentAccessLevel
+  created_at: string
+  expires_at: string
+  last_used_at: string | null
+}
+
+export type AgentAccess = {
+  available: boolean
+  enabled: boolean
+  endpoint_url: string | null
+  max_active_tokens: number
+  expiry_day_choices: number[]
+  tokens: AgentToken[]
+}
+
+export type CreatedAgentToken = {
+  token: AgentToken
+  // Shown once. Keep it in component state only; never persist it in the browser.
+  secret: string
+}
+
+export type AgentActivityItem = {
+  id: string
+  tool_name: string
+  outcome: 'ok' | 'error' | 'denied'
+  error_code: string | null
+  target_type: 'task' | 'subtask' | 'group' | null
+  target_id: string | null
+  target_label: string | null
+  target_count: number
+  token_name: string | null
+  created_at: string
+}
+
+export function getAgentAccess(): Promise<AgentAccess> {
+  return apiRequest<AgentAccess>('/settings/agent-access')
+}
+
+export function updateAgentAccess(enabled: boolean, csrfToken: string): Promise<AgentAccess> {
+  return apiRequest<AgentAccess>('/settings/agent-access', { method: 'PUT', body: JSON.stringify({ enabled }) }, csrfToken)
+}
+
+export function createAgentToken(
+  payload: { name: string; access_level: AgentAccessLevel; expires_in_days: number },
+  csrfToken: string
+): Promise<CreatedAgentToken> {
+  return apiRequest<CreatedAgentToken>('/settings/agent-access/tokens', { method: 'POST', body: JSON.stringify(payload), cache: 'no-store' }, csrfToken)
+}
+
+export function revokeAgentToken(tokenId: string, csrfToken: string): Promise<void> {
+  return apiRequest<void>(`/settings/agent-access/tokens/${encodeURIComponent(tokenId)}`, { method: 'DELETE' }, csrfToken)
+}
+
+export function getAgentActivity(): Promise<{ items: AgentActivityItem[] }> {
+  return apiRequest<{ items: AgentActivityItem[] }>('/settings/agent-access/activity')
+}

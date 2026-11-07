@@ -9,6 +9,10 @@ FRONTEND_URL="${FRONTEND_URL:-https://gustapp.ca}"
 POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-10}"
 MAX_POLLS="${MAX_POLLS:-60}"
 DRY_RUN="${DRY_RUN:-false}"
+# Set MCP_VERIFY=true once MCP_SERVER_ENABLED=true on the backend: an unauthenticated
+# POST /mcp must then answer 401, which proves the endpoint is mounted and failing closed.
+MCP_VERIFY="${MCP_VERIFY:-false}"
+MCP_URL="${MCP_URL:-https://api.gustapp.ca/mcp}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -168,6 +172,17 @@ verify_live_endpoints() {
 
   log "Verifying frontend homepage"
   curl -fsS "$FRONTEND_URL" >/dev/null || fail "Frontend reachability check failed at ${FRONTEND_URL}"
+
+  if [[ "$MCP_VERIFY" == "true" ]]; then
+    local mcp_status
+    log "Verifying MCP endpoint rejects unauthenticated requests"
+    mcp_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+      -H 'Content-Type: application/json' \
+      -H 'Accept: application/json, text/event-stream' \
+      --data '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+      "$MCP_URL")" || fail "MCP check could not reach ${MCP_URL}"
+    [[ "$mcp_status" == "401" ]] || fail "MCP check expected 401 from ${MCP_URL}, got ${mcp_status}"
+  fi
 }
 
 main() {

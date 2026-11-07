@@ -4,7 +4,7 @@ import base64
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 
 import sqlalchemy as sa
@@ -1040,8 +1040,18 @@ def _task_list_conditions(
     search_query: str | None,
     completed_start: datetime | None,
     completed_end: datetime | None,
+    due_start: date | None = None,
+    due_end: date | None = None,
+    no_due_date: bool = False,
 ) -> list[object]:
     conditions = [tasks.c.user_id == user_id, tasks.c.status == status]
+    if no_due_date:
+        conditions.append(tasks.c.due_date.is_(None))
+    else:
+        if due_start is not None:
+            conditions.append(tasks.c.due_date >= due_start)
+        if due_end is not None:
+            conditions.append(tasks.c.due_date <= due_end)
     if group_id is not None and group_id != "all":
         conditions.append(tasks.c.group_id == group_id)
     if not include_deleted:
@@ -1113,8 +1123,14 @@ def list_tasks(
     search_query: str | None = None,
     completed_start: datetime | None = None,
     completed_end: datetime | None = None,
+    due_start: date | None = None,
+    due_end: date | None = None,
+    no_due_date: bool = False,
 ) -> tuple[list[TaskWithGroupRecord], bool, str | None]:
-    """Returns (task rows with groups, has_more, next_cursor)."""
+    """Returns (task rows with groups, has_more, next_cursor).
+
+    `due_start` and `due_end` are inclusive local dates. `no_due_date` keeps only undated tasks
+    and ignores the due range."""
     conditions = _task_list_conditions(
         user_id=user_id,
         group_id=group_id,
@@ -1123,6 +1139,9 @@ def list_tasks(
         search_query=search_query,
         completed_start=completed_start,
         completed_end=completed_end,
+        due_start=due_start,
+        due_end=due_end,
+        no_due_date=no_due_date,
     )
     cursor_condition = _task_cursor_condition(cursor)
     if cursor_condition is not None:
@@ -1378,8 +1397,18 @@ def create_subtasks(
     task_id: str,
     titles: list[str],
 ) -> None:
-    for title in titles:
-        create_subtask(connection, user_id=user_id, task_id=task_id, title=title)
+    # Postgres CURRENT_TIMESTAMP is the transaction start, so subtasks inserted together would
+    # tie on created_at and come back in random ID order. One microsecond apart keeps the order
+    # they were given.
+    base = datetime.now(UTC)
+    for index, title in enumerate(titles):
+        create_subtask(
+            connection,
+            user_id=user_id,
+            task_id=task_id,
+            title=title,
+            created_at=base + timedelta(microseconds=index),
+        )
 
 
 def create_subtask(
@@ -1388,16 +1417,19 @@ def create_subtask(
     user_id: str,
     task_id: str,
     title: str,
+    created_at: datetime | None = None,
 ) -> SubtaskRecord:
     subtask_id = str(uuid.uuid4())
-    connection.execute(
-        subtasks.insert().values(
-            id=subtask_id,
-            task_id=task_id,
-            user_id=user_id,
-            title=title,
-        )
-    )
+    values: dict[str, object] = {
+        "id": subtask_id,
+        "task_id": task_id,
+        "user_id": user_id,
+        "title": title,
+    }
+    if created_at is not None:
+        values["created_at"] = created_at
+        values["updated_at"] = created_at
+    connection.execute(subtasks.insert().values(**values))
     row = connection.execute(sa.select(subtasks).where(subtasks.c.id == subtask_id)).one()
     return _row_to_subtask(row)
 
