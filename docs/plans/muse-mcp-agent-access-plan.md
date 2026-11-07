@@ -10,6 +10,8 @@ Changes from this plan made while building (see `docs/task-output/2026-11-07-mus
 - `mcp_audit_events` gained a `target_ids` JSON column so `create_tasks` can replay a batch.
 - The `mcp` IP scope defaults to `300/60,3000/3600`.
 - Tool descriptions do not repeat a per-tool Muse class beyond "Read." / "Write." / "Permanently deletes"; the MCP annotations carry the rest.
+- An `idempotency_key` replays for as long as its audit row exists (90 days), not 24 hours. A longer window can only prevent duplicates.
+- Rate-limited calls are logged but not written to `mcp_audit_events`, and the per-token limit is checked before the read-only check, so a looping agent cannot flood the audit table or the Settings activity list.
 
 ## Goal
 

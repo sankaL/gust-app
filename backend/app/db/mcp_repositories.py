@@ -88,10 +88,18 @@ def _active_token_conditions(*, user_id: str, now: datetime) -> list[object]:
     ]
 
 
-def get_user_mcp_state(connection: Connection, *, user_id: str) -> UserMcpState | None:
-    row = connection.execute(
-        sa.select(users.c.mcp_enabled, users.c.mcp_enabled_at).where(users.c.id == user_id)
-    ).first()
+def get_user_mcp_state(
+    connection: Connection,
+    *,
+    user_id: str,
+    for_update: bool = False,
+) -> UserMcpState | None:
+    """With for_update, lock the user's row so token creation and the on/off switch for the
+    same user run one at a time (no-op on SQLite)."""
+    statement = sa.select(users.c.mcp_enabled, users.c.mcp_enabled_at).where(users.c.id == user_id)
+    if for_update:
+        statement = statement.with_for_update()
+    row = connection.execute(statement).first()
     if row is None:
         return None
     return UserMcpState(enabled=bool(row.mcp_enabled), enabled_at=row.mcp_enabled_at)

@@ -206,9 +206,7 @@ class ReminderWorkerService:
                 limit=self.settings.reminder_batch_size,
             )
             users = list_users(connection)
-        summary.mcp_audit_events_deleted = AgentAccessService(
-            settings=self.settings
-        ).purge_expired_audit_events(now=now_utc)
+        summary.mcp_audit_events_deleted = self._purge_mcp_audit_events(now_utc=now_utc)
 
         self.reminder_delivery_service.ensure_configured()
 
@@ -230,6 +228,19 @@ class ReminderWorkerService:
                 summary.failed += 1
 
         return summary
+
+    def _purge_mcp_audit_events(self, *, now_utc: datetime) -> int:
+        # Retention cleanup must never stop the digests that follow it.
+        try:
+            return AgentAccessService(settings=self.settings).purge_expired_audit_events(
+                now=now_utc
+            )
+        except Exception:
+            logger.exception(
+                "mcp_audit_purge_failed",
+                extra={"event": "mcp_audit_purge_failed"},
+            )
+            return 0
 
     async def _run_task_reminders(
         self,

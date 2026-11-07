@@ -686,3 +686,32 @@ def test_resend_service_still_exposes_configuration_guard(client) -> None:
 
     with pytest.raises(ConfigurationError):
         service.ensure_configured()
+
+
+def test_daily_digest_still_sends_when_mcp_audit_purge_fails(client, monkeypatch, caplog) -> None:
+    _seed_open_task(
+        client,
+        title="Pay rent",
+        due_date=datetime.now(DIGEST_TIMEZONE).date(),
+    )
+
+    def broken_purge(self, *, now):  # type: ignore[no-untyped-def]
+        raise RuntimeError("audit table unavailable")
+
+    monkeypatch.setattr(
+        "app.services.agent_access.AgentAccessService.purge_expired_audit_events",
+        broken_purge,
+    )
+    delivery = FakeReminderDeliveryService(mode="success")
+    worker = ReminderWorkerService(
+        settings=client.app.state.settings,
+        reminder_delivery_service=delivery,
+    )
+
+    with caplog.at_level("ERROR", logger="gust.api"):
+        summary = asyncio.run(worker.run_due_work(mode="daily"))
+
+    assert summary.sent == 1
+    assert summary.mcp_audit_events_deleted == 0
+    assert len(delivery.requests) == 1
+    assert any(record.message == "mcp_audit_purge_failed" for record in caplog.records)

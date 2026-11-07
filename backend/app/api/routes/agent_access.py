@@ -18,6 +18,7 @@ from app.db.repositories import SessionContext
 from app.services.agent_access import (
     EXPIRY_DAY_CHOICES,
     MAX_TOKEN_NAME_CHARS,
+    AccessLevel,
     AgentAccessOverview,
     AgentAccessService,
 )
@@ -33,7 +34,7 @@ class AgentTokenResponse(BaseModel):
     id: str
     name: str
     token_prefix: str
-    access_level: Literal["read", "read_write"]
+    access_level: AccessLevel
     created_at: datetime
     expires_at: datetime
     last_used_at: datetime | None
@@ -54,7 +55,7 @@ class UpdateAgentAccessRequest(BaseModel):
 
 class CreateAgentTokenRequest(BaseModel):
     name: str = Field(min_length=1, max_length=MAX_TOKEN_NAME_CHARS)
-    access_level: Literal["read", "read_write"]
+    access_level: AccessLevel
     expires_in_days: int
 
 

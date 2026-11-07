@@ -619,14 +619,7 @@ class TaskService:
         return TaskDetail(task=updated, group=group, subtasks=task_subtasks)
 
     def create_subtask(self, *, user_id: str, task_id: str, title: str) -> SubtaskRecord:
-        try:
-            normalized_title = validate_plain_text(
-                title,
-                field_name="Subtask title",
-                max_length=MAX_TITLE_CHARS,
-            )
-        except ValueError as exc:
-            raise InvalidSubtaskError(str(exc)) from exc
+        normalized_title = self._normalize_subtask_title(title)
 
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
             task = get_task(connection, user_id=user_id, task_id=task_id)
@@ -666,14 +659,7 @@ class TaskService:
 
             values: dict[str, object] = {}
             if title is not None:
-                try:
-                    values["title"] = validate_plain_text(
-                        title,
-                        field_name="Subtask title",
-                        max_length=MAX_TITLE_CHARS,
-                    )
-                except ValueError as exc:
-                    raise InvalidSubtaskError(str(exc)) from exc
+                values["title"] = self._normalize_subtask_title(title)
             if is_completed is not None:
                 values["is_completed"] = is_completed
                 values["completed_at"] = datetime.now(UTC) if is_completed else None

@@ -22,6 +22,8 @@ TABLE_NAMES = (
 )
 # The MCP token-lookup actor may read token rows before the owner is known, and nothing else.
 MCP_TOKEN_LOOKUP_POLICY = ("mcp_access_tokens", "mcp_access_tokens_token_lookup")
+# The exact USING expression Postgres stores for the 0020 policy. Anything wider fails.
+MCP_TOKEN_LOOKUP_USING = "(current_setting('app.mcp_token_lookup'::text, true) = 'true'::text)"
 POLICY_REQUIRED_FRAGMENTS = {
     "tasks": ("owner_group.id = tasks.group_id", "owner_capture.id = tasks.capture_id"),
     "subtasks": ("owner_task.id = subtasks.task_id",),
@@ -198,9 +200,17 @@ def main() -> int:  # noqa: C901
                 ),
                 None,
             )
-            if lookup_policy is None or lookup_policy[3] != "SELECT":
+            if (
+                lookup_policy is None
+                or lookup_policy[1] != "PERMISSIVE"
+                or lookup_policy[2] != ["public"]
+                or lookup_policy[3] != "SELECT"
+                or " ".join(str(lookup_policy[4] or "").split()) != MCP_TOKEN_LOOKUP_USING
+                or lookup_policy[5] is not None
+            ):
                 print(
-                    f"FAIL: {lookup_policy_name} must exist and allow SELECT only.",
+                    f"FAIL: {lookup_policy_name} must exist, allow SELECT only, and use exactly "
+                    f"USING {MCP_TOKEN_LOOKUP_USING}.",
                     file=sys.stderr,
                 )
                 return 1

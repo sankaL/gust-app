@@ -21,6 +21,7 @@ import sqlalchemy as sa
 
 from app.core.errors import (
     ApiError,
+    ConflictError,
     GroupNotFoundError,
     InvalidGroupError,
     InvalidTaskError,
@@ -692,8 +693,10 @@ class AgentOperations:
                 self.settings.database_url, user_id=principal.user_id
             ) as connection:
                 return create(connection)
-        except sa.exc.IntegrityError:
+        except (sa.exc.IntegrityError, ConflictError):
             # A concurrent retry with the same key committed first. Its row is the result.
+            # create_group surfaces that race as a name ConflictError rather than an
+            # IntegrityError, because the group's unique name is checked before the key.
             if idempotency_key is None:
                 raise
             previous = self._find_idempotent_event(principal, idempotency_key)
@@ -806,15 +809,23 @@ class AgentOperations:
         target_type: str,
         target_id: str,
     ) -> None:
-        with user_connection_scope(
-            self.settings.database_url, user_id=principal.user_id
-        ) as connection:
-            self._record_ok(
-                connection,
-                principal,
-                tool_name=tool_name,
-                target_type=target_type,
-                target_id=target_id,
+        # The write has already committed. If its audit row cannot be written, the agent must
+        # still get the result: an error here would invite a retry that duplicates the write.
+        try:
+            with user_connection_scope(
+                self.settings.database_url, user_id=principal.user_id
+            ) as connection:
+                self._record_ok(
+                    connection,
+                    principal,
+                    tool_name=tool_name,
+                    target_type=target_type,
+                    target_id=target_id,
+                )
+        except Exception:
+            logger.exception(
+                "mcp_audit_failed",
+                extra={"event": "mcp_audit_failed", "tool": tool_name},
             )
 
     def _summary_from_item(self, item: TaskListItem, user_timezone: str) -> TaskSummary:
@@ -981,8 +992,9 @@ def _merge_reminder(
         return changes.reminder_at, True, None, True
     if changes.reminder_date is not None:
         return None, True, changes.reminder_date, True
-    # Untouched: pass the stored reminder through. When the due date moves, the service
-    # shifts it with the task (BUG-88) because it equals the stored value.
+    # Untouched: pass the stored reminder through. The service shifts it to the new due date
+    # only when an overdue or due-today task moves to a future date (BUG-88); otherwise it
+    # stays where it is.
     return _aware(existing.reminder_at), False, existing.reminder_date, False
 
 

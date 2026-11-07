@@ -2,11 +2,12 @@
 
 Every tool goes through `_gust_tool`, which:
 - rebuilds the principal from the verified bearer token (fails closed without one)
-- refuses write tools for read-only tokens
-- applies the per-token read or write rate limit
+- applies the per-token read or write rate limit, then refuses write tools for read-only
+  tokens
 - turns Gust errors into tool errors with the existing sanitized messages
-- records denied and failed writes in the audit log (successful writes are recorded by
-  AgentOperations, inside the write's own transaction where it matters)
+- records denied (except rate-limited) and failed writes in the audit log (successful
+  writes are recorded by AgentOperations, inside the write's own transaction where it
+  matters)
 - logs one `mcp_tool_called` line with no titles, descriptions or arguments
 
 Descriptions state facts only, per Meta's connector guidelines.
@@ -28,7 +29,11 @@ from mcp.types import ToolAnnotations
 from pydantic import AwareDatetime, Field, ValidationError
 
 from app.core.errors import ApiError
-from app.core.input_safety import MAX_GROUP_DESCRIPTION_CHARS, MAX_TITLE_CHARS
+from app.core.input_safety import (
+    MAX_GROUP_DESCRIPTION_CHARS,
+    MAX_TASK_DESCRIPTION_CHARS,
+    MAX_TITLE_CHARS,
+)
 from app.core.rate_limits import RequestRateLimiter
 from app.mcp.auth import current_principal
 from app.services.agent_access import McpPrincipal
@@ -64,6 +69,7 @@ READ_ONLY_TOKEN_MESSAGE = (
     "This token is read-only. Create a Read & write token in Gust Settings to make changes."
 )
 UNEXPECTED_ERROR_MESSAGE = "Unexpected server error. Try again later."
+RATE_LIMITED_CODE = "rate_limit_exceeded"
 
 TaskId = Annotated[str, Field(description="Task ID (UUID) from list_tasks or get_task.")]
 SubtaskId = Annotated[str, Field(description="Subtask ID (UUID) from get_task.")]
@@ -198,7 +204,9 @@ class _ToolRegistrar:
             )
             raise ToolError(UNEXPECTED_ERROR_MESSAGE) from None
         finally:
-            if is_write and error_code is not None:
+            # Rate-limited calls are logged below but not audited: one row per refused call
+            # would let a looping agent flood the table and the Settings activity list.
+            if is_write and error_code is not None and error_code != RATE_LIMITED_CODE:
                 self._record_failure(principal, tool_name, outcome, error_code)
             logger.info(
                 "mcp_tool_called",
@@ -213,8 +221,8 @@ class _ToolRegistrar:
             )
 
     def _guard(self, principal: McpPrincipal, is_write: bool) -> None:
-        if is_write and not principal.can_write:
-            raise _DeniedError("read_only_token", READ_ONLY_TOKEN_MESSAGE)
+        # The rate limit comes first so that a looping agent's refused calls, read-only
+        # denials included, are bounded by the token's write budget.
         limit = self.rate_limiter.evaluate_mcp_token_call(
             token_id=principal.token_id,
             write=is_write,
@@ -222,9 +230,11 @@ class _ToolRegistrar:
         if limit.exceeded:
             retry_after = limit.headers.get("Retry-After", "60")
             raise _DeniedError(
-                "rate_limit_exceeded",
+                RATE_LIMITED_CODE,
                 f"Rate limit exceeded for this token. Retry in {retry_after} seconds.",
             )
+        if is_write and not principal.can_write:
+            raise _DeniedError("read_only_token", READ_ONLY_TOKEN_MESSAGE)
 
     def _record_failure(
         self,
@@ -384,7 +394,7 @@ def register_tools(  # noqa: C901
     )
     def create_task(
         title: Annotated[str, Field(min_length=1, max_length=MAX_TITLE_CHARS)],
-        description: Annotated[str | None, Field(max_length=2000)] = None,
+        description: Annotated[str | None, Field(max_length=MAX_TASK_DESCRIPTION_CHARS)] = None,
         group_id: GroupIdArg = None,
         group_name: GroupNameArg = None,
         due_date: DueDateArg = None,
@@ -439,15 +449,18 @@ def register_tools(  # noqa: C901
         idempotent=True,
         description=(
             "Write. Changes only the fields given; everything else is kept. To remove a value, "
-            "list it in `clear` (description, due_date, reminder, recurrence). When the due "
-            "date moves, an existing reminder moves with it. If the stored reminder has already "
-            "passed and is not being changed, it is removed and the result says so."
+            "list it in `clear` (description, due_date, reminder, recurrence). Moving an overdue "
+            "or due-today task to a future date moves its unchanged reminder to the new date; "
+            "in every other case the reminder stays where it is, so send reminder_at or "
+            "reminder_date to move it. If the stored reminder has already passed and is not "
+            "being changed, it is removed and the result says so. Moving the task to another "
+            "group clears needs_review, as it does in the app; nothing else changes that flag."
         ),
     )
     def update_task(
         task_id: TaskId,
         title: Annotated[str | None, Field(min_length=1, max_length=MAX_TITLE_CHARS)] = None,
-        description: Annotated[str | None, Field(max_length=2000)] = None,
+        description: Annotated[str | None, Field(max_length=MAX_TASK_DESCRIPTION_CHARS)] = None,
         group_id: GroupIdArg = None,
         group_name: GroupNameArg = None,
         due_date: DueDateArg = None,

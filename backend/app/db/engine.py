@@ -56,7 +56,13 @@ def build_engine(database_url: str | None = None) -> Engine:
 
 
 def engine_options(database_url: str) -> dict[str, object]:
-    options: dict[str, object] = {"pool_pre_ping": True, "pool_recycle": POOL_RECYCLE_SECONDS}
+    options: dict[str, object] = {
+        "pool_pre_ping": True,
+        "pool_recycle": POOL_RECYCLE_SECONDS,
+        # Keep bound values (task titles, descriptions, token hashes) out of error messages,
+        # which logger.exception would otherwise write to the logs.
+        "hide_parameters": True,
+    }
     if make_url(database_url).get_backend_name() == "postgresql":
         options["connect_args"] = dict(POSTGRES_KEEPALIVE_CONNECT_ARGS)
     return options

@@ -12,7 +12,8 @@
 - Create tools take an optional `idempotency_key`; the audit row is written in the same transaction as the create, so the unique `(token_id, idempotency_key)` index turns a retry into a replay. `create_tasks` is all or nothing and reports every bad item.
 - Rate limits are per token inside each tool (reads 120/min; writes 30/min and 500/day), because every MCP call is a POST. The `mcp` IP scope (300/min) is only a flood gate, since agents share cloud IPs.
 - Kept the MCP Host allowlist to the `MCP_PUBLIC_URL` host (plus local hosts outside production) and rejected any browser `Origin`.
-- Audit rows hold IDs and codes only and are deleted after 90 days by the daily and weekly digest runs, shown in Settings as recent agent activity.
+- Audit rows hold IDs and codes only and are deleted after 90 days by the daily and weekly digest runs (up to 10,000 rows per run, in batches of 500), shown in Settings as recent agent activity. Rate-limited calls are logged but not audited, and the per-token limit runs before the read-only check, so a looping agent's refused calls stay bounded. A purge failure is logged and never stops the digests. An `idempotency_key` replays until its audit row is purged (90 days), not the 24 hours the plan first said.
+- Not exposed to agents: voice or text capture, extraction and the Review queue. The owner scoped agent access to tasks, subtasks and groups; an agent structures tasks itself and writes them directly. Agents clear `needs_review` the same way the app does, by moving the task to another group.
 
 ## 2026-10-27 00:37:06 EDT
 

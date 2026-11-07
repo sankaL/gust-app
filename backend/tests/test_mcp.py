@@ -28,6 +28,7 @@ from app.db.schema import (
     tasks,
 )
 from app.services.agent_access import AgentAccessService, hash_token
+from app.services.agent_operations import AgentOperations
 from app.services.auth import AuthenticatedIdentity
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
@@ -346,6 +347,27 @@ def test_token_lifecycle_through_settings(mcp_app: FastAPI, mcp_client: TestClie
     assert missing.status_code == 404
 
 
+def test_cannot_revoke_another_users_token(mcp_app: FastAPI, mcp_client: TestClient) -> None:
+    headers = _settings_headers(mcp_app, mcp_client)
+    _seed_user(mcp_app, user_id=OTHER_USER_ID, email="other@example.com")
+    _make_token(mcp_app, user_id=OTHER_USER_ID)
+    with connection_scope(_db(mcp_app)) as connection:
+        other_token_id = connection.execute(
+            sa.select(mcp_access_tokens.c.id).where(mcp_access_tokens.c.user_id == OTHER_USER_ID)
+        ).scalar_one()
+
+    response = mcp_client.delete(f"/settings/agent-access/tokens/{other_token_id}", headers=headers)
+
+    assert response.status_code == 404
+    with connection_scope(_db(mcp_app)) as connection:
+        revoked_at = connection.execute(
+            sa.select(mcp_access_tokens.c.revoked_at).where(
+                mcp_access_tokens.c.id == other_token_id
+            )
+        ).scalar_one()
+    assert revoked_at is None
+
+
 def test_token_request_validation_and_cap(mcp_app: FastAPI, mcp_client: TestClient) -> None:
     headers = _settings_headers(mcp_app, mcp_client)
     mcp_client.put("/settings/agent-access", json={"enabled": True}, headers=headers)
@@ -611,6 +633,93 @@ def test_read_token_is_denied_on_write_tools_and_audited(
     assert [(row.tool_name, row.outcome, row.error_code) for row in rows] == [
         ("create_task", "denied", "read_only_token")
     ]
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("update_task", {"task_id": "TASK", "title": "Renamed"}),
+        ("complete_task", {"task_id": "TASK"}),
+        ("delete_task", {"task_id": "TASK"}),
+        ("delete_subtask", {"task_id": "TASK", "subtask_id": "SUBTASK"}),
+        ("delete_group", {"group_id": "GROUP", "move_tasks_to_group_name": "Inbox"}),
+    ],
+)
+def test_read_token_is_denied_on_destructive_tools(
+    mcp_app: FastAPI,
+    mcp_client: TestClient,
+    tool: str,
+    arguments: dict[str, str],
+) -> None:
+    inbox = _seed_user(mcp_app)
+    group_id = _seed_group(mcp_app, user_id=USER_ID, name="Errands")
+    task_id = _seed_task(mcp_app, user_id=USER_ID, group_id=group_id, title="Keep me")
+    subtask_id = str(uuid.uuid4())
+    with connection_scope(_db(mcp_app)) as connection:
+        connection.execute(
+            subtasks.insert().values(id=subtask_id, user_id=USER_ID, task_id=task_id, title="s")
+        )
+    token = _make_token(mcp_app, access_level="read")
+    ids = {"TASK": task_id, "SUBTASK": subtask_id, "GROUP": group_id}
+    resolved = {key: ids.get(value, value) for key, value in arguments.items()}
+
+    assert "read-only" in _error_text(mcp_client, token, tool, resolved)
+
+    detail = _ok(mcp_client, token, "get_task", {"task_id": task_id})
+    assert detail["title"] == "Keep me"
+    assert detail["status"] == "open"
+    assert detail["deleted_at"] is None
+    assert detail["group"]["id"] == group_id
+    assert [subtask["id"] for subtask in detail["subtasks"]] == [subtask_id]
+    assert inbox != group_id
+
+
+def test_write_tools_cannot_touch_another_users_data(
+    mcp_app: FastAPI,
+    mcp_client: TestClient,
+) -> None:
+    _seed_user(mcp_app)
+    other_inbox = _seed_user(mcp_app, user_id=OTHER_USER_ID, email="other@example.com")
+    other_group = _seed_group(mcp_app, user_id=OTHER_USER_ID, name="Theirs")
+    other_task = _seed_task(mcp_app, user_id=OTHER_USER_ID, group_id=other_group, title="Theirs")
+    other_subtask = str(uuid.uuid4())
+    with connection_scope(_db(mcp_app)) as connection:
+        connection.execute(
+            subtasks.insert().values(
+                id=other_subtask, user_id=OTHER_USER_ID, task_id=other_task, title="theirs"
+            )
+        )
+    token = _make_token(mcp_app)
+
+    calls = [
+        ("update_task", {"task_id": other_task, "title": "Hijacked"}),
+        ("complete_task", {"task_id": other_task}),
+        ("delete_task", {"task_id": other_task}),
+        ("add_subtask", {"task_id": other_task, "title": "Injected"}),
+        ("update_subtask", {"task_id": other_task, "subtask_id": other_subtask, "title": "X"}),
+        ("delete_subtask", {"task_id": other_task, "subtask_id": other_subtask}),
+        ("update_group", {"group_id": other_group, "name": "Hijacked"}),
+        ("delete_group", {"group_id": other_group, "move_tasks_to_group_name": "Inbox"}),
+        ("create_task", {"title": "Into theirs", "group_id": other_group}),
+    ]
+    for tool, arguments in calls:
+        assert "could not be found" in _error_text(mcp_client, token, tool, arguments), tool
+
+    with connection_scope(_db(mcp_app)) as connection:
+        task_row = connection.execute(sa.select(tasks).where(tasks.c.id == other_task)).one()
+        group_row = connection.execute(sa.select(groups).where(groups.c.id == other_group)).one()
+        subtask_rows = connection.execute(
+            sa.select(subtasks.c.id, subtasks.c.title).where(subtasks.c.task_id == other_task)
+        ).fetchall()
+        mine = connection.execute(
+            sa.select(sa.func.count(tasks.c.id)).where(tasks.c.user_id == USER_ID)
+        ).scalar_one()
+    assert (task_row.title, task_row.status, task_row.deleted_at) == ("Theirs", "open", None)
+    assert task_row.group_id == other_group
+    assert group_row.name == "Theirs"
+    assert [(row.id, row.title) for row in subtask_rows] == [(other_subtask, "theirs")]
+    assert mine == 0
+    assert other_inbox != other_group
 
 
 def test_create_task_with_subtasks_and_idempotent_retry(
@@ -903,8 +1012,25 @@ def test_write_rate_limit_per_token(app_factory) -> None:
         )
         # Reads have their own budget.
         _ok(client, token, "list_tasks")
-    denied = [row for row in _audit_rows(mcp_app) if row.outcome == "denied"]
-    assert [row.error_code for row in denied] == ["rate_limit_exceeded"]
+    # Rate-limited calls are logged, not audited, so a looping agent cannot flood the table.
+    assert [row for row in _audit_rows(mcp_app) if row.outcome == "denied"] == []
+
+
+def test_read_only_denials_are_bounded_by_the_write_rate_limit(app_factory) -> None:
+    mcp_app = app_factory({**MCP_ENV, "RATE_LIMIT_MCP_WRITE_TOKEN": "2/60"})
+    with TestClient(mcp_app) as client:
+        _seed_user(mcp_app)
+        token = _make_token(mcp_app, access_level="read")
+        for _ in range(2):
+            assert "read-only" in _error_text(client, token, "create_task", {"title": "No"})
+        for _ in range(3):
+            assert "Rate limit exceeded" in _error_text(
+                client, token, "create_task", {"title": "No"}
+            )
+    assert [row.error_code for row in _audit_rows(mcp_app)] == [
+        "read_only_token",
+        "read_only_token",
+    ]
 
 
 # ----- activity and retention ------------------------------------------------------------
@@ -948,6 +1074,97 @@ def test_audit_purge_removes_only_expired_events(mcp_app: FastAPI, mcp_client: T
     service = AgentAccessService(settings=mcp_app.state.settings)
     assert service.purge_expired_audit_events(now=datetime.now(UTC)) == 1
     assert len(_audit_rows(mcp_app)) == 1
+
+
+def test_audit_purge_deletes_in_batches_up_to_a_cap(
+    mcp_app: FastAPI,
+    mcp_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_user(mcp_app)
+    _make_token(mcp_app)
+    with connection_scope(_db(mcp_app)) as connection:
+        token_id = connection.execute(sa.select(mcp_access_tokens.c.id)).scalar_one()
+        for index in range(7):
+            connection.execute(
+                mcp_audit_events.insert().values(
+                    id=str(uuid.uuid4()),
+                    user_id=USER_ID,
+                    token_id=token_id,
+                    tool_name="create_task",
+                    outcome="denied",
+                    error_code="read_only_token",
+                    created_at=datetime.now(UTC) - timedelta(days=100, minutes=index),
+                )
+            )
+    monkeypatch.setattr("app.services.agent_access.AUDIT_PURGE_BATCH_SIZE", 2)
+    monkeypatch.setattr("app.services.agent_access.AUDIT_PURGE_MAX_BATCHES", 3)
+    service = AgentAccessService(settings=mcp_app.state.settings)
+
+    assert service.purge_expired_audit_events(now=datetime.now(UTC)) == 6
+    assert service.purge_expired_audit_events(now=datetime.now(UTC)) == 1
+    assert _audit_rows(mcp_app) == []
+
+
+def _principal(app: FastAPI, token: str):  # type: ignore[no-untyped-def]
+    principal = AgentAccessService(settings=app.state.settings).resolve_bearer_token(token)
+    assert principal is not None
+    return principal
+
+
+def test_concurrent_create_group_retry_replays_instead_of_conflicting(
+    mcp_app: FastAPI,
+    mcp_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_user(mcp_app)
+    principal = _principal(mcp_app, _make_token(mcp_app))
+    operations = AgentOperations(settings=mcp_app.state.settings)
+    first = operations.create_group(
+        principal, name="Errands", description=None, idempotency_key="group-key-01"
+    )
+
+    # The retry's first lookup runs before the original call has committed, so it misses.
+    original_find = operations._find_idempotent_event
+    lookups: list[str] = []
+
+    def racing_find(principal_arg, key):  # type: ignore[no-untyped-def]
+        lookups.append(key)
+        return None if len(lookups) == 1 else original_find(principal_arg, key)
+
+    monkeypatch.setattr(operations, "_find_idempotent_event", racing_find)
+    retried = operations.create_group(
+        principal, name="Errands", description=None, idempotency_key="group-key-01"
+    )
+
+    assert retried.replayed is True
+    assert retried.group.id == first.group.id
+    assert len(lookups) == 2
+
+
+def test_write_still_succeeds_when_its_audit_row_fails_after_commit(
+    mcp_app: FastAPI,
+    mcp_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inbox = _seed_user(mcp_app)
+    task_id = _seed_task(mcp_app, user_id=USER_ID, group_id=inbox, title="Parent")
+    token = _make_token(mcp_app)
+
+    def broken_insert(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("audit insert failed")
+
+    monkeypatch.setattr("app.services.agent_operations.insert_mcp_audit_event", broken_insert)
+    result = _ok(mcp_client, token, "add_subtask", {"task_id": task_id, "title": "Child"})
+
+    assert result["subtask"]["title"] == "Child"
+    with connection_scope(_db(mcp_app)) as connection:
+        titles = (
+            connection.execute(sa.select(subtasks.c.title).where(subtasks.c.task_id == task_id))
+            .scalars()
+            .all()
+        )
+    assert titles == ["Child"]
 
 
 # ----- official client -------------------------------------------------------------------

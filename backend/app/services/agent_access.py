@@ -62,6 +62,8 @@ EXPIRY_DAY_CHOICES = (30, 90, 365)
 ACTIVITY_LIMIT = 20
 LAST_USED_WRITE_INTERVAL = timedelta(minutes=1)
 AUDIT_PURGE_BATCH_SIZE = 500
+# Up to 10,000 rows per digest run, each batch in its own short transaction.
+AUDIT_PURGE_MAX_BATCHES = 20
 
 AccessLevel = Literal["read", "read_write"]
 ACCESS_LEVELS: tuple[str, ...] = ("read", "read_write")
@@ -169,7 +171,7 @@ class AgentAccessService:
             raise AgentAccessUnavailableError()
         now = datetime.now(UTC)
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            state = get_user_mcp_state(connection, user_id=user_id)
+            state = get_user_mcp_state(connection, user_id=user_id, for_update=True)
             if state is None:
                 raise AgentTokenNotFoundError("User could not be found.")
             if enabled and not state.enabled:
@@ -207,7 +209,7 @@ class AgentAccessService:
         now = datetime.now(UTC)
         generated = generate_token()
         with user_connection_scope(self.settings.database_url, user_id=user_id) as connection:
-            state = get_user_mcp_state(connection, user_id=user_id)
+            state = get_user_mcp_state(connection, user_id=user_id, for_update=True)
             if state is None or not state.enabled:
                 raise AgentAccessDisabledError()
             if (
@@ -352,12 +354,18 @@ class AgentAccessService:
 
     def purge_expired_audit_events(self, *, now: datetime) -> int:
         cutoff = audit_retention_cutoff(now, retention_days=self.settings.mcp_audit_retention_days)
-        with internal_job_connection_scope(self.settings.database_url) as connection:
-            return delete_expired_mcp_audit_events(
-                connection,
-                created_before=cutoff,
-                limit=AUDIT_PURGE_BATCH_SIZE,
-            )
+        deleted = 0
+        for _ in range(AUDIT_PURGE_MAX_BATCHES):
+            with internal_job_connection_scope(self.settings.database_url) as connection:
+                batch = delete_expired_mcp_audit_events(
+                    connection,
+                    created_before=cutoff,
+                    limit=AUDIT_PURGE_BATCH_SIZE,
+                )
+            deleted += batch
+            if batch < AUDIT_PURGE_BATCH_SIZE:
+                break
+        return deleted
 
     def _overview(
         self, *, enabled: bool, tokens: list[McpAccessTokenRecord]
